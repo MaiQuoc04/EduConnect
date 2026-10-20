@@ -7,6 +7,7 @@ function required(name) {
 }
 
 export const env = {
+  isProduction: process.env.NODE_ENV === 'production',
   port: Number(process.env.PORT || 5000),
   clientOrigin: process.env.CLIENT_ORIGIN || 'http://localhost:5173',
   db: {
@@ -22,4 +23,13 @@ export const env = {
     secret: required('JWT_SECRET'),
     expiresIn: process.env.JWT_EXPIRES_IN || '8h',
   },
+  // Outgoing email (OTP for UC-02). Without SMTP_HOST, development prints emails to the console.
+  mail: {
+    host: process.env.SMTP_HOST || '',
+    port: Number(process.env.SMTP_PORT || 587),
+    user: process.env.SMTP_USER || '',
+    pass: process.env.SMTP_PASS || '',
+    from: process.env.MAIL_FROM || 'EduConnect <no-reply@educonnect.local>',
+  },
+  uploadDir: process.env.UPLOAD_DIR || './uploads',
 };

@@ -1,8 +1,10 @@
 import { Router } from 'express';
 import healthRoutes from './modules/health/health.routes.js';
+import accountRoutes from './modules/account/account.routes.js';
 import authRoutes from './modules/auth/auth.routes.js';
 
 // Each feature gets its own folder in src/modules and is mounted here, e.g.
+//   FE-01 account   -> /auth, /account (Quoc)
 //   FE-02 students  -> /students      (Anh)
 //   FE-03 teachers  -> /teachers      (Dung)
 //   FE-04 classes   -> /classes, /groups, /subjects (Khanh)
@@ -20,5 +22,6 @@ const router = Router();
 
 router.use('/health', healthRoutes);
 router.use('/auth', authRoutes);
+router.use('/account', accountRoutes);
 
 export default router;

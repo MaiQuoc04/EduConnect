@@ -2,17 +2,36 @@ import jwt from 'jsonwebtoken';
 import { env } from '../config/env.js';
 import { forbidden, unauthorized } from '../utils/AppError.js';
 
-// Verifies "Authorization: Bearer <token>" and sets req.user = { userId, roles, activeRole }.
-export function requireAuth(req, _res, next) {
+function verifyAccessToken(req) {
   const header = req.headers.authorization || '';
   const token = header.startsWith('Bearer ') ? header.slice(7) : null;
-  if (!token) return next(unauthorized('AUTH_REQUIRED', 'Please sign in.'));
+  if (!token) throw unauthorized('AUTH_REQUIRED', 'Please sign in.');
+  let payload;
   try {
-    req.user = jwt.verify(token, env.jwt.secret);
-    next();
+    payload = jwt.verify(token, env.jwt.secret);
   } catch {
-    next(unauthorized('AUTH_INVALID', 'Your session has expired. Please sign in again.'));
+    throw unauthorized('AUTH_INVALID', 'Your session has expired. Please sign in again.');
   }
+  // Single-purpose tokens (e.g. PASSWORD_RESET) are never access tokens.
+  if (payload.purpose) throw unauthorized('AUTH_INVALID', 'Your session has expired. Please sign in again.');
+  return payload;
+}
+
+// Verifies "Authorization: Bearer <token>" and sets req.user = { userId, roles, activeRole, mustChangePassword }.
+// UC-01: while the account still has a temporary password, every API except the few that use
+// requireAuthAllowingPasswordChange answers 403 PASSWORD_CHANGE_REQUIRED.
+export function requireAuth(req, _res, next) {
+  req.user = verifyAccessToken(req);
+  if (req.user.mustChangePassword) {
+    return next(forbidden('PASSWORD_CHANGE_REQUIRED', 'Please change your temporary password first.'));
+  }
+  next();
+}
+
+// Same as requireAuth but also lets in accounts that must change their password (GET /auth/me, change password).
+export function requireAuthAllowingPasswordChange(req, _res, next) {
+  req.user = verifyAccessToken(req);
+  next();
 }
 
 // Permissions follow the role the user is currently acting as (ERD 1b role switcher).

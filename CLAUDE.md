@@ -59,7 +59,12 @@ server/src/
 - Call the API only through `src/api/client.js` (adds the token, normalises errors to `{ code, message }`).
 - Auth state and role switching: `src/context/AuthContext.jsx` (`useAuth()`).
 - One folder per feature under `src/pages/<feature>/` when it grows; add routes in `App.jsx` wrapped in
-  `ProtectedRoute roles={[...]}`.
+  `ProtectedRoute roles={[...]}` and the menu entry in `src/navigation.js` (set the role's landing page in
+  `HOME_BY_ROLE` when its main screen exists).
+- Reuse the shared pieces: `components/Icon` (Material Symbols), `Avatar`, `PasswordInput`, `useToast()`, the
+  CSS classes in `styles.css` (`card`, `btn btn-primary`, `field`/`input`, `pill`, `stamp`, `notice`, `dl`, `table`).
+  Server: `middlewares/upload.js` (`uploadSingle`), `utils/storage.js` (`saveFile`), `utils/mailer.js`
+  (`sendMail`), `utils/password.js` (password rules).
 - Styling: plain CSS with the tokens in `styles.css` ("Ink & Paper" purple ink, light background). Student / parent
   screens listed in `docs/screens.md` also need a mobile layout. No dashboard.
 

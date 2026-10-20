@@ -5,3 +5,4 @@ dist/
 certs/*.pem
 .DS_Store
 *.log
+server/uploads/
