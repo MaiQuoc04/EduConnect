@@ -1,0 +1,669 @@
+-- EduConnect schema v0.2 (MySQL 8.0.16+, CHECK constraints enforced)
+-- Built 20/10/2026 from v0.1 (team DBML) + decisions in ERD_quyet_dinh.md (topics 1–7).
+-- Conventions:
+--   * Soft delete everywhere (deleted_at / deleted_by). Hard delete only for: post_likes (unlike),
+--     class_event_viewers, teacher_subjects, user_roles, student_parents (unlink), expired OTPs.
+--   * Rules marked "code" are checked in the application, not in the DB.
+--   * `groups` is a reserved word in MySQL 8.0, so it is always written with backticks.
+
+CREATE DATABASE IF NOT EXISTS educonnect CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+USE educonnect;
+
+-- 1. USERS & ROLES (1a–1f) -----------------------------------------------------
+
+CREATE TABLE roles (
+  role_id     BIGINT AUTO_INCREMENT PRIMARY KEY,
+  role_code   VARCHAR(50)  NOT NULL UNIQUE,      -- SYSTEM_ADMIN, SCHOOL_MANAGER, TEACHER, STUDENT, PARENT
+  description VARCHAR(255)
+);
+
+CREATE TABLE users (
+  user_id              BIGINT AUTO_INCREMENT PRIMARY KEY,
+  username             VARCHAR(50)  NOT NULL UNIQUE,   -- generated (anhnt, anhnt2…); only SA edits
+  email                VARCHAR(150) NULL UNIQUE,
+  phone                VARCHAR(20)  NULL UNIQUE,       -- required for parents (code)
+  password_hash        VARCHAR(255) NOT NULL,
+  full_name            VARCHAR(150) NOT NULL,
+  avatar_url           VARCHAR(500),
+  status               VARCHAR(20)  NOT NULL DEFAULT 'ACTIVE',  -- ACTIVE, LOCKED
+  must_change_password BOOLEAN NOT NULL DEFAULT TRUE,
+  failed_login_count   INT NOT NULL DEFAULT 0,
+  locked_until         DATETIME NULL,                   -- temporary sign-in lock
+  created_at           DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at           DATETIME NULL ON UPDATE CURRENT_TIMESTAMP,
+  CHECK (status IN ('ACTIVE','LOCKED'))
+);
+
+-- SA and STUDENT are exclusive roles (code). Hard delete allowed.
+CREATE TABLE user_roles (
+  user_id     BIGINT NOT NULL,
+  role_id     BIGINT NOT NULL,
+  assigned_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (user_id, role_id),
+  FOREIGN KEY (user_id) REFERENCES users(user_id),
+  FOREIGN KEY (role_id) REFERENCES roles(role_id)
+);
+
+CREATE TABLE students (
+  student_id   BIGINT AUTO_INCREMENT PRIMARY KEY,
+  user_id      BIGINT NOT NULL UNIQUE,
+  student_code VARCHAR(50) NOT NULL UNIQUE,
+  dob          DATE,
+  gender       VARCHAR(10),                       -- MALE, FEMALE, OTHER
+  FOREIGN KEY (user_id) REFERENCES users(user_id)
+);
+
+CREATE TABLE teachers (
+  teacher_id   BIGINT AUTO_INCREMENT PRIMARY KEY,
+  user_id      BIGINT NOT NULL UNIQUE,
+  teacher_code VARCHAR(50) NOT NULL UNIQUE,
+  department   VARCHAR(100),
+  FOREIGN KEY (user_id) REFERENCES users(user_id)
+);
+
+CREATE TABLE parents (
+  parent_id  BIGINT AUTO_INCREMENT PRIMARY KEY,
+  user_id    BIGINT NOT NULL UNIQUE,
+  occupation VARCHAR(100),
+  address    TEXT,
+  FOREIGN KEY (user_id) REFERENCES users(user_id)
+);
+
+-- Max 2 parents per student (code). Unlink = hard delete.
+CREATE TABLE student_parents (
+  student_id        BIGINT NOT NULL,
+  parent_id         BIGINT NOT NULL,
+  relationship_type VARCHAR(20) NOT NULL,         -- FATHER, MOTHER, GUARDIAN
+  linked_at         DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (student_id, parent_id),
+  FOREIGN KEY (student_id) REFERENCES students(student_id),
+  FOREIGN KEY (parent_id)  REFERENCES parents(parent_id)
+);
+
+-- 2. SCHOOL YEARS, SEMESTERS, CLASSES (2a–2d, MOM-05) --------------------------
+
+-- MOM-05: no is_current; the current year is found by date.
+CREATE TABLE school_years (
+  school_year_id BIGINT AUTO_INCREMENT PRIMARY KEY,
+  year_name      VARCHAR(50) NOT NULL UNIQUE,     -- 2026-2027
+  start_date     DATE NOT NULL,
+  end_date       DATE NOT NULL
+);
+
+CREATE TABLE semesters (
+  semester_id    BIGINT AUTO_INCREMENT PRIMARY KEY,
+  school_year_id BIGINT NOT NULL,
+  semester_no    TINYINT NOT NULL,                -- 1, 2
+  start_date     DATE NOT NULL,
+  end_date       DATE NOT NULL,
+  status         VARCHAR(10) NOT NULL DEFAULT 'OPEN',  -- OPEN, CLOSED (closed = attendance locked)
+  UNIQUE (school_year_id, semester_no),
+  FOREIGN KEY (school_year_id) REFERENCES school_years(school_year_id),
+  CHECK (semester_no IN (1,2)),
+  CHECK (status IN ('OPEN','CLOSED'))
+);
+
+CREATE TABLE grade_levels (
+  grade_level_id   BIGINT AUTO_INCREMENT PRIMARY KEY,
+  grade_level_name VARCHAR(50) NOT NULL UNIQUE    -- 10, 11, 12
+);
+
+CREATE TABLE subjects (
+  subject_id   BIGINT AUTO_INCREMENT PRIMARY KEY,
+  subject_code VARCHAR(50)  NOT NULL UNIQUE,
+  subject_name VARCHAR(150) NOT NULL,
+  deleted_at   DATETIME NULL
+);
+
+-- Class types (2d): e.g. A = Maths/Physics/Chemistry focus.
+CREATE TABLE class_tracks (
+  track_id    BIGINT AUTO_INCREMENT PRIMARY KEY,
+  track_name  VARCHAR(100) NOT NULL UNIQUE,
+  description VARCHAR(255),
+  deleted_at  DATETIME NULL
+);
+
+-- One set of weights per school year, copied from the previous year; locked once grades exist (code).
+CREATE TABLE track_subjects (
+  track_subject_id BIGINT AUTO_INCREMENT PRIMARY KEY,
+  track_id         BIGINT NOT NULL,
+  subject_id       BIGINT NOT NULL,
+  school_year_id   BIGINT NOT NULL,
+  weight           DECIMAL(5,2) NOT NULL DEFAULT 1.00,
+  periods_per_week INT NOT NULL DEFAULT 1,
+  UNIQUE (track_id, subject_id, school_year_id),
+  FOREIGN KEY (track_id)       REFERENCES class_tracks(track_id),
+  FOREIGN KEY (subject_id)     REFERENCES subjects(subject_id),
+  FOREIGN KEY (school_year_id) REFERENCES school_years(school_year_id)
+);
+
+-- Classes are per school year (2b). No homeroom teacher = warning in UI (1c).
+CREATE TABLE classes (
+  class_id            BIGINT AUTO_INCREMENT PRIMARY KEY,
+  class_name          VARCHAR(100) NOT NULL,
+  grade_level_id      BIGINT NOT NULL,
+  school_year_id      BIGINT NOT NULL,
+  track_id            BIGINT NOT NULL,
+  homeroom_teacher_id BIGINT NULL,
+  deleted_at          DATETIME NULL,
+  UNIQUE (class_name, school_year_id),
+  FOREIGN KEY (grade_level_id)      REFERENCES grade_levels(grade_level_id),
+  FOREIGN KEY (school_year_id)      REFERENCES school_years(school_year_id),
+  FOREIGN KEY (track_id)            REFERENCES class_tracks(track_id),
+  FOREIGN KEY (homeroom_teacher_id) REFERENCES teachers(teacher_id)
+);
+
+-- Promotion = new enrollment; transfer = old row TRANSFERRED + new row (2b).
+CREATE TABLE class_enrollments (
+  enrollment_id BIGINT AUTO_INCREMENT PRIMARY KEY,
+  student_id    BIGINT NOT NULL,
+  class_id      BIGINT NOT NULL,
+  nickname      VARCHAR(100),                     -- shown only inside the class (3e)
+  status        VARCHAR(20) NOT NULL DEFAULT 'STUDYING',  -- STUDYING, TRANSFERRED, DROPPED
+  enrolled_at   DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  left_at       DATETIME NULL,
+  UNIQUE (student_id, class_id),
+  FOREIGN KEY (student_id) REFERENCES students(student_id),
+  FOREIGN KEY (class_id)   REFERENCES classes(class_id),
+  CHECK (status IN ('STUDYING','TRANSFERRED','DROPPED'))
+);
+
+-- 3. TEACHING (5b, 5c) ----------------------------------------------------------
+
+-- Subjects a teacher can teach (MOM-05). Hard delete allowed.
+CREATE TABLE teacher_subjects (
+  teacher_id BIGINT NOT NULL,
+  subject_id BIGINT NOT NULL,
+  PRIMARY KEY (teacher_id, subject_id),
+  FOREIGN KEY (teacher_id) REFERENCES teachers(teacher_id),
+  FOREIGN KEY (subject_id) REFERENCES subjects(subject_id)
+);
+
+-- Teacher must teach the subject (teacher_subjects) – code.
+CREATE TABLE teaching_assignments (
+  assignment_id BIGINT AUTO_INCREMENT PRIMARY KEY,
+  class_id      BIGINT NOT NULL,
+  subject_id    BIGINT NOT NULL,
+  teacher_id    BIGINT NOT NULL,
+  start_date    DATE NOT NULL,
+  end_date      DATE NOT NULL,
+  deleted_at    DATETIME NULL,
+  FOREIGN KEY (class_id)   REFERENCES classes(class_id),
+  FOREIGN KEY (subject_id) REFERENCES subjects(subject_id),
+  FOREIGN KEY (teacher_id) REFERENCES teachers(teacher_id)
+);
+
+-- 4. TIMETABLE & ATTENDANCE (5a, 5b, 5d) ---------------------------------------
+
+CREATE TABLE time_slots (
+  slot_id       BIGINT AUTO_INCREMENT PRIMARY KEY,
+  period_number INT  NOT NULL UNIQUE,
+  start_time    TIME NOT NULL,
+  end_time      TIME NOT NULL
+);
+
+-- One row per period per day, generated from a weekly pattern. No substitute teaching:
+-- class/subject/teacher must match teaching_assignments (code). DB blocks class and teacher clashes.
+CREATE TABLE timetable_slots (
+  timetable_slot_id BIGINT AUTO_INCREMENT PRIMARY KEY,
+  class_id          BIGINT NOT NULL,
+  subject_id        BIGINT NOT NULL,
+  teacher_id        BIGINT NOT NULL,
+  slot_id           BIGINT NOT NULL,
+  `date`            DATE NOT NULL,
+  room              VARCHAR(50),
+  UNIQUE (class_id, `date`, slot_id),
+  UNIQUE (teacher_id, `date`, slot_id),
+  FOREIGN KEY (class_id)   REFERENCES classes(class_id),
+  FOREIGN KEY (subject_id) REFERENCES subjects(subject_id),
+  FOREIGN KEY (teacher_id) REFERENCES teachers(teacher_id),
+  FOREIGN KEY (slot_id)    REFERENCES time_slots(slot_id)
+);
+
+-- Edit rules (23:59 same day, homeroom teacher excused<->unexcused until semester CLOSED, then SM) – code.
+CREATE TABLE attendances (
+  attendance_id     BIGINT AUTO_INCREMENT PRIMARY KEY,
+  enrollment_id     BIGINT NOT NULL,
+  timetable_slot_id BIGINT NOT NULL,
+  status            VARCHAR(30) NOT NULL,         -- PRESENT, ABSENT_EXCUSED, ABSENT_UNEXCUSED, LATE
+  note              TEXT,
+  taken_by          BIGINT NOT NULL,              -- users.user_id
+  taken_at          DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at        DATETIME NULL ON UPDATE CURRENT_TIMESTAMP,
+  UNIQUE (enrollment_id, timetable_slot_id),
+  FOREIGN KEY (enrollment_id)     REFERENCES class_enrollments(enrollment_id),
+  FOREIGN KEY (timetable_slot_id) REFERENCES timetable_slots(timetable_slot_id),
+  FOREIGN KEY (taken_by)          REFERENCES users(user_id),
+  CHECK (status IN ('PRESENT','ABSENT_EXCUSED','ABSENT_UNEXCUSED','LATE'))
+);
+
+-- Every action is logged, including the first take (old_status NULL).
+CREATE TABLE attendance_histories (
+  history_id    BIGINT AUTO_INCREMENT PRIMARY KEY,
+  attendance_id BIGINT NOT NULL,
+  old_status    VARCHAR(30) NULL,
+  new_status    VARCHAR(30) NOT NULL,
+  reason        VARCHAR(255) NULL,
+  changed_by    BIGINT NOT NULL,
+  changed_at    DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  FOREIGN KEY (attendance_id) REFERENCES attendances(attendance_id),
+  FOREIGN KEY (changed_by)    REFERENCES users(user_id)
+);
+
+-- 5. CLASS CALENDAR EVENTS (5e, 5f) --------------------------------------------
+
+-- Fixed list loaded by SQL; no UC to edit.
+CREATE TABLE event_categories (
+  category_id BIGINT AUTO_INCREMENT PRIMARY KEY,
+  code        VARCHAR(30)  NOT NULL UNIQUE,
+  name        VARCHAR(100) NOT NULL
+);
+
+-- subject_id NULL = general event by the homeroom teacher. Homeroom teacher and creator always see it.
+CREATE TABLE class_events (
+  event_id             BIGINT AUTO_INCREMENT PRIMARY KEY,
+  class_id             BIGINT NOT NULL,
+  subject_id           BIGINT NULL,
+  category_id          BIGINT NOT NULL,
+  title                VARCHAR(255) NOT NULL,
+  description          TEXT,
+  start_at             DATETIME NOT NULL,
+  end_at               DATETIME NULL,
+  for_students         BOOLEAN NOT NULL DEFAULT FALSE,   -- all students of the class
+  for_parents          BOOLEAN NOT NULL DEFAULT FALSE,   -- all parents of the class
+  for_subject_teachers BOOLEAN NOT NULL DEFAULT FALSE,   -- all teachers of the class
+  reminded_at          DATETIME NULL,                    -- 1-day reminder sent; cleared when time changes
+  created_by           BIGINT NOT NULL,
+  created_at           DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at           DATETIME NULL ON UPDATE CURRENT_TIMESTAMP,
+  deleted_at           DATETIME NULL,
+  FOREIGN KEY (class_id)    REFERENCES classes(class_id),
+  FOREIGN KEY (subject_id)  REFERENCES subjects(subject_id),
+  FOREIGN KEY (category_id) REFERENCES event_categories(category_id),
+  FOREIGN KEY (created_by)  REFERENCES users(user_id)
+);
+
+-- Specific people chosen in addition to the group ticks. Hard delete allowed.
+CREATE TABLE class_event_viewers (
+  event_id BIGINT NOT NULL,
+  user_id  BIGINT NOT NULL,
+  PRIMARY KEY (event_id, user_id),
+  FOREIGN KEY (event_id) REFERENCES class_events(event_id),
+  FOREIGN KEY (user_id)  REFERENCES users(user_id)
+);
+
+-- 6. GROUPS & CHAT (3a–3h) ------------------------------------------------------
+
+-- class_id NULL for TEACHER_SCHOOL and DIRECT. direct_key = "smallerId_largerId" for DIRECT, else NULL.
+CREATE TABLE `groups` (
+  group_id         BIGINT AUTO_INCREMENT PRIMARY KEY,
+  class_id         BIGINT NULL,
+  group_name       VARCHAR(255) NULL,
+  group_type       VARCHAR(30)  NOT NULL,         -- GENERAL, STUDENT, PARENT, TEAM_CHAT, TEACHER_SCHOOL, DIRECT
+  direct_key       VARCHAR(50)  NULL UNIQUE,
+  require_approval BOOLEAN NOT NULL DEFAULT TRUE, -- post approval, on by default (6d)
+  created_by       BIGINT NULL,
+  created_at       DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  deleted_at       DATETIME NULL,
+  FOREIGN KEY (class_id)   REFERENCES classes(class_id),
+  FOREIGN KEY (created_by) REFERENCES users(user_id),
+  CHECK (group_type IN ('GENERAL','STUDENT','PARENT','TEAM_CHAT','TEACHER_SCHOOL','DIRECT'))
+);
+
+-- Removing / transferring = set left_at (3g). Re-joining = new row. One active row per user (code).
+CREATE TABLE group_members (
+  member_id    BIGINT AUTO_INCREMENT PRIMARY KEY,
+  group_id     BIGINT NOT NULL,
+  user_id      BIGINT NOT NULL,
+  joined_at    DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  left_at      DATETIME NULL,
+  last_read_at DATETIME NULL,                     -- read receipts (3d)
+  INDEX (group_id, user_id),
+  FOREIGN KEY (group_id) REFERENCES `groups`(group_id),
+  FOREIGN KEY (user_id)  REFERENCES users(user_id)
+);
+
+CREATE TABLE messages (
+  message_id BIGINT AUTO_INCREMENT PRIMARY KEY,
+  group_id   BIGINT NOT NULL,
+  sender_id  BIGINT NOT NULL,
+  content    TEXT NULL,                           -- NULL when the message is only attachments
+  sent_at    DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  deleted_at DATETIME NULL,
+  INDEX (group_id, sent_at),
+  FOREIGN KEY (group_id)  REFERENCES `groups`(group_id),
+  FOREIGN KEY (sender_id) REFERENCES users(user_id)
+);
+
+-- 7. GROUP FEED (6a–6e) ---------------------------------------------------------
+
+CREATE TABLE posts (
+  post_id         BIGINT AUTO_INCREMENT PRIMARY KEY,
+  group_id        BIGINT NOT NULL,
+  author_id       BIGINT NOT NULL,
+  content         TEXT NOT NULL,
+  approval_status VARCHAR(20) NOT NULL DEFAULT 'APPROVED',  -- APPROVED, PENDING, REJECTED
+  reviewed_by     BIGINT NULL,
+  reviewed_at     DATETIME NULL,
+  is_pinned       BOOLEAN NOT NULL DEFAULT FALSE,
+  is_hidden       BOOLEAN NOT NULL DEFAULT FALSE,
+  hidden_by       BIGINT NULL,
+  hidden_at       DATETIME NULL,
+  created_at      DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at      DATETIME NULL,                  -- set by code on edit ("edited" label)
+  deleted_at      DATETIME NULL,
+  deleted_by      BIGINT NULL,
+  FOREIGN KEY (group_id)    REFERENCES `groups`(group_id),
+  FOREIGN KEY (author_id)   REFERENCES users(user_id),
+  FOREIGN KEY (reviewed_by) REFERENCES users(user_id),
+  FOREIGN KEY (hidden_by)   REFERENCES users(user_id),
+  FOREIGN KEY (deleted_by)  REFERENCES users(user_id),
+  CHECK (approval_status IN ('APPROVED','PENDING','REJECTED'))
+);
+
+-- 8. SCHOOL FEED (6f) -----------------------------------------------------------
+
+-- No target rows = whole school.
+CREATE TABLE school_posts (
+  school_post_id    BIGINT AUTO_INCREMENT PRIMARY KEY,
+  author_id         BIGINT NOT NULL,
+  title             VARCHAR(255) NOT NULL,
+  content           TEXT NOT NULL,
+  post_type         VARCHAR(30) NOT NULL,         -- ANNOUNCEMENT (react/comment), NEWS (view only)
+  send_notification BOOLEAN NOT NULL,             -- default by type: ANNOUNCEMENT true, NEWS false (code)
+  is_pinned         BOOLEAN NOT NULL DEFAULT FALSE,
+  created_at        DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at        DATETIME NULL,
+  deleted_at        DATETIME NULL,
+  deleted_by        BIGINT NULL,
+  FOREIGN KEY (author_id)  REFERENCES users(user_id),
+  FOREIGN KEY (deleted_by) REFERENCES users(user_id),
+  CHECK (post_type IN ('ANNOUNCEMENT','NEWS'))
+);
+
+CREATE TABLE school_post_grade_targets (
+  school_post_id BIGINT NOT NULL,
+  grade_level_id BIGINT NOT NULL,
+  PRIMARY KEY (school_post_id, grade_level_id),
+  FOREIGN KEY (school_post_id) REFERENCES school_posts(school_post_id),
+  FOREIGN KEY (grade_level_id) REFERENCES grade_levels(grade_level_id)
+);
+
+CREATE TABLE school_post_class_targets (
+  school_post_id BIGINT NOT NULL,
+  class_id       BIGINT NOT NULL,
+  PRIMARY KEY (school_post_id, class_id),
+  FOREIGN KEY (school_post_id) REFERENCES school_posts(school_post_id),
+  FOREIGN KEY (class_id)       REFERENCES classes(class_id)
+);
+
+-- 9. COMMENTS, LIKES, ATTACHMENTS (shared by group posts and school posts) ------
+
+-- Exactly one of post_id / school_post_id. Multi-level replies. Comments are deleted, not hidden (6c).
+CREATE TABLE comments (
+  comment_id        BIGINT AUTO_INCREMENT PRIMARY KEY,
+  post_id           BIGINT NULL,
+  school_post_id    BIGINT NULL,
+  parent_comment_id BIGINT NULL,
+  author_id         BIGINT NOT NULL,
+  content           TEXT NOT NULL,
+  created_at        DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at        DATETIME NULL,
+  deleted_at        DATETIME NULL,
+  deleted_by        BIGINT NULL,
+  FOREIGN KEY (post_id)           REFERENCES posts(post_id),
+  FOREIGN KEY (school_post_id)    REFERENCES school_posts(school_post_id),
+  FOREIGN KEY (parent_comment_id) REFERENCES comments(comment_id),
+  FOREIGN KEY (author_id)         REFERENCES users(user_id),
+  FOREIGN KEY (deleted_by)        REFERENCES users(user_id),
+  CHECK ((post_id IS NULL) <> (school_post_id IS NULL))
+);
+
+-- Like only (6a). Unlike = hard delete.
+CREATE TABLE post_likes (
+  like_id        BIGINT AUTO_INCREMENT PRIMARY KEY,
+  user_id        BIGINT NOT NULL,
+  post_id        BIGINT NULL,
+  school_post_id BIGINT NULL,
+  created_at     DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  UNIQUE (user_id, post_id),
+  UNIQUE (user_id, school_post_id),
+  FOREIGN KEY (user_id)        REFERENCES users(user_id),
+  FOREIGN KEY (post_id)        REFERENCES posts(post_id),
+  FOREIGN KEY (school_post_id) REFERENCES school_posts(school_post_id),
+  CHECK ((post_id IS NULL) <> (school_post_id IS NULL))
+);
+
+-- Files live in cloud storage; DB keeps the URL. Images/files <= 10 MB, video <= 50 MB (code, system_settings).
+CREATE TABLE attachments (
+  attachment_id  BIGINT AUTO_INCREMENT PRIMARY KEY,
+  post_id        BIGINT NULL,
+  school_post_id BIGINT NULL,
+  message_id     BIGINT NULL,
+  file_url       VARCHAR(500) NOT NULL,
+  file_name      VARCHAR(255) NOT NULL,
+  mime_type      VARCHAR(100) NOT NULL,
+  size_bytes     BIGINT NOT NULL,
+  uploaded_by    BIGINT NOT NULL,
+  created_at     DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  deleted_at     DATETIME NULL,
+  FOREIGN KEY (post_id)        REFERENCES posts(post_id),
+  FOREIGN KEY (school_post_id) REFERENCES school_posts(school_post_id),
+  FOREIGN KEY (message_id)     REFERENCES messages(message_id),
+  FOREIGN KEY (uploaded_by)    REFERENCES users(user_id),
+  CHECK ((post_id IS NOT NULL) + (school_post_id IS NOT NULL) + (message_id IS NOT NULL) = 1)
+);
+
+-- 10. EXTRACURRICULAR EVENTS (7d) ------------------------------------------------
+
+-- An activity is a post in the class feed plus these details.
+CREATE TABLE extracurricular_events (
+  event_id              BIGINT AUTO_INCREMENT PRIMARY KEY,
+  post_id               BIGINT NOT NULL UNIQUE,
+  location              VARCHAR(255),
+  start_at              DATETIME NOT NULL,
+  end_at                DATETIME NULL,
+  registration_deadline DATETIME NOT NULL,
+  capacity              INT NULL,                 -- NULL = unlimited; full = registration blocked (code)
+  status                VARCHAR(20) NOT NULL DEFAULT 'OPEN',  -- OPEN, CANCELLED
+  cancelled_at          DATETIME NULL,
+  FOREIGN KEY (post_id) REFERENCES posts(post_id),
+  CHECK (status IN ('OPEN','CANCELLED')),
+  CHECK (capacity IS NULL OR capacity > 0)
+);
+
+-- One row per student; either parent may register / cancel; re-registering reuses the row.
+CREATE TABLE event_registrations (
+  registration_id BIGINT AUTO_INCREMENT PRIMARY KEY,
+  event_id        BIGINT NOT NULL,
+  student_id      BIGINT NOT NULL,
+  registered_by   BIGINT NOT NULL,                -- parent's users.user_id
+  status          VARCHAR(20) NOT NULL DEFAULT 'REGISTERED',  -- REGISTERED, CANCELLED
+  registered_at   DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  cancelled_at    DATETIME NULL,
+  UNIQUE (event_id, student_id),
+  FOREIGN KEY (event_id)      REFERENCES extracurricular_events(event_id),
+  FOREIGN KEY (student_id)    REFERENCES students(student_id),
+  FOREIGN KEY (registered_by) REFERENCES users(user_id),
+  CHECK (status IN ('REGISTERED','CANCELLED'))
+);
+
+-- 11. NOTIFICATIONS (7a–7c) -----------------------------------------------------
+
+-- Content stored once. is_personal = important item shown on the personal notification page.
+CREATE TABLE notifications (
+  notification_id BIGINT AUTO_INCREMENT PRIMARY KEY,
+  type            VARCHAR(30)  NOT NULL,          -- SCHOOL_POST, GROUP_POST, CLASS_EVENT, EXTRACURRICULAR, ATTENDANCE, GRADE, CHAT, MAINTENANCE, SYSTEM
+  title           VARCHAR(255) NOT NULL,          -- short text for the bell
+  detail          TEXT NULL,                      -- detailed text for personal notifications
+  is_personal     BOOLEAN NOT NULL DEFAULT FALSE,
+  target_type     VARCHAR(30) NULL,               -- what opens on click: POST, SCHOOL_POST, CLASS_EVENT, EXTRACURRICULAR_EVENT, ATTENDANCE, GRADE…
+  target_id       BIGINT NULL,
+  created_by      BIGINT NULL,                    -- NULL = system / scheduler
+  created_at      DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  FOREIGN KEY (created_by) REFERENCES users(user_id)
+);
+
+-- One row per recipient. Unread = read_at IS NULL (also used by "View Notification Read Status").
+CREATE TABLE notification_recipients (
+  notification_id BIGINT NOT NULL,
+  user_id         BIGINT NOT NULL,
+  student_id      BIGINT NULL,                    -- child concerned, so parents can filter by child
+  read_at         DATETIME NULL,
+  PRIMARY KEY (notification_id, user_id),
+  INDEX (user_id, read_at),
+  FOREIGN KEY (notification_id) REFERENCES notifications(notification_id),
+  FOREIGN KEY (user_id)         REFERENCES users(user_id),
+  FOREIGN KEY (student_id)      REFERENCES students(student_id)
+);
+
+-- 12. GRADES (4a–4d) -------------------------------------------------------------
+
+-- Structure per subject x grade level x semester; locked once the semester has grades (code).
+-- score_count = number of scores in the component (e.g. regular tests TX = 4).
+CREATE TABLE grade_components (
+  component_id   BIGINT AUTO_INCREMENT PRIMARY KEY,
+  subject_id     BIGINT NOT NULL,
+  grade_level_id BIGINT NOT NULL,
+  semester_id    BIGINT NOT NULL,
+  component_name VARCHAR(100) NOT NULL,
+  weight         DECIMAL(5,2) NOT NULL,
+  score_count    INT NOT NULL DEFAULT 1,
+  UNIQUE (subject_id, grade_level_id, semester_id, component_name),
+  FOREIGN KEY (subject_id)     REFERENCES subjects(subject_id),
+  FOREIGN KEY (grade_level_id) REFERENCES grade_levels(grade_level_id),
+  FOREIGN KEY (semester_id)    REFERENCES semesters(semester_id),
+  CHECK (score_count >= 1),
+  CHECK (weight > 0)
+);
+
+-- One row per individual score (TX1, TX2…). Rows are never deleted; clearing a score = score NULL.
+-- Averages are not stored; they are computed when shown.
+CREATE TABLE grades (
+  grade_id      BIGINT AUTO_INCREMENT PRIMARY KEY,
+  enrollment_id BIGINT NOT NULL,
+  component_id  BIGINT NOT NULL,
+  attempt_no    INT NOT NULL DEFAULT 1,
+  score         DECIMAL(4,2) NULL,
+  entered_by    BIGINT NOT NULL,                  -- teachers.teacher_id
+  entered_at    DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at    DATETIME NULL ON UPDATE CURRENT_TIMESTAMP,
+  UNIQUE (enrollment_id, component_id, attempt_no),
+  FOREIGN KEY (enrollment_id) REFERENCES class_enrollments(enrollment_id),
+  FOREIGN KEY (component_id)  REFERENCES grade_components(component_id),
+  FOREIGN KEY (entered_by)    REFERENCES teachers(teacher_id),
+  CHECK (score IS NULL OR (score >= 0 AND score <= 10)),
+  CHECK (attempt_no >= 1)
+);
+
+-- Grade book = class x subject x semester. Teacher finalizes (UC-82); blocked if any studying student
+-- is missing a score (code). School Manager unlocks (UC-83).
+CREATE TABLE grade_locks (
+  lock_id     BIGINT AUTO_INCREMENT PRIMARY KEY,
+  class_id    BIGINT NOT NULL,
+  subject_id  BIGINT NOT NULL,
+  semester_id BIGINT NOT NULL,
+  status      VARCHAR(20) NOT NULL,               -- LOCKED, UNLOCKED
+  locked_by   BIGINT NULL,
+  locked_at   DATETIME NULL,
+  unlocked_by BIGINT NULL,
+  unlocked_at DATETIME NULL,
+  UNIQUE (class_id, subject_id, semester_id),
+  FOREIGN KEY (class_id)    REFERENCES classes(class_id),
+  FOREIGN KEY (subject_id)  REFERENCES subjects(subject_id),
+  FOREIGN KEY (semester_id) REFERENCES semesters(semester_id),
+  FOREIGN KEY (locked_by)   REFERENCES users(user_id),
+  FOREIGN KEY (unlocked_by) REFERENCES users(user_id),
+  CHECK (status IN ('LOCKED','UNLOCKED'))
+);
+
+-- Subject, component, student and attempt are reached through grade_id (4d). First entry: old_score NULL.
+CREATE TABLE grade_histories (
+  history_id BIGINT AUTO_INCREMENT PRIMARY KEY,
+  grade_id   BIGINT NOT NULL,
+  old_score  DECIMAL(4,2) NULL,
+  new_score  DECIMAL(4,2) NULL,
+  changed_by BIGINT NOT NULL,
+  changed_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  FOREIGN KEY (grade_id)   REFERENCES grades(grade_id),
+  FOREIGN KEY (changed_by) REFERENCES users(user_id)
+);
+
+-- 13. SYSTEM ADMINISTRATION (7e–7h) --------------------------------------------
+
+-- Keys are loaded by SQL; SA edits values only.
+CREATE TABLE system_settings (
+  setting_key   VARCHAR(100) PRIMARY KEY,
+  setting_value VARCHAR(255) NOT NULL,
+  description   VARCHAR(255),
+  updated_by    BIGINT NULL,
+  updated_at    DATETIME NULL ON UPDATE CURRENT_TIMESTAMP,
+  FOREIGN KEY (updated_by) REFERENCES users(user_id)
+);
+
+-- Never deleted. Only important actions are logged (7f).
+CREATE TABLE activity_logs (
+  log_id      BIGINT AUTO_INCREMENT PRIMARY KEY,
+  user_id     BIGINT NULL,                        -- NULL for failed sign-in with unknown account
+  action      VARCHAR(50) NOT NULL,               -- LOGIN_SUCCESS, LOGIN_FAILED, ACCOUNT_CREATE, ACCOUNT_IMPORT, ACCOUNT_LOCK, ACCOUNT_UNLOCK, PASSWORD_RESET, ROLE_CHANGE, SETTING_CHANGE, GRADE_UNLOCK
+  target_type VARCHAR(30) NULL,
+  target_id   BIGINT NULL,
+  detail      TEXT NULL,
+  ip_address  VARCHAR(45) NULL,
+  created_at  DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  INDEX (created_at),
+  FOREIGN KEY (user_id) REFERENCES users(user_id)
+);
+
+-- Notice sent when scheduled; during start_at..end_at users cannot sign in ("system under maintenance").
+-- Assumption: System Admin can still sign in; ending early = update end_at.
+CREATE TABLE maintenance_announcements (
+  maintenance_id BIGINT AUTO_INCREMENT PRIMARY KEY,
+  title          VARCHAR(255) NOT NULL,
+  message        TEXT NOT NULL,
+  start_at       DATETIME NOT NULL,
+  end_at         DATETIME NOT NULL,
+  created_by     BIGINT NOT NULL,
+  created_at     DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  deleted_at     DATETIME NULL,
+  FOREIGN KEY (created_by) REFERENCES users(user_id),
+  CHECK (end_at > start_at)
+);
+
+-- 6-digit OTP, 5 minutes, hashed; 5 wrong attempts invalidate it; expired rows are hard deleted.
+CREATE TABLE password_reset_otps (
+  otp_id        BIGINT AUTO_INCREMENT PRIMARY KEY,
+  user_id       BIGINT NOT NULL,
+  otp_hash      VARCHAR(255) NOT NULL,
+  expires_at    DATETIME NOT NULL,
+  used_at       DATETIME NULL,
+  attempt_count INT NOT NULL DEFAULT 0,
+  created_at    DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  INDEX (user_id, expires_at),
+  FOREIGN KEY (user_id) REFERENCES users(user_id)
+);
+
+-- 14. SEED DATA ------------------------------------------------------------------
+
+INSERT INTO roles (role_code, description) VALUES
+  ('SYSTEM_ADMIN',   'System Admin'),
+  ('SCHOOL_MANAGER', 'School Manager'),
+  ('TEACHER',        'Teacher'),
+  ('STUDENT',        'Student'),
+  ('PARENT',         'Parent');
+
+INSERT INTO event_categories (code, name) VALUES
+  ('TEST',           'Kiểm tra'),
+  ('DEADLINE',       'Hạn nộp bài'),
+  ('PARENT_MEETING', 'Họp phụ huynh'),
+  ('CLASS_MEETING',  'Sinh hoạt lớp'),
+  ('OTHER',          'Khác');
+
+INSERT INTO system_settings (setting_key, setting_value, description) VALUES
+  ('login.max_failed_attempts',     '5',     'Wrong passwords before a temporary sign-in lock'),
+  ('login.lock_minutes_step',       '5',     'Lock length added each time (minutes)'),
+  ('login.lock_minutes_max',        '30',    'Maximum lock length (minutes)'),
+  ('upload.max_file_mb',            '10',    'Max size for images and files (MB)'),
+  ('upload.max_video_mb',           '50',    'Max size for videos (MB)'),
+  ('otp.expiry_minutes',            '5',     'Password reset OTP lifetime (minutes)'),
+  ('attendance.edit_deadline_time', '23:59', 'Subject teacher can edit attendance until this time on the same day');
