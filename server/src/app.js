@@ -5,6 +5,7 @@ import morgan from 'morgan';
 import { env } from './config/env.js';
 import { errorHandler, notFoundHandler } from './middlewares/errorHandler.js';
 import routes from './routes.js';
+import { uploadRoot } from './utils/storage.js';
 
 export const app = express();
 
@@ -15,6 +16,7 @@ app.use(express.json({ limit: '1mb' }));
 app.use(morgan('dev'));
 
 app.use('/api/v1', routes);
+app.use('/uploads', express.static(uploadRoot, { maxAge: '7d', index: false }));
 
 app.use(notFoundHandler);
 app.use(errorHandler);
