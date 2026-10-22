@@ -9,7 +9,6 @@
     "start": "node src/server.js",
     "db:check": "node scripts/check-db.js",
     "seed:admin": "node scripts/seed-admin.js",
-    "seed:generate": "node scripts/generate-seed.js",
     "seed:generate:small": "node scripts/generate-seed-small.js"
   },
   "engines": {
