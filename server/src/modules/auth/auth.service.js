@@ -13,16 +13,16 @@ const RESET_TOKEN_TTL = '10m';
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 async function getRoles(userId) {
-  const [rows] = await pool.query(
+  const { rows } = await pool.query(
     `SELECT r.role_code FROM user_roles ur JOIN roles r ON r.role_id = ur.role_id
-     WHERE ur.user_id = ? ORDER BY r.role_id`,
+     WHERE ur.user_id = $1 ORDER BY r.role_id`,
     [userId],
   );
   return rows.map((r) => r.role_code);
 }
 
 async function isUnderMaintenance() {
-  const [rows] = await pool.query(
+  const { rows } = await pool.query(
     `SELECT 1 FROM maintenance_announcements
      WHERE deleted_at IS NULL AND NOW() BETWEEN start_at AND end_at LIMIT 1`,
   );
@@ -37,12 +37,12 @@ async function isUnderMaintenance() {
 export async function signIn({ identifier, password, ip }) {
   if (!identifier || !password) throw badRequest('MSG_REQUIRED', 'Please enter your sign-in name and password.');
 
-  const [users] = await pool.query(
+  const { rows: users } = await pool.query(
     `SELECT user_id, username, full_name, avatar_url, password_hash, status, must_change_password, failed_login_count,
             locked_until > NOW() AS is_temp_locked,
-            CEIL(TIMESTAMPDIFF(SECOND, NOW(), locked_until) / 60) AS lock_minutes_left
-     FROM users WHERE username = ? OR email = ? OR phone = ? LIMIT 1`,
-    [identifier, identifier, identifier],
+            CEIL(EXTRACT(EPOCH FROM locked_until - NOW()) / 60)::int AS lock_minutes_left
+     FROM users WHERE username = $1 OR email = $1 OR phone = $1 LIMIT 1`,
+    [identifier],
   );
   const user = users[0];
   if (!user) {
@@ -71,16 +71,16 @@ export async function signIn({ identifier, password, ip }) {
     const failed = user.failed_login_count + 1;
     const lockMinutes = failed % maxAttempts === 0 ? Math.min(step * (failed / maxAttempts), maxMinutes) : 0;
     await pool.query(
-      `UPDATE users SET failed_login_count = ?,
-              locked_until = IF(? > 0, NOW() + INTERVAL ? MINUTE, locked_until)
-       WHERE user_id = ?`,
-      [failed, lockMinutes, lockMinutes, user.user_id],
+      `UPDATE users SET failed_login_count = $1,
+              locked_until = CASE WHEN $2::int > 0 THEN NOW() + make_interval(mins => $2::int) ELSE locked_until END
+       WHERE user_id = $3`,
+      [failed, lockMinutes, user.user_id],
     );
     await logActivity({ userId: user.user_id, action: 'LOGIN_FAILED', detail: { failed }, ip });
     throw unauthorized('MSG_LOGIN_FAILED', 'Incorrect sign-in name or password.');
   }
 
-  await pool.query('UPDATE users SET failed_login_count = 0, locked_until = NULL WHERE user_id = ?', [user.user_id]);
+  await pool.query('UPDATE users SET failed_login_count = 0, locked_until = NULL WHERE user_id = $1', [user.user_id]);
   await logActivity({ userId: user.user_id, action: 'LOGIN_SUCCESS', ip });
 
   const activeRole = roles[0];
@@ -107,10 +107,10 @@ export async function switchRole({ userId, role, mustChangePassword }) {
 }
 
 export async function getMe(userId) {
-  const [rows] = await pool.query(
-    `SELECT user_id AS id, username, full_name AS fullName, email, phone, avatar_url AS avatarUrl,
-            must_change_password AS mustChangePassword
-     FROM users WHERE user_id = ? AND status = 'ACTIVE'`,
+  const { rows } = await pool.query(
+    `SELECT user_id AS id, username, full_name AS "fullName", email, phone, avatar_url AS "avatarUrl",
+            must_change_password AS "mustChangePassword"
+     FROM users WHERE user_id = $1 AND status = 'ACTIVE'`,
     [userId],
   );
   if (!rows.length) throw unauthorized('AUTH_INVALID', 'Please sign in again.');
@@ -130,8 +130,8 @@ function validEmail(email) {
 export async function requestPasswordOtp({ email, ip }) {
   email = validEmail(email);
   const expiryMinutes = await getNumberSetting('otp.expiry_minutes', 5);
-  const [users] = await pool.query(
-    `SELECT user_id, full_name, email FROM users WHERE email = ? AND status = 'ACTIVE' LIMIT 1`,
+  const { rows: users } = await pool.query(
+    `SELECT user_id, full_name, email FROM users WHERE email = $1 AND status = 'ACTIVE' LIMIT 1`,
     [email],
   );
   const user = users[0];
@@ -139,23 +139,23 @@ export async function requestPasswordOtp({ email, ip }) {
   if (!user) return result;
 
   // Expired OTPs are the only rows we hard delete (business-rules §14).
-  await pool.query('DELETE FROM password_reset_otps WHERE expires_at < NOW() - INTERVAL 1 DAY');
+  await pool.query(`DELETE FROM password_reset_otps WHERE expires_at < NOW() - INTERVAL '1 day'`);
 
   // ASSUMPTION: at most one email per minute per account (anti-spam); a new code replaces the previous one.
-  const [recent] = await pool.query(
-    `SELECT 1 FROM password_reset_otps WHERE user_id = ? AND created_at > NOW() - INTERVAL 1 MINUTE LIMIT 1`,
+  const { rows: recent } = await pool.query(
+    `SELECT 1 FROM password_reset_otps WHERE user_id = $1 AND created_at > NOW() - INTERVAL '1 minute' LIMIT 1`,
     [user.user_id],
   );
   if (recent.length) return result;
 
   const otp = String(crypto.randomInt(0, 1_000_000)).padStart(6, '0');
-  await withTransaction(async (conn) => {
-    await conn.query(
-      `UPDATE password_reset_otps SET expires_at = NOW() WHERE user_id = ? AND used_at IS NULL AND expires_at > NOW()`,
+  await withTransaction(async (client) => {
+    await client.query(
+      `UPDATE password_reset_otps SET expires_at = NOW() WHERE user_id = $1 AND used_at IS NULL AND expires_at > NOW()`,
       [user.user_id],
     );
-    await conn.query(
-      `INSERT INTO password_reset_otps (user_id, otp_hash, expires_at) VALUES (?, ?, NOW() + INTERVAL ? MINUTE)`,
+    await client.query(
+      `INSERT INTO password_reset_otps (user_id, otp_hash, expires_at) VALUES ($1, $2, NOW() + make_interval(mins => $3::int))`,
       [user.user_id, await bcrypt.hash(otp, 10), expiryMinutes],
     );
   });
@@ -184,10 +184,10 @@ export async function verifyPasswordOtp({ email, otp }) {
   email = validEmail(email);
   if (typeof otp !== 'string' || !/^\d{6}$/.test(otp)) throw badRequest('MSG_OTP_FORMAT', 'The code has 6 digits.');
 
-  const [rows] = await pool.query(
+  const { rows } = await pool.query(
     `SELECT o.otp_id, o.otp_hash, o.attempt_count, o.user_id
      FROM password_reset_otps o JOIN users u ON u.user_id = o.user_id
-     WHERE u.email = ? AND u.status = 'ACTIVE' AND o.used_at IS NULL AND o.expires_at > NOW() AND o.attempt_count < ?
+     WHERE u.email = $1 AND u.status = 'ACTIVE' AND o.used_at IS NULL AND o.expires_at > NOW() AND o.attempt_count < $2
      ORDER BY o.created_at DESC LIMIT 1`,
     [email, OTP_MAX_ATTEMPTS],
   );
@@ -196,7 +196,7 @@ export async function verifyPasswordOtp({ email, otp }) {
 
   if (!(await bcrypt.compare(otp, row.otp_hash))) {
     const attempts = row.attempt_count + 1;
-    await pool.query('UPDATE password_reset_otps SET attempt_count = ? WHERE otp_id = ?', [attempts, row.otp_id]);
+    await pool.query('UPDATE password_reset_otps SET attempt_count = $1 WHERE otp_id = $2', [attempts, row.otp_id]);
     const attemptsLeft = OTP_MAX_ATTEMPTS - attempts;
     if (attemptsLeft <= 0) {
       throw badRequest('MSG_OTP_TOO_MANY', 'Too many wrong codes. Please request a new code.');
@@ -212,10 +212,10 @@ export async function resetPassword({ resetToken, newPassword, ip }) {
   const claims = verifyPurposeToken('PASSWORD_RESET', resetToken);
   if (!claims) throw badRequest('MSG_RESET_EXPIRED', 'The reset session has expired. Please start again.');
 
-  const [rows] = await pool.query(
+  const { rows } = await pool.query(
     `SELECT u.user_id, u.username, u.phone, u.password_hash
      FROM password_reset_otps o JOIN users u ON u.user_id = o.user_id
-     WHERE o.otp_id = ? AND o.user_id = ? AND o.used_at IS NULL AND u.status = 'ACTIVE'`,
+     WHERE o.otp_id = $1 AND o.user_id = $2 AND o.used_at IS NULL AND u.status = 'ACTIVE'`,
     [claims.otpId, claims.userId],
   );
   const user = rows[0];
@@ -223,9 +223,9 @@ export async function resetPassword({ resetToken, newPassword, ip }) {
 
   await assertNewPassword(newPassword, user);
   const hash = await hashPassword(newPassword);
-  await withTransaction(async (conn) => {
-    await conn.query('UPDATE users SET password_hash = ?, must_change_password = FALSE WHERE user_id = ?', [hash, user.user_id]);
-    await conn.query('UPDATE password_reset_otps SET used_at = NOW() WHERE otp_id = ?', [claims.otpId]);
+  await withTransaction(async (client) => {
+    await client.query('UPDATE users SET password_hash = $1, must_change_password = FALSE WHERE user_id = $2', [hash, user.user_id]);
+    await client.query('UPDATE password_reset_otps SET used_at = NOW() WHERE otp_id = $1', [claims.otpId]);
   });
   await logActivity({ userId: user.user_id, action: 'PASSWORD_RESET', detail: { step: 'DONE' }, ip });
   return { ok: true };

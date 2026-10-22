@@ -5,7 +5,7 @@ import { pool } from '../config/db.js';
 export async function logActivity({ userId = null, action, targetType = null, targetId = null, detail = null, ip = null }) {
   await pool.query(
     `INSERT INTO activity_logs (user_id, action, target_type, target_id, detail, ip_address)
-     VALUES (?, ?, ?, ?, ?, ?)`,
+     VALUES ($1, $2, $3, $4, $5, $6)`,
     [userId, action, targetType, targetId, detail ? JSON.stringify(detail) : null, ip],
   );
 }

@@ -1,12 +1,12 @@
 # EduConnect (SEP490-G39)
 
-Code base chung của nhóm: **React (Vite)** + **Node.js/Express** + **Socket.io** + **MySQL** (đúng công nghệ trong Report 2).
+Code base chung của nhóm: **React (Vite)** + **Node.js/Express** + **Socket.io** + **PostgreSQL** (Supabase).
 
 ```
 educonnect/
 ├── CLAUDE.md   hướng dẫn cho AI agent (Claude Code tự đọc file này)
 ├── docs/       quy tắc nghiệp vụ đã chốt, 107 UC, phân quyền, 71 màn
-├── database/   educonnect_schema_v0.2.sql (46 bảng, theo ERD_quyet_dinh.md)
+├── database/   educonnect_schema_v0.3.sql (46 bảng, PostgreSQL) + educonnect_seed_small_v0.3.sql (dữ liệu mẫu)
 ├── server/     API Express – http://localhost:5000/api/v1
 └── client/     Web React – http://localhost:5173
 ```
@@ -22,9 +22,9 @@ cd server
 npm install
 copy .env.example .env      # macOS/Linux: cp .env.example .env
 ```
-- Điền `DB_PASSWORD` (mật khẩu Aiven – nhóm trưởng gửi riêng) và `JWT_SECRET` (chuỗi ngẫu nhiên ≥ 32 ký tự, cả nhóm dùng **giống nhau**).
-- Chép `ca.pem` (tải từ Aiven) vào `server/certs/ca.pem`.
-- Kiểm tra kết nối: `npm run db:check` → phải báo `46 tables`.
+- Cách nhanh nhất: xin nhóm trưởng file `.env` (gửi riêng, không gửi vào nhóm chat) rồi đặt vào `server/.env`.
+- Hoặc tự điền: `DB_PASSWORD` (mật khẩu database Supabase – nhóm trưởng gửi riêng) và `JWT_SECRET` (chuỗi ngẫu nhiên ≥ 32 ký tự, cả nhóm dùng **giống nhau**). Các giá trị `DB_HOST`, `DB_USER`… đã có sẵn trong `.env.example`.
+- Kiểm tra kết nối: `npm run db:check` → phải báo `PostgreSQL 17…, 46 tables` và `time zone Asia/Ho_Chi_Minh`.
 
 ```bash
 cd ../client
@@ -39,12 +39,14 @@ cd client && npm run dev     # Web, mở http://localhost:5173
 ```
 
 ## 3. Tài khoản đầu tiên
-DB mới chưa có tài khoản nào. Một người (nhóm trưởng) chạy **một lần**:
+DB chung đã có dữ liệu mẫu (`educonnect_seed_small_v0.3.sql`): 3 tài khoản mỗi vai trò (kể cả System Admin), 2 lớp, mật khẩu chung `Educonnect@2026`. Danh sách tài khoản ở đầu file seed.
+File seed sinh bằng `npm run seed:generate:small` (không sửa tay; muốn đổi dữ liệu thì sửa `server/scripts/generate-seed-small.js`). Chỉ nạp vào DB vừa tạo từ file schema.
+
+Cần thêm một System Admin (vd DB local chưa nạp seed):
 ```bash
 cd server
 npm run seed:admin -- admin "System Admin" "<mật khẩu>"
 ```
-Sau đó đăng nhập web bằng `admin` + mật khẩu đó.
 
 ## 4. Quy ước code
 - **Mỗi FE một thư mục** `server/src/modules/<tên>/` gồm `*.routes.js` → `*.controller.js` → `*.service.js` (SQL nằm ở service). Gắn route trong `server/src/routes.js` (đã ghi sẵn ai làm FE nào). Mẫu: `modules/auth` (UC-01 Sign In).
@@ -57,9 +59,11 @@ Sau đó đăng nhập web bằng `admin` + mật khẩu đó.
 
 ## 5. Git
 - Nhánh chính `main` (luôn chạy được) và `develop`. Mỗi người làm trên `feature/fe-xx-<tên-ngắn>`, mở Pull Request vào `develop`, cần 1 người review.
-- **Không commit** `.env`, `ca.pem`, `node_modules` (đã có trong `.gitignore`).
+- **Không commit** `.env`, `*.pem`, `node_modules` (đã có trong `.gitignore`).
 
 ## 6. Database dùng chung
-- DB chung trên Aiven (MySQL 8.4, gói Free 1 GB): ai sửa/xoá dữ liệu thì cả nhóm thấy → dữ liệu thử nghiệm nên tạo trên MySQL local (đổi `.env`: `DB_HOST=127.0.0.1`, `DB_PORT=3306`, `DB_USER=root`, `DB_SSL=false`).
-- Đổi cấu trúc bảng: báo nhóm trưởng, sửa file trong `database/` rồi mới chạy trên Aiven.
-- Gói Free có thể tự tắt khi lâu không dùng → vào console.aiven.io bấm **Power on**.
+- DB chung trên Supabase (PostgreSQL 17, gói Free): ai sửa/xoá dữ liệu thì cả nhóm thấy → dữ liệu thử nghiệm nên tạo trên PostgreSQL local (đổi `.env`: `DB_HOST=127.0.0.1`, `DB_PORT=5432`, `DB_USER=postgres`, `DB_NAME=educonnect`, `DB_SSL=false`, rồi chạy file schema và seed).
+- Xem dữ liệu: supabase.com/dashboard → project EduConnect → **Table Editor** hoặc **SQL Editor**.
+- Đổi cấu trúc bảng: báo nhóm trưởng, sửa file trong `database/` rồi mới chạy trên Supabase (SQL Editor).
+- Gói Free giới hạn số kết nối: mỗi máy để `DB_POOL_MAX=3`. Gặp lỗi "max clients reached" thì đổi `DB_PORT=6543`.
+- Gói Free tự tạm dừng project sau 7 ngày không dùng → vào dashboard bấm **Restore project**.
