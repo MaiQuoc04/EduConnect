@@ -11,14 +11,15 @@ if (!username || !fullName || !password) {
 
 try {
   const hash = await bcrypt.hash(password, 10);
-  await withTransaction(async (conn) => {
-    const [res] = await conn.query(
-      'INSERT INTO users (username, full_name, password_hash, must_change_password) VALUES (?, ?, ?, FALSE)',
+  await withTransaction(async (client) => {
+    const { rows } = await client.query(
+      `INSERT INTO users (username, full_name, password_hash, must_change_password) VALUES ($1, $2, $3, FALSE)
+       RETURNING user_id`,
       [username, fullName, hash],
     );
-    await conn.query(
-      "INSERT INTO user_roles (user_id, role_id) SELECT ?, role_id FROM roles WHERE role_code = 'SYSTEM_ADMIN'",
-      [res.insertId],
+    await client.query(
+      "INSERT INTO user_roles (user_id, role_id) SELECT $1, role_id FROM roles WHERE role_code = 'SYSTEM_ADMIN'",
+      [rows[0].user_id],
     );
   });
   console.log(`System Admin "${username}" created.`);

@@ -12,12 +12,13 @@ export const env = {
   clientOrigin: process.env.CLIENT_ORIGIN || 'http://localhost:5173',
   db: {
     host: required('DB_HOST'),
-    port: Number(process.env.DB_PORT || 3306),
+    port: Number(process.env.DB_PORT || 5432),
     user: required('DB_USER'),
     password: process.env.DB_PASSWORD || '',
-    database: process.env.DB_NAME || 'educonnect',
+    database: process.env.DB_NAME || 'postgres',
     ssl: process.env.DB_SSL === 'true',
-    sslCa: process.env.DB_SSL_CA || './certs/ca.pem',
+    sslCa: process.env.DB_SSL_CA || '', // empty: SSL without verifying the server certificate
+    poolMax: Number(process.env.DB_POOL_MAX || 3),
   },
   jwt: {
     secret: required('JWT_SECRET'),
