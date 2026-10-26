@@ -6,6 +6,12 @@ import { errorText } from '../../messages.js';
 import { yearLabel } from '../school-years/schoolYearLabels.js';
 import { formatWeight } from './subjectText.js';
 
+const TEACHERS_SHOWN = 5; // longer lists open with "+n giáo viên khác"
+const MISSING = 'MISSING'; // table filter: classes without an active teacher
+
+// A class "has a teacher" only when its current teacher's account is active (a locked teacher must be replaced).
+const hasActiveTeacher = (c) => c.teacher?.status === 'ACTIVE';
+
 function classStatus(teacher) {
   if (!teacher) return { label: 'Chưa có giáo viên', pill: 'amber' };
   if (teacher.status !== 'ACTIVE') return { label: 'Giáo viên đã khoá', pill: 'red' };
@@ -21,7 +27,8 @@ export default function SubjectDetailPage() {
   const yearId = params.get('schoolYearId') ?? '';
   const [years, setYears] = useState([]);
   const [state, setState] = useState({ loading: true, data: null, error: '' });
-  const [grade, setGrade] = useState('');
+  const [grade, setGrade] = useState(''); // '' = all, a grade level, or MISSING
+  const [allTeachers, setAllTeachers] = useState(false);
 
   useEffect(() => {
     api
@@ -44,7 +51,15 @@ export default function SubjectDetailPage() {
 
   const classes = useMemo(() => state.data?.classes ?? [], [state.data]);
   const grades = useMemo(() => [...new Set(classes.map((c) => c.gradeLevel))].sort(), [classes]);
-  const shown = grade ? classes.filter((c) => c.gradeLevel === grade) : classes;
+  const missing = useMemo(() => classes.filter((c) => !hasActiveTeacher(c)), [classes]);
+  let shown = classes;
+  if (grade === MISSING) shown = missing;
+  else if (grade) shown = classes.filter((c) => c.gradeLevel === grade);
+
+  function showMissing() {
+    setGrade(MISSING);
+    document.getElementById('subject-classes')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }
 
   if (state.loading && !state.data) return <p className="loading">Đang tải môn học…</p>;
   if (state.error) {
@@ -112,53 +127,92 @@ export default function SubjectDetailPage() {
           <Icon name="library_books" />
           Thông tin tổng quan
         </h2>
-        <div className="subject-facts">
+
+        <div className="subject-stats">
           <div>
-            <p className="label-upper muted">Loại lớp áp dụng</p>
+            <p className="label-upper muted">Lớp học môn</p>
+            <p className="subject-figure">
+              {summary.classCount} <span>lớp</span>
+            </p>
+          </div>
+          <div>
+            <p className="label-upper muted">Có giáo viên đang dạy</p>
+            <p className={`subject-figure${missing.length ? ' amber' : ''}`}>
+              {summary.classCount - missing.length}/{summary.classCount} <span>lớp</span>
+            </p>
+          </div>
+          <div>
+            <p className="label-upper muted">Tổng tiết/tuần</p>
+            <p className="subject-figure">
+              {summary.totalPeriodsPerWeek} <span>tiết/tuần</span>
+            </p>
+          </div>
+        </div>
+
+        {missing.length > 0 && (
+          <div className="notice amber subject-missing">
+            <Icon name="warning" />
+            <p>
+              {missing.length} lớp chưa có giáo viên đang dạy: {missing.map((c) => c.className).join(', ')}.
+            </p>
+            <button type="button" className="btn btn-secondary push" onClick={showMissing}>
+              Xem các lớp
+            </button>
+          </div>
+        )}
+
+        <div className="subject-split">
+          <div>
+            <p className="label-upper muted">Tiết & hệ số theo loại lớp</p>
             {tracks.length ? (
-              <ul className="plain-list">
-                {tracks.map((t) => (
-                  <li key={t.trackId}>
-                    <span className="chip">{t.trackName}</span> {t.periodsPerWeek} tiết/tuần · hệ số{' '}
-                    {formatWeight(t.weight)}
-                  </li>
-                ))}
-              </ul>
+              <table className="mini-table">
+                <thead>
+                  <tr>
+                    <th>Loại lớp</th>
+                    <th className="num">Tiết/tuần</th>
+                    <th className="num">Hệ số</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {tracks.map((t) => (
+                    <tr key={t.trackId}>
+                      <td>{t.trackName}</td>
+                      <td className="num">{t.periodsPerWeek}</td>
+                      <td className="num">{formatWeight(t.weight)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
             ) : (
-              <p className="muted">Chưa thiết lập cho năm học này</p>
+              <p className="muted">Chưa thiết lập cho năm học này.</p>
             )}
           </div>
           <div>
-            <p className="label-upper muted">Phân công</p>
-            <p className="subject-figure">
-              {summary.assignedCount}/{summary.classCount} <span>lớp có giáo viên</span>
-            </p>
-          </div>
-          <div>
-            <p className="label-upper muted">Tổng số tiết/tuần</p>
-            <p className="subject-figure">
-              {summary.totalPeriodsPerWeek} <span>tiết toàn trường</span>
-            </p>
-          </div>
-          <div>
-            <p className="label-upper muted">Giáo viên dạy được</p>
+            <p className="label-upper muted">Giáo viên dạy được ({teachers.length})</p>
             {teachers.length ? (
               <ul className="plain-list">
-                {teachers.map((t) => (
+                {(allTeachers ? teachers : teachers.slice(0, TEACHERS_SHOWN)).map((t) => (
                   <li key={t.teacherId}>
                     {t.fullName} <span className="mono muted">{t.teacherCode}</span>
                     {t.status !== 'ACTIVE' && <span className="pill red">Đã khoá</span>}
                   </li>
                 ))}
+                {teachers.length > TEACHERS_SHOWN && (
+                  <li>
+                    <button type="button" className="link-button" onClick={() => setAllTeachers((v) => !v)}>
+                      {allTeachers ? 'Thu gọn' : `+${teachers.length - TEACHERS_SHOWN} giáo viên khác`}
+                    </button>
+                  </li>
+                )}
               </ul>
             ) : (
-              <p className="muted">Chưa có giáo viên nào</p>
+              <p className="muted">Chưa có giáo viên nào.</p>
             )}
           </div>
         </div>
       </section>
 
-      <section className="card card-outline subject-table">
+      <section id="subject-classes" className="card card-outline subject-table">
         <div className="subject-table-head">
           <div>
             <h2 className="title-sm">
@@ -166,16 +220,22 @@ export default function SubjectDetailPage() {
             </h2>
             {schoolYear && <p className="caption muted">Năm học {yearLabel(schoolYear.yearName)}</p>}
           </div>
-          {grades.length > 1 && (
+          {(grades.length > 1 || missing.length > 0) && (
             <div className="tabs" role="tablist">
               <button type="button" role="tab" aria-selected={!grade} onClick={() => setGrade('')}>
                 Tất cả ({classes.length})
               </button>
-              {grades.map((g) => (
-                <button key={g} type="button" role="tab" aria-selected={grade === g} onClick={() => setGrade(g)}>
-                  Khối {g} ({classes.filter((c) => c.gradeLevel === g).length})
+              {grades.length > 1 &&
+                grades.map((g) => (
+                  <button key={g} type="button" role="tab" aria-selected={grade === g} onClick={() => setGrade(g)}>
+                    Lớp {g} ({classes.filter((c) => c.gradeLevel === g).length})
+                  </button>
+                ))}
+              {missing.length > 0 && (
+                <button type="button" role="tab" aria-selected={grade === MISSING} onClick={() => setGrade(MISSING)}>
+                  Chưa có giáo viên ({missing.length})
                 </button>
-              ))}
+              )}
             </div>
           )}
         </div>
