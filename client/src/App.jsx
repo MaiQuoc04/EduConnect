@@ -7,6 +7,7 @@ import EditAvatarPage from './pages/account/EditAvatarPage.jsx';
 import ForgotPasswordPage from './pages/account/ForgotPasswordPage.jsx';
 import LoginPage from './pages/account/LoginPage.jsx';
 import ProfilePage from './pages/account/ProfilePage.jsx';
+import StudentDetailPage from './pages/students/StudentDetailPage.jsx';
 import StudentListPage from './pages/students/StudentListPage.jsx';
 import ProtectedRoute from './routes/ProtectedRoute.jsx';
 
@@ -43,6 +44,14 @@ export default function App() {
           element={
             <ProtectedRoute roles={['SCHOOL_MANAGER']}>
               <StudentListPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="students/:studentId"
+          element={
+            <ProtectedRoute roles={['SCHOOL_MANAGER']}>
+              <StudentDetailPage />
             </ProtectedRoute>
           }
         />

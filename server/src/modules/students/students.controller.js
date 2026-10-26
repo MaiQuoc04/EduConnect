@@ -66,3 +66,13 @@ export async function list(req, res) {
   if (filters.unassigned && filters.status) throw invalid('status');
   res.json(await studentsService.listStudents(filters));
 }
+
+// UC-08 View Student Detail
+export async function detail(req, res) {
+  const value = req.params.studentId;
+  // BIGINT ids arrive as JS numbers (db.js), so the id must be a positive safe integer.
+  if (!/^\d+$/.test(value) || Number(value) < 1 || Number(value) > Number.MAX_SAFE_INTEGER) {
+    throw invalid('studentId');
+  }
+  res.json(await studentsService.getStudentDetail(Number(value)));
+}

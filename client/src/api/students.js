@@ -15,6 +15,12 @@ export async function listStudents(params, { signal } = {}) {
   return data;
 }
 
+// UC-08 GET /students/:studentId -> { student, currentEnrollment, enrollmentHistory, parents }
+export async function getStudent(studentId, { signal } = {}) {
+  const { data } = await api.get(`/students/${encodeURIComponent(studentId)}`, { signal });
+  return data;
+}
+
 // Class options for the Student List filter, grouped by grade level.
 // TODO FE-04 (Khanh): replace with the class list API (GET /classes?schoolYearId=) once it exists.
 // ASSUMPTION: until then the options are collected from the students of the year (at most 20 pages of 100), so a

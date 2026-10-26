@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { fetchClassOptions, listStudents } from '../../api/students.js';
 import Avatar from '../../components/Avatar.jsx';
 import Icon from '../../components/Icon.jsx';
@@ -102,6 +102,7 @@ function SkeletonRows({ count }) {
 // SCR-07 Student List (UC-07 View Student List), School Manager only.
 export default function StudentListPage() {
   const [searchParams, setSearchParams] = useSearchParams();
+  const navigate = useNavigate();
   const filters = readFilters(searchParams);
   const query = searchParams.toString();
 
@@ -322,14 +323,27 @@ export default function StudentListPage() {
                 )}
                 {items.map((s) => {
                   const locked = s.accountStatus === 'LOCKED';
+                  // UC-08: the name links to Student Detail (SCR-08); the rest of the row is a mouse shortcut. The
+                  // list's query string goes along so the detail page returns to the same filters and page.
+                  const detailPath = `/students/${s.studentId}`;
+                  const detailState = { listSearch: query ? `?${query}` : '' };
+                  const openDetail = (e) => {
+                    if (e.target.closest('a, button')) return;
+                    navigate(detailPath, { state: detailState });
+                  };
                   return (
-                    // TODO UC-08: open Student Detail (SCR-08) when the row is clicked.
-                    <tr key={`${s.studentId}-${s.classId ?? 'none'}`} className={locked ? 'is-locked' : undefined}>
+                    <tr
+                      key={`${s.studentId}-${s.classId ?? 'none'}`}
+                      className={`is-clickable${locked ? ' is-locked' : ''}`}
+                      onClick={openDetail}
+                    >
                       <td className="num mono caption">{s.studentCode}</td>
                       <td className="sticky">
                         <div className="student-list-name">
                           <Avatar src={s.avatarUrl} name={s.fullName} size={24} square />
-                          <span>{s.fullName}</span>
+                          <Link to={detailPath} state={detailState}>
+                            {s.fullName}
+                          </Link>
                         </div>
                       </td>
                       {/* Read only: only System Admin changes a username (business-rules §3, UC-99). */}
@@ -347,7 +361,7 @@ export default function StudentListPage() {
                         </span>
                       </td>
                       <td className="num">
-                        {/* TODO UC-08: row actions (view detail) */}
+                        {/* TODO UC-09 / UC-10: row actions (update, transfer) */}
                         <button type="button" className="btn btn-icon" disabled aria-label={`Thao tác với ${s.fullName}`}>
                           <Icon name="more_horiz" size="sm" />
                         </button>

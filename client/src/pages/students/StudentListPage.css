@@ -75,6 +75,10 @@
 .student-list .table th.sticky { background: var(--graphite-50); }
 .student-list-name { display: flex; align-items: center; gap: 8px; font-weight: 600; }
 .student-list-name .avatar.square { border-radius: 4px; }
+/* UC-08: the name opens Student Detail; the whole row is clickable too. */
+.student-list .table tr.is-clickable { cursor: pointer; }
+.student-list-name a { color: inherit; }
+.student-list-name a:hover { color: var(--ink-700); text-decoration: underline; }
 
 .student-list-class { display: flex; align-items: center; gap: 8px; font-weight: 500; }
 
