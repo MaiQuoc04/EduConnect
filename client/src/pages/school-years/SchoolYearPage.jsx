@@ -21,7 +21,8 @@ export default function SchoolYearPage() {
   const fallback = years.find((y) => y.status === 'CURRENT') ?? years[0];
   const selectedId = years.some((y) => y.schoolYearId === requestedId) ? requestedId : fallback?.schoolYearId ?? null;
   const detail = useSchoolYear(selectedId, version);
-  const current = years.find((y) => y.status === 'CURRENT');
+  // The stamp follows the selected year (hidden while a new year is being created).
+  const stamped = mode === 'create' ? null : years.find((y) => y.schoolYearId === selectedId);
 
   function select(id) {
     setMode('view');
@@ -33,6 +34,12 @@ export default function SchoolYearPage() {
     await reload();
     setVersion((v) => v + 1);
     select(year.schoolYearId);
+  }
+
+  // UC-21: after a semester action, reload the detail and the list (its semester count).
+  function handleSemestersChanged() {
+    reload();
+    setVersion((v) => v + 1);
   }
 
   if (loading) return <p className="loading">Đang tải năm học…</p>;
@@ -57,7 +64,7 @@ export default function SchoolYearPage() {
       <SchoolYearForm key={selectedId} year={detail.data} onSaved={handleSaved} onCancel={() => setMode('view')} />
     );
   } else {
-    right = <SchoolYearDetail year={detail.data} onEdit={() => setMode('edit')} />;
+    right = <SchoolYearDetail year={detail.data} onEdit={() => setMode('edit')} onChanged={handleSemestersChanged} />;
   }
 
   return (
@@ -70,10 +77,10 @@ export default function SchoolYearPage() {
           <h1 className="headline-lg">Năm học & Học kỳ</h1>
           <p>Thiết lập thời gian các năm học và học kỳ của trường.</p>
         </div>
-        {current && (
+        {stamped && (
           <span className="stamp">
-            <Icon name="verified" size="sm" />
-            Năm học {yearLabel(current.yearName)}
+            <Icon name={stamped.status === 'CURRENT' ? 'verified' : 'calendar_month'} size="sm" />
+            Năm học {yearLabel(stamped.yearName)}
           </span>
         )}
       </div>

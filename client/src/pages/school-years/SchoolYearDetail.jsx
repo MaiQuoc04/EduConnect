@@ -1,10 +1,10 @@
 import Icon from '../../components/Icon.jsx';
 import { formatDate } from '../../utils/format.js';
-import { SEMESTER_STATUS, YEAR_STATUS, yearLabel } from './schoolYearLabels.js';
+import SemesterSection from './SemesterSection.jsx';
+import { YEAR_STATUS, yearLabel } from './schoolYearLabels.js';
 
-// SCR-18 right column: the selected school year (UC-20) and its semesters, read only here
-// (creating, editing and closing semesters is UC-21).
-export default function SchoolYearDetail({ year, onEdit }) {
+// SCR-18 right column: the selected school year (UC-20) and its semesters (UC-21).
+export default function SchoolYearDetail({ year, onEdit, onChanged }) {
   const status = YEAR_STATUS[year.status] ?? YEAR_STATUS.ENDED;
   const ended = year.status === 'ENDED';
 
@@ -53,40 +53,7 @@ export default function SchoolYearDetail({ year, onEdit }) {
         )}
       </section>
 
-      <section>
-        <div className="semester-head">
-          <h3 className="title-sm">Các học kỳ trong năm</h3>
-          <span className="chip">{year.semesters.length} kỳ</span>
-        </div>
-        {year.semesters.length === 0 ? (
-          <div className="notice">
-            <Icon name="info" />
-            <p>Năm học này chưa có học kỳ.</p>
-          </div>
-        ) : (
-          <div className="stack semester-stack">
-            {year.semesters.map((s) => {
-              const sStatus = SEMESTER_STATUS[s.status] ?? SEMESTER_STATUS.CLOSED;
-              return (
-                <article key={s.semesterId} className="card card-outline semester-card">
-                  <div className="semester-card-top">
-                    <span className="title-sm">Học kỳ {s.semesterNo}</span>
-                    <span className={`pill ${sStatus.pill}`}>{sStatus.label}</span>
-                    <span className="semester-dates mono">
-                      <Icon name="schedule" size="sm" />
-                      {formatDate(s.startDate)} – {formatDate(s.endDate)}
-                    </span>
-                  </div>
-                  <p className="semester-meta">
-                    <Icon name="view_timeline" size="sm" />
-                    {s.weekCount} tuần
-                  </p>
-                </article>
-              );
-            })}
-          </div>
-        )}
-      </section>
+      <SemesterSection year={year} onChanged={onChanged} />
     </div>
   );
 }

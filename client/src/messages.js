@@ -37,6 +37,13 @@ const ERROR_MESSAGES = {
   MSG_SCHOOL_YEAR_OVERLAP: 'Khoảng thời gian này trùng với một năm học khác.',
   MSG_SCHOOL_YEAR_ENDED: 'Năm học đã kết thúc nên không thể chỉnh sửa.',
   MSG_SCHOOL_YEAR_SEMESTER_OUT_OF_RANGE: 'Các học kỳ đã tạo phải nằm trong khoảng thời gian của năm học.',
+  MSG_SEMESTERS_EXIST: 'Năm học này đã có học kỳ.',
+  MSG_SEMESTER_DATES: 'Ngày bắt đầu học kỳ phải trước ngày kết thúc.',
+  MSG_SEMESTER_ORDER: 'Học kỳ 1 phải kết thúc trước khi học kỳ 2 bắt đầu.',
+  MSG_SEMESTER_OUT_OF_YEAR: 'Học kỳ phải nằm trong khoảng thời gian của năm học.',
+  MSG_SEMESTER_CLOSED: 'Học kỳ đã đóng.',
+  MSG_SEMESTER_NOT_ENDED: 'Chỉ đóng được học kỳ sau ngày kết thúc.',
+  MSG_SEMESTER_NOT_CLOSED: 'Học kỳ đang mở.',
 };
 
 export function errorText({ code, message, details } = {}) {

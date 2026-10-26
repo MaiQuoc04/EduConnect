@@ -522,6 +522,19 @@ img { display: block; }
 .semester-dates { margin-left: auto; display: flex; align-items: center; gap: 6px; color: var(--graphite-600); font-size: 13px; }
 .semester-meta { display: flex; align-items: center; gap: 6px; color: var(--graphite-700); }
 .year-form { max-width: none; }
+.pill.amber { background: var(--amber-bg); color: var(--amber); }
+.semester-card-body { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; }
+.semester-meta .chip { margin-left: 4px; }
+.semester-edit, .semester-create { display: grid; gap: 16px; }
+.semester-create-row { border: 0; margin: 0; padding: 0; display: grid; gap: 10px; }
+.semester-create-row legend { padding: 0; margin-bottom: 10px; }
+.semester-empty { align-items: center; }
+.confirm-box { display: grid; gap: 14px; padding: 16px; border-radius: var(--radius-control); }
+.confirm-box.amber { background: var(--amber-bg); outline: 1px solid #f3d9a8; }
+.confirm-box.ink { background: var(--ink-50); outline: 1px solid var(--ink-200); }
+.confirm-head { display: flex; gap: 12px; align-items: flex-start; color: var(--graphite-700); }
+.confirm-box.amber .confirm-head > .icon { color: var(--amber); }
+.confirm-box.ink .confirm-head > .icon { color: var(--ink-600); }
 .year-form-dates { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
 .year-form-date-error { margin-top: -12px; }
 

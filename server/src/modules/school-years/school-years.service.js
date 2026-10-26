@@ -6,15 +6,15 @@ const STATUS_SQL = `CASE WHEN CURRENT_DATE < sy.start_date THEN 'UPCOMING'
                          WHEN CURRENT_DATE > sy.end_date THEN 'ENDED'
                          ELSE 'CURRENT' END`;
 
-const conflict = (code, message) => new AppError(409, code, message);
+export const conflict = (code, message) => new AppError(409, code, message);
 
-function parseId(value) {
+export function parseId(value, message = 'School year not found.') {
   const id = Number(value);
-  if (!Number.isSafeInteger(id) || id <= 0) throw notFound('NOT_FOUND', 'School year not found.');
+  if (!Number.isSafeInteger(id) || id <= 0) throw notFound('NOT_FOUND', message);
   return id;
 }
 
-function isIsoDate(value) {
+export function isIsoDate(value) {
   if (typeof value !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
   const [y, m, d] = value.split('-').map(Number);
   const date = new Date(Date.UTC(y, m - 1, d));
@@ -77,26 +77,39 @@ export async function listSchoolYears() {
   return rows;
 }
 
-// UC-20: one school year with its semesters (read only here; UC-21 manages them) and its number of classes.
+// UC-20 / UC-21: one school year with its number of classes and its semesters. What the School Manager may do
+// next is computed here so the client does not repeat the rules.
 export async function getSchoolYear(idParam) {
   const id = parseId(idParam);
   const { rows } = await pool.query(
     `SELECT sy.school_year_id AS "schoolYearId", sy.year_name AS "yearName",
             sy.start_date AS "startDate", sy.end_date AS "endDate", ${STATUS_SQL} AS "status",
             (SELECT COUNT(*) FROM classes c
-             WHERE c.school_year_id = sy.school_year_id AND c.deleted_at IS NULL) AS "classCount"
+             WHERE c.school_year_id = sy.school_year_id AND c.deleted_at IS NULL) AS "classCount",
+            CURRENT_DATE <= sy.end_date
+              AND NOT EXISTS (SELECT 1 FROM semesters s WHERE s.school_year_id = sy.school_year_id) AS "canCreateSemesters"
      FROM school_years sy
      WHERE sy.school_year_id = $1`,
     [id],
   );
   if (!rows.length) throw notFound('NOT_FOUND', 'School year not found.');
   const { rows: semesters } = await pool.query(
-    `SELECT semester_id AS "semesterId", semester_no AS "semesterNo",
-            start_date AS "startDate", end_date AS "endDate", status,
-            CEIL((end_date - start_date + 1) / 7.0)::int AS "weekCount"
-     FROM semesters
-     WHERE school_year_id = $1
-     ORDER BY semester_no`,
+    `SELECT s.semester_id AS "semesterId", s.semester_no AS "semesterNo",
+            s.start_date AS "startDate", s.end_date AS "endDate", s.status,
+            CEIL((s.end_date - s.start_date + 1) / 7.0)::int AS "weekCount",
+            -- phase is about dates only; status OPEN / CLOSED is the stored attendance lock (UC-21)
+            CASE WHEN CURRENT_DATE < s.start_date THEN 'UPCOMING'
+                 WHEN CURRENT_DATE > s.end_date THEN 'ENDED'
+                 ELSE 'ONGOING' END AS "phase",
+            CASE WHEN CURRENT_DATE BETWEEN s.start_date AND s.end_date
+                 THEN (CURRENT_DATE - s.start_date) / 7 + 1 END AS "currentWeek",
+            s.status = 'OPEN' AND CURRENT_DATE <= sy.end_date AS "canEdit",
+            s.status = 'OPEN' AND CURRENT_DATE > s.end_date AS "canClose",
+            s.status = 'CLOSED' AS "canReopen"
+     FROM semesters s
+     JOIN school_years sy ON sy.school_year_id = s.school_year_id
+     WHERE s.school_year_id = $1
+     ORDER BY s.semester_no`,
     [id],
   );
   return { ...rows[0], semesters };

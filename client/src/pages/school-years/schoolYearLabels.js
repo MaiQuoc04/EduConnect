@@ -5,10 +5,13 @@ export const YEAR_STATUS = {
   ENDED: { label: 'Đã kết thúc', pill: '' },
 };
 
-export const SEMESTER_STATUS = {
-  OPEN: { label: 'Đang mở', pill: 'green' },
-  CLOSED: { label: 'Đã đóng', pill: '' },
-};
+// A semester's label combines the stored status (OPEN / CLOSED = attendance lock) with its date phase.
+export function semesterStatus({ status, phase }) {
+  if (status === 'CLOSED') return { label: 'Đã đóng', pill: '' };
+  if (phase === 'UPCOMING') return { label: 'Chưa bắt đầu', pill: 'blue' };
+  if (phase === 'ONGOING') return { label: 'Đang diễn ra', pill: 'green' };
+  return { label: 'Đã kết thúc, chưa đóng', pill: 'amber' };
+}
 
 // Stored as "2026-2027" (seed), shown as "2026–2027".
 export const yearLabel = (name) => String(name ?? '').replace('-', '–');
