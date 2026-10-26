@@ -1,0 +1,157 @@
+/* FE-02 Student List (SCR-07). Only this screen's styles; every rule is scoped under .student-list.
+   Design: Stitch "SCR-07 Student List". Colours, radii and type come from the tokens in styles.css.
+   styles.css is loaded after this file, so rules that override a shared class (.card) are prefixed with
+   .student-list to win on specificity.
+   Breakpoints are the ones of the profile screen (styles.css): 900px (app shell becomes a drawer) and 640px. */
+
+.student-list .visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+
+/* ---------- filter strip ---------- */
+.student-list .student-list-filters {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 16px;
+  margin-bottom: 16px;
+}
+.student-list-controls { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; flex: 1; min-width: 0; }
+.student-list-controls .input { height: 36px; width: auto; max-width: 100%; }
+.student-list-controls select.input { padding-right: 32px; cursor: pointer; }
+.student-list-search { position: relative; flex: 1 1 240px; max-width: 340px; }
+.student-list-search .icon {
+  position: absolute;
+  left: 10px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: var(--graphite-400);
+  pointer-events: none;
+}
+.student-list-search .input { width: 100%; padding-left: 32px; }
+.student-list-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 36px;
+  color: var(--graphite-700);
+  font-weight: 500;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.student-list-toggle input { width: 16px; height: 16px; margin: 0; accent-color: var(--ink-600); cursor: pointer; }
+.student-list-total { display: flex; align-items: center; gap: 8px; }
+.student-list-count {
+  padding: 2px 10px;
+  border-radius: 4px;
+  background: var(--graphite-100);
+  color: var(--graphite-900);
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+/* ---------- table ---------- */
+.student-list .student-list-table { padding: 0; overflow: hidden; }
+/* position: relative keeps absolutely positioned children (visually-hidden labels) inside the scroll box, so they
+   cannot widen the page. */
+.student-list-scroll { position: relative; overflow-x: auto; }
+.student-list .table { min-width: 860px; transition: opacity 0.15s; }
+.student-list .table.is-refreshing { opacity: 0.55; }
+.student-list .table th { height: 40px; padding: 0 16px; white-space: nowrap; }
+.student-list .table td { padding: 0 16px; white-space: nowrap; }
+.student-list .table .num { text-align: right; }
+.student-list .table tbody tr:hover td { background: var(--graphite-100); }
+.student-list .table .caption { color: var(--graphite-600); }
+
+/* Name column stays visible while the table scrolls sideways (narrow screens). */
+.student-list .table .sticky { position: sticky; left: 0; z-index: 1; background: var(--white); }
+.student-list .table th.sticky { background: var(--graphite-50); }
+.student-list-name { display: flex; align-items: center; gap: 8px; font-weight: 600; }
+.student-list-name .avatar.square { border-radius: 4px; }
+
+.student-list-class { display: flex; align-items: center; gap: 8px; font-weight: 500; }
+
+.student-list-parents {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 2px 8px;
+  border-radius: 4px;
+  background: var(--graphite-100);
+  color: var(--graphite-700);
+  font-size: 12px;
+  line-height: 18px;
+  font-weight: 500;
+}
+/* No parent linked yet: something School Manager has to follow up. */
+.student-list-parents.none { background: var(--amber-bg); color: var(--amber); }
+.student-list-parents.none::before { content: ''; width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
+
+/* Locked accounts stay in the list (business-rules §3), dimmed. */
+.student-list .table tr.is-locked td { background: var(--graphite-50); color: var(--graphite-500); }
+.student-list .table tr.is-locked .student-list-name { color: var(--graphite-600); }
+.student-list .table tr.is-locked .avatar { background: var(--graphite-200); color: var(--graphite-600); }
+
+.student-list-empty { height: 96px !important; text-align: center; color: var(--graphite-600); }
+
+.student-list-skeleton td span {
+  display: block;
+  height: 10px;
+  width: 70%;
+  border-radius: 4px;
+  background: var(--graphite-100);
+}
+
+/* ---------- pagination ---------- */
+.student-list-pager {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 16px;
+  border-top: 1px solid var(--graphite-200);
+}
+.student-list-pager .strong { color: var(--graphite-900); font-weight: 500; }
+.student-list-pager-controls { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; }
+.student-list-page-size { display: inline-flex; align-items: center; gap: 8px; }
+.student-list-page-size .input { width: auto; height: 32px; padding: 0 28px 0 10px; }
+.student-list-pages { display: flex; align-items: center; gap: 4px; }
+.student-list-pages .btn { height: 32px; min-width: 32px; padding: 0 8px; font-size: 12px; color: var(--graphite-700); }
+.student-list-pages .btn:not(.btn-secondary):hover { background: var(--graphite-100); }
+.student-list-pages .btn.current { background: var(--graphite-100); color: var(--graphite-900); font-weight: 600; }
+.student-list-pages .gap { padding: 0 4px; color: var(--graphite-400); }
+.student-list-page-of { display: none; }
+
+/* ---------- responsive (profile breakpoints) ---------- */
+@media (max-width: 900px) {
+  .student-list .page-header .actions-row { width: 100%; }
+}
+@media (max-width: 640px) {
+  .student-list .student-list-filters { flex-direction: column; align-items: stretch; padding: 16px; }
+  .student-list-controls { flex-direction: column; align-items: stretch; }
+  .student-list-controls .input,
+  .student-list-search { width: 100%; max-width: none; flex: none; }
+  .student-list-controls .input { height: 44px; }
+  .student-list-toggle { min-height: 44px; }
+  .student-list-toggle input { width: 20px; height: 20px; }
+  .student-list .page-header .actions-row .btn { flex: 1 1 100%; height: 44px; }
+  .student-list .table td { height: 48px; }
+  .student-list .table td .btn-icon { width: 44px; height: 44px; }
+  .student-list-pager { flex-direction: column; align-items: stretch; }
+  .student-list-pager-controls { justify-content: space-between; }
+  .student-list-page-size .input { height: 44px; }
+  /* Numbered pages make way for "Trang x / y"; previous / next stay as 44px targets. */
+  .student-list-pages .btn:not(.btn-secondary),
+  .student-list-pages .gap { display: none; }
+  .student-list-pages .btn { height: 44px; min-width: 44px; }
+  .student-list-page-of { display: inline; order: 1; }
+  .student-list-pages { order: 2; }
+}

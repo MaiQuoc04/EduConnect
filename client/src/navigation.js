@@ -4,6 +4,13 @@
 //   { to: '/students', label: 'Học sinh', icon: 'school', roles: ['SCHOOL_MANAGER'] }
 export const NAV_SECTIONS = [
   {
+    // Stitch app shell: "Hồ sơ" = student / parent / teacher records (FE-02, FE-14, FE-03).
+    label: 'Hồ sơ',
+    items: [
+      { to: '/students', label: 'Học sinh', icon: 'school', roles: ['SCHOOL_MANAGER'] }, // FE-02 UC-07
+    ],
+  },
+  {
     label: 'Tài khoản',
     items: [
       { to: '/profile', label: 'Hồ sơ của tôi', icon: 'person' }, // FE-01 UC-04
