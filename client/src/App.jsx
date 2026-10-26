@@ -7,6 +7,7 @@ import EditAvatarPage from './pages/account/EditAvatarPage.jsx';
 import ForgotPasswordPage from './pages/account/ForgotPasswordPage.jsx';
 import LoginPage from './pages/account/LoginPage.jsx';
 import ProfilePage from './pages/account/ProfilePage.jsx';
+import SchoolYearPage from './pages/school-years/SchoolYearPage.jsx';
 import ProtectedRoute from './routes/ProtectedRoute.jsx';
 
 function RoleHome() {
@@ -36,6 +37,15 @@ export default function App() {
         <Route path="profile" element={<ProfilePage />} />
         <Route path="profile/avatar" element={<EditAvatarPage />} />
         <Route path="change-password" element={<ChangePasswordPage />} />
+        {/* FE-04 Class & Group Management */}
+        <Route
+          path="school-years"
+          element={
+            <ProtectedRoute roles={['SCHOOL_MANAGER']}>
+              <SchoolYearPage />
+            </ProtectedRoute>
+          }
+        />
       </Route>
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>

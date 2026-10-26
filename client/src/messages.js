@@ -28,6 +28,15 @@ const ERROR_MESSAGES = {
   MSG_FILE_TOO_LARGE: ({ maxMb } = {}) => `Tệp vượt quá dung lượng cho phép (tối đa ${maxMb} MB).`,
   MSG_UPLOAD_FAILED: 'Không tải được tệp lên. Vui lòng thử lại.',
   MSG_INVALID_IMAGE: 'Chỉ chấp nhận ảnh JPG, PNG hoặc WebP.',
+  // FE-04 Class & Group Management
+  MSG_INVALID_DATE: 'Ngày không hợp lệ.',
+  MSG_SCHOOL_YEAR_NAME_FORMAT: 'Tên năm học gồm hai năm liên tiếp, ví dụ 2027–2028.',
+  MSG_SCHOOL_YEAR_NAME_TAKEN: 'Năm học này đã tồn tại.',
+  MSG_SCHOOL_YEAR_DATES: 'Ngày bắt đầu phải trước ngày kết thúc.',
+  MSG_SCHOOL_YEAR_DATES_NAME: 'Ngày bắt đầu phải thuộc năm đầu và ngày kết thúc thuộc năm sau của tên năm học.',
+  MSG_SCHOOL_YEAR_OVERLAP: 'Khoảng thời gian này trùng với một năm học khác.',
+  MSG_SCHOOL_YEAR_ENDED: 'Năm học đã kết thúc nên không thể chỉnh sửa.',
+  MSG_SCHOOL_YEAR_SEMESTER_OUT_OF_RANGE: 'Các học kỳ đã tạo phải nằm trong khoảng thời gian của năm học.',
 };
 
 export function errorText({ code, message, details } = {}) {

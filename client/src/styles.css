@@ -490,6 +490,41 @@ img { display: block; }
 .rules .count { color: var(--graphite-600); font-weight: 400; }
 .rules .count.all { color: var(--green); }
 
+/* ---------- school year & semester (SCR-18, FE-04) ---------- */
+.pill.blue { background: var(--blue-bg); color: var(--blue); }
+.push { margin-left: auto; }
+.year-grid { display: grid; grid-template-columns: minmax(0, 360px) minmax(0, 1fr); gap: 24px; align-items: start; }
+.year-list { padding: 0; overflow: hidden; }
+.year-list-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 12px 8px 12px 16px; background: var(--graphite-50); border-bottom: 1px solid var(--graphite-200); }
+.year-list-head h2 { display: flex; align-items: center; gap: 8px; white-space: nowrap; }
+.year-list-head .btn { white-space: nowrap; }
+.year-list ul { list-style: none; margin: 0; padding: 0; }
+.year-list li + li { border-top: 1px solid var(--graphite-200); }
+.year-item { display: grid; gap: 6px; width: 100%; padding: 16px; border: 0; border-left: 3px solid transparent; background: var(--white); text-align: left; font: inherit; color: inherit; cursor: pointer; }
+.year-item:hover { background: var(--graphite-50); }
+.year-item:focus-visible { outline: 2px solid var(--ink-400); outline-offset: -2px; }
+.year-item.selected { border-left-color: var(--ink-600); background: var(--ink-50); }
+.year-item-top { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.year-item-name { font-size: 16px; line-height: 22px; font-weight: 600; }
+.year-item-meta { display: flex; align-items: center; gap: 6px; font-size: 13px; color: var(--graphite-600); }
+.year-list-empty { padding: 24px 16px; }
+.year-list-foot { padding: 10px 16px; text-align: center; background: var(--graphite-50); border-top: 1px solid var(--graphite-200); }
+.year-detail-head { display: flex; align-items: center; gap: 12px; padding-bottom: 16px; margin-bottom: 16px; border-bottom: 1px solid var(--graphite-200); }
+.year-detail-icon { display: grid; place-items: center; width: 40px; height: 40px; border-radius: var(--radius-control); background: var(--ink-50); color: var(--ink-600); }
+.year-facts { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 16px; margin: 0; }
+.year-facts dt { color: var(--graphite-600); margin-bottom: 4px; }
+.year-facts dd { margin: 0; font-weight: 500; }
+.year-detail-note { margin-top: 16px; }
+.semester-head { display: flex; align-items: center; gap: 8px; margin-bottom: 12px; }
+.semester-stack { gap: 12px; }
+.semester-card { padding: 16px 20px; display: grid; gap: 10px; }
+.semester-card-top { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; }
+.semester-dates { margin-left: auto; display: flex; align-items: center; gap: 6px; color: var(--graphite-600); font-size: 13px; }
+.semester-meta { display: flex; align-items: center; gap: 6px; color: var(--graphite-700); }
+.year-form { max-width: none; }
+.year-form-dates { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
+.year-form-date-error { margin-top: -12px; }
+
 /* ---------- toast & loading ---------- */
 .toast-stack { position: fixed; left: 24px; bottom: 24px; z-index: 50; display: grid; gap: 8px; }
 .toast {
@@ -512,6 +547,8 @@ img { display: block; }
 /* ---------- responsive ---------- */
 @media (max-width: 1080px) {
   .profile-grid { grid-template-columns: minmax(0, 1fr); }
+  .year-grid { grid-template-columns: minmax(0, 1fr); }
+  .year-facts { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
 @media (max-width: 900px) {
   .shell { grid-template-columns: minmax(0, 1fr); }
