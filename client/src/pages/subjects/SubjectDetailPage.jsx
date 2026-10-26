@@ -100,6 +100,10 @@ export default function SubjectDetailPage() {
               </option>
             ))}
           </select>
+          <Link to={`/subjects/${subject.subjectId}/edit`} className="btn btn-primary">
+            <Icon name="edit" size="sm" />
+            Sửa thông tin môn
+          </Link>
         </div>
       </div>
 

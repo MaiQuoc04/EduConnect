@@ -46,6 +46,7 @@ const ERROR_MESSAGES = {
   MSG_SEMESTER_NOT_CLOSED: 'Học kỳ đang mở.',
   MSG_SUBJECT_CODE_FORMAT: 'Mã môn gồm 2 đến 20 ký tự: chữ in hoa không dấu, chữ số hoặc dấu gạch dưới.',
   MSG_SUBJECT_CODE_TAKEN: 'Mã môn này đã được sử dụng.',
+  MSG_SUBJECT_CODE_LOCKED: 'Môn đã được sử dụng nên không đổi được mã.',
   MSG_SUBJECT_NAME_TAKEN: 'Đã có môn học cùng tên.',
   MSG_SUBJECT_NAME_LENGTH: 'Tên môn học tối đa 150 ký tự.',
 };

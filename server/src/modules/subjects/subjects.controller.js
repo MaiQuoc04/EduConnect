@@ -12,3 +12,8 @@ export async function create(req, res) {
   const { subjectCode, subjectName } = req.body ?? {};
   res.status(201).json(await subjectService.createSubject({ subjectCode, subjectName }));
 }
+
+export async function update(req, res) {
+  const { subjectCode, subjectName } = req.body ?? {};
+  res.json(await subjectService.updateSubject(req.params.id, { subjectCode, subjectName }));
+}

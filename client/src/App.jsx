@@ -73,6 +73,14 @@ export default function App() {
             </ProtectedRoute>
           }
         />
+        <Route
+          path="subjects/:id/edit"
+          element={
+            <ProtectedRoute roles={['SCHOOL_MANAGER']}>
+              <SubjectFormPage key="edit" />
+            </ProtectedRoute>
+          }
+        />
       </Route>
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>

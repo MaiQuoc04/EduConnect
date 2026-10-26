@@ -205,3 +205,25 @@ export async function createSubject(input) {
   return getSubject(id);
 }
 
+// UC-25 Update Subject. Once the subject is used anywhere (see codeLocked in getSubject) only its name can change:
+// the code is what Excel imports refer to (ASSUMPTION agreed 27/10).
+export async function updateSubject(idParam, input) {
+  const id = parseSubjectId(idParam);
+  const data = validateInput(input);
+  await withTransaction(async (client) => {
+    await client.query('LOCK TABLE subjects IN SHARE ROW EXCLUSIVE MODE');
+    const current = await loadSubject(client, id);
+    if (current.codeLocked && current.subjectCode !== data.code) {
+      throw conflict('MSG_SUBJECT_CODE_LOCKED', 'This subject is already used, so its code cannot change.');
+    }
+    await assertUnique(client, data, id);
+    await client.query('UPDATE subjects SET subject_code = $2, subject_name = $3 WHERE subject_id = $1', [
+      id,
+      data.code,
+      data.name,
+    ]);
+  }).catch((err) => {
+    throw mapDuplicate(err);
+  });
+  return getSubject(id);
+}
