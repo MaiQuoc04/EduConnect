@@ -3,6 +3,7 @@ import healthRoutes from './modules/health/health.routes.js';
 import accountRoutes from './modules/account/account.routes.js';
 import authRoutes from './modules/auth/auth.routes.js';
 import schoolYearRoutes from './modules/school-years/school-years.routes.js';
+import subjectRoutes from './modules/subjects/subjects.routes.js';
 
 // Each feature gets its own folder in src/modules and is mounted here, e.g.
 //   FE-01 account   -> /auth, /account (Quoc)
@@ -25,5 +26,6 @@ router.use('/health', healthRoutes);
 router.use('/auth', authRoutes);
 router.use('/account', accountRoutes);
 router.use('/school-years', schoolYearRoutes);
+router.use('/subjects', subjectRoutes);
 
 export default router;

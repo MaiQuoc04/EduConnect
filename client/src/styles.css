@@ -538,6 +538,21 @@ img { display: block; }
 .year-form-dates { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
 .year-form-date-error { margin-top: -12px; }
 
+/* ---------- subject list (SCR-19, FE-04) ---------- */
+.subject-toolbar { display: grid; grid-template-columns: minmax(0, 1fr) 200px 200px; gap: 12px; padding: 16px; margin-bottom: 16px; }
+.subject-search .input { padding-left: 36px; }
+.subject-search-icon { position: absolute; left: 10px; top: 50%; transform: translateY(-50%); color: var(--graphite-500); pointer-events: none; }
+.subject-table { padding: 0; overflow: hidden; }
+.subject-table.is-loading { opacity: 0.6; }
+.subject-table .table-scroll { overflow-x: auto; }
+.subject-table .table th.num, .subject-table .table td.num { text-align: right; white-space: nowrap; }
+.subject-table .table td { padding-top: 8px; padding-bottom: 8px; }
+.subject-code { color: var(--ink-700); font-weight: 600; white-space: nowrap; }
+.subject-name { font-weight: 500; }
+.subject-empty { padding: 24px 16px; text-align: center; }
+.subject-foot { padding: 10px 16px; background: var(--graphite-50); border-top: 1px solid var(--graphite-200); }
+.subject-note { margin-top: 24px; }
+
 /* ---------- toast & loading ---------- */
 .toast-stack { position: fixed; left: 24px; bottom: 24px; z-index: 50; display: grid; gap: 8px; }
 .toast {
@@ -561,6 +576,7 @@ img { display: block; }
 @media (max-width: 1080px) {
   .profile-grid { grid-template-columns: minmax(0, 1fr); }
   .year-grid { grid-template-columns: minmax(0, 1fr); }
+  .subject-toolbar { grid-template-columns: minmax(0, 1fr); }
   .year-facts { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
 @media (max-width: 900px) {

@@ -7,6 +7,7 @@ export const NAV_SECTIONS = [
     label: 'Đào tạo',
     items: [
       { to: '/school-years', label: 'Năm học & học kỳ', icon: 'date_range', roles: ['SCHOOL_MANAGER'] }, // FE-04 UC-20, UC-21
+      { to: '/subjects', label: 'Môn học', icon: 'book', roles: ['SCHOOL_MANAGER'] }, // FE-04 UC-22
     ],
   },
   {
