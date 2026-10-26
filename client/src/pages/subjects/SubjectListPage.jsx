@@ -182,7 +182,7 @@ export default function SubjectListPage() {
       <div className="notice subject-note">
         <Icon name="info" />
         <p>
-          Số tiết/tuần và hệ số của môn được thiết lập theo loại lớp cho từng năm học. Chip “Khối A · 4” nghĩa là
+          Số tiết/tuần và hệ số của môn được thiết lập theo loại lớp cho từng năm học. “Khối A · 4” nghĩa là
           lớp thuộc loại Khối A học môn này 4 tiết mỗi tuần.
         </p>
       </div>
