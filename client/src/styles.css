@@ -552,6 +552,25 @@ img { display: block; }
 .subject-empty { padding: 24px 16px; text-align: center; }
 .subject-foot { padding: 10px 16px; background: var(--graphite-50); border-top: 1px solid var(--graphite-200); }
 .subject-note { margin-top: 24px; }
+.subject-table .row-link { cursor: pointer; }
+.subject-table .row-link:hover td { background: var(--graphite-50); }
+.back-link { display: inline-flex; align-items: center; gap: 6px; margin-bottom: 12px; color: var(--ink-700); font-size: 13px; }
+.subject-title { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+.subject-title .chip { font-family: var(--font-ui); }
+.year-select { width: auto; min-width: 190px; }
+.is-loading { opacity: 0.6; }
+.subject-overview { margin-bottom: 24px; }
+.subject-facts { display: grid; grid-template-columns: 1.4fr 1fr 1fr 1.4fr; gap: 24px; }
+.subject-facts .label-upper { margin-bottom: 8px; }
+.subject-figure { font-size: 24px; line-height: 30px; font-weight: 600; }
+.subject-figure span { font-size: 13px; font-weight: 400; color: var(--graphite-600); }
+.plain-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
+.plain-list li { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.subject-table-head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px; padding: 16px; border-bottom: 1px solid var(--graphite-200); }
+.subject-table-head h2 { display: flex; align-items: center; gap: 8px; }
+.tabs { display: inline-flex; padding: 3px; gap: 2px; border-radius: var(--radius-control); background: var(--graphite-100); }
+.tabs button { border: 0; background: transparent; font: inherit; font-size: 13px; padding: 4px 10px; border-radius: 4px; color: var(--graphite-700); cursor: pointer; }
+.tabs button[aria-selected='true'] { background: var(--white); color: var(--graphite-900); font-weight: 500; box-shadow: var(--shadow-menu); }
 
 /* ---------- toast & loading ---------- */
 .toast-stack { position: fixed; left: 24px; bottom: 24px; z-index: 50; display: grid; gap: 8px; }
@@ -577,6 +596,7 @@ img { display: block; }
   .profile-grid { grid-template-columns: minmax(0, 1fr); }
   .year-grid { grid-template-columns: minmax(0, 1fr); }
   .subject-toolbar { grid-template-columns: minmax(0, 1fr); }
+  .subject-facts { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .year-facts { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
 @media (max-width: 900px) {

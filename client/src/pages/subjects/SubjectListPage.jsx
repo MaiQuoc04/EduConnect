@@ -1,28 +1,18 @@
 import { useEffect, useMemo, useState } from 'react';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { api } from '../../api/client.js';
 import Icon from '../../components/Icon.jsx';
 import { errorText } from '../../messages.js';
 import { yearLabel } from '../school-years/schoolYearLabels.js';
-
-// Lower case without Vietnamese accents, so "hoa" finds "Hoá học" and "dia" finds "Địa lí".
-const fold = (text) =>
-  String(text ?? '')
-    .normalize('NFD')
-    .replace(/[̀-ͯ]/g, '')
-    .replace(/đ/g, 'd')
-    .replace(/Đ/g, 'D')
-    .toLowerCase();
-
-function periodsText({ periodsMin, periodsMax }) {
-  if (periodsMin === null || periodsMin === undefined) return '—';
-  return periodsMin === periodsMax ? `${periodsMin} tiết` : `${periodsMin}–${periodsMax} tiết`;
-}
+import { fold, periodsText } from './subjectText.js';
 
 // SCR-19 Subject List – UC-22 View Subject List (School Manager). Figures (class types, periods, classes) are for
 // the chosen school year; search and the class-type filter run here because a school has only ~15 subjects.
 export default function SubjectListPage() {
+  const navigate = useNavigate();
   const [years, setYears] = useState([]);
-  const [yearId, setYearId] = useState('');
+  const [params] = useSearchParams();
+  const [yearId, setYearId] = useState(() => params.get('schoolYearId') ?? ''); // back from the detail page
   const [state, setState] = useState({ loading: true, data: null, error: '' });
   const [query, setQuery] = useState('');
   const [trackId, setTrackId] = useState('');
@@ -63,6 +53,8 @@ export default function SubjectListPage() {
   }, [subjects, query, trackId]);
 
   const schoolYear = state.data?.schoolYear;
+  // UC-23: the detail page opens on the same school year.
+  const detailHref = (id) => `/subjects/${id}${yearId ? `?schoolYearId=${yearId}` : ''}`;
   const selectedYear = yearId || (schoolYear ? String(schoolYear.schoolYearId) : '');
 
   return (
@@ -139,8 +131,16 @@ export default function SubjectListPage() {
               </thead>
               <tbody>
                 {shown.map((s) => (
-                  <tr key={s.subjectId}>
-                    <td className="mono subject-code">{s.subjectCode}</td>
+                  <tr
+                    key={s.subjectId}
+                    className="row-link"
+                    onClick={() => navigate(detailHref(s.subjectId))}
+                  >
+                    <td className="mono subject-code">
+                      <Link to={detailHref(s.subjectId)} onClick={(e) => e.stopPropagation()}>
+                        {s.subjectCode}
+                      </Link>
+                    </td>
                     <td className="subject-name">{s.subjectName}</td>
                     <td>
                       {s.tracks.length ? (
