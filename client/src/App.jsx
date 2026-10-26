@@ -9,6 +9,7 @@ import LoginPage from './pages/account/LoginPage.jsx';
 import ProfilePage from './pages/account/ProfilePage.jsx';
 import SchoolYearPage from './pages/school-years/SchoolYearPage.jsx';
 import SubjectDetailPage from './pages/subjects/SubjectDetailPage.jsx';
+import SubjectFormPage from './pages/subjects/SubjectFormPage.jsx';
 import SubjectListPage from './pages/subjects/SubjectListPage.jsx';
 import ProtectedRoute from './routes/ProtectedRoute.jsx';
 
@@ -53,6 +54,14 @@ export default function App() {
           element={
             <ProtectedRoute roles={['SCHOOL_MANAGER']}>
               <SubjectListPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="subjects/new"
+          element={
+            <ProtectedRoute roles={['SCHOOL_MANAGER']}>
+              <SubjectFormPage />
             </ProtectedRoute>
           }
         />

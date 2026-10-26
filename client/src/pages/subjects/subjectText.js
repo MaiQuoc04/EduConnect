@@ -9,6 +9,14 @@ export const fold = (text) =>
     .replace(/Đ/g, 'D')
     .toLowerCase();
 
+// What a subject code may contain (UC-24 / UC-25): "toán học" -> "TOAN_HOC".
+export const toSubjectCode = (text) =>
+  fold(text)
+    .toUpperCase()
+    .replace(/\s+/g, '_')
+    .replace(/[^A-Z0-9_]/g, '')
+    .slice(0, 20);
+
 export function periodsText({ periodsMin, periodsMax }) {
   if (periodsMin === null || periodsMin === undefined) return '—';
   return periodsMin === periodsMax ? `${periodsMin} tiết` : `${periodsMin}–${periodsMax} tiết`;

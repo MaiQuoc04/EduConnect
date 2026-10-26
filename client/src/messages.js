@@ -44,6 +44,10 @@ const ERROR_MESSAGES = {
   MSG_SEMESTER_CLOSED: 'Học kỳ đã đóng.',
   MSG_SEMESTER_NOT_ENDED: 'Chỉ đóng được học kỳ sau ngày kết thúc.',
   MSG_SEMESTER_NOT_CLOSED: 'Học kỳ đang mở.',
+  MSG_SUBJECT_CODE_FORMAT: 'Mã môn gồm 2 đến 20 ký tự: chữ in hoa không dấu, chữ số hoặc dấu gạch dưới.',
+  MSG_SUBJECT_CODE_TAKEN: 'Mã môn này đã được sử dụng.',
+  MSG_SUBJECT_NAME_TAKEN: 'Đã có môn học cùng tên.',
+  MSG_SUBJECT_NAME_LENGTH: 'Tên môn học tối đa 150 ký tự.',
 };
 
 export function errorText({ code, message, details } = {}) {

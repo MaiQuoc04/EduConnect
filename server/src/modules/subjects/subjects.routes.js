@@ -11,5 +11,6 @@ router.use(requireAuth, requireRole('SCHOOL_MANAGER'));
 
 router.get('/', ctrl.list); // UC-22
 router.get('/:id', ctrl.detail); // UC-23
+router.post('/', ctrl.create); // UC-24
 
 export default router;

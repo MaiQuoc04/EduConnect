@@ -1,5 +1,7 @@
-import { pool } from '../../config/db.js';
-import { notFound } from '../../utils/AppError.js';
+import { pool, withTransaction } from '../../config/db.js';
+import { AppError, badRequest, notFound } from '../../utils/AppError.js';
+
+const conflict = (code, message) => new AppError(409, code, message);
 
 // The year the figures are computed for: the requested one, or the current year by date (MOM-05) – the latest
 // year that has started, else the first upcoming one. Null when no school year exists yet.
@@ -151,5 +153,55 @@ export async function getSubject(idParam, { schoolYearId } = {}) {
     totalPeriodsPerWeek: classes.reduce((sum, c) => sum + (c.periodsPerWeek ?? 0), 0),
   };
   return { subject, schoolYear, tracks, classes, teachers, summary };
+}
+
+// UC-24 / UC-25 input: code = upper-case letters without accents, digits or "_", 2–20 characters (seed: TOAN, HDTN);
+// name = 1–150 characters (subjects.subject_name VARCHAR(150)).
+function validateInput({ subjectCode, subjectName }) {
+  const code = typeof subjectCode === 'string' ? subjectCode.trim() : '';
+  const name = typeof subjectName === 'string' ? subjectName.trim().replace(/\s+/g, ' ') : '';
+  if (!code || !name) throw badRequest('MSG_REQUIRED', 'Please enter the subject code and name.');
+  if (!/^[A-Z0-9_]{2,20}$/.test(code)) {
+    throw badRequest('MSG_SUBJECT_CODE_FORMAT', 'The code has 2–20 upper-case letters without accents, digits or _.');
+  }
+  if (name.length > 150) throw badRequest('MSG_SUBJECT_NAME_LENGTH', 'The subject name has at most 150 characters.');
+  return { code, name };
+}
+
+// Codes are unique over every row, deleted ones included (UNIQUE constraint); names only among live subjects
+// (ASSUMPTION: no two subjects share a name, case-insensitive – agreed 27/10).
+async function assertUnique(client, { code, name }, excludeId = null) {
+  const { rows } = await client.query(
+    `SELECT EXISTS (SELECT 1 FROM subjects WHERE subject_code = $1
+                    AND ($3::bigint IS NULL OR subject_id <> $3)) AS "codeTaken",
+            EXISTS (SELECT 1 FROM subjects WHERE lower(subject_name) = lower($2) AND deleted_at IS NULL
+                    AND ($3::bigint IS NULL OR subject_id <> $3)) AS "nameTaken"`,
+    [code, name, excludeId],
+  );
+  if (rows[0].codeTaken) throw conflict('MSG_SUBJECT_CODE_TAKEN', 'This subject code is already used.');
+  if (rows[0].nameTaken) throw conflict('MSG_SUBJECT_NAME_TAKEN', 'A subject with this name already exists.');
+}
+
+// 23505 can still happen if two School Managers save the same code at the same moment.
+function mapDuplicate(err) {
+  if (err.code === '23505') return conflict('MSG_SUBJECT_CODE_TAKEN', 'This subject code is already used.');
+  return err;
+}
+
+// UC-24 Create Subject. Its class types, periods and weights are set later (UC-26).
+export async function createSubject(input) {
+  const data = validateInput(input);
+  const id = await withTransaction(async (client) => {
+    await client.query('LOCK TABLE subjects IN SHARE ROW EXCLUSIVE MODE'); // subjects are written rarely
+    await assertUnique(client, data);
+    const { rows } = await client.query(
+      'INSERT INTO subjects (subject_code, subject_name) VALUES ($1, $2) RETURNING subject_id AS "subjectId"',
+      [data.code, data.name],
+    );
+    return rows[0].subjectId;
+  }).catch((err) => {
+    throw mapDuplicate(err);
+  });
+  return getSubject(id);
 }
 

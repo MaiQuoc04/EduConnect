@@ -70,6 +70,10 @@ export default function SubjectListPage() {
             tính theo năm học đang chọn.
           </p>
         </div>
+        <Link to="/subjects/new" className="btn btn-primary">
+          <Icon name="add" size="sm" />
+          Thêm môn học
+        </Link>
       </div>
 
       <div className="card card-outline subject-toolbar">
