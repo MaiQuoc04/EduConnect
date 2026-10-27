@@ -85,6 +85,48 @@ export async function parents(req, res) {
   res.json(await studentsService.getStudentParents(parseStudentId(req.params.studentId)));
 }
 
+// --- UC-13 ---------------------------------------------------------------------------------------------------
+
+const LINK_FIELDS = ['parentId', 'relationshipType'];
+
+// parentId is parents.parent_id, the same id GET /students/:studentId/parents returns.
+function parseParentId(value) {
+  if (!/^\d+$/.test(value) || Number(value) < 1 || Number(value) > Number.MAX_SAFE_INTEGER) {
+    throw invalid('parentId');
+  }
+  return Number(value);
+}
+
+// UC-13 Link Parent–Student: { parentId, relationshipType }. Unknown keys are rejected, as in UC-09 / UC-10.
+export async function linkParent(req, res) {
+  const studentId = parseStudentId(req.params.studentId);
+  const body = req.body ?? {};
+  if (!isPlainObject(body)) {
+    throw badRequest('MSG_INVALID_PARAM', 'The request body must be a JSON object.', { field: 'body' });
+  }
+  rejectUnknownKeys(body, LINK_FIELDS);
+  const { parentId, relationshipType } = body;
+  if (!isId(parentId)) throw invalid('parentId');
+  // Exact upper-case values only ("father" is rejected, not normalised), as gender in UC-09.
+  if (!studentsService.RELATIONSHIP_TYPES.includes(relationshipType)) {
+    throw badRequest('MSG_INVALID_RELATIONSHIP_TYPE', 'Invalid relationship type.',
+      { field: 'relationshipType', allowed: studentsService.RELATIONSHIP_TYPES });
+  }
+  res.json(await studentsService.linkParent(studentId, parentId, relationshipType));
+}
+
+// UC-13 Unlink Parent–Student. No body: anything sent is rejected rather than ignored.
+export async function unlinkParent(req, res) {
+  const studentId = parseStudentId(req.params.studentId);
+  const parentId = parseParentId(req.params.parentId);
+  const body = req.body ?? {};
+  if (!isPlainObject(body)) {
+    throw badRequest('MSG_INVALID_PARAM', 'The request body must be a JSON object.', { field: 'body' });
+  }
+  rejectUnknownKeys(body, []);
+  res.json(await studentsService.unlinkParent(studentId, parentId));
+}
+
 // --- UC-09 ---------------------------------------------------------------------------------------------------
 
 // The only fields UC-09 may change. Login identifiers (email, phone, username) belong to System Admin (UC-99,

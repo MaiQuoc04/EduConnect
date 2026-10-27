@@ -28,6 +28,23 @@ export async function getStudentParents(studentId, { signal } = {}) {
   return data;
 }
 
+// UC-13 POST /students/:studentId/parents -> { student, parents, canLinkMore, warnings } (the UC-12 shape plus
+// warnings). The body is only { parentId, relationshipType }: the server rejects any other key, and
+// relationshipType must be exactly FATHER | MOTHER | GUARDIAN (upper case).
+export async function linkParent(studentId, { parentId, relationshipType }) {
+  const { data } = await api.post(`/students/${encodeURIComponent(studentId)}/parents`, { parentId, relationshipType });
+  return data;
+}
+
+// UC-13 DELETE /students/:studentId/parents/:parentId -> same shape as linkParent. No body. The link is hard
+// deleted (business-rules §14); linking the same parent again later is allowed.
+export async function unlinkParent(studentId, parentId) {
+  const { data } = await api.delete(
+    `/students/${encodeURIComponent(studentId)}/parents/${encodeURIComponent(parentId)}`,
+  );
+  return data;
+}
+
 // UC-09 PATCH /students/:studentId -> the updated "student" object (same shape as UC-08's `student`).
 // changes may only hold fullName, dob, gender: the server rejects any other key with MSG_FIELD_NOT_EDITABLE.
 export async function updateStudent(studentId, changes) {

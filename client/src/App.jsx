@@ -12,6 +12,7 @@ import StudentListPage from './pages/students/StudentListPage.jsx';
 import StudentParentsPage from './pages/students/StudentParentsPage.jsx';
 import TransferStudentPage from './pages/students/TransferStudentPage.jsx';
 import UpdateStudentPage from './pages/students/UpdateStudentPage.jsx';
+import UpdateStudentRelationshipPage from './pages/students/UpdateStudentRelationshipPage.jsx';
 import ProtectedRoute from './routes/ProtectedRoute.jsx';
 
 function RoleHome() {
@@ -90,6 +91,15 @@ export default function App() {
           element={
             <ProtectedRoute roles={['SCHOOL_MANAGER']}>
               <StudentParentsPage />
+            </ProtectedRoute>
+          }
+        />
+        {/* UC-13 Link / Unlink Parent–Student (SCR-13), opened from SCR-12; no menu entry. */}
+        <Route
+          path="students/:studentId/parents/edit"
+          element={
+            <ProtectedRoute roles={['SCHOOL_MANAGER']}>
+              <UpdateStudentRelationshipPage />
             </ProtectedRoute>
           }
         />

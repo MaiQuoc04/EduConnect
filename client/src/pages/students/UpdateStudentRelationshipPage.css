@@ -1,0 +1,321 @@
+/* FE-02 Update Student Relationship (SCR-13, UC-13). Only this screen's styles; every rule is scoped under
+   .update-relationship (the dialogs are rendered inside it). Design: Stitch "SCR-12 Update Student Relationship".
+   Colours, radii and type come from the tokens in styles.css; rules that override a shared class (.card, .notice,
+   .input, .btn) are prefixed with .update-relationship to win on specificity (styles.css is loaded after this file).
+   Breakpoints are the ones of the other FE-02 screens: 1080px (7/5 grid stacks), 900px (app shell becomes a drawer)
+   and 640px (44px touch targets, full-width buttons). */
+
+.update-relationship .strong { font-weight: 500; color: var(--graphite-900); }
+.update-relationship p,
+.update-relationship dd { overflow-wrap: anywhere; }
+
+/* ---------- header ---------- */
+.update-relationship .page-header {
+  align-items: flex-end;
+  padding-bottom: 24px;
+  border-bottom: 1px solid var(--graphite-200);
+}
+.update-relationship-eyebrow { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 6px; color: var(--graphite-500); }
+.update-relationship-eyebrow .mono { color: var(--ink-700); text-transform: none; letter-spacing: 0.02em; }
+
+/* ---------- student + quota ---------- */
+.update-relationship .update-relationship-summary {
+  display: flex;
+  align-items: center;
+  gap: 24px;
+  margin-top: 24px;
+  padding: 20px 24px;
+}
+.update-relationship-student { display: flex; align-items: center; gap: 16px; flex: 1; min-width: 0; }
+.update-relationship-student > div { min-width: 0; }
+.update-relationship-student .avatar { background: var(--graphite-100); color: var(--graphite-700); }
+.update-relationship-person-name { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; margin-bottom: 2px; }
+.update-relationship-person-name h2,
+.update-relationship-person-name h3 { overflow-wrap: anywhere; }
+
+.update-relationship-quota {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  flex: 0 1 400px;
+  min-width: 0;
+  padding: 12px 16px;
+  border-radius: var(--radius-control);
+  background: var(--graphite-50);
+}
+.update-relationship-quota > div { display: grid; justify-items: start; gap: 6px; min-width: 0; }
+/* Quota ring: ink while there is room, amber when full (as in the design). */
+.update-relationship-ring {
+  --ring: var(--ink-600);
+  position: relative;
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 52px;
+  height: 52px;
+  border-radius: 50%;
+  background: conic-gradient(var(--ring) var(--quota), var(--graphite-200) 0);
+}
+.update-relationship-ring::before {
+  content: '';
+  position: absolute;
+  inset: 5px;
+  border-radius: 50%;
+  background: var(--graphite-50);
+}
+.update-relationship-ring .mono { position: relative; font-weight: 600; color: var(--graphite-900); }
+.update-relationship-quota.full .update-relationship-ring { --ring: var(--amber); }
+.update-relationship .pill.amber { background: var(--amber-bg); color: var(--amber); }
+
+/* ---------- outcome of the last action ---------- */
+.update-relationship-outcome { display: grid; gap: 8px; margin-top: 16px; }
+
+/* ---------- 7 / 5 grid ---------- */
+.update-relationship-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 7fr) minmax(0, 5fr);
+  gap: 24px;
+  align-items: start;
+  margin-top: 24px;
+}
+.update-relationship-current { display: grid; gap: 16px; min-width: 0; }
+.update-relationship-section-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.update-relationship-section-head h2 { display: flex; align-items: center; gap: 8px; }
+.update-relationship-section-head h2 .icon { color: var(--ink-700); }
+
+/* ---------- linked parents ---------- */
+.update-relationship .update-relationship-parent { display: grid; gap: 14px; min-width: 0; padding: 20px; }
+.update-relationship-parent-head { display: flex; flex-wrap: wrap; align-items: flex-start; justify-content: space-between; gap: 10px; }
+.update-relationship-person { display: flex; align-items: center; gap: 12px; min-width: 0; }
+.update-relationship-person > div { min-width: 0; }
+.update-relationship-person .avatar { background: var(--ink-50); color: var(--ink-700); }
+.update-relationship-contact {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px 16px;
+  margin: 0;
+  padding: 10px 12px;
+  list-style: none;
+  border-radius: var(--radius-control);
+  background: var(--graphite-50);
+  color: var(--graphite-700);
+}
+.update-relationship-contact li { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.update-relationship-contact li > span { overflow-wrap: anywhere; }
+.update-relationship-contact .icon { color: var(--graphite-400); }
+.update-relationship-contact .empty { color: var(--graphite-400); }
+.update-relationship-parent-foot { display: flex; justify-content: flex-end; }
+
+.update-relationship .update-relationship-empty { outline: 1px dashed var(--graphite-300); background: var(--graphite-50); }
+.update-relationship-empty > .icon { color: var(--ink-600); }
+
+.update-relationship .update-relationship-rules {
+  position: relative;
+  display: flex;
+  gap: 16px;
+  padding-left: 48px;
+  background: var(--graphite-50);
+}
+.update-relationship-rules::before {
+  content: '';
+  position: absolute;
+  left: 24px;
+  top: 0;
+  bottom: 0;
+  width: 1px;
+  background: var(--ink-200);
+}
+.update-relationship-rules > .icon { color: var(--ink-600); margin-top: 1px; }
+.update-relationship-rules ul { display: grid; gap: 6px; margin: 8px 0 0; padding-left: 18px; color: var(--graphite-700); }
+
+/* ---------- link panel ---------- */
+.update-relationship .update-relationship-panel { display: grid; gap: 16px; min-width: 0; }
+.update-relationship-panel .notice { padding: 12px; }
+.update-relationship-account-note { display: flex; gap: 8px; color: var(--graphite-600); }
+.update-relationship-account-note .icon { flex: none; color: var(--ink-600); }
+.update-relationship-fieldset { display: grid; gap: 16px; min-width: 0; margin: 0; padding: 0; border: 0; }
+.update-relationship-fieldset legend { margin-bottom: 8px; padding: 0; }
+.update-relationship-fieldset:disabled .update-relationship-modes,
+.update-relationship-fieldset:disabled .field { opacity: 0.7; }
+
+/* Segmented choice between the two ways of picking a parent. */
+.update-relationship-modes {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 4px;
+  padding: 4px;
+  border-radius: var(--radius-control);
+  background: var(--graphite-100);
+}
+.update-relationship-modes button {
+  min-height: 36px;
+  padding: 0 10px;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  font: 500 13px/18px var(--font-ui);
+  color: var(--graphite-600);
+  cursor: pointer;
+}
+.update-relationship-modes button.active { background: var(--white); color: var(--ink-700); box-shadow: 0 1px 2px rgba(28, 27, 25, 0.08); }
+.update-relationship-modes button:focus-visible { outline: 2px solid var(--ink-400); outline-offset: 1px; }
+.update-relationship-modes button:disabled { cursor: default; }
+
+.update-relationship .update-relationship-search { padding-left: 38px; }
+.update-relationship-input-icon,
+.update-relationship-select-icon {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  color: var(--graphite-500);
+  pointer-events: none;
+}
+.update-relationship-input-icon { left: 12px; }
+.update-relationship-select-icon { right: 12px; }
+.update-relationship .update-relationship-select { appearance: none; padding-right: 40px; cursor: pointer; }
+
+.update-relationship-options { display: grid; gap: 6px; margin: 4px 0 0; padding: 0; list-style: none; }
+.update-relationship-option {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  min-height: 52px;
+  padding: 8px 10px;
+  border: 1px solid var(--graphite-200);
+  border-radius: var(--radius-control);
+  background: var(--white);
+  text-align: left;
+  font: inherit;
+  color: inherit;
+  cursor: pointer;
+}
+.update-relationship-option > span:not(.avatar) { display: grid; flex: 1; min-width: 0; }
+.update-relationship-option > span .caption { overflow-wrap: anywhere; }
+.update-relationship-option > .icon { flex: none; color: var(--graphite-400); }
+.update-relationship-option:not(:disabled):hover { background: var(--graphite-50); }
+.update-relationship-option:focus-visible { outline: 2px solid var(--ink-400); outline-offset: 1px; }
+.update-relationship-option:disabled { opacity: 0.6; cursor: default; }
+.update-relationship-option.active { border-color: var(--ink-600); background: var(--ink-50); }
+.update-relationship-option.active > .icon { color: var(--ink-600); }
+
+.update-relationship-sibling { display: grid; gap: 8px; }
+.update-relationship-sibling-head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 4px 8px; }
+
+.update-relationship-selected {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 12px 14px;
+  border-radius: var(--radius-control);
+  background: var(--ink-50);
+}
+.update-relationship-selected > div { display: grid; gap: 2px; min-width: 0; }
+.update-relationship-selected .label-upper { color: var(--ink-700); }
+.update-relationship-locked { color: var(--amber); }
+.update-relationship .update-relationship-submit { width: 100%; height: 40px; }
+
+/* ---------- dialogs ---------- */
+.update-relationship-dialog {
+  width: min(480px, calc(100vw - 32px));
+  max-height: calc(100dvh - 32px);
+  overflow-y: auto;
+  padding: 24px;
+  border: 0;
+  border-radius: var(--radius-dialog);
+  background: var(--white);
+  color: var(--graphite-900);
+  box-shadow: var(--shadow-dialog);
+}
+.update-relationship-dialog::backdrop { background: rgba(28, 27, 25, 0.32); }
+.update-relationship-dialog-head { display: flex; align-items: center; gap: 10px; margin-bottom: 16px; }
+.update-relationship-dialog-icon {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  background: var(--ink-50);
+  color: var(--ink-700);
+}
+.update-relationship-dialog.danger .update-relationship-dialog-icon { background: var(--red-bg); color: var(--red-pen); }
+.update-relationship-dialog-body { display: grid; gap: 14px; }
+.update-relationship-dialog-facts {
+  display: grid;
+  grid-template-columns: max-content minmax(0, 1fr);
+  gap: 6px 14px;
+  margin: 0;
+  padding: 12px 14px;
+  border-radius: var(--radius-control);
+  background: var(--graphite-50);
+}
+.update-relationship-dialog-facts dt { color: var(--graphite-500); }
+.update-relationship-dialog-facts dd { margin: 0; }
+.update-relationship-dialog .notice { padding: 12px; }
+.update-relationship .update-relationship-consequences { background: var(--red-bg); color: var(--red-pen); border-radius: var(--radius-control); }
+.update-relationship-consequences .icon { color: var(--red-pen); }
+.update-relationship-consequences .notice-title { color: inherit; }
+.update-relationship-consequences ul { display: grid; gap: 4px; margin: 4px 0 0; padding-left: 18px; }
+.update-relationship-dialog-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 8px; margin-top: 20px; }
+/* Filled red-pen button: only for the irreversible confirmation in the unlink dialog. */
+.update-relationship .update-relationship-btn-danger { background: var(--red-pen); color: #fff; }
+.update-relationship .update-relationship-btn-danger:not(:disabled):hover { background: #8f1c13; }
+.update-relationship-spin { animation: update-relationship-spin 0.9s linear infinite; }
+@keyframes update-relationship-spin { to { transform: rotate(360deg); } }
+
+/* ---------- not found, load error ---------- */
+.update-relationship .update-relationship-missing {
+  display: grid;
+  justify-items: center;
+  gap: 8px;
+  margin-top: 24px;
+  padding: 48px 24px;
+  text-align: center;
+}
+.update-relationship-missing > .icon { font-size: 40px; color: var(--graphite-400); }
+.update-relationship-missing .btn { margin-top: 12px; }
+.update-relationship > .form-error { margin-top: 16px; }
+.update-relationship-retry { margin-top: 16px; }
+
+/* ---------- responsive ---------- */
+@media (max-width: 1080px) {
+  .update-relationship .update-relationship-summary { flex-direction: column; align-items: stretch; gap: 16px; }
+  .update-relationship-quota { flex-basis: auto; }
+  .update-relationship-grid { grid-template-columns: minmax(0, 1fr); }
+  /* The link panel comes first once stacked: it is the main action of the screen. */
+  .update-relationship-panel { order: -1; }
+}
+@media (max-width: 900px) {
+  .update-relationship .page-header { align-items: stretch; }
+}
+@media (max-width: 640px) {
+  .update-relationship .breadcrumb a { display: inline-flex; align-items: center; min-height: 44px; margin: -12px 0; }
+  .update-relationship .page-header .btn { width: 100%; height: 44px; }
+  .update-relationship .update-relationship-summary,
+  .update-relationship .update-relationship-panel,
+  .update-relationship .update-relationship-parent { padding: 16px; }
+  .update-relationship-student { align-items: flex-start; }
+  .update-relationship-contact { grid-template-columns: minmax(0, 1fr); }
+  .update-relationship-modes button { min-height: 44px; }
+  .update-relationship .input { height: 44px; }
+  .update-relationship .update-relationship-submit,
+  .update-relationship-parent-foot .btn,
+  .update-relationship-sibling-head .btn { width: 100%; height: 44px; }
+  .update-relationship-option { min-height: 56px; }
+  .update-relationship .update-relationship-rules { padding-left: 32px; }
+  .update-relationship-rules::before { left: 16px; }
+  .update-relationship-rules > .icon { display: none; }
+  .update-relationship-dialog { padding: 20px 16px; }
+  .update-relationship-dialog-facts { grid-template-columns: minmax(0, 1fr); gap: 2px; }
+  .update-relationship-dialog-facts dd + dt { margin-top: 6px; }
+  .update-relationship-dialog-actions .btn { flex: 1 1 100%; height: 44px; }
+  .update-relationship-retry .btn { flex: 1 1 100%; height: 44px; }
+  .update-relationship-missing .btn { width: 100%; height: 44px; }
+}

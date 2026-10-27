@@ -314,11 +314,11 @@ export async function findStudentParents(studentId, db = pool) {
 // UC-08: only the header of the student and their parents. Not logged (business-rules §13).
 // className is the class of the current enrollment, chosen as in UC-07 / UC-08; null when the student has no
 // class this year or no school year exists (then $1 is NULL and the LEFT JOIN finds nothing).
-export async function getStudentParents(studentId) {
-  const params = [await resolveSchoolYearId()];
+export async function getStudentParents(studentId, db = pool) {
+  const params = [await resolveSchoolYearId({}, db)];
   const enrollments = enrollmentsOfYear(params);
   params.push(studentId);
-  const { rows } = await pool.query(
+  const { rows } = await db.query(
     `SELECT s.student_id AS "studentId", s.student_code AS "studentCode", u.full_name AS "fullName",
             u.avatar_url AS "avatarUrl", c.class_name AS "className"
      FROM students s
@@ -331,8 +331,128 @@ export async function getStudentParents(studentId) {
   const student = rows[0];
   if (!student) throw notFound('MSG_STUDENT_NOT_FOUND', 'The student does not exist.');
 
-  const parents = await findStudentParents(studentId);
+  const parents = await findStudentParents(studentId, db);
   return { student, parents, canLinkMore: parents.length < MAX_PARENTS_PER_STUDENT };
+}
+
+// --- UC-13 -----------------------------------------------------------------------------------------------------
+
+export const RELATIONSHIP_TYPES = ['FATHER', 'MOTHER', 'GUARDIAN']; // student_parents.relationship_type has no CHECK
+
+// Classes whose groups a parent link concerns: every class the student is STUDYING in whose school year has not
+// ended yet. Usually one class; two after a promotion (UC-11 keeps last year's enrollment STUDYING) until the old
+// year ends. ASSUMPTION: a year that has ended is left out because its groups are read only (business-rules §4),
+// and a later year the student was already promoted into is included, so a parent linked in the summer still
+// reaches the new class. Soft-deleted classes are ignored as everywhere in FE-02.
+async function activeClassesOfStudent(client, studentId) {
+  const { rows } = await client.query(
+    `SELECT c.class_id, c.class_name
+     FROM class_enrollments ce
+     JOIN classes c ON c.class_id = ce.class_id
+     JOIN school_years sy ON sy.school_year_id = c.school_year_id
+     WHERE ce.student_id = $1 AND ce.status = 'STUDYING' AND c.deleted_at IS NULL AND sy.end_date >= CURRENT_DATE
+     ORDER BY sy.start_date, c.class_id`,
+    [studentId],
+  );
+  return rows;
+}
+
+// Same "no class" warning for link and unlink: the link itself is saved, only the groups are not touched.
+// ASSUMPTION: new warning code WARN_STUDENT_HAS_NO_CLASS (waiting for the team lead to add it to messages.js).
+const NO_CLASS_WARNING = {
+  code: 'WARN_STUDENT_HAS_NO_CLASS',
+  message: 'The student is not studying in any class; no class group was changed.',
+  details: {},
+};
+
+// Locks the student row (404 when missing). Every UC-13 call and UC-10 / UC-11 lock it first, so links of the same
+// student, and a link racing a transfer, run one after the other.
+async function lockStudent(client, studentId) {
+  const { rows } = await client.query('SELECT student_id FROM students WHERE student_id = $1 FOR UPDATE', [studentId]);
+  if (!rows[0]) throw notFound('MSG_STUDENT_NOT_FOUND', 'The student does not exist.');
+}
+
+// UC-13 Link Parent–Student (School Manager), SCR-13. Adds one student_parents row and puts the parent into the
+// GENERAL and PARENT groups of the student's class(es) (business-rules §4), in one transaction. No account is
+// created or changed (UC-13 postcondition). Returns the UC-12 shape plus warnings.
+// Not logged: parent links are not in the activity_logs list (business-rules §13).
+// ASSUMPTION: a LOCKED parent account can be linked; the documents do not forbid it (locked accounts keep their
+// data, business-rules §3). Two parents with the same relationshipType are allowed (not forbidden either).
+export async function linkParent(studentId, parentId, relationshipType) {
+  return withTransaction(async (client) => {
+    await lockStudent(client, studentId);
+
+    const { rows: parentRows } = await client.query(
+      `SELECT p.user_id,
+              EXISTS (SELECT 1 FROM user_roles ur JOIN roles r ON r.role_id = ur.role_id
+                      WHERE ur.user_id = p.user_id AND r.role_code = 'PARENT') AS "hasParentRole"
+       FROM parents p WHERE p.parent_id = $1`,
+      [parentId],
+    );
+    const parent = parentRows[0];
+    if (!parent) throw badRequest('MSG_PARENT_NOT_FOUND', 'The parent does not exist.');
+    if (!parent.hasParentRole) throw badRequest('MSG_USER_NOT_PARENT', 'This account is not a parent account.');
+
+    // The student row lock above already serialises links of one student; FOR UPDATE on the links themselves also
+    // stops an unlink of the same rows from interleaving. Checked here so the INSERT never raises 23505.
+    const { rows: links } = await client.query(
+      'SELECT parent_id FROM student_parents WHERE student_id = $1 FOR UPDATE',
+      [studentId],
+    );
+    if (links.some((link) => link.parent_id === parentId)) {
+      throw badRequest('MSG_LINK_ALREADY_EXISTS', 'This parent is already linked to the student.');
+    }
+    if (links.length >= MAX_PARENTS_PER_STUDENT) {
+      throw badRequest('MSG_MAX_PARENTS_REACHED', `A student can have at most ${MAX_PARENTS_PER_STUDENT} parents.`,
+        { max: MAX_PARENTS_PER_STUDENT });
+    }
+
+    await client.query(
+      `INSERT INTO student_parents (student_id, parent_id, relationship_type, linked_at)
+       VALUES ($1, $2, $3, NOW())`,
+      [studentId, parentId, relationshipType],
+    );
+
+    // joinClassGroups skips a group the parent is already an active member of (another child in the same class).
+    const classes = await activeClassesOfStudent(client, studentId);
+    const warnings = classes.length ? [] : [NO_CLASS_WARNING];
+    for (const { class_id: classId, class_name: className } of classes) {
+      const { warnings: classWarnings } = await joinClassGroups(client, classId, new Map([[parent.user_id, 'PARENT']]));
+      for (const warning of classWarnings) warnings.push({ ...warning, details: { ...warning.details, classId, className } });
+    }
+
+    return { ...(await getStudentParents(studentId, client)), warnings };
+  });
+}
+
+// UC-13 Unlink Parent–Student (School Manager). HARD delete of the student_parents row (business-rules §14 lists
+// it as an exception to soft delete), and the parent leaves the GENERAL and PARENT groups of the student's class(es)
+// (left_at, row kept, §6) unless another of their children still studies in that class. One transaction.
+// The parent account is not touched (UC-13 postcondition). Not logged (business-rules §13).
+export async function unlinkParent(studentId, parentId) {
+  return withTransaction(async (client) => {
+    await lockStudent(client, studentId);
+
+    const { rows: deleted } = await client.query(
+      `DELETE FROM student_parents sp USING parents p
+       WHERE p.parent_id = sp.parent_id AND sp.student_id = $1 AND sp.parent_id = $2
+       RETURNING p.user_id`,
+      [studentId, parentId],
+    );
+    if (!deleted[0]) throw badRequest('MSG_LINK_NOT_FOUND', 'This link does not exist.');
+
+    // Groups are checked after the DELETE, so the sibling test only sees the parent's remaining children.
+    const classes = await activeClassesOfStudent(client, studentId);
+    const warnings = classes.length ? [] : [NO_CLASS_WARNING];
+    for (const { class_id: classId, class_name: className } of classes) {
+      await leaveParentClassGroups(client, { classId, parentUserIds: [deleted[0].user_id], exceptStudentId: studentId });
+      for (const warning of await classGroupWarnings(client, classId, ['PARENT'])) {
+        warnings.push({ ...warning, details: { ...warning.details, classId, className } });
+      }
+    }
+
+    return { ...(await getStudentParents(studentId, client)), warnings };
+  });
 }
 
 // --- UC-09 -----------------------------------------------------------------------------------------------------
@@ -543,24 +663,9 @@ async function moveClassGroups(client, { studentId, studentUserId, fromClassId, 
     [fromClassId, studentUserId],
   );
   // Old class, parents: leave GENERAL and PARENT, unless another of their children still studies in that class.
-  // ASSUMPTION: the sibling exception is not in the documents; without it the parent would be cut off from the
-  // other child's class.
-  const { rows: parentsLeft } = parentUserIds.length
-    ? await client.query(
-      `UPDATE group_members gm SET left_at = NOW()
-       FROM groups g
-       WHERE g.group_id = gm.group_id AND g.class_id = $1 AND g.deleted_at IS NULL
-         AND g.group_type IN ('GENERAL', 'PARENT')
-         AND gm.user_id = ANY($2::bigint[]) AND gm.left_at IS NULL
-         AND NOT EXISTS (SELECT 1 FROM parents p
-                         JOIN student_parents sp ON sp.parent_id = p.parent_id
-                         JOIN class_enrollments ce ON ce.student_id = sp.student_id
-                         WHERE p.user_id = gm.user_id AND sp.student_id <> $3
-                           AND ce.class_id = $1 AND ce.status = 'STUDYING')
-       RETURNING ${GROUP_MEMBER_COLUMNS}`,
-      [fromClassId, parentUserIds, studentId],
-    )
-    : { rows: [] };
+  const parentsLeft = await leaveParentClassGroups(client, {
+    classId: fromClassId, parentUserIds, exceptStudentId: studentId,
+  });
 
   const memberTypeByUser = new Map([[studentUserId, 'STUDENT']]);
   for (const parentUserId of parentUserIds) memberTypeByUser.set(parentUserId, 'PARENT');
@@ -574,19 +679,49 @@ async function moveClassGroups(client, { studentId, studentUserId, fromClassId, 
   };
 }
 
-// Adds members to the class groups of one class (shared by UC-10 and UC-11), inside the caller's transaction.
+// Parents leave the GENERAL and PARENT groups of one class (left_at, row kept, business-rules §6), unless another of
+// their children (not exceptStudentId) still studies in that class. Shared by UC-10 (the child moves out) and UC-13
+// (the link is removed). Returns the rows closed.
+// ASSUMPTION: the sibling exception is not in the documents; without it the parent would be cut off from the
+// other child's class.
+// A parent who also teaches the class (Teacher + Parent, business-rules §1) stays in its GENERAL group: they are
+// its homeroom teacher (classes.homeroom_teacher_id) or have a teaching assignment for it. They still leave the
+// PARENT group, which is for parents only. Teachers, classes and teaching_assignments are only read here.
+// ASSUMPTION: an assignment counts while it is not soft-deleted and has not ended (end_date >= CURRENT_DATE); one
+// that starts later still counts (the teacher is about to teach the class), one that has ended does not.
+async function leaveParentClassGroups(client, { classId, parentUserIds, exceptStudentId }) {
+  if (!parentUserIds.length) return [];
+  const { rows } = await client.query(
+    `UPDATE group_members gm SET left_at = NOW()
+     FROM groups g
+     WHERE g.group_id = gm.group_id AND g.class_id = $1 AND g.deleted_at IS NULL
+       AND g.group_type IN ('GENERAL', 'PARENT')
+       AND gm.user_id = ANY($2::bigint[]) AND gm.left_at IS NULL
+       AND NOT EXISTS (SELECT 1 FROM parents p
+                       JOIN student_parents sp ON sp.parent_id = p.parent_id
+                       JOIN class_enrollments ce ON ce.student_id = sp.student_id
+                       WHERE p.user_id = gm.user_id AND sp.student_id <> $3
+                         AND ce.class_id = $1 AND ce.status = 'STUDYING')
+       AND NOT (g.group_type = 'GENERAL'
+                AND EXISTS (SELECT 1 FROM teachers t
+                            WHERE t.user_id = gm.user_id
+                              AND (EXISTS (SELECT 1 FROM classes c
+                                           WHERE c.class_id = $1 AND c.homeroom_teacher_id = t.teacher_id)
+                                   OR EXISTS (SELECT 1 FROM teaching_assignments ta
+                                              WHERE ta.class_id = $1 AND ta.teacher_id = t.teacher_id
+                                                AND ta.deleted_at IS NULL AND ta.end_date >= CURRENT_DATE))))
+     RETURNING ${GROUP_MEMBER_COLUMNS}`,
+    [classId, parentUserIds, exceptStudentId],
+  );
+  return rows;
+}
+
+// Adds members to the class groups of one class (shared by UC-10, UC-11 and UC-13), inside the caller's transaction.
 // memberTypeByUser: Map userId -> 'STUDENT' | 'PARENT' (one entry per user, so a parent of two children moving to
 // the same class is added once). Only the groups that really exist are used (UC-27 may not have run, or the class
 // was created by hand); a (user, group) pair that already has an active row is skipped. Never creates a group
 // (FE-04) and never touches other classes' groups. Returns the rows added (with memberType) and the warnings.
 async function joinClassGroups(client, classId, memberTypeByUser) {
-  const { rows: typeRows } = await client.query(
-    `SELECT DISTINCT group_type FROM groups
-     WHERE class_id = $1 AND deleted_at IS NULL AND group_type IN ('GENERAL', 'STUDENT', 'PARENT')`,
-    [classId],
-  );
-  const existingTypes = typeRows.map((row) => row.group_type);
-
   // (user, group type) pairs to join.
   const userIds = [];
   const groupTypes = [];
@@ -612,29 +747,39 @@ async function joinClassGroups(client, classId, memberTypeByUser) {
     [classId, userIds, groupTypes],
   );
 
-  // Warnings are { code, message, details } like errors; the client maps the code to Vietnamese.
-  const warnings = [];
-  const hasParents = [...memberTypeByUser.values()].includes('PARENT');
-  const neededTypes = hasParents ? ['GENERAL', 'STUDENT', 'PARENT'] : ['GENERAL', 'STUDENT'];
-  const missingGroupTypes = neededTypes.filter((type) => !existingTypes.includes(type));
-  if (!existingTypes.length) {
-    warnings.push({
-      code: 'WARN_CLASS_HAS_NO_GROUPS',
-      message: 'The new class has no class groups yet; the student was not added to any group.',
-      details: { missingGroupTypes },
-    });
-  } else if (missingGroupTypes.length) {
-    warnings.push({
-      code: 'WARN_CLASS_GROUPS_MISSING',
-      message: 'Some class groups of the new class do not exist yet; nobody was added to them.',
-      details: { missingGroupTypes },
-    });
-  }
-
   return {
     joinedGroups: joined.map((row) => ({ ...row, memberType: memberTypeByUser.get(row.userId) })),
-    warnings,
+    warnings: await classGroupWarnings(client, classId, new Set(memberTypeByUser.values())),
   };
+}
+
+// Warnings for the class groups that members of these types need but that do not exist (FE-04 creates them).
+// Warnings are { code, message, details } like errors; the client maps the code to Vietnamese.
+async function classGroupWarnings(client, classId, memberTypes) {
+  const { rows: typeRows } = await client.query(
+    `SELECT DISTINCT group_type FROM groups
+     WHERE class_id = $1 AND deleted_at IS NULL AND group_type IN ('GENERAL', 'STUDENT', 'PARENT')`,
+    [classId],
+  );
+  const existingTypes = typeRows.map((row) => row.group_type);
+  const neededTypes = ['GENERAL', 'STUDENT', 'PARENT']
+    .filter((type) => [...memberTypes].some((memberType) => JOIN_GROUP_TYPES[memberType].includes(type)));
+  const missingGroupTypes = neededTypes.filter((type) => !existingTypes.includes(type));
+  if (!existingTypes.length) {
+    return [{
+      code: 'WARN_CLASS_HAS_NO_GROUPS',
+      message: 'The class has no class groups yet; nobody was added to or removed from a group.',
+      details: { missingGroupTypes },
+    }];
+  }
+  if (missingGroupTypes.length) {
+    return [{
+      code: 'WARN_CLASS_GROUPS_MISSING',
+      message: 'Some class groups of the class do not exist yet; nobody was added to or removed from them.',
+      details: { missingGroupTypes },
+    }];
+  }
+  return [];
 }
 
 // New STUDYING enrollments, one INSERT for every row (shared by UC-10 and UC-11). rows: [{ studentId, classId }].

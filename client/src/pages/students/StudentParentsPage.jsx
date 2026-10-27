@@ -148,7 +148,7 @@ function ContactRow({ icon, label, children }) {
 
 // One linked parent. The relationship (who, since when, other children) comes first; the profile itself belongs
 // to FE-14 (business-rules §2) and is only shown read only.
-function ParentCard({ parent }) {
+function ParentCard({ parent, onUnlink }) {
   const locked = parent.accountStatus === 'LOCKED';
   const others = parent.otherChildrenCount;
   return (
@@ -216,8 +216,8 @@ function ParentCard({ parent }) {
       )}
 
       <footer className="student-parents-card-foot">
-        {/* TODO UC-13 Link / Unlink Parent–Student (SCR-13) */}
-        <button type="button" className="btn btn-danger" disabled title={NOT_BUILT}>
+        {/* UC-13: opens SCR-13, which asks for the confirmation of this parent's unlink. */}
+        <button type="button" className="btn btn-danger" onClick={() => onUnlink(parent.parentId)}>
           <Icon name="link_off" size="sm" />
           Gỡ liên kết
         </button>
@@ -277,6 +277,13 @@ export default function StudentParentsPage() {
     else navigate(detailPath, { state: detailState });
   }
 
+  // SCR-13 (UC-13). unlinkParentId: the parent whose unlink confirmation SCR-13 opens right away.
+  function toEdit(unlinkParentId) {
+    navigate(`/students/${studentId}/parents/edit`, {
+      state: { listSearch: location.state?.listSearch, fromParents: true, unlinkParentId },
+    });
+  }
+
   if (!validId) return <NotFound backTo={backTo} />;
   if (error && (error.status === 404 || error.code === 'MSG_STUDENT_NOT_FOUND' || error.code === 'MSG_INVALID_PARAM')) {
     return <NotFound backTo={backTo} />;
@@ -328,12 +335,12 @@ export default function StudentParentsPage() {
               <Icon name="arrow_back" size="sm" />
               Quay lại hồ sơ
             </button>
-            {/* TODO UC-13 Link / Unlink Parent–Student (SCR-13). Disabled anyway when 2 parents are linked. */}
+            {/* UC-13 Link / Unlink Parent–Student (SCR-13). Disabled when 2 parents are linked (business-rules §3). */}
             <button
               type="button"
               className="btn btn-primary"
-              disabled
-              title={canLinkMore ? NOT_BUILT : 'Đã đủ 2 phụ huynh'}
+              onClick={() => toEdit()}
+              disabled={!canLinkMore}
               aria-describedby={canLinkMore ? undefined : 'student-parents-full'}
             >
               <Icon name="add_link" size="sm" />
@@ -342,7 +349,7 @@ export default function StudentParentsPage() {
           </div>
           {!canLinkMore && (
             <p id="student-parents-full" className="caption muted">
-              Đã đủ 2 phụ huynh
+              Đã đủ 2 phụ huynh. Gỡ liên kết trước khi thêm.
             </p>
           )}
         </div>
@@ -377,7 +384,7 @@ export default function StudentParentsPage() {
       ) : (
         <div className="student-parents-list">
           {parents.map((p) => (
-            <ParentCard key={p.parentId} parent={p} />
+            <ParentCard key={p.parentId} parent={p} onUnlink={(parentId) => toEdit(parentId)} />
           ))}
         </div>
       )}
