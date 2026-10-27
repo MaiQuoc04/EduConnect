@@ -105,7 +105,7 @@ const CLASS_SQL = `
   LEFT JOIN teachers t ON t.teacher_id = c.homeroom_teacher_id
   LEFT JOIN users u ON u.user_id = t.user_id`;
 
-// SCR-22 (interim, completed by UC-29): the classes of a school year with their three groups.
+// SCR-22, School Manager view of UC-29 View Group List: the classes of a school year with their three groups.
 // The School Manager sees member counts only, never feeds or chats (business-rules §2).
 export async function listClasses({ schoolYearId }) {
   const schoolYear = await resolveYear(schoolYearId);

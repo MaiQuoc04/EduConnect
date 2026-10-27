@@ -9,7 +9,7 @@ const router = Router();
 
 router.use(requireAuth, requireRole('SCHOOL_MANAGER'));
 
-router.get('/', ctrl.list); // SCR-22 list (interim until UC-29)
+router.get('/', ctrl.list); // SCR-22 list (School Manager view of UC-29)
 router.get('/grade-levels', ctrl.gradeLevels);
 router.get('/eligible-students', ctrl.eligibleStudents); // UC-28
 router.post('/', ctrl.create); // UC-28 Create Class Group

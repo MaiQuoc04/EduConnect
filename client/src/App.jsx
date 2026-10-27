@@ -9,6 +9,10 @@ import LoginPage from './pages/account/LoginPage.jsx';
 import ProfilePage from './pages/account/ProfilePage.jsx';
 import ClassTrackPage from './pages/class-tracks/ClassTrackPage.jsx';
 import ClassListPage from './pages/classes/ClassListPage.jsx';
+import GroupLayout from './pages/groups/GroupLayout.jsx';
+import GroupListPage from './pages/groups/GroupListPage.jsx';
+import GroupMembersPage from './pages/groups/GroupMembersPage.jsx';
+import GroupOverview from './pages/groups/GroupOverview.jsx';
 import SchoolYearPage from './pages/school-years/SchoolYearPage.jsx';
 import SubjectDetailPage from './pages/subjects/SubjectDetailPage.jsx';
 import SubjectFormPage from './pages/subjects/SubjectFormPage.jsx';
@@ -99,6 +103,25 @@ export default function App() {
             </ProtectedRoute>
           }
         />
+        <Route
+          path="groups"
+          element={
+            <ProtectedRoute roles={['TEACHER', 'STUDENT', 'PARENT']}>
+              <GroupListPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="groups/:id"
+          element={
+            <ProtectedRoute roles={['SCHOOL_MANAGER', 'TEACHER', 'STUDENT', 'PARENT']}>
+              <GroupLayout />
+            </ProtectedRoute>
+          }
+        >
+          <Route index element={<GroupOverview />} />
+          <Route path="members" element={<GroupMembersPage />} />
+        </Route>
       </Route>
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>

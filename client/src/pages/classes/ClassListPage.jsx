@@ -1,9 +1,10 @@
 import { useEffect, useMemo, useState } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
 import { api } from '../../api/client.js';
 import Icon from '../../components/Icon.jsx';
 import { errorText } from '../../messages.js';
 import { yearLabel } from '../school-years/schoolYearLabels.js';
+import GroupLink from '../groups/GroupLink.jsx';
 import ClassCreateForm from './ClassCreateForm.jsx';
 import ClassImportPanel from './ClassImportPanel.jsx';
 
@@ -13,9 +14,9 @@ const GRADES = ['10', '11', '12'];
 // Class names are compared without spaces or case: "10 a1" finds "10A1".
 const compact = (text) => String(text ?? '').replace(/\s+/g, '').toLowerCase();
 
-// SCR-22 Group List ("Lớp & nhóm lớp"), School Manager view – UC-27 Import Class List and UC-28 Create Class Group.
-// The list itself is interim: UC-29 View Group List completes it. The School Manager sees member counts only,
-// never class feeds or chats.
+// SCR-22 Group List ("Lớp & nhóm lớp"), School Manager view – UC-29 View Group List (every class group of a year
+// and the school-wide teacher group), UC-27 Import Class List and UC-28 Create Class Group. The School Manager opens
+// a group's information and members only, never class feeds or chats.
 export default function ClassListPage() {
   const [params, setParams] = useSearchParams();
   const yearParam = params.get('schoolYearId') ?? '';
@@ -25,12 +26,17 @@ export default function ClassListPage() {
   const [mode, setMode] = useState(null); // null | 'import' | 'create'
   const [grade, setGrade] = useState(''); // '' = every grade
   const [query, setQuery] = useState('');
+  const [teacherGroup, setTeacherGroup] = useState(null);
 
   useEffect(() => {
     api
       .get('/school-years')
       .then(({ data }) => setYears(data))
       .catch(() => setYears([]));
+    api
+      .get('/groups')
+      .then(({ data }) => setTeacherGroup(data.teacherGroup))
+      .catch(() => setTeacherGroup(null));
   }, []);
 
   useEffect(() => {
@@ -128,6 +134,16 @@ export default function ClassListPage() {
         </div>
       </div>
 
+      {teacherGroup && !mode && (
+        <section className="card card-outline group-card class-teacher-group">
+          <div>
+            <p className="label-upper muted">Toàn trường</p>
+            <h2 className="title-md">{teacherGroup.groupName}</h2>
+          </div>
+          <GroupLink group={teacherGroup} />
+        </section>
+      )}
+
       {mode === 'import' && schoolYear && (
         <ClassImportPanel schoolYear={schoolYear} onCancel={() => setMode(null)} onDone={handleDone} />
       )}
@@ -178,9 +194,9 @@ export default function ClassListPage() {
                     <td>
                       <span className="chips">
                         {c.groups.map((g) => (
-                          <span key={g.groupId} className="chip" title={g.groupName}>
+                          <Link key={g.groupId} to={`/groups/${g.groupId}/members`} className="chip chip-link" title={g.groupName}>
                             {GROUP_LABELS[g.groupType]} · {g.memberCount}
-                          </span>
+                          </Link>
                         ))}
                       </span>
                     </td>

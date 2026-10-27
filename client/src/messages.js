@@ -70,6 +70,7 @@ const ERROR_MESSAGES = {
   MSG_CLASS_NAME_TAKEN: 'Lớp này đã có trong năm học.',
   MSG_CLASS_NAME_FORMAT: 'Tên lớp gồm khối viết liền với chữ hoặc số, không dấu, ví dụ 10A1.',
   MSG_CLASS_NAME_GRADE: 'Tên lớp phải bắt đầu bằng khối của lớp.',
+  MSG_GROUP_NOT_FOUND: 'Không tìm thấy nhóm hoặc bạn không thuộc nhóm này.',
   MSG_CLASS_STUDENT_DUPLICATE: 'Một học sinh bị chọn hai lần.',
   MSG_STUDENT_ALREADY_ENROLLED: ({ classes } = {}) =>
     `Có học sinh đang học lớp khác trong năm học${classes?.length ? ` (${classes.join(', ')})` : ''}.`,
