@@ -23,11 +23,39 @@ export async function ensureClassGroups(client, { classId, className, createdBy 
   return rowCount;
 }
 
-// Adds everyone who belongs in the class groups and is not an active member yet (same rules as the seed):
+// Everyone a class explains, with why (same rules as the seed). `classId` is a SQL placeholder such as '$1'.
+//   HOMEROOM = the homeroom teacher, TEACHER = a subject teacher (teaching_assignments),
+//   STUDENT = a studying student, PARENT = a parent of a studying student.
+export const classPeopleSql = (classId) => `
+  SELECT t.user_id, 'HOMEROOM' AS kind
+  FROM classes c JOIN teachers t ON t.teacher_id = c.homeroom_teacher_id
+  WHERE c.class_id = ${classId}
+  UNION
+  SELECT t.user_id, 'TEACHER'
+  FROM teaching_assignments ta JOIN teachers t ON t.teacher_id = ta.teacher_id
+  WHERE ta.class_id = ${classId} AND ta.deleted_at IS NULL
+  UNION
+  SELECT s.user_id, 'STUDENT'
+  FROM class_enrollments e JOIN students s ON s.student_id = e.student_id
+  WHERE e.class_id = ${classId} AND e.status = 'STUDYING'
+  UNION
+  SELECT p.user_id, 'PARENT'
+  FROM class_enrollments e
+  JOIN student_parents sp ON sp.student_id = e.student_id
+  JOIN parents p ON p.parent_id = sp.parent_id
+  WHERE e.class_id = ${classId} AND e.status = 'STUDYING'`;
+
+// Who belongs in which group – join condition on the group alias `g` and the person alias `p`:
 //   GENERAL = homeroom teacher + subject teachers + studying students + their parents (feed + chat)
 //   STUDENT = homeroom teacher + studying students (chat)
 //   PARENT  = homeroom teacher + parents of studying students (chat)
-// Only adds: people who left are removed by the use case that removes them (left_at, business-rules §6).
+export const GROUP_RULE_SQL = `(
+  g.group_type = 'GENERAL'
+  OR (g.group_type = 'STUDENT' AND p.kind IN ('HOMEROOM', 'STUDENT'))
+  OR (g.group_type = 'PARENT' AND p.kind IN ('HOMEROOM', 'PARENT')))`;
+
+// Adds everyone who belongs in the class groups and has never been in that group. Someone who left a group
+// (removed by UC-33, or transferred: left_at set) is not brought back here – only by UC-32 Add Group Member.
 // Returns [{ groupId, userId }] of the new memberships.
 export async function addClassGroupMembers(client, classId) {
   const { rows } = await client.query(
@@ -35,36 +63,14 @@ export async function addClassGroupMembers(client, classId) {
        SELECT group_id, group_type FROM groups
        WHERE class_id = $1 AND deleted_at IS NULL AND group_type IN ('GENERAL', 'STUDENT', 'PARENT')
      ),
-     people AS (
-       SELECT t.user_id, 'HOMEROOM' AS kind
-       FROM classes c JOIN teachers t ON t.teacher_id = c.homeroom_teacher_id
-       WHERE c.class_id = $1
-       UNION
-       SELECT t.user_id, 'TEACHER'
-       FROM teaching_assignments ta JOIN teachers t ON t.teacher_id = ta.teacher_id
-       WHERE ta.class_id = $1 AND ta.deleted_at IS NULL
-       UNION
-       SELECT s.user_id, 'STUDENT'
-       FROM class_enrollments e JOIN students s ON s.student_id = e.student_id
-       WHERE e.class_id = $1 AND e.status = 'STUDYING'
-       UNION
-       SELECT p.user_id, 'PARENT'
-       FROM class_enrollments e
-       JOIN student_parents sp ON sp.student_id = e.student_id
-       JOIN parents p ON p.parent_id = sp.parent_id
-       WHERE e.class_id = $1 AND e.status = 'STUDYING'
-     ),
+     people AS (${classPeopleSql('$1')}),
      wanted AS (
        SELECT DISTINCT g.group_id, p.user_id
-       FROM g JOIN people p
-         ON g.group_type = 'GENERAL'
-         OR (g.group_type = 'STUDENT' AND p.kind IN ('HOMEROOM', 'STUDENT'))
-         OR (g.group_type = 'PARENT' AND p.kind IN ('HOMEROOM', 'PARENT'))
+       FROM g JOIN people p ON ${GROUP_RULE_SQL}
      )
      INSERT INTO group_members (group_id, user_id)
      SELECT w.group_id, w.user_id FROM wanted w
-     WHERE NOT EXISTS (SELECT 1 FROM group_members m
-                       WHERE m.group_id = w.group_id AND m.user_id = w.user_id AND m.left_at IS NULL)
+     WHERE NOT EXISTS (SELECT 1 FROM group_members m WHERE m.group_id = w.group_id AND m.user_id = w.user_id)
      RETURNING group_id AS "groupId", user_id AS "userId"`,
     [classId],
   );

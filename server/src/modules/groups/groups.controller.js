@@ -1,4 +1,5 @@
 import * as groupService from './groups.service.js';
+import * as memberService from './groupMembers.service.js';
 
 export async function list(req, res) {
   res.json(await groupService.listMyGroups(req.user, { schoolYearId: req.query.schoolYearId }));
@@ -10,4 +11,20 @@ export async function detail(req, res) {
 
 export async function members(req, res) {
   res.json(await groupService.listMembers(req.user, req.params.id));
+}
+
+export async function candidates(req, res) {
+  res.json(await memberService.listCandidates(req.user, req.params.id));
+}
+
+export async function addMembers(req, res) {
+  res.status(201).json(await memberService.addMembers(req.user, req.params.id, req.body?.userIds));
+}
+
+export async function removeMember(req, res) {
+  res.json(await memberService.removeMember(req.user, req.params.id, req.params.userId));
+}
+
+export async function setNickname(req, res) {
+  res.json(await memberService.setNickname(req.user, req.params.id, req.params.userId, req.body?.nickname));
 }

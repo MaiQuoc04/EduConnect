@@ -49,7 +49,8 @@ export function groupScopeSql(user, role) {
 // The group if the user may see it, with what they may do; otherwise 404 (the group's existence is not revealed).
 //   readOnly         – the class belongs to an ended school year (business-rules §4: last year's groups are read only)
 //   canSeeContent    – feed / chat; false for the School Manager in class groups (business-rules §2)
-//   canManageMembers – UC-32..34: School Manager or the class's homeroom teacher, class groups of an open year only
+//   canManageMembers – UC-32, UC-33: School Manager or the class's homeroom teacher, class groups of an open year only
+//   canSetNickname   – UC-34: the class's homeroom teacher only, open year
 export async function findGroupForUser(db, user, groupId) {
   const id = Number(groupId);
   if (!Number.isSafeInteger(id) || id <= 0) throw notFound('MSG_GROUP_NOT_FOUND', 'Group not found.');
@@ -74,5 +75,6 @@ export async function findGroupForUser(db, user, groupId) {
     canSeeContent: !(manager && isClassGroup),
     canManageMembers:
       isClassGroup && !group.readOnly && (manager || (user.activeRole === 'TEACHER' && group.isHomeroom)),
+    canSetNickname: isClassGroup && !group.readOnly && user.activeRole === 'TEACHER' && group.isHomeroom,
   };
 }

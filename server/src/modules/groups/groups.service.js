@@ -86,8 +86,8 @@ export async function listMyGroups(user, { schoolYearId }) {
 // Active members of a group with what makes them members. group_members has no role column, so the reason is
 // worked out from the class: homeroom teacher, subject teacher (teaching_assignments), studying student, parent of a
 // studying student; in the teacher group: School Manager or teacher.
-async function memberRows(groupId) {
-  const { rows } = await pool.query(
+export async function memberRows(db, groupId) {
+  const { rows } = await db.query(
     `SELECT u.user_id AS "userId", u.full_name AS "fullName", u.avatar_url AS "avatarUrl", u.status,
             u.email, u.phone, m.joined_at AS "joinedAt", g.class_id AS "classId",
             st.student_code AS "studentCode", e.nickname, e.enrollment_id IS NOT NULL AS "isStudent",
@@ -142,7 +142,7 @@ const RANK = { HOMEROOM: 0, MANAGER: 1, SUBJECT_TEACHER: 2, TEACHER: 2, STUDENT:
 const TEACHER_KINDS = ['HOMEROOM', 'SUBJECT_TEACHER', 'TEACHER', 'MANAGER'];
 // Vietnamese lists sort by given name (the last word), then by the full name.
 const givenName = (name) => name.trim().split(/\s+/).pop();
-const byRankThenName = (a, b) =>
+export const byRankThenName = (a, b) =>
   Math.min(...a.kinds.map((k) => RANK[k])) - Math.min(...b.kinds.map((k) => RANK[k])) ||
   givenName(a.fullName).localeCompare(givenName(b.fullName), 'vi') ||
   a.fullName.localeCompare(b.fullName, 'vi');
@@ -161,7 +161,7 @@ function countKinds(members) {
 export async function getGroup(user, groupId) {
   const group = await findGroupForUser(pool, user, groupId);
   const [members, info] = await Promise.all([
-    memberRows(group.groupId),
+    memberRows(pool, group.groupId),
     group.classId === null
       ? null
       : pool.query(
@@ -199,6 +199,7 @@ export async function getGroup(user, groupId) {
     readOnly: group.readOnly,
     canSeeContent: group.canSeeContent,
     canManageMembers: group.canManageMembers,
+    canSetNickname: group.canSetNickname,
   };
 }
 
@@ -209,7 +210,7 @@ export async function getGroup(user, groupId) {
 // only inside that class". Never shown in the teacher group or outside the class.
 export async function listMembers(user, groupId) {
   const group = await findGroupForUser(pool, user, groupId);
-  const members = await memberRows(group.groupId);
+  const members = await memberRows(pool, group.groupId);
   const contacts = seesContacts(user);
   const list = members.sort(byRankThenName).map((m) => ({
     userId: m.userId,
@@ -229,6 +230,7 @@ export async function listMembers(user, groupId) {
     groupType: group.groupType,
     readOnly: group.readOnly,
     canManageMembers: group.canManageMembers,
+    canSetNickname: group.canSetNickname,
     showContacts: contacts,
     counts: countKinds(members),
     members: list,

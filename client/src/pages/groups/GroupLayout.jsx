@@ -14,10 +14,11 @@ export default function GroupLayout() {
   const { id } = useParams();
   const { activeRole } = useAuth();
   const [state, setState] = useState({ loading: true, group: null, error: '' });
+  const [version, setVersion] = useState(0); // bumped after member changes (UC-32..34) to refresh the counts
 
   useEffect(() => {
     let alive = true;
-    setState({ loading: true, group: null, error: '' });
+    setState((s) => (s.group?.groupId === Number(id) ? s : { loading: true, group: null, error: '' }));
     api
       .get(`/groups/${id}`)
       .then(({ data }) => alive && setState({ loading: false, group: data, error: '' }))
@@ -25,7 +26,7 @@ export default function GroupLayout() {
     return () => {
       alive = false;
     };
-  }, [id]);
+  }, [id, version]);
 
   const manager = activeRole === 'SCHOOL_MANAGER';
   const g = state.group;
@@ -86,7 +87,7 @@ export default function GroupLayout() {
             </NavLink>
           </nav>
 
-          <Outlet context={g} />
+          <Outlet context={{ ...g, reload: () => setVersion((v) => v + 1) }} />
         </>
       )}
     </>
