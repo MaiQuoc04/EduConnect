@@ -7,7 +7,7 @@ import { yearLabel } from '../school-years/schoolYearLabels.js';
 import { fold, periodsText } from './subjectText.js';
 
 // SCR-19 Subject List – UC-22 View Subject List (School Manager). Figures (class types, periods, classes) are for
-// the chosen school year; search and the class-type filter run here because a school has only ~15 subjects.
+// the chosen school year; search and filters run here because a school has only ~15 subjects, so no paging.
 export default function SubjectListPage() {
   const navigate = useNavigate();
   const [years, setYears] = useState([]);
@@ -16,6 +16,7 @@ export default function SubjectListPage() {
   const [state, setState] = useState({ loading: true, data: null, error: '' });
   const [query, setQuery] = useState('');
   const [trackId, setTrackId] = useState('');
+  const [onlyUnset, setOnlyUnset] = useState(false); // subjects with no class type in the chosen year
 
   useEffect(() => {
     api
@@ -42,20 +43,29 @@ export default function SubjectListPage() {
     subjects.forEach((s) => s.tracks.forEach((t) => byId.set(t.trackId, t.trackName)));
     return [...byId].map(([id, name]) => ({ id, name })).sort((a, b) => a.name.localeCompare(b.name, 'vi'));
   }, [subjects]);
+  const unsetCount = useMemo(() => subjects.filter((s) => !s.tracks.length).length, [subjects]);
 
   const shown = useMemo(() => {
     const q = fold(query.trim());
     return subjects.filter(
       (s) =>
         (!q || fold(s.subjectCode).includes(q) || fold(s.subjectName).includes(q)) &&
-        (!trackId || s.tracks.some((t) => String(t.trackId) === trackId)),
+        (!trackId || s.tracks.some((t) => String(t.trackId) === trackId)) &&
+        (!onlyUnset || !s.tracks.length),
     );
-  }, [subjects, query, trackId]);
+  }, [subjects, query, trackId, onlyUnset]);
 
   const schoolYear = state.data?.schoolYear;
   // UC-23: the detail page opens on the same school year.
   const detailHref = (id) => `/subjects/${id}${yearId ? `?schoolYearId=${yearId}` : ''}`;
   const selectedYear = yearId || (schoolYear ? String(schoolYear.schoolYearId) : '');
+  const filtered = Boolean(query.trim() || trackId || onlyUnset);
+
+  function clearFilters() {
+    setQuery('');
+    setTrackId('');
+    setOnlyUnset(false);
+  }
 
   return (
     <>
@@ -102,6 +112,7 @@ export default function SubjectListPage() {
           onChange={(e) => {
             setYearId(e.target.value);
             setTrackId('');
+            setOnlyUnset(false);
           }}
           aria-label="Năm học"
           disabled={!years.length}
@@ -113,6 +124,17 @@ export default function SubjectListPage() {
             </option>
           ))}
         </select>
+        {unsetCount > 0 && (
+          <button
+            type="button"
+            className={`class-filter-chip subject-unset-chip${onlyUnset ? ' is-on' : ''}`}
+            aria-pressed={onlyUnset}
+            onClick={() => setOnlyUnset((v) => !v)}
+          >
+            <Icon name="warning" size="sm" />
+            Chưa thiết lập ({unsetCount})
+          </button>
+        )}
       </div>
 
       {state.error ? (
@@ -125,56 +147,77 @@ export default function SubjectListPage() {
             <table className="table">
               <thead>
                 <tr>
-                  <th>Mã môn</th>
-                  <th>Tên môn học</th>
+                  <th>Môn học</th>
                   <th>Loại lớp áp dụng</th>
-                  <th className="num">Số tiết/tuần</th>
-                  <th className="num">Số lớp đang dạy</th>
+                  <th className="num">Tiết/tuần</th>
+                  <th className="num">Lớp đang dạy</th>
                   <th className="num">Giáo viên dạy được</th>
+                  <th className="subject-arrow-col" aria-hidden="true" />
                 </tr>
               </thead>
               <tbody>
                 {shown.map((s) => (
-                  <tr
-                    key={s.subjectId}
-                    className="row-link"
-                    onClick={() => navigate(detailHref(s.subjectId))}
-                  >
-                    <td className="mono subject-code">
-                      <Link to={detailHref(s.subjectId)} onClick={(e) => e.stopPropagation()}>
-                        {s.subjectCode}
+                  <tr key={s.subjectId} className="row-link" onClick={() => navigate(detailHref(s.subjectId))}>
+                    <td>
+                      <Link
+                        to={detailHref(s.subjectId)}
+                        className="subject-cell"
+                        onClick={(e) => e.stopPropagation()}
+                      >
+                        <span className="subject-name">{s.subjectName}</span>
+                        <span className="mono caption subject-code">{s.subjectCode}</span>
                       </Link>
                     </td>
-                    <td className="subject-name">{s.subjectName}</td>
                     <td>
                       {s.tracks.length ? (
                         <span className="chips">
                           {s.tracks.map((t) => (
-                            <span key={t.trackId} className="chip">
-                              {t.trackName} · {t.periodsPerWeek}
+                            <span key={t.trackId} className="chip subject-track">
+                              {t.trackName}
+                              <span className="subject-track-periods">{t.periodsPerWeek} tiết</span>
                             </span>
                           ))}
                         </span>
                       ) : (
-                        <span className="muted">Chưa thiết lập</span>
+                        <span className="class-warn">Chưa thiết lập cho năm học này</span>
                       )}
                     </td>
                     <td className="num">{periodsText(s)}</td>
-                    <td className="num">{s.classCount} lớp</td>
-                    <td className="num">{s.teacherCount} giáo viên</td>
+                    <td className="num">
+                      {s.classCount ? `${s.classCount} lớp` : <span className="muted">Chưa phân công</span>}
+                    </td>
+                    <td className="num">
+                      {s.teacherCount ? `${s.teacherCount} giáo viên` : <span className="class-warn">Chưa có</span>}
+                    </td>
+                    <td className="subject-arrow-col">
+                      <Icon name="chevron_right" size="sm" className="subject-arrow" />
+                    </td>
                   </tr>
                 ))}
               </tbody>
             </table>
           </div>
           {shown.length === 0 && (
-            <p className="subject-empty muted">
-              {subjects.length ? 'Không tìm thấy môn học phù hợp.' : 'Trường chưa có môn học nào.'}
-            </p>
+            <div className="subject-empty muted">
+              <p>{subjects.length ? 'Không tìm thấy môn học phù hợp.' : 'Trường chưa có môn học nào.'}</p>
+              {filtered && (
+                <button type="button" className="btn btn-tertiary" onClick={clearFilters}>
+                  Xoá bộ lọc
+                </button>
+              )}
+            </div>
           )}
           <p className="subject-foot caption muted">
             Hiển thị {shown.length} / {subjects.length} môn học
             {schoolYear && ` · Năm học ${yearLabel(schoolYear.yearName)}`}
+            {filtered && shown.length > 0 && (
+              <>
+                {' · '}
+                <button type="button" className="link-button" onClick={clearFilters}>
+                  Xoá bộ lọc
+                </button>
+              </>
+            )}
           </p>
         </div>
       )}
@@ -182,8 +225,8 @@ export default function SubjectListPage() {
       <div className="notice subject-note">
         <Icon name="info" />
         <p>
-          Số tiết/tuần và hệ số của môn được thiết lập theo loại lớp cho từng năm học. “Khối A · 4” nghĩa là
-          lớp thuộc loại Khối A học môn này 4 tiết mỗi tuần.
+          Số tiết/tuần và hệ số của môn được thiết lập theo loại lớp cho từng năm học, tại màn{' '}
+          <Link to="/class-tracks">Loại lớp & hệ số</Link>.
         </p>
       </div>
     </>
