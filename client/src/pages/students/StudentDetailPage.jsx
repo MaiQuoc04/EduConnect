@@ -276,7 +276,7 @@ function ClassTimeline({ current, history }) {
   );
 }
 
-// Read only. Link / unlink is UC-13 and the parent detail screen is UC-12.
+// Read only. Link / unlink is UC-13; the link details are on SCR-12 (UC-12, "Xem phụ huynh" in the header).
 function ParentsCard({ parents }) {
   return (
     <section className="card card-outline student-detail-parents">
@@ -497,11 +497,15 @@ export default function StudentDetailPage() {
               Chuyển lớp
             </Link>
           )}
-          {/* TODO UC-12 View Student's Parents (SCR-12) */}
-          <button type="button" className="btn btn-secondary" disabled title={NOT_BUILT}>
+          {/* UC-12 View Student's Parents (SCR-12). fromDetail: going back from there returns here. */}
+          <Link
+            to={`/students/${student.studentId}/parents`}
+            state={{ fromDetail: true, listSearch: location.state?.listSearch }}
+            className="btn btn-secondary"
+          >
             <Icon name="family_restroom" size="sm" />
             Xem phụ huynh
-          </button>
+          </Link>
           <AccountMenu student={student} />
         </div>
       </div>

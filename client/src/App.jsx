@@ -9,6 +9,7 @@ import LoginPage from './pages/account/LoginPage.jsx';
 import ProfilePage from './pages/account/ProfilePage.jsx';
 import StudentDetailPage from './pages/students/StudentDetailPage.jsx';
 import StudentListPage from './pages/students/StudentListPage.jsx';
+import StudentParentsPage from './pages/students/StudentParentsPage.jsx';
 import TransferStudentPage from './pages/students/TransferStudentPage.jsx';
 import UpdateStudentPage from './pages/students/UpdateStudentPage.jsx';
 import ProtectedRoute from './routes/ProtectedRoute.jsx';
@@ -80,6 +81,15 @@ export default function App() {
           element={
             <ProtectedRoute roles={['SCHOOL_MANAGER']}>
               <TransferStudentPage />
+            </ProtectedRoute>
+          }
+        />
+        {/* UC-12 View Student's Parents (SCR-12), opened from Student Detail; no menu entry. */}
+        <Route
+          path="students/:studentId/parents"
+          element={
+            <ProtectedRoute roles={['SCHOOL_MANAGER']}>
+              <StudentParentsPage />
             </ProtectedRoute>
           }
         />

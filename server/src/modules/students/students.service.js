@@ -280,11 +280,26 @@ export async function getStudentDetail(studentId) {
     [studentId],
   );
 
-  // Linked parents (at most 2, business-rules §3), read only; empty when none is linked yet.
-  const { rows: parents } = await pool.query(
+  const parents = await findStudentParents(studentId);
+
+  return { student, currentEnrollment, enrollmentHistory, parents };
+}
+
+// --- UC-12 -----------------------------------------------------------------------------------------------------
+
+export const MAX_PARENTS_PER_STUDENT = 2; // business-rules §3
+
+// Parents linked to a student, oldest link first; empty when none is linked yet. Shared by UC-08, UC-12 and UC-13.
+// Locked parent accounts stay in the list (accounts are never deleted, only LOCKED, business-rules §3).
+// ASSUMPTION: otherChildrenCount (the parent's other linked children, this student excluded) is not required by
+// the documents; it lets School Manager see on SCR-12 that a parent has several children (business-rules §3).
+export async function findStudentParents(studentId, db = pool) {
+  const { rows } = await db.query(
     `SELECT p.parent_id AS "parentId", pu.user_id AS "userId", pu.full_name AS "fullName",
             pu.avatar_url AS "avatarUrl", pu.phone, pu.email, sp.relationship_type AS "relationshipType",
-            p.occupation, p.address, pu.status AS "accountStatus", sp.linked_at AS "linkedAt"
+            p.occupation, p.address, pu.status AS "accountStatus", sp.linked_at AS "linkedAt",
+            (SELECT COUNT(*) FROM student_parents osp
+             WHERE osp.parent_id = sp.parent_id AND osp.student_id <> sp.student_id) AS "otherChildrenCount"
      FROM student_parents sp
      JOIN parents p ON p.parent_id = sp.parent_id
      JOIN users pu ON pu.user_id = p.user_id
@@ -292,8 +307,32 @@ export async function getStudentDetail(studentId) {
      ORDER BY sp.linked_at, p.parent_id`,
     [studentId],
   );
+  return rows;
+}
 
-  return { student, currentEnrollment, enrollmentHistory, parents };
+// UC-12 View Student's Parents (School Manager), SCR-12. Read only: link / unlink is UC-13. A lighter read than
+// UC-08: only the header of the student and their parents. Not logged (business-rules §13).
+// className is the class of the current enrollment, chosen as in UC-07 / UC-08; null when the student has no
+// class this year or no school year exists (then $1 is NULL and the LEFT JOIN finds nothing).
+export async function getStudentParents(studentId) {
+  const params = [await resolveSchoolYearId()];
+  const enrollments = enrollmentsOfYear(params);
+  params.push(studentId);
+  const { rows } = await pool.query(
+    `SELECT s.student_id AS "studentId", s.student_code AS "studentCode", u.full_name AS "fullName",
+            u.avatar_url AS "avatarUrl", c.class_name AS "className"
+     FROM students s
+     JOIN users u ON u.user_id = s.user_id
+     LEFT JOIN ${enrollments} ON e.student_id = s.student_id
+     LEFT JOIN classes c ON c.class_id = e.class_id
+     WHERE s.student_id = $${params.length}`,
+    params,
+  );
+  const student = rows[0];
+  if (!student) throw notFound('MSG_STUDENT_NOT_FOUND', 'The student does not exist.');
+
+  const parents = await findStudentParents(studentId);
+  return { student, parents, canLinkMore: parents.length < MAX_PARENTS_PER_STUDENT };
 }
 
 // --- UC-09 -----------------------------------------------------------------------------------------------------

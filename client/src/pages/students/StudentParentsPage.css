@@ -1,0 +1,182 @@
+/* FE-02 Student Parent Detail (SCR-12, UC-12). Only this screen's styles; every rule is scoped under .student-parents.
+   Design: Stitch "SCR-11 Student Parent Detail". Colours, radii and type come from the tokens in styles.css.
+   styles.css is loaded after this file, so rules that override a shared class (.card, .chip, .notice) are prefixed
+   with .student-parents to win on specificity.
+   Breakpoints are the ones of the other FE-02 screens: 1080px (summary stacks), 900px (app shell becomes a drawer)
+   and 640px (cards stack, 44px touch targets). */
+
+.student-parents .strong,
+.student-parents-value { font-weight: 500; color: var(--graphite-900); }
+
+/* ---------- header ---------- */
+.student-parents .page-header {
+  align-items: flex-end;
+  padding-bottom: 24px;
+  border-bottom: 1px solid var(--graphite-200);
+}
+.student-parents-eyebrow { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 6px; color: var(--graphite-500); }
+.student-parents-eyebrow .mono { color: var(--ink-700); text-transform: none; letter-spacing: 0.02em; }
+.student-parents .page-header .student-parents-eyebrow { margin-top: 0; }
+.student-parents-actions { display: grid; justify-items: end; gap: 6px; }
+.student-parents-actions .actions-row { gap: 10px; flex-wrap: nowrap; }
+
+/* ---------- student + link status ---------- */
+.student-parents .student-parents-summary {
+  display: flex;
+  align-items: center;
+  gap: 24px;
+  margin-top: 24px;
+  padding: 20px 24px;
+}
+.student-parents-student { display: flex; align-items: center; gap: 16px; flex: 1; min-width: 0; }
+.student-parents-student > div { min-width: 0; }
+.student-parents-student .avatar { background: var(--graphite-100); color: var(--graphite-700); outline: 1px solid var(--graphite-200); }
+.student-parents-student-name { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 12px; margin-bottom: 4px; }
+.student-parents-student-name h2 { overflow-wrap: anywhere; }
+.student-parents-student-name .chip.ink { font-weight: 600; }
+.student-parents-status {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  flex: 0 1 420px;
+  min-width: 0;
+  padding-left: 24px;
+  border-left: 1px solid var(--graphite-200);
+}
+.student-parents-status > div { display: grid; justify-items: start; gap: 6px; min-width: 0; }
+.student-parents-status .stamp { margin-left: auto; }
+
+/* ---------- section head ---------- */
+.student-parents-section-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px 16px;
+  margin: 32px 0 12px;
+}
+.student-parents-section-head h2 { display: flex; align-items: center; gap: 10px; }
+.student-parents-section-head .chip { text-transform: none; letter-spacing: 0; font-weight: 500; }
+
+/* ---------- parent cards (two side by side, one per row on phones) ---------- */
+.student-parents-list {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 24px;
+  align-items: start;
+}
+.student-parents .student-parents-card { display: flex; flex-direction: column; gap: 20px; min-width: 0; }
+.student-parents-card-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding-bottom: 16px;
+  border-bottom: 1px solid var(--graphite-200);
+}
+.student-parents-card-head .chip { gap: 4px; }
+.student-parents-person { display: flex; align-items: center; gap: 14px; min-width: 0; }
+.student-parents-person > div { min-width: 0; }
+.student-parents-person h3 { overflow-wrap: anywhere; }
+.student-parents-person .caption { margin-top: 2px; }
+.student-parents-person .avatar { background: var(--ink-50); color: var(--ink-700); }
+
+.student-parents-contact { display: grid; gap: 14px; margin: 0; padding: 0; list-style: none; }
+.student-parents-contact li { display: flex; align-items: flex-start; gap: 12px; min-width: 0; }
+.student-parents-contact li > .icon { margin-top: 2px; color: var(--graphite-400); }
+.student-parents-contact li > div { min-width: 0; }
+.student-parents-contact li p:not(.caption) { margin-top: 2px; color: var(--graphite-900); overflow-wrap: anywhere; }
+.student-parents-contact li p.empty { color: var(--graphite-400); }
+.student-parents-missing-phone { display: grid; justify-items: start; gap: 4px; }
+.student-parents .pill.amber { background: var(--amber-bg); color: var(--amber); }
+
+.student-parents-siblings {
+  padding: 12px 14px;
+  border-radius: var(--radius-control);
+  background: var(--graphite-50);
+  color: var(--graphite-700);
+}
+.student-parents-siblings .label-upper { display: flex; align-items: center; gap: 6px; margin-bottom: 4px; color: var(--graphite-500); }
+.student-parents-siblings .label-upper .icon { text-transform: none; } /* keep the icon ligature lower case */
+
+.student-parents-card-foot {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 10px;
+  margin-top: auto;
+  padding-top: 16px;
+  border-top: 1px solid var(--graphite-200);
+}
+
+/* ---------- empty state: calm, not an error ---------- */
+.student-parents .student-parents-empty { outline: 1px dashed var(--graphite-300); background: var(--graphite-50); }
+.student-parents-empty > .icon { color: var(--ink-600); }
+
+/* ---------- rules (notebook margin rule of the design) ---------- */
+.student-parents .student-parents-rules {
+  position: relative;
+  display: flex;
+  gap: 16px;
+  margin-top: 32px;
+  padding-left: 48px;
+  background: var(--graphite-50);
+}
+.student-parents-rules::before {
+  content: '';
+  position: absolute;
+  left: 24px;
+  top: 0;
+  bottom: 0;
+  width: 1px;
+  background: var(--ink-200);
+}
+.student-parents-rules > .icon { color: var(--ink-600); margin-top: 1px; }
+.student-parents-rules ul { display: grid; gap: 6px; margin: 8px 0 0; padding-left: 18px; color: var(--graphite-700); }
+
+/* ---------- loading, not found, error ---------- */
+.student-parents-skeleton { display: grid; gap: 12px; }
+.student-parents-skeleton.tall { min-height: 320px; align-content: start; }
+.student-parents-skeleton .block { display: block; height: 12px; width: 60%; border-radius: 4px; background: var(--graphite-100); }
+.student-parents-skeleton .block.avatar-block { width: 64px; height: 64px; border-radius: 50%; flex: none; }
+.student-parents .student-parents-missing {
+  display: grid;
+  justify-items: center;
+  gap: 8px;
+  margin-top: 24px;
+  padding: 48px 24px;
+  text-align: center;
+}
+.student-parents-missing > .icon { font-size: 40px; color: var(--graphite-400); }
+.student-parents-missing .btn { margin-top: 12px; }
+.student-parents .form-error { margin-top: 16px; }
+.student-parents-retry { margin-top: 16px; }
+
+/* ---------- responsive ---------- */
+@media (max-width: 1080px) {
+  .student-parents .student-parents-summary { flex-direction: column; align-items: stretch; gap: 16px; }
+  .student-parents-status { flex-basis: auto; padding: 16px 0 0; border-left: 0; border-top: 1px solid var(--graphite-200); }
+}
+@media (max-width: 900px) {
+  .student-parents .page-header { align-items: stretch; }
+  .student-parents-actions { justify-items: start; }
+}
+@media (max-width: 640px) {
+  .student-parents .breadcrumb a { display: inline-flex; align-items: center; min-height: 44px; margin: -12px 0; }
+  .student-parents-actions,
+  .student-parents-actions .actions-row { width: 100%; }
+  .student-parents-actions .actions-row { flex-wrap: wrap; }
+  .student-parents-actions .btn { flex: 1 1 auto; height: 44px; }
+  .student-parents .student-parents-summary { padding: 16px; }
+  .student-parents-student { align-items: flex-start; }
+  .student-parents-status { flex-wrap: wrap; gap: 12px; }
+  .student-parents-status .stamp { margin-left: 0; }
+  .student-parents-list { grid-template-columns: minmax(0, 1fr); gap: 16px; }
+  .student-parents-card-foot .btn { flex: 1 1 auto; height: 44px; }
+  .student-parents .student-parents-rules { padding-left: 32px; }
+  .student-parents-rules::before { left: 16px; }
+  .student-parents-rules > .icon { display: none; }
+  .student-parents-retry .btn { flex: 1 1 100%; height: 44px; }
+  .student-parents-missing .btn { width: 100%; height: 44px; }
+}

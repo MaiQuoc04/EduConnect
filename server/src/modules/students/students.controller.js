@@ -80,6 +80,11 @@ export async function detail(req, res) {
   res.json(await studentsService.getStudentDetail(parseStudentId(req.params.studentId)));
 }
 
+// UC-12 View Student's Parents
+export async function parents(req, res) {
+  res.json(await studentsService.getStudentParents(parseStudentId(req.params.studentId)));
+}
+
 // --- UC-09 ---------------------------------------------------------------------------------------------------
 
 // The only fields UC-09 may change. Login identifiers (email, phone, username) belong to System Admin (UC-99,

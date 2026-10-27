@@ -18,5 +18,7 @@ router.patch('/:studentId', requireAuth, requireRole('SCHOOL_MANAGER'), ctrl.upd
 // A business action (old enrollment TRANSFERRED + new enrollment), not a field update, so POST on a sub-resource.
 // permissions.md "Enrollment – Transfer / promote": School Manager only.
 router.post('/:studentId/transfer', requireAuth, requireRole('SCHOOL_MANAGER'), ctrl.transfer); // UC-10
+// Read only (link / unlink is UC-13). permissions.md "Parent–student link": School Manager only.
+router.get('/:studentId/parents', requireAuth, requireRole('SCHOOL_MANAGER'), ctrl.parents); // UC-12
 
 export default router;

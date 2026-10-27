@@ -21,6 +21,13 @@ export async function getStudent(studentId, { signal } = {}) {
   return data;
 }
 
+// UC-12 GET /students/:studentId/parents -> { student: { studentId, studentCode, fullName, avatarUrl, className },
+// parents: [...], canLinkMore }. Read only; parents are ordered by linkedAt, at most 2 (business-rules §3).
+export async function getStudentParents(studentId, { signal } = {}) {
+  const { data } = await api.get(`/students/${encodeURIComponent(studentId)}/parents`, { signal });
+  return data;
+}
+
 // UC-09 PATCH /students/:studentId -> the updated "student" object (same shape as UC-08's `student`).
 // changes may only hold fullName, dob, gender: the server rejects any other key with MSG_FIELD_NOT_EDITABLE.
 export async function updateStudent(studentId, changes) {
