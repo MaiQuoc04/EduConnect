@@ -74,6 +74,13 @@ Boundaries that are easy to get wrong:
   teacher nobody approves that class's posts, and the class shows a warning.
 - Max **2 parents per student** (check in code).
 - Forgot password: 6-digit OTP by email, valid 5 minutes, stored **hashed**, invalid after 5 wrong attempts.
+- **Password reset request** (agreed 27/10/2026): a user who cannot use the OTP (no email, lost mailbox…) sends a
+  request from the Forgot Password screen (sign-in name + optional reason, max 500 characters). The screen always
+  answers "request sent" (does not reveal whether the account exists); at most one PENDING request per account.
+  SA handles any account, SM only student / parent / teacher accounts; all of them get a notification. The handler
+  checks the person's identity outside the system, then resets with UC-100 (marks the request DONE) or rejects it.
+  SA / SM can still reset directly from the account screens without a request. Sending a request is not logged;
+  the reset is (`PASSWORD_RESET`).
 - During **maintenance** (`maintenance_announcements` window) nobody except System Admin can sign in; users see
   "The system is under maintenance". When SA schedules maintenance, all accounts are notified and a banner shows
   beforehand.
