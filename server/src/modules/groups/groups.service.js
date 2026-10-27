@@ -34,7 +34,8 @@ async function visibleYears(user) {
 
 // UC-29 View Group List. The groups (and teams, UC-35) the user can see in one school year, grouped by class (a parent with two
 // children in two classes gets two cards), plus the school-wide teacher group when visible. Default year: the
-// current one (started, newest), else the newest the user has groups in.
+// current one (started, newest), else the newest the user has groups in. isHomeroom: the user, acting as a teacher,
+// is the class's homeroom teacher (the client lists those classes first and filters on it).
 export async function listMyGroups(user, { schoolYearId }) {
   const years = await visibleYears(user);
   let schoolYear;
@@ -61,6 +62,7 @@ export async function listMyGroups(user, { schoolYearId }) {
     const { rows } = await pool.query(
       `SELECT c.class_id AS "classId", c.class_name AS "className", gl.grade_level_name AS "gradeLevel",
               u.full_name AS "homeroomName", u.status AS "homeroomStatus",
+              COALESCE($2 = 'TEACHER' AND t.user_id = $1, FALSE) AS "isHomeroom",
               COALESCE(json_agg(json_build_object('groupId', g.group_id, 'groupName', g.group_name,
                                                   'groupType', g.group_type, 'memberCount', ${MEMBER_COUNT})
                                 ORDER BY ${GROUP_ORDER}) FILTER (WHERE g.group_type <> 'TEAM_CHAT'), '[]') AS "groups",
@@ -73,7 +75,7 @@ export async function listMyGroups(user, { schoolYearId }) {
        LEFT JOIN teachers t ON t.teacher_id = c.homeroom_teacher_id
        LEFT JOIN users u ON u.user_id = t.user_id
        WHERE c.school_year_id = $3 AND ${groupScopeSql('$1', '$2')}
-       GROUP BY c.class_id, gl.grade_level_name, u.full_name, u.status
+       GROUP BY c.class_id, gl.grade_level_name, u.full_name, u.status, t.user_id
        ORDER BY gl.grade_level_name, c.class_name`,
       [...params, schoolYear.schoolYearId],
     );

@@ -748,8 +748,6 @@ img { display: block; }
 }
 
 /* ---------- groups (SCR-22..24, FE-04 UC-29..31) ---------- */
-.group-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(340px, 1fr)); gap: 16px; align-items: start; }
-.group-grid.is-loading { opacity: 0.6; }
 .group-card { display: grid; gap: 12px; }
 .group-card-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
 .group-links { display: grid; gap: 4px; }
@@ -796,7 +794,6 @@ img { display: block; }
   .group-toolbar.no-role.with-action { grid-template-columns: minmax(0, 1fr); }
 }
 @media (max-width: 640px) {
-  .group-grid { grid-template-columns: minmax(0, 1fr); }
   .group-header { flex-direction: column; }
   .group-tabs { overflow-x: auto; }
 }
@@ -821,4 +818,79 @@ img { display: block; }
 .class-pick label.is-disabled { cursor: not-allowed; opacity: 0.6; }
 @media (max-width: 900px) {
   .team-form-grid, .team-filter { grid-template-columns: minmax(0, 1fr); }
+}
+
+/* ---------- my groups (SCR-22 for teachers, students, parents – FE-04 UC-29/UC-35) ---------- */
+.my-groups { display: grid; gap: 20px; }
+.my-groups.is-loading { opacity: 0.6; }
+.my-groups-header { align-items: flex-end; }
+.my-groups-eyebrow { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin-bottom: 8px; }
+.my-groups-eyebrow .chip { text-transform: uppercase; letter-spacing: 0.04em; font-size: 11px; }
+.my-groups-toolbar { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px; padding: 12px 16px; margin-bottom: 20px; }
+.my-groups-toolbar-right { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; margin-left: auto; }
+.my-groups-search { width: 260px; }
+.pill-tabs { display: flex; flex-wrap: wrap; gap: 4px; }
+.pill-tabs button { border: 0; background: transparent; font: inherit; font-size: 13px; font-weight: 500; padding: 6px 14px; border-radius: var(--radius-control); color: var(--graphite-700); cursor: pointer; }
+.pill-tabs button:hover { background: var(--graphite-100); }
+.pill-tabs button[aria-selected='true'] { background: var(--ink-700); color: #fff; }
+
+/* Featured: the general group of my homeroom class. */
+.my-featured { display: grid; gap: 16px; padding: 24px; }
+.my-featured-head { display: flex; align-items: flex-start; gap: 16px; }
+.my-featured-main { flex: 1; min-width: 0; display: grid; gap: 4px; }
+.my-featured-badges { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-bottom: 2px; }
+.stamp-solid { display: inline-flex; align-items: center; padding: 2px 8px; border-radius: 4px; background: var(--ink-700); color: #fff; font-size: 11px; line-height: 18px; font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase; }
+.my-featured-main h2 { font-family: var(--font-serif); }
+.my-featured-desc { color: var(--graphite-700); padding: 12px 16px; border-radius: var(--radius-control); background: var(--graphite-50); }
+.my-featured-teams { display: grid; gap: 10px; }
+.my-subchannels { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 10px; }
+.my-subchannel { display: flex; align-items: flex-start; gap: 10px; padding: 10px 12px; border: 0; border-radius: var(--radius-control); outline: 1px solid var(--graphite-200); background: var(--white); color: var(--graphite-900); font: inherit; text-align: left; text-decoration: none; cursor: pointer; }
+.my-subchannel:hover { background: var(--ink-50); outline-color: var(--ink-100); text-decoration: none; }
+.my-subchannel.is-new { outline-style: dashed; color: var(--ink-700); }
+.my-subchannel-icon { margin-top: 2px; color: var(--ink-600); }
+.my-subchannel-text { display: grid; min-width: 0; }
+.my-subchannel-name { font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.my-featured-foot { display: flex; justify-content: flex-end; }
+.my-open-main { color: var(--ink-700); border-color: var(--ink-200); }
+
+/* Other groups and teams. */
+.my-group-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 16px; }
+.my-card { display: flex; flex-direction: column; gap: 6px; padding: 20px; }
+.my-card-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 8px; margin-bottom: 8px; }
+.my-card-icon { display: grid; place-items: center; flex: none; width: 44px; height: 44px; border-radius: var(--radius-control); background: var(--ink-50); color: var(--ink-600); }
+.my-card-icon.type-student { background: var(--green-bg); color: var(--green); }
+.my-card-icon.type-parent { background: var(--blue-bg); color: var(--blue); }
+.my-card-icon.type-teacher_school { background: var(--graphite-100); color: var(--graphite-700); }
+.my-badge { padding: 2px 8px; border-radius: 4px; font-size: 11px; line-height: 18px; font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase; white-space: nowrap; }
+.my-badge.ink { background: var(--ink-50); color: var(--ink-700); }
+.my-badge.green { background: var(--green-bg); color: var(--green); }
+.my-badge.blue { background: var(--blue-bg); color: var(--blue); }
+.my-badge.amber { background: var(--amber-bg); color: var(--amber); }
+.my-badge.grey { background: var(--graphite-100); color: var(--graphite-700); }
+.my-card-title { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.my-card-role { font-size: 13px; color: var(--graphite-600); }
+.my-card-role strong { font-weight: 500; color: var(--graphite-900); }
+.my-card-desc { flex: 1; margin-top: 6px; color: var(--graphite-700); }
+.my-card-foot { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-top: 12px; }
+.my-open { height: 32px; padding: 0 10px; }
+
+.my-groups-rules { display: flex; align-items: flex-start; gap: 16px; padding: 20px; }
+.my-groups-rules-icon { display: grid; place-items: center; flex: none; width: 40px; height: 40px; border-radius: var(--radius-control); background: var(--ink-50); color: var(--ink-600); }
+.my-groups-rules .muted { margin-top: 4px; }
+
+@media (max-width: 900px) {
+  .my-groups-header { align-items: flex-start; }
+  .my-groups-toolbar-right { margin-left: 0; width: 100%; }
+  .my-groups-search { flex: 1; width: auto; min-width: 200px; }
+}
+@media (max-width: 640px) {
+  .my-groups-header { flex-direction: column; }
+  .my-groups-header .btn { width: 100%; justify-content: center; }
+  .my-groups-toolbar-right .year-select, .my-groups-search { width: 100%; }
+  .my-featured { padding: 16px; }
+  .my-featured-head { gap: 12px; }
+  .my-group-grid, .my-subchannels { grid-template-columns: minmax(0, 1fr); }
+  .my-open-main { width: 100%; justify-content: center; }
+  .pill-tabs { flex-wrap: nowrap; overflow-x: auto; width: 100%; }
+  .pill-tabs button { white-space: nowrap; }
 }

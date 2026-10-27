@@ -15,7 +15,16 @@ export const GROUP_TYPE_HELP = {
   TEAM_CHAT: 'Chỉ trò chuyện giữa các thành viên được chọn',
 };
 
-export const GROUP_TYPE_ICONS = { GENERAL: 'groups', STUDENT: 'school', PARENT: 'family_restroom', TEACHER_SCHOOL: 'co_present', TEAM_CHAT: 'forum' };
+// What each group is for (business-rules §4: GENERAL and the teacher group have a feed, the others are chat only).
+export const GROUP_TYPE_DESC = {
+  GENERAL: 'Bảng tin và trò chuyện chung của lớp với giáo viên, học sinh và phụ huynh.',
+  STUDENT: 'Trò chuyện giữa giáo viên chủ nhiệm và học sinh của lớp.',
+  PARENT: 'Trò chuyện giữa giáo viên chủ nhiệm và phụ huynh của lớp.',
+  TEACHER_SCHOOL: 'Bảng tin và trò chuyện của toàn bộ giáo viên và quản lý trường.',
+  TEAM_CHAT: 'Trò chuyện riêng giữa các thành viên được chọn trong lớp.',
+};
+
+export const GROUP_TYPE_ICONS ={ GENERAL: 'groups', STUDENT: 'school', PARENT: 'family_restroom', TEACHER_SCHOOL: 'co_present', TEAM_CHAT: 'forum' };
 
 // Why someone is a member (worked out by the server).
 export const MEMBER_KIND_LABELS = {
