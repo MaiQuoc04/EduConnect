@@ -1,0 +1,121 @@
+/* ── TeacherEditPage.css ── SCR-15 Update Teacher ── */
+
+.te-page { max-width: 860px; margin: 0 auto; width: 100%; padding-bottom: 3rem; }
+
+.te-top { display: flex; align-items: center; justify-content: space-between; gap: 0.5rem; }
+.te-back { display: inline-flex; align-items: center; gap: 6px; color: var(--graphite-600); font-weight: 500; text-decoration: none; }
+.te-back:hover { color: var(--ink-700); }
+.te-breadcrumb { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-top: 6px; font-size: 12px; color: var(--graphite-500); }
+.te-breadcrumb a { color: var(--graphite-500); text-decoration: none; }
+.te-breadcrumb a:hover { color: var(--graphite-900); text-decoration: underline; }
+.te-breadcrumb strong { color: var(--graphite-900); font-weight: 500; }
+.te-heading { margin: 0.75rem 0 1.5rem; }
+.te-heading h1 { margin: 0; color: var(--graphite-900); }
+.te-heading p { margin: 4px 0 0; color: var(--graphite-600); }
+
+.te-card { background: var(--white); border-radius: var(--radius-card); outline: 1px solid var(--graphite-200); }
+
+/* Identity strip – paper margin line */
+.te-identity {
+  position: relative;
+  display: flex; align-items: center; justify-content: space-between; gap: 1rem; flex-wrap: wrap;
+  padding: 1.25rem 1.5rem 1.25rem 3.5rem;
+  margin-bottom: 1.5rem;
+}
+.te-identity::before { content: ''; position: absolute; left: 1.5rem; top: 0; bottom: 0; width: 1px; background: var(--ink-200); }
+.te-identity-main { display: flex; align-items: center; gap: 1rem; min-width: 0; }
+.te-identity-name { display: flex; align-items: center; flex-wrap: wrap; gap: 0.625rem; }
+.te-identity-meta { margin: 2px 0 0; font-size: 12px; color: var(--graphite-600); }
+.te-mono { font-family: ui-monospace, monospace; color: var(--graphite-900); }
+.te-identity-aside { display: grid; gap: 2px; text-align: right; font-size: 12px; font-weight: 500; color: var(--graphite-700); }
+
+/* Form sections */
+.te-form { display: grid; gap: 1.5rem; }
+.te-section { padding: 1.75rem 2rem; }
+.te-section-head {
+  display: flex; align-items: baseline; justify-content: space-between; gap: 0.5rem; flex-wrap: wrap;
+  padding-bottom: 1rem; margin-bottom: 1.5rem; border-bottom: 1px solid var(--graphite-200);
+}
+.te-section-head h2 { margin: 0; display: flex; align-items: center; gap: 8px; color: var(--graphite-900); }
+.te-bullet { width: 8px; height: 8px; border-radius: 50%; background: var(--ink-600); }
+.te-head-icon { color: var(--graphite-500); font-size: 18px !important; }
+.te-required-note { font-size: 12px; font-style: italic; color: var(--graphite-500); }
+.te-req { color: var(--red-pen); font-weight: 700; }
+
+.te-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1.25rem 1.5rem; }
+.te-grid--3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.te-wide { grid-column: 1 / -1; }
+
+/* Subject picker */
+.te-picker {
+  min-height: 44px; padding: 6px;
+  display: flex; flex-wrap: wrap; align-items: center; gap: 6px;
+  background: var(--white); border: 1px solid var(--graphite-200); border-radius: var(--radius-control);
+}
+.te-picker:focus-within { border-color: var(--ink-600); }
+.te-picker--invalid { border-color: var(--red-pen); }
+.te-chip {
+  display: inline-flex; align-items: center; gap: 4px;
+  padding: 3px 4px 3px 10px; border-radius: 4px;
+  background: var(--ink-50); color: var(--ink-800); outline: 1px solid var(--ink-200);
+  font-weight: 500;
+}
+.te-chip--locked { padding-right: 8px; }
+.te-chip-remove, .te-chip-lock { display: inline-grid; place-items: center; width: 20px; height: 20px; border-radius: 4px; color: var(--ink-400); }
+.te-chip-remove { border: 0; background: none; cursor: pointer; padding: 0; }
+.te-chip-remove:hover { color: var(--ink-800); background: var(--ink-100); }
+.te-chip-remove:focus-visible { outline: 2px solid var(--ink-400); }
+.te-chip-lock .icon { font-size: 14px !important; }
+
+.te-add { position: relative; }
+.te-add-btn {
+  height: 28px; padding: 0 10px; display: inline-flex; align-items: center; gap: 4px;
+  border: 0; border-radius: 4px; background: var(--paper); color: var(--ink-700);
+  font: 500 12px/16px var(--font-ui); cursor: pointer;
+}
+.te-add-btn:hover:not(:disabled) { background: var(--ink-100); }
+.te-add-btn:disabled { color: var(--graphite-400); cursor: default; }
+.te-dropdown {
+  position: absolute; left: 0; top: calc(100% + 4px); z-index: 30;
+  width: 260px; background: var(--white); border-radius: var(--radius-control);
+  outline: 1px solid var(--graphite-200); box-shadow: var(--shadow-menu); overflow: hidden;
+}
+.te-dropdown-search { width: 100%; height: 36px; padding: 0 12px; border: 0; border-bottom: 1px solid var(--graphite-200); font: inherit; outline: none; }
+.te-dropdown-list { max-height: 240px; overflow-y: auto; padding: 4px 0; }
+.te-dropdown-item {
+  width: 100%; display: flex; justify-content: space-between; align-items: center; gap: 8px;
+  padding: 8px 12px; border: 0; background: none; text-align: left; cursor: pointer;
+  font: 500 13px/18px var(--font-ui); color: var(--graphite-700);
+}
+.te-dropdown-item:hover, .te-dropdown-item:focus-visible { background: var(--graphite-50); outline: none; }
+.te-dropdown-code { font-family: ui-monospace, monospace; font-size: 11px; color: var(--graphite-400); }
+.te-dropdown-empty { padding: 10px 12px; font-size: 12px; color: var(--graphite-500); }
+
+/* Read-only identity */
+.te-notice { margin-bottom: 1.5rem; font-size: 13px; }
+.te-locked-label { justify-content: flex-start; gap: 6px; }
+.te-locked-label .icon { color: var(--graphite-400); font-size: 14px !important; }
+.te-readonly { background: var(--graphite-50); color: var(--graphite-700); font-family: ui-monospace, monospace; font-size: 13px; cursor: not-allowed; }
+.te-readonly:focus { border-color: var(--graphite-200); box-shadow: none; }
+
+/* Footer actions */
+.te-actions { display: flex; align-items: center; justify-content: space-between; gap: 1rem; flex-wrap: wrap; }
+.te-dirty { font-size: 12px; color: var(--graphite-500); }
+.te-buttons { display: flex; gap: 0.75rem; margin-left: auto; }
+
+/* States */
+.te-load-error { display: flex; gap: 0.75rem; padding: 1.25rem; color: var(--red-pen); }
+.te-load-error p { margin: 0 0 0.75rem; color: var(--graphite-900); }
+.te-skeleton { background: linear-gradient(90deg, var(--graphite-50), var(--graphite-100), var(--graphite-50)); background-size: 200% 100%; animation: te-shimmer 1.4s infinite; }
+@keyframes te-shimmer { from { background-position: 200% 0; } to { background-position: -200% 0; } }
+@media (prefers-reduced-motion: reduce) { .te-skeleton { animation: none; } }
+
+@media (max-width: 720px) {
+  .te-section { padding: 1.25rem; }
+  .te-grid, .te-grid--3 { grid-template-columns: minmax(0, 1fr); }
+  .te-identity { padding-left: 1.25rem; }
+  .te-identity::before { display: none; }
+  .te-identity-aside { text-align: left; }
+  .te-buttons { width: 100%; }
+  .te-buttons > * { flex: 1; }
+}

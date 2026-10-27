@@ -10,7 +10,7 @@ import { signAccessToken } from '../../utils/token.js';
 async function currentSchoolYear() {
   const [rows] = await pool.query(
     `SELECT school_year_id AS id, year_name AS name FROM school_years
-     WHERE start_date <= CURDATE() ORDER BY start_date DESC LIMIT 1`,
+     WHERE start_date <= CURRENT_DATE ORDER BY start_date DESC LIMIT 1`,
   );
   return rows[0] ?? null;
 }
@@ -130,7 +130,7 @@ export async function changePassword({ user: claims, currentPassword, newPasswor
     throw badRequest('MSG_WRONG_CURRENT_PASSWORD', 'The current password is not correct.');
   }
   await assertNewPassword(newPassword, user);
-  await pool.query('UPDATE users SET password_hash = ?, must_change_password = FALSE WHERE user_id = ?', [
+  await pool.query('UPDATE users SET password_hash = $1, must_change_password = FALSE WHERE user_id = $2', [
     await hashPassword(newPassword),
     user.user_id,
   ]);

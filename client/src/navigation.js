@@ -10,6 +10,14 @@ export const NAV_SECTIONS = [
       { to: '/change-password', label: 'Đổi mật khẩu', icon: 'lock_reset' }, // FE-01 UC-05
     ],
   },
+  {
+    label: 'Hồ sơ',
+    items: [
+      { to: '/teachers', label: 'Giáo viên', icon: 'badge', roles: ['SCHOOL_MANAGER'] }, // SCR-13
+      { to: '/homeroom-assignments', label: 'Phân công chủ nhiệm', icon: 'assignment_ind', roles: ['SCHOOL_MANAGER'] }, // SCR-16
+      { to: '/teaching-assignments', label: 'Phân công giảng dạy', icon: 'co_present', roles: ['SCHOOL_MANAGER'] }, // SCR-17
+    ],
+  },
 ];
 
 export function navFor(activeRole) {

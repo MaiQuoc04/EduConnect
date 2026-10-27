@@ -39,8 +39,8 @@ export async function signIn({ identifier, password, ip }) {
 
   const [users] = await pool.query(
     `SELECT user_id, username, full_name, avatar_url, password_hash, status, must_change_password, failed_login_count,
-            locked_until > NOW() AS is_temp_locked,
-            CEIL(TIMESTAMPDIFF(SECOND, NOW(), locked_until) / 60) AS lock_minutes_left
+            (locked_until > NOW()) AS is_temp_locked,
+            CEIL(EXTRACT(EPOCH FROM (locked_until - NOW())) / 60)::int AS lock_minutes_left
      FROM users WHERE username = ? OR email = ? OR phone = ? LIMIT 1`,
     [identifier, identifier, identifier],
   );
@@ -72,7 +72,7 @@ export async function signIn({ identifier, password, ip }) {
     const lockMinutes = failed % maxAttempts === 0 ? Math.min(step * (failed / maxAttempts), maxMinutes) : 0;
     await pool.query(
       `UPDATE users SET failed_login_count = ?,
-              locked_until = IF(? > 0, NOW() + INTERVAL ? MINUTE, locked_until)
+              locked_until = CASE WHEN ? > 0 THEN NOW() + (? * INTERVAL '1 minute') ELSE locked_until END
        WHERE user_id = ?`,
       [failed, lockMinutes, lockMinutes, user.user_id],
     );
@@ -139,11 +139,11 @@ export async function requestPasswordOtp({ email, ip }) {
   if (!user) return result;
 
   // Expired OTPs are the only rows we hard delete (business-rules §14).
-  await pool.query('DELETE FROM password_reset_otps WHERE expires_at < NOW() - INTERVAL 1 DAY');
+  await pool.query('DELETE FROM password_reset_otps WHERE expires_at < NOW() - INTERVAL \'1 day\'');
 
   // ASSUMPTION: at most one email per minute per account (anti-spam); a new code replaces the previous one.
   const [recent] = await pool.query(
-    `SELECT 1 FROM password_reset_otps WHERE user_id = ? AND created_at > NOW() - INTERVAL 1 MINUTE LIMIT 1`,
+    `SELECT 1 FROM password_reset_otps WHERE user_id = ? AND created_at > NOW() - INTERVAL '1 minute' LIMIT 1`,
     [user.user_id],
   );
   if (recent.length) return result;
@@ -155,7 +155,7 @@ export async function requestPasswordOtp({ email, ip }) {
       [user.user_id],
     );
     await conn.query(
-      `INSERT INTO password_reset_otps (user_id, otp_hash, expires_at) VALUES (?, ?, NOW() + INTERVAL ? MINUTE)`,
+      `INSERT INTO password_reset_otps (user_id, otp_hash, expires_at) VALUES (?, ?, NOW() + ($3 * INTERVAL '1 minute'))`,
       [user.user_id, await bcrypt.hash(otp, 10), expiryMinutes],
     );
   });
@@ -190,8 +190,7 @@ export async function verifyPasswordOtp({ email, otp }) {
      WHERE u.email = ? AND u.status = 'ACTIVE' AND o.used_at IS NULL AND o.expires_at > NOW() AND o.attempt_count < ?
      ORDER BY o.created_at DESC LIMIT 1`,
     [email, OTP_MAX_ATTEMPTS],
-  );
-  const row = rows[0];
+  );  const row = rows[0];
   if (!row) throw badRequest('MSG_OTP_INVALID', 'The code is invalid or has expired. Please request a new code.');
 
   if (!(await bcrypt.compare(otp, row.otp_hash))) {
