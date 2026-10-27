@@ -28,7 +28,44 @@ export async function updateStudent(studentId, changes) {
   return data;
 }
 
-// Class options for the Student List filter, grouped by grade level.
+// UC-10 POST /students/:studentId/transfer -> { student, fromEnrollment, toEnrollment, groupChanges, warnings }.
+// The body is only { toClassId }: the server rejects any other key (there is no "reason", see UC-10).
+export async function transferStudent(studentId, toClassId) {
+  const { data } = await api.post(`/students/${encodeURIComponent(studentId)}/transfer`, { toClassId });
+  return data;
+}
+
+// UC-11 POST /students/promote -> { summary: { total, promoted, skipped }, results, warnings }. Answers 200 even when
+// some students are SKIPPED (each result says why); only a problem with the whole request is an error.
+// body: { fromSchoolYearId, toSchoolYearId, groups: [{ toClassId, studentIds }] } – no other key is accepted.
+export async function promoteStudents(body) {
+  const { data } = await api.post('/students/promote', body);
+  return data;
+}
+
+// TEMPORARY: GET /students/promote/options -> { schoolYears, classes } for the SCR-11 selects (UC-10, UC-11).
+// schoolYears: [{ schoolYearId, yearName, startDate, endDate, isCurrent }] by start_date; classes (only with
+// toSchoolYearId): [{ classId, className, gradeLevelName, trackName, studentCount }].
+// TODO FE-04 (Khanh): switch to GET /school-years and GET /classes?schoolYearId= once they exist; the server
+// endpoint is removed then.
+export async function getPromoteOptions({ toSchoolYearId } = {}, { signal } = {}) {
+  const { data } = await api.get('/students/promote/options', { params: compact({ toSchoolYearId }), signal });
+  return data;
+}
+
+// Every student of a UC-07 query, page after page (100 per page, at most MAX_OPTION_PAGES pages), for the
+// UC-11 class roster and the destination year check. Errors are thrown like listStudents().
+export async function listAllStudents(params, { signal } = {}) {
+  const items = [];
+  for (let page = 1; page <= MAX_OPTION_PAGES; page += 1) {
+    const data = await listStudents({ ...params, page, pageSize: 100 }, { signal });
+    items.push(...data.items);
+    if (page * data.pageSize >= data.total) break;
+  }
+  return items;
+}
+
+// Class options for the Student List filter, grouped by grade level. (SCR-11 uses getPromoteOptions instead.)
 // TODO FE-04 (Khanh): replace with the class list API (GET /classes?schoolYearId=) once it exists.
 // ASSUMPTION: until then the options are collected from the students of the year (at most 20 pages of 100), so a
 // class without students does not appear. Cached per school year for the session.

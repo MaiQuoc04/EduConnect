@@ -200,11 +200,12 @@ export default function StudentListPage() {
             <Icon name="upload_file" size="sm" />
             Nhập liên kết phụ huynh
           </button>
-          {/* TODO UC-10 / UC-11 Student Transfer & Promotion (SCR-11) */}
-          <button type="button" className="btn btn-secondary" disabled title="Chức năng đang được xây dựng">
+          {/* SCR-11: opens the promotion tab (UC-11, a whole class). A transfer (UC-10) is for one student, so it
+              starts from Student Detail ("Chuyển lớp"). */}
+          <Link to="/students/promote" state={{ listSearch: query ? `?${query}` : '' }} className="btn btn-secondary">
             <Icon name="swap_horiz" size="sm" />
             Chuyển lớp / Lên lớp
-          </button>
+          </Link>
         </div>
       </div>
 

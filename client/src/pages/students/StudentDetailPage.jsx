@@ -485,6 +485,18 @@ export default function StudentDetailPage() {
             <Icon name="edit" size="sm" />
             Sửa thông tin
           </Link>
+          {/* UC-10 Transfer Student (SCR-11). Only offered while the student studies in a class this year: the
+              server refuses anyone else (MSG_NO_ACTIVE_ENROLLMENT); the page itself explains it when opened directly. */}
+          {current && (
+            <Link
+              to={`/students/${student.studentId}/transfer`}
+              state={{ fromDetail: true, listSearch: location.state?.listSearch }}
+              className="btn btn-secondary"
+            >
+              <Icon name="swap_horiz" size="sm" />
+              Chuyển lớp
+            </Link>
+          )}
           {/* TODO UC-12 View Student's Parents (SCR-12) */}
           <button type="button" className="btn btn-secondary" disabled title={NOT_BUILT}>
             <Icon name="family_restroom" size="sm" />

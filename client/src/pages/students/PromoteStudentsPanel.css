@@ -1,0 +1,207 @@
+/* FE-02 Promote Students (SCR-11 Student Transfer & Promotion, promotion tab, UC-11). The page root carries both
+   .transfer-student and .promote-students: the header, tabs, 8/4 grid, side panels, footer, class picker and dialog
+   come from TransferStudentPage.css; this file only adds the promotion parts, every rule scoped under
+   .promote-students. Design: Stitch "SCR-10 Student Transfer & Promotion" (banner with the notebook margin rule and
+   the ink stamp, table cards with a grey head bar). Colours, radii and type come from the tokens in styles.css.
+   Breakpoints are the ones of the other FE-02 screens: 1080px (grid stacks), 900px (app shell becomes a drawer),
+   640px. */
+
+.promote-students .visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+/* Single-column grids with minmax(0, 1fr): a grid item's default min-width is its content, so without this the
+   640px-wide tables would stretch the cards past the screen instead of scrolling inside them. */
+.promote-students-main,
+.promote-students .promote-students-result,
+.promote-students .promote-students-form,
+.promote-students-fieldset,
+.promote-students-step { grid-template-columns: minmax(0, 1fr); }
+.promote-students-main { display: grid; gap: 24px; min-width: 0; }
+
+/* ---------- banner (design: margin rule + stamp) ---------- */
+.promote-students .promote-students-banner {
+  position: relative;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px 16px;
+  padding: 20px 24px 20px 48px;
+  overflow: hidden;
+}
+.promote-students-banner::before {
+  content: '';
+  position: absolute;
+  left: 24px;
+  top: 0;
+  bottom: 0;
+  width: 1px;
+  background: var(--ink-200);
+}
+.promote-students-banner > div { display: grid; gap: 4px; min-width: 0; flex: 1 1 280px; }
+.promote-students-banner h2 { overflow-wrap: anywhere; }
+.promote-students-banner-eyebrow { display: inline-flex; align-items: center; gap: 6px; color: var(--ink-700); }
+.promote-students-banner .stamp { flex: none; }
+
+/* ---------- steps ---------- */
+.promote-students-fieldset { display: grid; gap: 24px; min-width: 0; margin: 0; padding: 0; border: 0; }
+.promote-students-step { display: grid; gap: 12px; min-width: 0; padding-bottom: 24px; border-bottom: 1px solid var(--graphite-100); }
+.promote-students-fieldset > .promote-students-step:last-of-type { padding-bottom: 0; border-bottom: 0; }
+.promote-students-target { white-space: nowrap; }
+.promote-students-step-head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px 16px; }
+.promote-students-step-title { display: flex; align-items: center; gap: 10px; font-size: 15px; font-weight: 600; color: var(--graphite-900); }
+.promote-students-step-no {
+  display: inline-grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  border-radius: 999px;
+  background: var(--ink-50);
+  color: var(--ink-700);
+  font-size: 12px;
+  font-weight: 600;
+}
+.promote-students-count { color: var(--graphite-600); font-size: 13px; }
+
+/* Source year | source class | destination year. */
+.promote-students-scope { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; align-items: start; }
+.promote-students-year { min-width: 0; }
+
+/* ---------- student table (same horizontal scroll + sticky name as Student List) ---------- */
+.promote-students-tools { display: flex; flex-wrap: wrap; gap: 8px; }
+.promote-students-scroll {
+  position: relative;
+  overflow-x: auto;
+  border-radius: var(--radius-control);
+  outline: 1px solid var(--graphite-200);
+}
+.promote-students .table { min-width: 640px; }
+.promote-students .table th { height: 40px; padding: 0 12px; white-space: nowrap; }
+.promote-students .table td { padding: 6px 12px; }
+.promote-students .table .num { text-align: right; white-space: nowrap; }
+.promote-students .table .caption { color: var(--graphite-600); }
+.promote-students .table .sticky { position: sticky; left: 0; z-index: 1; background: var(--white); }
+.promote-students .table th.sticky { background: var(--graphite-50); }
+.promote-students .table th.check,
+.promote-students .table td.check { width: 48px; padding: 0 4px 0 8px; }
+.promote-students-check { display: inline-grid; place-items: center; width: 36px; height: 36px; cursor: pointer; }
+.promote-students-check input { width: 16px; height: 16px; margin: 0; accent-color: var(--ink-600); cursor: pointer; }
+.promote-students-check input:disabled { cursor: not-allowed; }
+.promote-students .table tr.is-ticked td { background: var(--ink-50); }
+.promote-students .table tr.is-locked td { background: var(--graphite-50); color: var(--graphite-500); }
+.promote-students-name { display: flex; align-items: center; gap: 8px; font-weight: 600; white-space: nowrap; }
+.promote-students-name .avatar.square { border-radius: 4px; }
+.promote-students-status { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; }
+.promote-students .promote-students-group-select { height: 36px; width: auto; min-width: 160px; padding-right: 28px; cursor: pointer; }
+
+/* ---------- groups ---------- */
+.promote-students-groups { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; align-items: start; }
+.promote-students-group {
+  display: grid;
+  gap: 12px;
+  min-width: 0;
+  padding: 16px;
+  border: 1px solid var(--graphite-200);
+  border-radius: var(--radius-control);
+  background: var(--graphite-50);
+}
+.promote-students-group-head { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.promote-students .promote-students-remove { margin-left: auto; height: 32px; }
+.promote-students-add { justify-self: start; align-self: center; }
+
+/* ---------- confirmation ---------- */
+.promote-students-dialog-groups { display: grid; gap: 8px; margin: 0 0 16px; padding: 0; list-style: none; }
+.promote-students-dialog-groups li {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 8px;
+  padding: 8px 12px;
+  border-radius: var(--radius-control);
+  background: var(--graphite-50);
+  outline: 1px solid var(--graphite-200);
+}
+
+/* ---------- result ---------- */
+.promote-students .promote-students-result { display: grid; gap: 20px; min-width: 0; }
+/* TransferStudentPage.css is loaded after this file, so this beats its green ".transfer-student-result-head > .icon". */
+.promote-students .transfer-student-result-head > .promote-students-none { color: var(--amber); }
+.promote-students-summary { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; margin: 0; }
+.promote-students-summary > div {
+  display: grid;
+  gap: 4px;
+  padding: 12px 16px;
+  border-radius: var(--radius-control);
+  background: var(--graphite-50);
+  outline: 1px solid var(--graphite-200);
+}
+.promote-students-summary dd { margin: 0; font-size: 24px; line-height: 30px; font-weight: 600; color: var(--graphite-900); }
+.promote-students-summary .green { background: var(--green-bg); outline-color: #bfe0cc; }
+.promote-students-summary .green dt,
+.promote-students-summary .green dd { color: var(--green); }
+.promote-students-summary .amber { background: var(--amber-bg); outline-color: #f3d9a8; }
+.promote-students-summary .amber dt,
+.promote-students-summary .amber dd { color: var(--amber); }
+.promote-students-result-tools { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px; }
+.promote-students-filter { display: inline-flex; padding: 2px; border-radius: var(--radius-control); background: var(--graphite-100); }
+.promote-students-filter button {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 36px;
+  padding: 0 14px;
+  border: 0;
+  border-radius: 4px;
+  background: none;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--graphite-600);
+  cursor: pointer;
+}
+.promote-students-filter button.active {
+  background: var(--white);
+  color: var(--ink-700);
+  font-weight: 600;
+  box-shadow: 0 1px 2px rgba(28, 27, 25, 0.08);
+}
+.promote-students-move { display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; }
+.promote-students-move .icon { color: var(--graphite-400); }
+.promote-students-outcome { display: grid; gap: 4px; justify-items: start; min-width: 220px; padding: 2px 0; }
+.promote-students .table .promote-students-outcome .caption { color: var(--amber); }
+.promote-students .table tr.is-skipped td { background: #fffbf3; }
+.promote-students .table td.promote-students-empty { height: 72px; text-align: center; color: var(--graphite-600); }
+
+
+/* ---------- responsive (FE-02 breakpoints) ---------- */
+@media (max-width: 1080px) {
+  .promote-students-groups { grid-template-columns: minmax(0, 1fr); }
+}
+@media (max-width: 900px) {
+  .promote-students-scope { grid-template-columns: minmax(0, 1fr); }
+}
+@media (max-width: 640px) {
+  .promote-students .promote-students-banner { padding: 16px 16px 16px 36px; }
+  .promote-students-banner::before { left: 18px; }
+  .promote-students .promote-students-tools .btn { flex: 1 1 0; height: 44px; min-width: 0; }
+  .promote-students-check { width: 44px; height: 44px; }
+  .promote-students-check input { width: 20px; height: 20px; }
+  .promote-students .promote-students-group-select { height: 44px; }
+  .promote-students .table td { height: 52px; }
+  .promote-students .promote-students-remove { height: 44px; }
+  .promote-students .promote-students-add { justify-self: stretch; height: 44px; }
+  .promote-students-summary { gap: 8px; }
+  .promote-students-summary > div { padding: 10px; }
+  .promote-students-summary dd { font-size: 20px; line-height: 26px; }
+  .promote-students-filter { width: 100%; }
+  .promote-students-filter button { flex: 1 1 0; justify-content: center; min-height: 44px; }
+  .promote-students .transfer-student-picker-tools .link-button { min-height: 44px; }
+  /* The result's two buttons have long labels: one per line instead of two half-width ones. */
+  .promote-students .promote-students-result .transfer-student-buttons { flex-direction: column; }
+  .promote-students .promote-students-result .transfer-student-buttons .btn { flex: none; width: 100%; }
+}

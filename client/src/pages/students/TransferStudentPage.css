@@ -1,0 +1,262 @@
+/* FE-02 Transfer Student (SCR-11 Student Transfer & Promotion, UC-10). Only this screen's styles; every rule is
+   scoped under .transfer-student (the dialog is rendered inside it). Design: Stitch "SCR-10 Student Transfer &
+   Promotion". Colours, radii and type come from the tokens in styles.css; rules that override a shared class
+   (.card, .input, .notice) are prefixed with .transfer-student to win on specificity.
+   Breakpoints are the ones of the profile screen and the other FE-02 screens: 1080px (8/4 grid stacks),
+   900px (app shell becomes a drawer) and 640px. */
+
+.transfer-student .strong { font-weight: 600; color: var(--graphite-900); }
+.transfer-student-required { color: var(--red-pen); }
+
+/* ---------- header (same pattern as Student Detail / Update Student) ---------- */
+.transfer-student .page-header {
+  align-items: flex-end;
+  padding-bottom: 24px;
+  border-bottom: 1px solid var(--graphite-200);
+}
+.transfer-student .page-header p { overflow-wrap: anywhere; }
+.transfer-student-eyebrow { display: block; margin-bottom: 4px; color: var(--ink-700); }
+.transfer-student-metric { display: grid; gap: 2px; text-align: right; flex: none; }
+.transfer-student-metric .label-upper { color: var(--graphite-500); }
+
+/* ---------- tabs ---------- */
+.transfer-student-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0 4px;
+  margin-top: 16px;
+  border-bottom: 1px solid var(--graphite-200);
+}
+.transfer-student-tabs button {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 44px;
+  padding: 0 16px;
+  margin-bottom: -1px;
+  border: 0;
+  border-bottom: 2px solid transparent;
+  background: none;
+  font: inherit;
+  font-weight: 500;
+  color: var(--graphite-600);
+  cursor: pointer;
+}
+.transfer-student-tabs button.active { color: var(--ink-700); font-weight: 600; border-bottom-color: var(--ink-600); }
+.transfer-student-tabs button:disabled { cursor: not-allowed; color: var(--graphite-400); }
+.transfer-student-tabs .chip { font-size: 11px; }
+.transfer-student-tab-soon { padding: 0 8px; }
+
+/* ---------- main grid: 8 / 4 columns in the design ---------- */
+.transfer-student-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 2fr) minmax(0, 1fr);
+  gap: 24px;
+  margin-top: 24px;
+  align-items: start;
+}
+.transfer-student-aside { display: grid; gap: 24px; min-width: 0; }
+
+/* ---------- transfer form ---------- */
+.transfer-student .transfer-student-form { display: grid; gap: 20px; min-width: 0; }
+.transfer-student-form-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding-bottom: 16px;
+  border-bottom: 1px solid var(--graphite-200);
+}
+.transfer-student-form-head > .icon { color: var(--ink-700); }
+.transfer-student .field-label { color: var(--graphite-900); }
+
+.transfer-student-who {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 4px 10px;
+  min-height: 44px;
+  padding: 6px 12px;
+  border: 1px solid var(--graphite-200);
+  border-radius: var(--radius-control);
+  background: var(--white);
+}
+.transfer-student-who .strong { overflow-wrap: anywhere; }
+.transfer-student-who-ok { margin-left: auto; color: var(--green); }
+
+/* Current class | arrow | target class: side by side, stacked on narrow screens. */
+.transfer-student-pair {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+  gap: 16px;
+  align-items: start;
+  padding-top: 16px;
+  border-top: 1px solid var(--graphite-100);
+}
+.transfer-student-pair-arrow { margin-top: 44px; color: var(--graphite-400); }
+.transfer-student-current { display: grid; gap: 6px; min-width: 0; }
+.transfer-student-current-box {
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+  padding: 12px;
+  border: 1px solid var(--graphite-200);
+  border-radius: var(--radius-control);
+  background: var(--graphite-50);
+}
+.transfer-student-current-box p { margin-top: 2px; overflow-wrap: anywhere; }
+.transfer-student-current-head { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; }
+.transfer-student-badge {
+  display: inline-grid;
+  place-items: center;
+  flex: none;
+  min-width: 36px;
+  height: 36px;
+  padding: 0 4px;
+  border-radius: 999px;
+  background: var(--ink-100);
+  color: var(--ink-700);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.transfer-student-picker { min-width: 0; }
+.transfer-student .transfer-student-select { appearance: none; padding-right: 40px; cursor: pointer; }
+.transfer-student-select-icon {
+  position: absolute;
+  right: 12px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: var(--graphite-500);
+  pointer-events: none;
+}
+.transfer-student-picker-tools { display: flex; flex-wrap: wrap; gap: 4px 16px; margin-top: 4px; }
+.transfer-student-picker-tools .link-button { min-height: 32px; font-size: 13px; text-align: left; }
+
+.transfer-student .transfer-student-sync { border-radius: var(--radius-control); outline: 1px solid var(--graphite-200); background: var(--graphite-50); }
+
+.transfer-student-footer {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px 16px;
+  padding-top: 16px;
+  border-top: 1px solid var(--graphite-200);
+}
+.transfer-student-buttons { display: flex; gap: 8px; margin-left: auto; }
+
+/* ---------- side panels ---------- */
+.transfer-student-aside-head { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; margin-bottom: 12px; }
+.transfer-student-log ol { display: grid; gap: 8px; margin: 0; padding: 0; list-style: none; }
+.transfer-student-log li {
+  display: grid;
+  gap: 4px;
+  justify-items: start;
+  padding: 10px 12px;
+  border: 1px solid var(--graphite-200);
+  border-radius: var(--radius-control);
+  background: var(--graphite-50);
+}
+.transfer-student-log-head { display: flex; justify-content: space-between; gap: 8px; width: 100%; }
+.transfer-student-rules-title { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; font-size: 14px; font-weight: 600; }
+.transfer-student-rules-title .icon { color: var(--ink-600); }
+.transfer-student-rules ul { display: grid; gap: 6px; margin: 0; padding-left: 18px; color: var(--graphite-600); }
+
+/* ---------- result ---------- */
+.transfer-student .transfer-student-result { display: grid; gap: 20px; min-width: 0; }
+.transfer-student-result-head { display: flex; align-items: flex-start; gap: 12px; }
+.transfer-student-result-head > .icon { color: var(--green); }
+.transfer-student-result-head > div { flex: 1; min-width: 0; }
+.transfer-student-result-head h2 { overflow-wrap: anywhere; }
+.transfer-student-warnings { display: grid; gap: 8px; }
+.transfer-student-result-move {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+  align-items: center;
+  gap: 16px;
+  padding: 16px;
+  border-radius: var(--radius-control);
+  background: var(--graphite-50);
+  outline: 1px solid var(--graphite-200);
+}
+.transfer-student-result-move > div { display: grid; gap: 4px; justify-items: start; }
+.transfer-student-result-arrow { color: var(--ink-600); }
+.transfer-student-result-groups { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px 24px; }
+.transfer-student-groups h3 { display: flex; align-items: center; gap: 6px; margin-bottom: 8px; }
+.transfer-student-groups ul { display: grid; gap: 8px; margin: 0; padding: 0; list-style: none; }
+.transfer-student-groups li { display: grid; gap: 2px; padding-left: 10px; border-left: 2px solid var(--ink-200); overflow-wrap: anywhere; }
+
+/* ---------- confirmation ---------- */
+.transfer-student-dialog {
+  width: min(460px, calc(100vw - 32px));
+  max-height: calc(100dvh - 32px);
+  overflow-y: auto;
+  padding: 24px;
+  border: 0;
+  border-radius: var(--radius-dialog);
+  background: var(--white);
+  color: var(--graphite-900);
+  box-shadow: var(--shadow-dialog);
+}
+.transfer-student-dialog::backdrop { background: rgba(28, 27, 25, 0.32); }
+.transfer-student-dialog-head { display: flex; align-items: center; gap: 8px; margin-bottom: 12px; }
+.transfer-student-dialog-head > .icon { color: var(--ink-700); }
+.transfer-student-dialog p { overflow-wrap: anywhere; }
+.transfer-student-dialog-move { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin: 12px 0 16px; }
+.transfer-student-dialog .notice { padding: 12px; }
+.transfer-student-dialog-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 20px;
+  padding-top: 16px;
+  border-top: 1px solid var(--graphite-200);
+}
+.transfer-student-spin { animation: transfer-student-spin 0.9s linear infinite; }
+@keyframes transfer-student-spin { to { transform: rotate(360deg); } }
+
+/* ---------- loading, not found, error (same as the other FE-02 screens) ---------- */
+.transfer-student .transfer-student-skeleton { display: grid; gap: 16px; margin-top: 24px; min-height: 280px; align-content: start; }
+.transfer-student-skeleton .block { display: block; height: 12px; width: 60%; border-radius: 4px; background: var(--graphite-100); }
+.transfer-student-skeleton .block.short { width: 30%; }
+.transfer-student .transfer-student-missing {
+  display: grid;
+  justify-items: center;
+  gap: 8px;
+  margin-top: 24px;
+  padding: 48px 24px;
+  text-align: center;
+}
+.transfer-student-missing > .icon { font-size: 40px; color: var(--graphite-400); }
+.transfer-student-missing .btn { margin-top: 12px; }
+.transfer-student .form-error { margin-top: 0; }
+.transfer-student > .form-error { margin-top: 16px; }
+.transfer-student-retry { margin-top: 16px; }
+
+/* ---------- responsive (profile breakpoints) ---------- */
+@media (max-width: 1080px) {
+  .transfer-student-grid { grid-template-columns: minmax(0, 1fr); }
+}
+@media (max-width: 900px) {
+  .transfer-student .page-header { align-items: stretch; }
+  .transfer-student-metric { text-align: left; }
+}
+@media (max-width: 640px) {
+  .transfer-student .breadcrumb a { display: inline-flex; align-items: center; min-height: 44px; margin: -12px 0; }
+  .transfer-student-tabs button { flex: 1 1 auto; padding: 0 12px; }
+  .transfer-student-pair { grid-template-columns: minmax(0, 1fr); }
+  .transfer-student-pair-arrow { margin: 0 auto; transform: rotate(90deg); }
+  .transfer-student .input { height: 44px; }
+  .transfer-student-picker-tools .link-button { min-height: 44px; }
+  .transfer-student-buttons { width: 100%; margin-left: 0; }
+  .transfer-student-buttons .btn { flex: 1 1 0; height: 44px; min-width: 0; }
+  .transfer-student-result-move { grid-template-columns: minmax(0, 1fr); }
+  .transfer-student-result-arrow { transform: rotate(90deg); }
+  .transfer-student-result-groups { grid-template-columns: minmax(0, 1fr); }
+  .transfer-student-dialog { padding: 20px 16px; }
+  .transfer-student-dialog-actions .btn { flex: 1 1 100%; height: 44px; }
+  .transfer-student-retry .btn { flex: 1 1 100%; height: 44px; }
+  .transfer-student-missing .btn { width: 100%; height: 44px; }
+}

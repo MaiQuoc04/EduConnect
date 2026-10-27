@@ -132,3 +132,102 @@ export async function update(req, res) {
   }
   res.json(await studentsService.updateStudent(studentId, changes));
 }
+
+// --- UC-10 ---------------------------------------------------------------------------------------------------
+
+// The only key UC-10 accepts. There is no "reason": class_enrollments has no column for it and transfers are not
+// in activity_logs (business-rules §13), so a reason could not be stored; it is rejected like any unknown key
+// instead of being accepted and thrown away.
+const TRANSFER_FIELDS = ['toClassId'];
+
+// UC-10 Transfer Student: move a student to another class of the same school year.
+export async function transfer(req, res) {
+  const studentId = parseStudentId(req.params.studentId);
+  const body = req.body ?? {};
+  if (typeof body !== 'object' || Array.isArray(body)) {
+    throw badRequest('MSG_INVALID_PARAM', 'The request body must be a JSON object.', { field: 'body' });
+  }
+  const rejected = Object.keys(body).filter((key) => !TRANSFER_FIELDS.includes(key));
+  if (rejected.length) {
+    throw badRequest('MSG_INVALID_PARAM', 'These fields are not accepted here.', { fields: rejected });
+  }
+  // A JSON number, as every id the API returns (BIGINT -> Number, db.js).
+  const { toClassId } = body;
+  if (!Number.isSafeInteger(toClassId) || toClassId < 1) throw invalid('toClassId');
+  res.json(await studentsService.transferStudent(studentId, toClassId));
+}
+
+// --- UC-11 ---------------------------------------------------------------------------------------------------
+
+// TEMPORARY until FE-04 has GET /school-years and GET /classes (see getPromoteOptions in the service).
+// School years, plus the classes of toSchoolYearId when given, for the selects of SCR-11.
+export async function promoteOptions(req, res) {
+  const query = req.query ?? {};
+  const rejected = Object.keys(query).filter((key) => key !== 'toSchoolYearId');
+  if (rejected.length) {
+    throw badRequest('MSG_INVALID_PARAM', 'These parameters are not accepted here.', { fields: rejected });
+  }
+  res.json(await studentsService.getPromoteOptions({ toSchoolYearId: optionalInt(query, 'toSchoolYearId') }));
+}
+
+const PROMOTE_FIELDS = ['fromSchoolYearId', 'toSchoolYearId', 'groups'];
+const PROMOTE_GROUP_FIELDS = ['toClassId', 'studentIds'];
+
+const isId = (value) => Number.isSafeInteger(value) && value >= 1;
+const isPlainObject = (value) => typeof value === 'object' && value !== null && !Array.isArray(value);
+
+function rejectUnknownKeys(object, allowed) {
+  const rejected = Object.keys(object).filter((key) => !allowed.includes(key));
+  if (rejected.length) {
+    throw badRequest('MSG_INVALID_PARAM', 'These fields are not accepted here.', { fields: rejected });
+  }
+}
+
+// UC-11 Promote Students: enrol students into classes of a later school year, in groups (one target class per
+// group, so an old class can be split and a student repeating a year can go to a class of the same grade).
+// The whole body is checked here before the DB is touched; per-student problems are SKIPPED results (service).
+export async function promote(req, res) {
+  const body = req.body ?? {};
+  if (!isPlainObject(body)) {
+    throw badRequest('MSG_INVALID_PARAM', 'The request body must be a JSON object.', { field: 'body' });
+  }
+  rejectUnknownKeys(body, PROMOTE_FIELDS);
+  const { fromSchoolYearId, toSchoolYearId, groups } = body;
+  if (!isId(fromSchoolYearId)) throw invalid('fromSchoolYearId');
+  if (!isId(toSchoolYearId)) throw invalid('toSchoolYearId');
+  if (fromSchoolYearId === toSchoolYearId) {
+    throw badRequest('MSG_SAME_SCHOOL_YEAR',
+      'The destination school year must differ from the source school year. Use transfer (UC-10) within a year.');
+  }
+  if (!Array.isArray(groups) || groups.length === 0) throw invalid('groups');
+
+  const seen = new Set();
+  const duplicates = new Set();
+  let total = 0;
+  groups.forEach((group, index) => {
+    if (!isPlainObject(group)) throw invalid(`groups[${index}]`);
+    rejectUnknownKeys(group, PROMOTE_GROUP_FIELDS);
+    if (!isId(group.toClassId)) throw invalid(`groups[${index}].toClassId`);
+    if (!Array.isArray(group.studentIds) || group.studentIds.length === 0) throw invalid(`groups[${index}].studentIds`);
+    for (const studentId of group.studentIds) {
+      if (!isId(studentId)) throw invalid(`groups[${index}].studentIds`);
+      if (seen.has(studentId)) duplicates.add(studentId);
+      seen.add(studentId);
+    }
+    total += group.studentIds.length;
+  });
+  if (duplicates.size) {
+    throw badRequest('MSG_DUPLICATE_STUDENT_IN_REQUEST', 'A student appears more than once in the request.',
+      { studentIds: [...duplicates] });
+  }
+  if (total > studentsService.MAX_PROMOTE_STUDENTS) {
+    throw badRequest('MSG_TOO_MANY_STUDENTS', `At most ${studentsService.MAX_PROMOTE_STUDENTS} students per request.`,
+      { max: studentsService.MAX_PROMOTE_STUDENTS, total });
+  }
+
+  res.json(await studentsService.promoteStudents({
+    fromSchoolYearId,
+    toSchoolYearId,
+    groups: groups.map(({ toClassId, studentIds }) => ({ toClassId, studentIds })),
+  }));
+}

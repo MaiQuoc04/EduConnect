@@ -542,3 +542,7 @@ img { display: block; }
   .headline-xl { font-size: 26px; line-height: 34px; }
   .toast-stack { left: 16px; bottom: 16px; }
 }
+
+/* ---------- FE-02 Promote Students (UC-11) ---------- */
+/* Amber status pill: something to look at that is not an error (e.g. a student skipped by a promotion). */
+.pill.amber { background: var(--amber-bg); color: var(--amber); }

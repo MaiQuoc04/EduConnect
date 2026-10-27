@@ -8,7 +8,15 @@ import * as ctrl from './students.controller.js';
 const router = Router();
 
 router.get('/', requireAuth, requireRole('SCHOOL_MANAGER'), ctrl.list); // UC-07
+// UC-11 is a batch action on many students, so it is not under /:studentId. Declared before the /:studentId routes.
+// permissions.md "Enrollment – Transfer / promote": School Manager only.
+router.post('/promote', requireAuth, requireRole('SCHOOL_MANAGER'), ctrl.promote); // UC-11
+// TEMPORARY read-only lists of school years and classes for SCR-11 until FE-04 has its own endpoints.
+router.get('/promote/options', requireAuth, requireRole('SCHOOL_MANAGER'), ctrl.promoteOptions); // UC-11
 router.get('/:studentId', requireAuth, requireRole('SCHOOL_MANAGER'), ctrl.detail); // UC-08
 router.patch('/:studentId', requireAuth, requireRole('SCHOOL_MANAGER'), ctrl.update); // UC-09
+// A business action (old enrollment TRANSFERRED + new enrollment), not a field update, so POST on a sub-resource.
+// permissions.md "Enrollment – Transfer / promote": School Manager only.
+router.post('/:studentId/transfer', requireAuth, requireRole('SCHOOL_MANAGER'), ctrl.transfer); // UC-10
 
 export default router;

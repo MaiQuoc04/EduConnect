@@ -363,3 +363,473 @@ export async function updateStudent(studentId, changes) {
     return findStudent(studentId, client);
   });
 }
+
+// --- UC-10 -----------------------------------------------------------------------------------------------------
+
+// Class groups a member is added to in the new class, by member type (business-rules §4: GENERAL feed + chat,
+// STUDENT chat, PARENT chat). The groups themselves belong to FE-04 (UC-27 creates them on class import); UC-10 and
+// UC-11 only read groups and write group_members, and never create a group.
+const JOIN_GROUP_TYPES = { STUDENT: ['GENERAL', 'STUDENT'], PARENT: ['GENERAL', 'PARENT'] };
+
+// UC-10 Transfer Student (School Manager): move a student to another class of the SAME school year and the SAME
+// grade level (business-rules §4; grade level: team decision 2026-10-27). The old enrollment is never moved to the new class nor deleted: grades and attendances
+// point at its enrollment_id, so it becomes TRANSFERRED (left_at = NOW()) and a new STUDYING enrollment is added.
+// Everything runs in one transaction: enrollments and group memberships change together or not at all.
+// Not logged: transfers are not in the activity_logs list (business-rules §13).
+//
+// Known limit kept on purpose (team decision): class_enrollments has UNIQUE (student_id, class_id), so a student
+// can never go back to a class they already left (11D1 -> 11A1 -> 11D1). It is checked before the INSERT and
+// answered with MSG_CLASS_ALREADY_ENROLLED.
+export async function transferStudent(studentId, toClassId) {
+  return withTransaction(async (client) => {
+    // Lock the student first: two School Managers transferring the same student run one after the other, and the
+    // second one then finds the new enrollment instead of creating another one.
+    const { rows: studentRows } = await client.query(
+      'SELECT user_id FROM students WHERE student_id = $1 FOR UPDATE',
+      [studentId],
+    );
+    if (!studentRows[0]) throw notFound('MSG_STUDENT_NOT_FOUND', 'The student does not exist.');
+    const studentUserId = studentRows[0].user_id;
+
+    // ASSUMPTION: the year being worked on is the current school year, found as in UC-07 / UC-08
+    // (resolveSchoolYearId); the body has no schoolYearId, a transfer happens inside the running year.
+    const yearId = await resolveSchoolYearId({}, client);
+    const { rows: fromRows } = yearId
+      ? await client.query(
+        `SELECT ce.enrollment_id, ce.class_id, c.class_name, c.school_year_id, c.grade_level_id, gl.grade_level_name
+         FROM class_enrollments ce
+         JOIN classes c ON c.class_id = ce.class_id
+         JOIN grade_levels gl ON gl.grade_level_id = c.grade_level_id
+         WHERE ce.student_id = $1 AND ce.status = 'STUDYING' AND c.school_year_id = $2 AND c.deleted_at IS NULL
+         ORDER BY ce.enrolled_at DESC, ce.enrollment_id DESC
+         FOR UPDATE OF ce`,
+        [studentId, yearId],
+      )
+      : { rows: [] };
+    const from = fromRows[0];
+    if (!from) {
+      throw badRequest('MSG_NO_ACTIVE_ENROLLMENT', 'The student is not studying in any class this school year.');
+    }
+
+    // FOR SHARE: the target class cannot be soft-deleted while the transfer runs.
+    const { rows: toRows } = await client.query(
+      `SELECT c.class_id, c.class_name, c.school_year_id, c.grade_level_id, gl.grade_level_name
+       FROM classes c
+       JOIN grade_levels gl ON gl.grade_level_id = c.grade_level_id
+       WHERE c.class_id = $1 AND c.deleted_at IS NULL
+       FOR SHARE OF c`,
+      [toClassId],
+    );
+    const to = toRows[0];
+    if (!to) throw badRequest('MSG_CLASS_NOT_FOUND', 'The class does not exist.');
+    if (to.class_id === from.class_id) {
+      throw badRequest('MSG_TRANSFER_SAME_CLASS', 'The student is already studying in this class.');
+    }
+    if (to.school_year_id !== from.school_year_id) {
+      throw badRequest('MSG_TRANSFER_DIFFERENT_YEAR',
+        'The class belongs to another school year. Use student promotion (UC-11) to move to a new school year.');
+    }
+    // Team decision 2026-10-27 (not in business-rules.md yet): a transfer stays within the same grade level;
+    // moving up a grade is UC-11. Checked after the school year so a class of another year gets the promotion hint.
+    if (to.grade_level_id !== from.grade_level_id) {
+      throw badRequest('MSG_TRANSFER_DIFFERENT_GRADE_LEVEL',
+        'The class is in another grade level. A transfer stays within the same grade level.',
+        { currentGradeLevel: from.grade_level_name, targetGradeLevel: to.grade_level_name });
+    }
+    const { rows: pastRows } = await client.query(
+      'SELECT 1 FROM class_enrollments WHERE student_id = $1 AND class_id = $2',
+      [studentId, to.class_id],
+    );
+    if (pastRows[0]) {
+      throw badRequest('MSG_CLASS_ALREADY_ENROLLED',
+        'The student has already studied in this class and cannot be transferred back to it.');
+    }
+
+    // 1. Close the old enrollment (kept, with its grades and attendances). 2. Open the new one.
+    const { rows: [fromEnrollment] } = await client.query(
+      `UPDATE class_enrollments SET status = 'TRANSFERRED', left_at = NOW()
+       WHERE enrollment_id = $1
+       RETURNING enrollment_id AS "enrollmentId", class_id AS "classId", status, left_at AS "leftAt"`,
+      [from.enrollment_id],
+    );
+    const [{ studentId: _studentId, ...toEnrollment }] = await insertEnrollments(client, [{ studentId, classId: to.class_id }]);
+
+    // BR-05: exactly one STUDYING enrollment in the year. Cannot fail after the checks above unless the data was
+    // already broken (two STUDYING rows); then everything is rolled back instead of being saved half right.
+    const { rows: [{ studying }] } = await client.query(
+      `SELECT COUNT(*) AS studying FROM class_enrollments ce JOIN classes c ON c.class_id = ce.class_id
+       WHERE ce.student_id = $1 AND ce.status = 'STUDYING' AND c.school_year_id = $2 AND c.deleted_at IS NULL`,
+      [studentId, from.school_year_id],
+    );
+    if (studying !== 1) throw new Error(`UC-10: student ${studentId} would have ${studying} STUDYING enrollments`);
+
+    const { leftGroups, joinedGroups, warnings } = await moveClassGroups(client, {
+      studentId, studentUserId, fromClassId: from.class_id, toClassId: to.class_id,
+    });
+
+    return {
+      student: await findStudent(studentId, client),
+      fromEnrollment: { ...fromEnrollment, className: from.class_name },
+      toEnrollment: { ...toEnrollment, className: to.class_name },
+      groupChanges: { leftGroups, joinedGroups },
+      warnings,
+    };
+  });
+}
+
+const GROUP_MEMBER_COLUMNS = `g.group_id AS "groupId", g.group_type AS "groupType", g.group_name AS "groupName",
+            gm.user_id AS "userId"`;
+
+// Group memberships of a transfer, inside the transfer's transaction (business-rules §6: transferring sets
+// group_members.left_at and keeps the row; schema: re-joining = new row, one active row per user).
+// Groups that do not exist are not created (FE-04); a warning is returned instead.
+async function moveClassGroups(client, { studentId, studentUserId, fromClassId, toClassId }) {
+  // ASSUMPTION: business-rules §6 only names the student. Their linked parents (student_parents) follow them:
+  // they leave the old class's GENERAL and PARENT groups and join the new class's GENERAL and PARENT groups.
+  const { rows: parentRows } = await client.query(
+    `SELECT p.user_id FROM student_parents sp JOIN parents p ON p.parent_id = sp.parent_id
+     WHERE sp.student_id = $1 ORDER BY p.user_id`,
+    [studentId],
+  );
+  const parentUserIds = parentRows.map((row) => row.user_id);
+
+  // Old class, student: leaves every group of the class.
+  // ASSUMPTION: this includes TEAM_CHAT groups of the class (teams have "members from one class", §4).
+  const { rows: studentLeft } = await client.query(
+    `UPDATE group_members gm SET left_at = NOW()
+     FROM groups g
+     WHERE g.group_id = gm.group_id AND g.class_id = $1 AND g.deleted_at IS NULL
+       AND gm.user_id = $2 AND gm.left_at IS NULL
+     RETURNING ${GROUP_MEMBER_COLUMNS}`,
+    [fromClassId, studentUserId],
+  );
+  // Old class, parents: leave GENERAL and PARENT, unless another of their children still studies in that class.
+  // ASSUMPTION: the sibling exception is not in the documents; without it the parent would be cut off from the
+  // other child's class.
+  const { rows: parentsLeft } = parentUserIds.length
+    ? await client.query(
+      `UPDATE group_members gm SET left_at = NOW()
+       FROM groups g
+       WHERE g.group_id = gm.group_id AND g.class_id = $1 AND g.deleted_at IS NULL
+         AND g.group_type IN ('GENERAL', 'PARENT')
+         AND gm.user_id = ANY($2::bigint[]) AND gm.left_at IS NULL
+         AND NOT EXISTS (SELECT 1 FROM parents p
+                         JOIN student_parents sp ON sp.parent_id = p.parent_id
+                         JOIN class_enrollments ce ON ce.student_id = sp.student_id
+                         WHERE p.user_id = gm.user_id AND sp.student_id <> $3
+                           AND ce.class_id = $1 AND ce.status = 'STUDYING')
+       RETURNING ${GROUP_MEMBER_COLUMNS}`,
+      [fromClassId, parentUserIds, studentId],
+    )
+    : { rows: [] };
+
+  const memberTypeByUser = new Map([[studentUserId, 'STUDENT']]);
+  for (const parentUserId of parentUserIds) memberTypeByUser.set(parentUserId, 'PARENT');
+  const { joinedGroups, warnings } = await joinClassGroups(client, toClassId, memberTypeByUser);
+
+  const withMemberType = (row) => ({ ...row, memberType: memberTypeByUser.get(row.userId) });
+  return {
+    leftGroups: [...studentLeft, ...parentsLeft].map(withMemberType),
+    joinedGroups,
+    warnings,
+  };
+}
+
+// Adds members to the class groups of one class (shared by UC-10 and UC-11), inside the caller's transaction.
+// memberTypeByUser: Map userId -> 'STUDENT' | 'PARENT' (one entry per user, so a parent of two children moving to
+// the same class is added once). Only the groups that really exist are used (UC-27 may not have run, or the class
+// was created by hand); a (user, group) pair that already has an active row is skipped. Never creates a group
+// (FE-04) and never touches other classes' groups. Returns the rows added (with memberType) and the warnings.
+async function joinClassGroups(client, classId, memberTypeByUser) {
+  const { rows: typeRows } = await client.query(
+    `SELECT DISTINCT group_type FROM groups
+     WHERE class_id = $1 AND deleted_at IS NULL AND group_type IN ('GENERAL', 'STUDENT', 'PARENT')`,
+    [classId],
+  );
+  const existingTypes = typeRows.map((row) => row.group_type);
+
+  // (user, group type) pairs to join.
+  const userIds = [];
+  const groupTypes = [];
+  for (const [userId, memberType] of memberTypeByUser) {
+    for (const type of JOIN_GROUP_TYPES[memberType]) {
+      userIds.push(userId);
+      groupTypes.push(type);
+    }
+  }
+  const { rows: joined } = await client.query(
+    `WITH added AS (
+       INSERT INTO group_members (group_id, user_id, joined_at)
+       SELECT g.group_id, w.user_id, NOW()
+       FROM unnest($2::bigint[], $3::text[]) AS w(user_id, group_type)
+       JOIN groups g ON g.group_type = w.group_type AND g.class_id = $1 AND g.deleted_at IS NULL
+       WHERE NOT EXISTS (SELECT 1 FROM group_members x
+                         WHERE x.group_id = g.group_id AND x.user_id = w.user_id AND x.left_at IS NULL)
+       RETURNING group_id, user_id
+     )
+     SELECT g.group_id AS "groupId", g.group_type AS "groupType", g.group_name AS "groupName", a.user_id AS "userId"
+     FROM added a JOIN groups g ON g.group_id = a.group_id
+     ORDER BY a.user_id, g.group_id`,
+    [classId, userIds, groupTypes],
+  );
+
+  // Warnings are { code, message, details } like errors; the client maps the code to Vietnamese.
+  const warnings = [];
+  const hasParents = [...memberTypeByUser.values()].includes('PARENT');
+  const neededTypes = hasParents ? ['GENERAL', 'STUDENT', 'PARENT'] : ['GENERAL', 'STUDENT'];
+  const missingGroupTypes = neededTypes.filter((type) => !existingTypes.includes(type));
+  if (!existingTypes.length) {
+    warnings.push({
+      code: 'WARN_CLASS_HAS_NO_GROUPS',
+      message: 'The new class has no class groups yet; the student was not added to any group.',
+      details: { missingGroupTypes },
+    });
+  } else if (missingGroupTypes.length) {
+    warnings.push({
+      code: 'WARN_CLASS_GROUPS_MISSING',
+      message: 'Some class groups of the new class do not exist yet; nobody was added to them.',
+      details: { missingGroupTypes },
+    });
+  }
+
+  return {
+    joinedGroups: joined.map((row) => ({ ...row, memberType: memberTypeByUser.get(row.userId) })),
+    warnings,
+  };
+}
+
+// New STUDYING enrollments, one INSERT for every row (shared by UC-10 and UC-11). rows: [{ studentId, classId }].
+// A future column (e.g. the proposed enrollment_type) is one more field in rows, one more unnest array and one more
+// column here. Returns the new rows in no particular order.
+async function insertEnrollments(client, rows) {
+  const { rows: inserted } = await client.query(
+    `INSERT INTO class_enrollments (student_id, class_id, status, enrolled_at)
+     SELECT w.student_id, w.class_id, 'STUDYING', NOW()
+     FROM unnest($1::bigint[], $2::bigint[]) AS w(student_id, class_id)
+     RETURNING enrollment_id AS "enrollmentId", student_id AS "studentId", class_id AS "classId", status,
+               enrolled_at AS "enrolledAt"`,
+    [rows.map((row) => row.studentId), rows.map((row) => row.classId)],
+  );
+  return inserted;
+}
+
+// --- UC-11 -----------------------------------------------------------------------------------------------------
+
+// TEMPORARY READ-ONLY ENDPOINT (GET /students/promote/options). FE-04 (Khanh) has no GET /school-years and no
+// GET /classes yet, so the SCR-11 screen (UC-11 promotion, and the UC-10 class picker) reads the school years and
+// the classes of one year from here, to fill its selects instead of making School Manager type ids.
+// It only reads; creating / editing years and classes stays in FE-04 (UC-20, UC-27, UC-28).
+// TODO FE-04: delete this function, its route and controller once FE-04's endpoints exist, and switch the client
+// (getPromoteOptions in client/src/api/students.js) to them.
+//
+// - schoolYears: every school year, oldest first by start_date (not by id: a later year can be created first).
+//   isCurrent = CURRENT_DATE BETWEEN start_date AND end_date (school_years has no is_current column, MOM-05).
+// - classes: only with toSchoolYearId – the year's classes that are not soft-deleted, with their current size
+//   (STUDYING enrollments), by grade level then class name. MSG_SCHOOL_YEAR_NOT_FOUND when the year does not exist.
+//   ASSUMPTION: "10A2" before "10A10" (shorter name first), a natural order without a sort column in the schema.
+// Not logged (reading, business-rules §13).
+export async function getPromoteOptions({ toSchoolYearId }) {
+  const { rows: schoolYears } = await pool.query(
+    `SELECT school_year_id AS "schoolYearId", year_name AS "yearName", start_date AS "startDate",
+            end_date AS "endDate", CURRENT_DATE BETWEEN start_date AND end_date AS "isCurrent"
+     FROM school_years
+     ORDER BY start_date, school_year_id`,
+  );
+  if (!toSchoolYearId) return { schoolYears, classes: [] };
+
+  const yearId = await resolveSchoolYearId({ schoolYearId: toSchoolYearId });
+  // class_tracks.deleted_at is not filtered: a class keeps showing the type it was created with (as in UC-07).
+  const { rows: classes } = await pool.query(
+    `SELECT c.class_id AS "classId", c.class_name AS "className", gl.grade_level_name AS "gradeLevelName",
+            t.track_name AS "trackName",
+            (SELECT COUNT(*) FROM class_enrollments ce
+             WHERE ce.class_id = c.class_id AND ce.status = 'STUDYING') AS "studentCount"
+     FROM classes c
+     JOIN grade_levels gl ON gl.grade_level_id = c.grade_level_id
+     JOIN class_tracks t ON t.track_id = c.track_id
+     WHERE c.school_year_id = $1 AND c.deleted_at IS NULL
+     ORDER BY gl.grade_level_name, length(c.class_name), c.class_name, c.class_id`,
+    [yearId],
+  );
+  return { schoolYears, classes };
+}
+
+// ASSUMPTION: the documents set no batch size; at most 200 students per call so one request does not hold its row
+// locks for long. A whole grade is promoted in a few calls (the screen sends one class at a time).
+export const MAX_PROMOTE_STUDENTS = 200;
+
+// UC-11 Promote Students (School Manager): enrol students of one school year into classes of a LATER school year.
+// Unlike UC-10 (business-rules §4), the old enrollment is left exactly as it is (STUDYING, left_at NULL): it is the
+// history of the old year. Only a new STUDYING enrollment is added; users and students are not changed. BR-05 (one
+// STUDYING enrollment per school year) still holds because the two rows are in different years.
+// The grade level is NOT checked: promotion changes it (10 -> 11) and a student repeating a year stays in it
+// (10 -> 10 of the next year); School Manager picks the class.
+//
+// groups: [{ toClassId, studentIds }] (already validated by the controller: no student twice, at most
+// MAX_PROMOTE_STUDENTS). A whole-request problem (school year / class) is a 400; a student who does not qualify
+// is SKIPPED in the results and does not stop the others (UC-11 alternative flow). One transaction for the whole
+// request: every promoted student is written, or none (a skipped student is a normal result, not a rollback).
+//
+// Class groups: students join GENERAL + STUDENT of the new class, their parents GENERAL + PARENT. The old class's
+// memberships are NOT closed (no left_at): last year's groups become read only (business-rules §4), their members
+// can still read them. ASSUMPTION: "read only" is derived from the school year having ended – the schema has no
+// column for it and none is added here (to confirm with the team lead).
+// Not logged: promotion is not in the activity_logs list (business-rules §13).
+export async function promoteStudents({ fromSchoolYearId, toSchoolYearId, groups }) {
+  return withTransaction(async (client) => {
+    await resolveSchoolYearId({ schoolYearId: fromSchoolYearId }, client);
+    await resolveSchoolYearId({ schoolYearId: toSchoolYearId }, client);
+    const { rows: [{ inOrder }] } = await client.query(
+      `SELECT t.start_date > f.start_date AS "inOrder"
+       FROM school_years f, school_years t WHERE f.school_year_id = $1 AND t.school_year_id = $2`,
+      [fromSchoolYearId, toSchoolYearId],
+    );
+    if (!inOrder) {
+      throw badRequest('MSG_INVALID_YEAR_ORDER', 'The destination school year must start after the source school year.');
+    }
+
+    // Target classes: must exist, not be soft-deleted and belong to the destination year. FOR SHARE: none of them
+    // can be soft-deleted while the promotion runs.
+    const classIds = [...new Set(groups.map((group) => group.toClassId))];
+    const { rows: classRows } = await client.query(
+      `SELECT class_id, class_name FROM classes
+       WHERE class_id = ANY($1::bigint[]) AND school_year_id = $2 AND deleted_at IS NULL
+       FOR SHARE`,
+      [classIds, toSchoolYearId],
+    );
+    const classNameById = new Map(classRows.map((row) => [row.class_id, row.class_name]));
+    const missingClassIds = classIds.filter((id) => !classNameById.has(id));
+    if (missingClassIds.length) {
+      throw badRequest('MSG_CLASS_NOT_FOUND', 'The class does not exist in the destination school year.',
+        { classIds: missingClassIds });
+    }
+
+    // Requested students in request order, each with its target class.
+    const requested = groups.flatMap((group) => group.studentIds.map((studentId) => ({ studentId, toClassId: group.toClassId })));
+    const studentIds = requested.map((item) => item.studentId);
+
+    // Lock the students first, in student_id order (two School Managers promoting overlapping lists cannot
+    // deadlock), as UC-10 does: a transfer of the same student waits, and the queries below then see its result.
+    const { rows: studentRows } = await client.query(
+      `SELECT s.student_id, s.user_id, s.student_code, u.full_name
+       FROM students s JOIN users u ON u.user_id = s.user_id
+       WHERE s.student_id = ANY($1::bigint[])
+       ORDER BY s.student_id
+       FOR UPDATE OF s`,
+      [studentIds],
+    );
+    const studentById = new Map(studentRows.map((row) => [row.student_id, row]));
+
+    // Source enrollment = the STUDYING one of the source year, locked in student_id order. A student with several
+    // (broken data, BR-05) uses the latest, as UC-10 does.
+    // ASSUMPTION (team decision 2026-10-27, not in business-rules.md yet): only STUDYING counts. A student whose
+    // enrollment of the source year is DROPPED, or TRANSFERRED with no STUDYING row after it, is skipped; a
+    // student who transferred inside the source year is promoted from the class they study in now.
+    const { rows: sourceRows } = await client.query(
+      `SELECT ce.student_id, ce.class_id, c.class_name
+       FROM class_enrollments ce
+       JOIN classes c ON c.class_id = ce.class_id
+       WHERE ce.student_id = ANY($1::bigint[]) AND ce.status = 'STUDYING'
+         AND c.school_year_id = $2 AND c.deleted_at IS NULL
+       ORDER BY ce.student_id, ce.enrolled_at DESC, ce.enrollment_id DESC
+       FOR UPDATE OF ce`,
+      [studentIds, fromSchoolYearId],
+    );
+    const sourceByStudent = new Map();
+    for (const row of sourceRows) if (!sourceByStudent.has(row.student_id)) sourceByStudent.set(row.student_id, row);
+
+    // Enrollments the students already have in the destination year (any status: a student who already studied,
+    // transferred or dropped there is not promoted again), and in the target classes themselves (UNIQUE
+    // (student_id, class_id): checked here so the INSERT never raises 23505).
+    // ASSUMPTION: enrollments in soft-deleted classes are ignored, as everywhere else in FE-02.
+    const { rows: targetYearRows } = await client.query(
+      `SELECT DISTINCT ce.student_id FROM class_enrollments ce JOIN classes c ON c.class_id = ce.class_id
+       WHERE ce.student_id = ANY($1::bigint[]) AND c.school_year_id = $2 AND c.deleted_at IS NULL`,
+      [studentIds, toSchoolYearId],
+    );
+    const enrolledInTargetYear = new Set(targetYearRows.map((row) => row.student_id));
+    const { rows: sameClassRows } = await client.query(
+      `SELECT ce.student_id, ce.class_id FROM class_enrollments ce
+       JOIN unnest($1::bigint[], $2::bigint[]) AS w(student_id, class_id)
+         ON w.student_id = ce.student_id AND w.class_id = ce.class_id`,
+      [studentIds, requested.map((item) => item.toClassId)],
+    );
+    const sameClass = new Set(sameClassRows.map((row) => `${row.student_id}:${row.class_id}`));
+
+    // Decide per student. SKIPPED is checked in this order, so each student gets the first reason that applies.
+    const decisions = requested.map(({ studentId, toClassId }) => {
+      const student = studentById.get(studentId);
+      const base = { studentId, studentCode: student?.student_code ?? null, fullName: student?.full_name ?? null };
+      const skip = (reason, message) => ({ ...base, status: 'SKIPPED', reason, message });
+      if (!student) return skip('SKIP_STUDENT_NOT_FOUND', 'The student does not exist.');
+      const source = sourceByStudent.get(studentId);
+      if (!source) {
+        return skip('SKIP_NO_ACTIVE_ENROLLMENT', 'The student is not studying in any class of the source school year.');
+      }
+      if (enrolledInTargetYear.has(studentId)) {
+        return skip('SKIP_ALREADY_ENROLLED', 'The student already has an enrollment in the destination school year.');
+      }
+      // Cannot happen after the check above while the target class is in the destination year; kept as the guard
+      // of UNIQUE (student_id, class_id).
+      if (sameClass.has(`${studentId}:${toClassId}`)) {
+        return skip('SKIP_CLASS_ENROLLMENT_EXISTS', 'The student has already been enrolled in this class.');
+      }
+      return { ...base, status: 'PROMOTED', toClassId, userId: student.user_id, fromClassName: source.class_name };
+    });
+    const toPromote = decisions.filter((decision) => decision.status === 'PROMOTED');
+
+    const warnings = [];
+    const enrollmentIdByStudent = new Map();
+    if (toPromote.length) {
+      const inserted = await insertEnrollments(client,
+        toPromote.map(({ studentId, toClassId }) => ({ studentId, classId: toClassId })));
+      for (const row of inserted) enrollmentIdByStudent.set(row.studentId, row.enrollmentId);
+
+      // BR-05 in the destination year. Cannot fail after the checks above; if the data was already broken,
+      // everything is rolled back instead of being saved half right.
+      const { rows: brokenRows } = await client.query(
+        `SELECT ce.student_id FROM class_enrollments ce JOIN classes c ON c.class_id = ce.class_id
+         WHERE ce.student_id = ANY($1::bigint[]) AND ce.status = 'STUDYING'
+           AND c.school_year_id = $2 AND c.deleted_at IS NULL
+         GROUP BY ce.student_id HAVING COUNT(*) > 1`,
+        [toPromote.map((decision) => decision.studentId), toSchoolYearId],
+      );
+      if (brokenRows.length) {
+        throw new Error(`UC-11: students ${brokenRows.map((row) => row.student_id)} would have several STUDYING enrollments`);
+      }
+
+      // Class groups of each target class: the promoted students and their linked parents (same ASSUMPTION as
+      // UC-10: parents follow their child). Old classes' memberships are left as they are (see above).
+      const { rows: parentRows } = await client.query(
+        `SELECT sp.student_id, p.user_id FROM student_parents sp JOIN parents p ON p.parent_id = sp.parent_id
+         WHERE sp.student_id = ANY($1::bigint[]) ORDER BY p.user_id`,
+        [toPromote.map((decision) => decision.studentId)],
+      );
+      for (const classId of classIds) {
+        const promotedHere = toPromote.filter((decision) => decision.toClassId === classId);
+        if (!promotedHere.length) continue;
+        const memberTypeByUser = new Map(promotedHere.map((decision) => [decision.userId, 'STUDENT']));
+        const promotedIds = new Set(promotedHere.map((decision) => decision.studentId));
+        for (const row of parentRows) {
+          if (promotedIds.has(row.student_id) && !memberTypeByUser.has(row.user_id)) {
+            memberTypeByUser.set(row.user_id, 'PARENT');
+          }
+        }
+        const { warnings: classWarnings } = await joinClassGroups(client, classId, memberTypeByUser);
+        const className = classNameById.get(classId);
+        for (const warning of classWarnings) {
+          warnings.push({ ...warning, details: { ...warning.details, classId, className } });
+        }
+      }
+    }
+
+    const results = decisions.map(({ toClassId, userId, ...decision }) => (decision.status === 'PROMOTED'
+      ? { ...decision, toClassName: classNameById.get(toClassId), enrollmentId: enrollmentIdByStudent.get(decision.studentId) }
+      : decision));
+    return {
+      summary: { total: results.length, promoted: toPromote.length, skipped: results.length - toPromote.length },
+      results,
+      warnings,
+    };
+  });
+}

@@ -9,6 +9,7 @@ import LoginPage from './pages/account/LoginPage.jsx';
 import ProfilePage from './pages/account/ProfilePage.jsx';
 import StudentDetailPage from './pages/students/StudentDetailPage.jsx';
 import StudentListPage from './pages/students/StudentListPage.jsx';
+import TransferStudentPage from './pages/students/TransferStudentPage.jsx';
 import UpdateStudentPage from './pages/students/UpdateStudentPage.jsx';
 import ProtectedRoute from './routes/ProtectedRoute.jsx';
 
@@ -48,6 +49,16 @@ export default function App() {
             </ProtectedRoute>
           }
         />
+        {/* UC-11 Promote Students (SCR-11, promotion tab): a batch action, not one student. Declared before
+            students/:studentId so the reading order matches the server's routes. */}
+        <Route
+          path="students/promote"
+          element={
+            <ProtectedRoute roles={['SCHOOL_MANAGER']}>
+              <TransferStudentPage />
+            </ProtectedRoute>
+          }
+        />
         <Route
           path="students/:studentId"
           element={
@@ -61,6 +72,14 @@ export default function App() {
           element={
             <ProtectedRoute roles={['SCHOOL_MANAGER']}>
               <UpdateStudentPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="students/:studentId/transfer"
+          element={
+            <ProtectedRoute roles={['SCHOOL_MANAGER']}>
+              <TransferStudentPage />
             </ProtectedRoute>
           }
         />
