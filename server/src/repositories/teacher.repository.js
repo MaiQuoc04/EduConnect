@@ -1,5 +1,6 @@
 import { pool } from '../config/db.js';
 import { HOMEROOM_FILTER } from '../constants/teacher.constants.js';
+import { escapeLike, foldVietnamese, phoneSearchDigits, VI_TRANSLATE } from '../utils/text.js';
 
 // "Current school year" as a sub-query (MOM-05: latest year that has started). Constant SQL, no user input.
 const CURRENT_YEAR_SQL = `(SELECT school_year_id FROM school_years
@@ -8,14 +9,29 @@ const CURRENT_YEAR_SQL = `(SELECT school_year_id FROM school_years
 
 // ── SCR-13 list ─────────────────────────────────────────────────────────────
 
+// Accent-insensitive, case-insensitive form of a column (same result as foldVietnamese() in JS).
+const fold = (column) => `lower(translate(${column}, ?, ?))`;
+const foldParams = () => [VI_TRANSLATE.from, VI_TRANSLATE.to];
+
 function listFilters({ search, subject, homeroom, status }) {
   // users has no deleted_at column (accounts are LOCKED, not soft-deleted)
   const conditions = [];
   const params = [];
   if (search) {
-    conditions.push('(u.full_name ILIKE ? OR t.teacher_code ILIKE ? OR u.email ILIKE ?)');
-    const like = `%${search}%`;
-    params.push(like, like, like);
+    // name without accents ("nguyen" finds "Nguyễn"), teacher code, email, phone ("0914 882 119", "+84914…").
+    // User input is matched literally: % and _ are escaped.
+    const parts = [
+      `${fold('u.full_name')} LIKE ? ESCAPE '\\'`,
+      `t.teacher_code ILIKE ? ESCAPE '\\'`,
+      `u.email ILIKE ? ESCAPE '\\'`,
+    ];
+    params.push(...foldParams(), `%${escapeLike(foldVietnamese(search))}%`, `%${escapeLike(search)}%`, `%${escapeLike(search)}%`);
+    const digits = phoneSearchDigits(search);
+    if (digits) {
+      parts.push(`regexp_replace(regexp_replace(COALESCE(u.phone, ''), '\\D', '', 'g'), '^84(\\d{9,})$', '0\\1') LIKE ?`);
+      params.push(`%${digits}%`);
+    }
+    conditions.push(`(${parts.join(' OR ')})`);
   }
   if (status) {
     conditions.push('u.status = ?');
@@ -31,9 +47,9 @@ function listFilters({ search, subject, homeroom, status }) {
     conditions.push(`EXISTS (
       SELECT 1 FROM teacher_subjects ts2
       JOIN subjects s2 ON s2.subject_id = ts2.subject_id
-      WHERE ts2.teacher_id = t.teacher_id AND s2.subject_name ILIKE ? AND s2.deleted_at IS NULL
+      WHERE ts2.teacher_id = t.teacher_id AND ${fold('s2.subject_name')} LIKE ? ESCAPE '\\' AND s2.deleted_at IS NULL
     )`);
-    params.push(`%${subject}%`);
+    params.push(...foldParams(), `%${escapeLike(foldVietnamese(subject))}%`);
   }
   return { where: conditions.length ? `WHERE ${conditions.join(' AND ')}` : '', params };
 }

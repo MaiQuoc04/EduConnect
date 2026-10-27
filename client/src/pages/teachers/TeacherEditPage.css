@@ -119,3 +119,7 @@
   .te-buttons { width: 100%; }
   .te-buttons > * { flex: 1; }
 }
+
+/* Field footer: message + character counter */
+.te-field-foot { display: flex; justify-content: space-between; align-items: flex-start; gap: 8px; }
+.te-counter { flex: none; font-size: 11px; color: var(--graphite-400); font-variant-numeric: tabular-nums; }

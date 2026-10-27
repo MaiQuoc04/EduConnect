@@ -6,14 +6,20 @@ import Icon from '../../components/Icon.jsx';
 import { useToast } from '../../context/ToastContext.jsx';
 import { errorText } from '../../messages.js';
 import { formatDate } from '../../utils/format.js';
+import {
+  checkDepartment,
+  checkPersonName,
+  cleanText,
+  DEPARTMENT_REASON_TEXT,
+  foldVietnamese,
+  formatPhone,
+  LIMITS,
+  NAME_REASON_TEXT as NAME_TEXT,
+  validateDepartment,
+  validateFullName,
+} from '../../utils/teacherValidation.js';
 import './TeacherEditPage.css';
 
-const FULL_NAME_MAX = 150; // users.full_name
-const DEPARTMENT_MAX = 100; // teachers.department
-
-const normalizeName = (v) => v.trim().replace(/\s+/g, ' ');
-// Accent-insensitive search: "hoa" and "hóa" both find "Hoá học".
-const fold = (v) => v.normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/đ/g, 'd').replace(/Đ/g, 'D').toLowerCase();
 const sameSet = (a, b) => a.length === b.length && a.every((x) => b.includes(x));
 
 // "2026-10-27 14:28" -> "14:28 · 27/10/2026"
@@ -23,15 +29,25 @@ function formatDateTime(value) {
   return t ? `${t} · ${formatDate(d)}` : formatDate(d);
 }
 
-// Client-side checks mirror the server (teacher.service.js updateTeacher).
+// Client-side checks mirror the server (validators/teacher.validator.js + utils/text.js).
 function validate(form) {
   const errors = {};
-  const name = normalizeName(form.fullName);
-  if (!name) errors.fullName = 'Vui lòng nhập họ và tên.';
-  else if (name.length > FULL_NAME_MAX) errors.fullName = `Họ và tên tối đa ${FULL_NAME_MAX} ký tự.`;
-  if (form.department.trim().length > DEPARTMENT_MAX) errors.department = `Tối đa ${DEPARTMENT_MAX} ký tự.`;
+  const name = validateFullName(form.fullName);
+  if (name.error) errors.fullName = name.error;
+  const dept = validateDepartment(form.department);
+  if (dept.error) errors.department = dept.error;
   if (!form.subjectIds.length) errors.subjectIds = 'Chọn ít nhất một môn chuyên môn.';
   return errors;
+}
+
+// Errors shown while typing (a wrong character); the others (empty, too short…) wait until the field is left.
+const LIVE_REASONS = new Set(['HAS_DIGIT', 'INVALID_CHAR', 'TOO_LONG']);
+function liveError(name, value) {
+  const check = name === 'fullName'
+    ? checkPersonName(value, { min: LIMITS.FULL_NAME_MIN_LETTERS, max: LIMITS.FULL_NAME_MAX })
+    : checkDepartment(value, { min: LIMITS.DEPARTMENT_MIN, max: LIMITS.DEPARTMENT_MAX });
+  if (!LIVE_REASONS.has(check.reason)) return null;
+  return (name === 'fullName' ? NAME_TEXT : DEPARTMENT_REASON_TEXT)[check.reason];
 }
 
 // ── Subject chips + "Thêm môn" picker ───────────────────────────────────────
@@ -59,9 +75,9 @@ function SubjectPicker({ options, value, locked, onChange, invalid }) {
   }, [open]);
 
   const byId = useMemo(() => Object.fromEntries(options.map((o) => [String(o.subjectId), o])), [options]);
-  const q = fold(query.trim());
+  const q = foldVietnamese(query.trim());
   const available = options.filter(
-    (o) => !value.includes(String(o.subjectId)) && (!q || fold(o.name).includes(q) || fold(o.code).includes(q)),
+    (o) => !value.includes(String(o.subjectId)) && (!q || foldVietnamese(o.name).includes(q) || foldVietnamese(o.code).includes(q)),
   );
 
   function add(id) {
@@ -110,6 +126,7 @@ function SubjectPicker({ options, value, locked, onChange, invalid }) {
             <input
               ref={searchRef}
               className="te-dropdown-search"
+              maxLength={50}
               placeholder="Tìm môn…"
               value={query}
               onChange={(e) => setQuery(e.target.value)}
@@ -174,6 +191,7 @@ export default function TeacherEditPage() {
   const [loadError, setLoadError] = useState(null);
   const [form, setForm] = useState(null);
   const [errors, setErrors] = useState({});
+  const [touched, setTouched] = useState({});
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
@@ -208,8 +226,8 @@ export default function TeacherEditPage() {
   const dirty = useMemo(() => {
     if (!form || !teacher) return false;
     return (
-      normalizeName(form.fullName) !== teacher.fullName ||
-      form.department.trim() !== (teacher.department ?? '') ||
+      validateFullName(form.fullName).value !== teacher.fullName ||
+      cleanText(form.department) !== (teacher.department ?? '') ||
       !sameSet(form.subjectIds, teacher.subjects.map((s) => String(s.subjectId)))
     );
   }, [form, teacher]);
@@ -224,20 +242,32 @@ export default function TeacherEditPage() {
 
   function setField(name, value) {
     setForm((f) => ({ ...f, [name]: value }));
-    setErrors((e) => ({ ...e, [name]: undefined, form: undefined }));
+    setErrors((e) => ({ ...e, [name]: touched[name] ? validate({ ...form, [name]: value })[name] : liveError(name, value) ?? undefined, form: undefined }));
+  }
+
+  // Leaving a text field: show every error, and show the value as it will be saved ("phạm  thu hà" → "Phạm Thu Hà").
+  function handleBlur(name) {
+    setTouched((t) => ({ ...t, [name]: true }));
+    const check = name === 'fullName' ? validateFullName(form[name]) : validateDepartment(form[name]);
+    if (!check.error && check.value !== form[name]) setForm((f) => ({ ...f, [name]: check.value }));
+    setErrors((e) => ({ ...e, [name]: check.error ?? undefined }));
   }
 
   async function handleSubmit(e) {
     e.preventDefault();
     const found = validate(form);
     setErrors(found);
-    if (Object.keys(found).length) return;
+    setTouched({ fullName: true, department: true });
+    if (Object.keys(found).length) {
+      document.getElementById(found.fullName ? 'te-full-name' : found.department ? 'te-department' : 'te-subjects-label')?.focus();
+      return;
+    }
 
     setSaving(true);
     try {
       await updateTeacher(teacherId, {
-        fullName: normalizeName(form.fullName),
-        department: form.department.trim(),
+        fullName: validateFullName(form.fullName).value,
+        department: validateDepartment(form.department).value,
         subjectIds: form.subjectIds.map(Number),
       });
       toast('Đã lưu thông tin giáo viên.');
@@ -245,7 +275,8 @@ export default function TeacherEditPage() {
     } catch (err) {
       const message = errorText(err);
       const field = err.details?.field;
-      setErrors(field ? { [field]: message } : err.code === 'MSG_SUBJECT_IN_USE' ? { subjectIds: message } : { form: message });
+      const target = field ?? (err.code === 'MSG_SUBJECT_IN_USE' ? 'subjectIds' : null);
+      setErrors(target && ['fullName', 'department', 'subjectIds'].includes(target) ? { [target]: message } : { form: message });
     } finally {
       setSaving(false);
     }
@@ -339,15 +370,21 @@ export default function TeacherEditPage() {
                       id="te-full-name"
                       className="input"
                       value={form.fullName}
-                      maxLength={FULL_NAME_MAX + 20}
+                      maxLength={LIMITS.FULL_NAME_MAX}
                       onChange={(e) => setField('fullName', e.target.value)}
+                      onBlur={() => handleBlur('fullName')}
                       aria-invalid={Boolean(errors.fullName)}
+                      aria-describedby="te-full-name-msg"
                       autoComplete="off"
+                      spellCheck={false}
                     />
                   </div>
-                  {errors.fullName
-                    ? <span className="field-error">{errors.fullName}</span>
-                    : <span className="field-help">Tên đầy đủ theo giấy tờ tuỳ thân.</span>}
+                  <div className="te-field-foot" id="te-full-name-msg">
+                    {errors.fullName
+                      ? <span className="field-error" role="alert">{errors.fullName}</span>
+                      : <span className="field-help">Chỉ gồm chữ cái và khoảng trắng; chữ đầu mỗi từ tự viết hoa.</span>}
+                    <span className="te-counter">{form.fullName.length}/{LIMITS.FULL_NAME_MAX}</span>
+                  </div>
                 </div>
 
                 <div className={`field${errors.department ? ' invalid' : ''}`}>
@@ -360,19 +397,24 @@ export default function TeacherEditPage() {
                       className="input"
                       value={form.department}
                       placeholder="Ví dụ: Tổ Toán - Tin"
-                      maxLength={DEPARTMENT_MAX + 20}
+                      maxLength={LIMITS.DEPARTMENT_MAX}
                       onChange={(e) => setField('department', e.target.value)}
+                      onBlur={() => handleBlur('department')}
                       aria-invalid={Boolean(errors.department)}
+                      aria-describedby="te-department-msg"
                       autoComplete="off"
                     />
                   </div>
-                  {errors.department
-                    ? <span className="field-error">{errors.department}</span>
-                    : <span className="field-help">Để trống nếu giáo viên chưa thuộc tổ nào.</span>}
+                  <div className="te-field-foot" id="te-department-msg">
+                    {errors.department
+                      ? <span className="field-error" role="alert">{errors.department}</span>
+                      : <span className="field-help">Để trống nếu giáo viên chưa thuộc tổ nào.</span>}
+                    <span className="te-counter">{form.department.length}/{LIMITS.DEPARTMENT_MAX}</span>
+                  </div>
                 </div>
 
                 <div className={`field te-wide${errors.subjectIds ? ' invalid' : ''}`}>
-                  <span className="field-label" id="te-subjects-label">
+                  <span className="field-label" id="te-subjects-label" tabIndex={-1}>
                     <span>Môn chuyên môn <span className="te-req">*</span></span>
                   </span>
                   <SubjectPicker
@@ -406,7 +448,7 @@ export default function TeacherEditPage() {
               <div className="te-grid te-grid--3">
                 <LockedField label="Tên đăng nhập" value={teacher.username} />
                 <LockedField label="Email" value={teacher.email} />
-                <LockedField label="Số điện thoại" value={teacher.phone} />
+                <LockedField label="Số điện thoại" value={teacher.phone ? formatPhone(teacher.phone) : null} />
               </div>
             </section>
 

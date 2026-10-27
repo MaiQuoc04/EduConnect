@@ -5,12 +5,13 @@ import Icon from '../../components/Icon.jsx';
 import { useToast } from '../../context/ToastContext.jsx';
 import { errorText } from '../../messages.js';
 import { formatDate } from '../../utils/format.js';
+import { foldVietnamese } from '../../utils/teacherValidation.js';
 import './HomeroomAssignmentPage.css'; // shared toolbar / save bar styles (hr-*)
 import './TeachingAssignmentPage.css';
 
 const keyOf = (classId, subjectId) => `${classId}:${subjectId}`;
 const idOf = (v) => (v == null || v === '' ? null : String(v));
-const fold = (v = '') => v.normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/đ/g, 'd').replace(/Đ/g, 'D').toLowerCase();
+const fold = (v = '') => foldVietnamese(v); // accent-insensitive search, same rule as the server
 
 // ── Teacher picker popover (fixed position so the scrolling matrix does not clip it) ──
 function CellPicker({ anchor, cell, teachers, loads, onPick, onUndo, onClose }) {
@@ -358,7 +359,7 @@ export default function TeachingAssignmentPage() {
             </div>
             <div className="ta-search">
               <Icon name="search" />
-              <input placeholder="Tìm lớp (vd: 10A1)…" value={search} onChange={(e) => setSearch(e.target.value)} aria-label="Tìm lớp" />
+              <input placeholder="Tìm lớp (vd: 10A1)…" value={search} maxLength={20} onChange={(e) => setSearch(e.target.value)} aria-label="Tìm lớp" />
             </div>
             <label className="ta-check">
               <input type="checkbox" checked={onlyTodo} onChange={(e) => setOnlyTodo(e.target.checked)} />

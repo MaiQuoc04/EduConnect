@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { getTeachers } from '../../api/teachers.js';
+import { errorText } from '../../messages.js';
+import { cleanSearch } from '../../utils/teacherValidation.js';
 
 const PAGE_SIZE = 10;
 
@@ -22,7 +24,8 @@ export function useTeachers() {
 
   useEffect(() => {
     clearTimeout(searchDebounce.current);
-    searchDebounce.current = setTimeout(() => setDebouncedSearch(search), 300);
+    // cleaned like the server: NFC, no invisible characters, single spaces, at most 100 characters
+    searchDebounce.current = setTimeout(() => setDebouncedSearch(cleanSearch(search)), 300);
     return () => clearTimeout(searchDebounce.current);
   }, [search]);
 
@@ -42,7 +45,7 @@ export function useTeachers() {
       setTotal(data.total);
       setTotalPages(data.totalPages);
     } catch (err) {
-      setError(err.message ?? 'Không tải được danh sách giáo viên.');
+      setError(errorText(err));
     } finally {
       setLoading(false);
     }

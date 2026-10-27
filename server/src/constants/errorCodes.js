@@ -5,6 +5,10 @@ export const ERROR_CODES = Object.freeze({
   INVALID_INPUT: 'MSG_INVALID_INPUT',
   INVALID_DATE: 'INVALID_DATE',
   TOO_MANY: 'MSG_TOO_MANY',
+  INVALID_NAME: 'MSG_INVALID_NAME', // details: { field, reason } – reason from utils/text.js NAME_REASON
+  INVALID_DEPARTMENT: 'MSG_INVALID_DEPARTMENT', // details: { field, reason }
+  LOGIN_IDENTIFIER_READONLY: 'MSG_LOGIN_IDENTIFIER_READONLY', // username / email / phone: System Admin only
+  UNKNOWN_FIELD: 'MSG_UNKNOWN_FIELD',
   // teacher
   TEACHER_NOT_FOUND: 'TEACHER_NOT_FOUND',
   SUBJECT_INVALID: 'MSG_SUBJECT_INVALID',

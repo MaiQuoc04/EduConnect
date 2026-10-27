@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import Icon from '../../components/Icon.jsx';
+import { formatPhone, LIMITS } from '../../utils/teacherValidation.js';
 import { useTeachers } from './useTeachers.js';
 import './TeacherListPage.css';
 
@@ -266,7 +267,9 @@ export default function TeacherListPage() {
             ref={searchRef}
             type="text"
             className="tc-search-input"
-            placeholder="Tìm theo họ tên, mã GV, email…"
+            placeholder="Tìm theo họ tên (có hoặc không dấu), mã GV, email, số điện thoại…"
+            maxLength={LIMITS.SEARCH_MAX}
+            aria-label="Tìm giáo viên"
             value={search}
             onChange={(e) => { setSearch(e.target.value); setPage(1); }}
           />
@@ -407,7 +410,7 @@ export default function TeacherListPage() {
                           <span className={isLocked ? 'tc-strikethrough' : ''}>{t.email ?? '—'}</span>
                         </td>
                         {/* Phone */}
-                        <td className="tc-td tc-mono">{t.phone ?? '—'}</td>
+                        <td className="tc-td tc-mono">{t.phone ? formatPhone(t.phone) : '—'}</td>
                         {/* Status */}
                         <td className="tc-td">
                           {isLocked ? (

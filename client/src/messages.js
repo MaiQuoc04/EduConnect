@@ -1,3 +1,5 @@
+import { DEPARTMENT_REASON_TEXT, NAME_REASON_TEXT } from './utils/teacherValidation.js';
+
 // Vietnamese UI text for API error codes. The server keeps its messages in English; the client shows these.
 // Add a line here whenever a module introduces a new error code.
 const ERROR_MESSAGES = {
@@ -31,13 +33,19 @@ const ERROR_MESSAGES = {
   // FE-03 Teacher Management
   TEACHER_NOT_FOUND: 'Không tìm thấy giáo viên này.',
   INVALID_DATE: 'Ngày không hợp lệ.',
-  MSG_FIELD_TOO_LONG: ({ max } = {}) => `Nội dung quá dài (tối đa ${max ?? ''} ký tự).`,
+  MSG_FIELD_TOO_LONG: ({ field, max } = {}) =>
+    `${{ fullName: 'Họ và tên', department: 'Tên tổ', search: 'Từ khoá tìm kiếm', subject: 'Tên môn' }[field] ?? 'Nội dung'} quá dài (tối đa ${max ?? ''} ký tự).`,
   MSG_SUBJECT_INVALID: 'Có môn học không còn tồn tại. Vui lòng tải lại trang.',
   MSG_SUBJECT_IN_USE: ({ subjects = [] } = {}) =>
     `Không thể bỏ ${subjects.map((s) => `môn ${s.name} (đang dạy ${s.classes.join(', ')})`).join('; ')}. ` +
     'Hãy phân công lại giảng dạy trước.',
   MSG_INVALID_INPUT: 'Dữ liệu gửi lên không hợp lệ. Vui lòng tải lại trang.',
-  MSG_TOO_MANY: 'Quá nhiều thay đổi trong một lần lưu.',
+  MSG_TOO_MANY: ({ field, max } = {}) =>
+    field === 'subjectIds' ? `Chỉ chọn tối đa ${max} môn.` : 'Quá nhiều thay đổi trong một lần lưu.',
+  MSG_INVALID_NAME: ({ reason } = {}) => NAME_REASON_TEXT[reason] ?? 'Họ và tên không hợp lệ.',
+  MSG_INVALID_DEPARTMENT: ({ reason } = {}) => DEPARTMENT_REASON_TEXT[reason] ?? 'Tên tổ chuyên môn không hợp lệ.',
+  MSG_LOGIN_IDENTIFIER_READONLY: 'Chỉ Quản trị hệ thống mới được đổi tên đăng nhập, email và số điện thoại.',
+  MSG_UNKNOWN_FIELD: 'Dữ liệu gửi lên có trường không được phép. Vui lòng tải lại trang.',
   SCHOOL_YEAR_NOT_FOUND: 'Không tìm thấy năm học.',
   MSG_HOMEROOM_STALE: ({ classes = [] } = {}) =>
     `Lớp ${classes.join(', ')} vừa được người khác thay đổi. Hãy tải lại dữ liệu rồi phân công lại.`,

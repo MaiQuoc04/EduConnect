@@ -3,6 +3,7 @@ import { Link, useParams } from 'react-router-dom';
 import Avatar from '../../components/Avatar.jsx';
 import Icon from '../../components/Icon.jsx';
 import { formatDate } from '../../utils/format.js';
+import { formatPhone } from '../../utils/teacherValidation.js';
 import { useTeacherDetail } from './useTeacherDetail.js';
 import './TeacherDetailPage.css';
 
@@ -193,7 +194,7 @@ function PersonalCard({ teacher }) {
         <InfoRow label="Họ và tên">{teacher.fullName}</InfoRow>
         <InfoRow label="Tên đăng nhập" mono>{teacher.username}</InfoRow>
         <InfoRow label="Email" mono>{teacher.email}</InfoRow>
-        <InfoRow label="Số điện thoại" mono>{teacher.phone}</InfoRow>
+        <InfoRow label="Số điện thoại" mono>{teacher.phone ? formatPhone(teacher.phone) : null}</InfoRow>
         <InfoRow label="Tổ chuyên môn">{teacher.department}</InfoRow>
         <InfoRow label="Môn có thể dạy">
           {teacher.subjects.length ? teacher.subjects.map((s) => s.name).join(', ') : null}
