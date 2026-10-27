@@ -7,6 +7,7 @@ import EditAvatarPage from './pages/account/EditAvatarPage.jsx';
 import ForgotPasswordPage from './pages/account/ForgotPasswordPage.jsx';
 import LoginPage from './pages/account/LoginPage.jsx';
 import ProfilePage from './pages/account/ProfilePage.jsx';
+import ClassTrackPage from './pages/class-tracks/ClassTrackPage.jsx';
 import SchoolYearPage from './pages/school-years/SchoolYearPage.jsx';
 import SubjectDetailPage from './pages/subjects/SubjectDetailPage.jsx';
 import SubjectFormPage from './pages/subjects/SubjectFormPage.jsx';
@@ -78,6 +79,14 @@ export default function App() {
           element={
             <ProtectedRoute roles={['SCHOOL_MANAGER']}>
               <SubjectFormPage key="edit" />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="class-tracks"
+          element={
+            <ProtectedRoute roles={['SCHOOL_MANAGER']}>
+              <ClassTrackPage />
             </ProtectedRoute>
           }
         />

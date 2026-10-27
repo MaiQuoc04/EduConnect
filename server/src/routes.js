@@ -4,12 +4,13 @@ import accountRoutes from './modules/account/account.routes.js';
 import authRoutes from './modules/auth/auth.routes.js';
 import schoolYearRoutes from './modules/school-years/school-years.routes.js';
 import subjectRoutes from './modules/subjects/subjects.routes.js';
+import classTrackRoutes from './modules/class-tracks/class-tracks.routes.js';
 
 // Each feature gets its own folder in src/modules and is mounted here, e.g.
 //   FE-01 account   -> /auth, /account (Quoc)
 //   FE-02 students  -> /students      (Anh)
 //   FE-03 teachers  -> /teachers      (Dung)
-//   FE-04 classes   -> /school-years, /classes, /groups, /subjects (Khanh)
+//   FE-04 classes   -> /school-years, /classes, /groups, /subjects, /class-tracks (Khanh)
 //   FE-05 feed      -> /posts         (Anh)
 //   FE-06 chat      -> /conversations (Anh, + src/sockets)
 //   FE-07 events    -> /extracurricular-events (Dung)
@@ -27,5 +28,6 @@ router.use('/auth', authRoutes);
 router.use('/account', accountRoutes);
 router.use('/school-years', schoolYearRoutes);
 router.use('/subjects', subjectRoutes);
+router.use('/class-tracks', classTrackRoutes);
 
 export default router;

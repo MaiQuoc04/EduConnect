@@ -49,6 +49,17 @@ const ERROR_MESSAGES = {
   MSG_SUBJECT_CODE_LOCKED: 'Môn đã được sử dụng nên không đổi được mã.',
   MSG_SUBJECT_NAME_TAKEN: 'Đã có môn học cùng tên.',
   MSG_SUBJECT_NAME_LENGTH: 'Tên môn học tối đa 150 ký tự.',
+  MSG_TRACK_NAME_TAKEN: 'Tên này đã được dùng cho một loại lớp khác, kể cả loại lớp đã xoá.',
+  MSG_TRACK_NAME_LENGTH: 'Tên loại lớp tối đa 100 ký tự.',
+  MSG_TRACK_DESCRIPTION_LENGTH: 'Mô tả tối đa 255 ký tự.',
+  MSG_TRACK_IN_USE: 'Đang có lớp thuộc loại này nên không xoá được.',
+  MSG_TRACK_WEIGHT_RANGE: 'Hệ số phải lớn hơn 0, tối đa 10 và có nhiều nhất 2 chữ số thập phân.',
+  MSG_TRACK_PERIODS_RANGE: 'Số tiết mỗi tuần là số nguyên từ 1 đến 10.',
+  MSG_TRACK_SUBJECT_DUPLICATE: 'Một môn học bị chọn hai lần.',
+  MSG_TRACK_WEIGHTS_LOCKED: 'Năm học đã có điểm nên không thể thêm, bỏ môn hoặc đổi hệ số.',
+  MSG_TRACK_CONFIG_EXISTS: 'Năm học này đã có thiết lập môn cho các loại lớp.',
+  MSG_TRACK_COPY_SAME_YEAR: 'Vui lòng chọn hai năm học khác nhau.',
+  MSG_TRACK_COPY_EMPTY: 'Năm học nguồn chưa có thiết lập để sao chép.',
 };
 
 export function errorText({ code, message, details } = {}) {

@@ -580,6 +580,23 @@ img { display: block; }
 .tabs button { border: 0; background: transparent; font: inherit; font-size: 13px; padding: 4px 10px; border-radius: 4px; color: var(--graphite-700); cursor: pointer; }
 .tabs button[aria-selected='true'] { background: var(--white); color: var(--graphite-900); font-weight: 500; box-shadow: var(--shadow-menu); }
 
+/* ---------- class types & subject weights (SCR-71, FE-04) ---------- */
+.track-note { margin-bottom: 16px; }
+.track-item-desc { font-size: 13px; line-height: 18px; color: var(--graphite-600); }
+.track-panel { display: grid; gap: 16px; }
+.track-panel-head { display: flex; align-items: center; gap: 12px; padding-bottom: 16px; border-bottom: 1px solid var(--graphite-200); }
+.track-panel-title { flex: 1; min-width: 0; }
+.track-table-label { margin-bottom: -8px; }
+.track-table th.num, .track-table td.num { text-align: right; white-space: nowrap; }
+.track-table th.check, .track-table td.check { width: 72px; text-align: center; }
+.track-table td { padding-top: 6px; padding-bottom: 6px; }
+.track-table td.check input { width: 16px; height: 16px; accent-color: var(--ink-600); cursor: pointer; }
+.track-table tr.is-off .subject-code, .track-table tr.is-off .subject-name { color: var(--graphite-500); font-weight: 400; }
+.track-input { width: 76px; height: 32px; padding: 0 10px; text-align: right; }
+.track-input.bad { border-color: var(--red-pen); box-shadow: 0 0 0 0.5px var(--red-pen); }
+.track-help { margin-top: -8px; }
+.track-footer { padding-top: 16px; border-top: 1px solid var(--graphite-200); }
+
 /* ---------- toast & loading ---------- */
 .toast-stack { position: fixed; left: 24px; bottom: 24px; z-index: 50; display: grid; gap: 8px; }
 .toast {
