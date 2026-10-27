@@ -1,0 +1,161 @@
+/* FE-02 Update Student (SCR-09). Only this screen's styles; every rule is scoped under .update-student.
+   Design: Stitch "SCR-09 Update Student". Colours, radii and type come from the tokens in styles.css.
+   styles.css is loaded after this file, so rules that override a shared class (.card, .input, .notice) are prefixed
+   with .update-student to win on specificity.
+   Breakpoints are the ones of the profile screen (styles.css): 900px (app shell becomes a drawer) and 640px. */
+
+.update-student .strong { font-weight: 600; color: var(--graphite-900); }
+
+/* ---------- header (same as Student Detail) ---------- */
+.update-student .page-header {
+  align-items: flex-end;
+  padding-bottom: 24px;
+  border-bottom: 1px solid var(--graphite-200);
+}
+.update-student .page-header p { overflow-wrap: anywhere; }
+.update-student .update-student-back { flex: none; }
+
+/* ---------- the sheet: one card, sections split by hairlines ---------- */
+.update-student .update-student-sheet { margin-top: 24px; padding: 0; overflow: hidden; }
+.update-student-section { padding: 24px; }
+.update-student-section + .update-student-section { border-top: 1px solid var(--graphite-200); }
+.update-student-section.is-readonly { background: var(--paper); }
+.update-student-section-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 4px 12px;
+  padding-bottom: 8px;
+  margin-bottom: 16px;
+  border-bottom: 1px solid var(--graphite-200);
+}
+/* Ink margin mark before each section title (graphite for the read-only one). */
+.update-student-section-head h2 { display: flex; align-items: center; gap: 8px; }
+.update-student-section-head h2::before {
+  content: '';
+  flex: none;
+  width: 6px;
+  height: 16px;
+  border-radius: 999px;
+  background: var(--ink-600);
+}
+.update-student-section.is-readonly .update-student-section-head h2::before { background: var(--graphite-500); }
+.update-student-locked-note { display: inline-flex; align-items: center; gap: 4px; }
+
+.update-student-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px 24px; align-items: start; }
+.update-student-grid .wide { grid-column: 1 / -1; }
+.update-student-grid .field { min-width: 0; }
+.update-student .field-label { color: var(--graphite-900); }
+.update-student-required { color: var(--red-pen); }
+
+/* Select with the design's chevron instead of the browser arrow. */
+.update-student .update-student-select { appearance: none; padding-right: 40px; cursor: pointer; }
+.update-student-select-icon,
+.update-student-lock-icon {
+  position: absolute;
+  right: 12px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: var(--graphite-500);
+  pointer-events: none;
+}
+.update-student-lock-icon { color: var(--graphite-400); }
+
+/* Native date picker kept under the calendar button: invisible, only opened through showPicker(). */
+.update-student-picker {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  width: 40px;
+  height: 1px;
+  padding: 0;
+  border: 0;
+  opacity: 0;
+  pointer-events: none;
+}
+
+/* Read-only account fields look like the design's locked inputs. */
+.update-student .update-student-locked {
+  padding-right: 40px;
+  background: var(--graphite-50);
+  color: var(--graphite-700);
+  cursor: default;
+  text-overflow: ellipsis;
+}
+.update-student .update-student-locked:focus { border-color: var(--graphite-300); box-shadow: none; }
+.update-student .update-student-notice { margin-bottom: 16px; padding: 12px; }
+.update-student .update-student-notice .caption { margin-top: 2px; color: var(--graphite-700); }
+
+/* ---------- footer bar ---------- */
+.update-student .update-student-form-error { margin: 0 24px 16px; }
+.update-student-footer {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px 16px;
+  padding: 16px 24px;
+  border-top: 1px solid var(--graphite-200);
+  background: var(--white);
+}
+.update-student-status { display: inline-flex; align-items: center; gap: 6px; min-width: 0; color: var(--graphite-600); }
+.update-student-status .icon { color: var(--graphite-400); }
+.update-student-buttons { display: flex; gap: 8px; margin-left: auto; }
+.update-student-spin { animation: update-student-spin 0.9s linear infinite; }
+@keyframes update-student-spin { to { transform: rotate(360deg); } }
+
+/* ---------- leave confirmation ---------- */
+.update-student-dialog {
+  width: min(440px, calc(100vw - 32px));
+  padding: 24px;
+  border: 0;
+  border-radius: var(--radius-dialog);
+  background: var(--white);
+  color: var(--graphite-900);
+  box-shadow: var(--shadow-dialog);
+}
+.update-student-dialog::backdrop { background: rgba(28, 27, 25, 0.32); }
+.update-student-dialog-body { display: flex; gap: 12px; align-items: flex-start; }
+.update-student-dialog-body > .icon { color: var(--ink-600); }
+.update-student-dialog-body p { margin-top: 4px; }
+.update-student-dialog-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 8px; margin-top: 24px; }
+
+/* ---------- loading, not found, error (same as Student Detail) ---------- */
+.update-student .update-student-skeleton { display: grid; gap: 16px; margin-top: 24px; min-height: 280px; align-content: start; }
+.update-student-skeleton .block { display: block; height: 12px; width: 60%; border-radius: 4px; background: var(--graphite-100); }
+.update-student-skeleton .block.short { width: 30%; }
+.update-student .update-student-missing {
+  display: grid;
+  justify-items: center;
+  gap: 8px;
+  margin-top: 24px;
+  padding: 48px 24px;
+  text-align: center;
+}
+.update-student-missing > .icon { font-size: 40px; color: var(--graphite-400); }
+.update-student-missing .btn { margin-top: 12px; }
+.update-student .form-error { margin-top: 16px; }
+.update-student-retry { margin-top: 16px; }
+
+/* ---------- responsive (profile breakpoints) ---------- */
+@media (max-width: 900px) {
+  .update-student .page-header { align-items: stretch; }
+  .update-student .update-student-back { align-self: flex-start; }
+}
+@media (max-width: 640px) {
+  .update-student .breadcrumb a { display: inline-flex; align-items: center; min-height: 44px; margin: -12px 0; }
+  .update-student .update-student-back { height: 44px; margin-left: -8px; }
+  .update-student-section { padding: 20px 16px; }
+  .update-student-grid { grid-template-columns: minmax(0, 1fr); }
+  .update-student .input { height: 44px; }
+  .update-student .input-action { width: 44px; height: 44px; }
+  .update-student .update-student-form-error { margin: 0 16px 16px; }
+  .update-student-footer { padding: 16px; }
+  .update-student-buttons { width: 100%; margin-left: 0; }
+  .update-student-buttons .btn { flex: 1 1 0; height: 44px; min-width: 0; }
+  .update-student-dialog { padding: 20px 16px; }
+  .update-student-dialog-actions .btn { flex: 1 1 100%; height: 44px; }
+  .update-student-retry .btn { flex: 1 1 100%; height: 44px; }
+  .update-student-missing .btn { width: 100%; height: 44px; }
+}

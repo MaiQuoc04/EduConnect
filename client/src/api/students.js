@@ -21,6 +21,13 @@ export async function getStudent(studentId, { signal } = {}) {
   return data;
 }
 
+// UC-09 PATCH /students/:studentId -> the updated "student" object (same shape as UC-08's `student`).
+// changes may only hold fullName, dob, gender: the server rejects any other key with MSG_FIELD_NOT_EDITABLE.
+export async function updateStudent(studentId, changes) {
+  const { data } = await api.patch(`/students/${encodeURIComponent(studentId)}`, changes);
+  return data;
+}
+
 // Class options for the Student List filter, grouped by grade level.
 // TODO FE-04 (Khanh): replace with the class list API (GET /classes?schoolYearId=) once it exists.
 // ASSUMPTION: until then the options are collected from the students of the year (at most 20 pages of 100), so a

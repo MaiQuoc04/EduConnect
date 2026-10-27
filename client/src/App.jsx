@@ -9,6 +9,7 @@ import LoginPage from './pages/account/LoginPage.jsx';
 import ProfilePage from './pages/account/ProfilePage.jsx';
 import StudentDetailPage from './pages/students/StudentDetailPage.jsx';
 import StudentListPage from './pages/students/StudentListPage.jsx';
+import UpdateStudentPage from './pages/students/UpdateStudentPage.jsx';
 import ProtectedRoute from './routes/ProtectedRoute.jsx';
 
 function RoleHome() {
@@ -52,6 +53,14 @@ export default function App() {
           element={
             <ProtectedRoute roles={['SCHOOL_MANAGER']}>
               <StudentDetailPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="students/:studentId/edit"
+          element={
+            <ProtectedRoute roles={['SCHOOL_MANAGER']}>
+              <UpdateStudentPage />
             </ProtectedRoute>
           }
         />

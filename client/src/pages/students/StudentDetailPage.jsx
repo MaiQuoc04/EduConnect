@@ -6,6 +6,7 @@ import Icon from '../../components/Icon.jsx';
 import { useToast } from '../../context/ToastContext.jsx';
 import { errorText, GENDER_LABELS, RELATIONSHIP_LABELS } from '../../messages.js';
 import { formatDate } from '../../utils/format.js';
+import { clearHandedOverDetail, peekHandedOverDetail } from './detailHandoff.js';
 import './StudentDetailPage.css';
 
 // Same labels as the Student List (SCR-07).
@@ -396,7 +397,8 @@ function NotFound({ backTo }) {
   );
 }
 
-// SCR-08 Student Detail (UC-08 View Student Detail), School Manager only. Read only: updating is UC-09 (SCR-09),
+// SCR-08 Student Detail (UC-08 View Student Detail), School Manager only. Read only: updating is UC-09 (SCR-09,
+// UpdateStudentPage),
 // parents UC-12 / UC-13 (SCR-12 / SCR-13), reset password and lock / unlock FE-13 (UC-100 / UC-101).
 export default function StudentDetailPage() {
   const { studentId } = useParams();
@@ -406,13 +408,19 @@ export default function StudentDetailPage() {
   // ASSUMPTION: an id that is not a positive integer is shown as "not found" without calling the API.
   const validId = /^[1-9]\d*$/.test(studentId ?? '');
 
-  const [data, setData] = useState(null);
-  const [loading, setLoading] = useState(validId);
+  // Coming back from UC-09: the edit page hands over the saved data, shown without a new request.
+  const [handedOver] = useState(() => peekHandedOverDetail(Number(studentId)));
+  const initialData = useRef(handedOver);
+  const [data, setData] = useState(handedOver);
+  const [loading, setLoading] = useState(validId && !handedOver);
   const [error, setError] = useState(null);
   const [attempt, setAttempt] = useState(0);
 
+  useEffect(() => clearHandedOverDetail(), []);
+
   useEffect(() => {
     if (!validId) return undefined;
+    if (attempt === 0 && initialData.current?.student.studentId === Number(studentId)) return undefined;
     const controller = new AbortController();
     setLoading(true);
     setError(null);
@@ -467,11 +475,16 @@ export default function StudentDetailPage() {
           <p>Hồ sơ học vụ &amp; tài khoản học sinh {student.fullName}</p>
         </div>
         <div className="actions-row">
-          {/* TODO UC-09 Update Student (SCR-09) */}
-          <button type="button" className="btn btn-secondary" disabled title={NOT_BUILT}>
+          {/* UC-09 Update Student (SCR-09). The loaded data goes along so the form needs no second request, and
+              fromDetail tells the form that this page is the history entry behind it. */}
+          <Link
+            to={`/students/${student.studentId}/edit`}
+            state={{ detail: data, fromDetail: true, listSearch: location.state?.listSearch }}
+            className="btn btn-secondary"
+          >
             <Icon name="edit" size="sm" />
             Sửa thông tin
-          </button>
+          </Link>
           {/* TODO UC-12 View Student's Parents (SCR-12) */}
           <button type="button" className="btn btn-secondary" disabled title={NOT_BUILT}>
             <Icon name="family_restroom" size="sm" />

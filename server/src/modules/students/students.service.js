@@ -1,4 +1,4 @@
-import { pool } from '../../config/db.js';
+import { pool, withTransaction } from '../../config/db.js';
 import { badRequest, notFound } from '../../utils/AppError.js';
 import { vietnameseNameOrder } from '../../utils/nameSort.js';
 
@@ -210,10 +210,11 @@ export async function listStudents({ q, classId, schoolYearId, status, accountSt
 // UC-09, transfer / promotion UC-10 / UC-11, parent links UC-12..UC-14, and reset password / lock / unlock belong to
 // FE-13 (business-rules §2) – this only returns the account state the screen needs to show those buttons.
 // Queries run one after the other (DB_POOL_MAX=3, README §6). Viewing is not logged (business-rules §13).
-export async function getStudentDetail(studentId) {
+// The "student" object of UC-08, also returned by UC-09 so the client uses one shape. Throws 404 when missing.
+async function findStudent(studentId, db = pool) {
   // lockedUntil is the automatic temporary sign-in lock (business-rules §3), not the manual LOCKED status.
   // ASSUMPTION: a lock that has already expired is returned as null, so the UI never shows a past lock.
-  const { rows: studentRows } = await pool.query(
+  const { rows: studentRows } = await db.query(
     `SELECT s.student_id AS "studentId", u.user_id AS "userId", s.student_code AS "studentCode",
             u.full_name AS "fullName", u.username AS "username", u.avatar_url AS "avatarUrl", s.dob, s.gender,
             u.email, u.phone, u.status AS "accountStatus", u.must_change_password AS "mustChangePassword",
@@ -225,6 +226,11 @@ export async function getStudentDetail(studentId) {
   );
   const student = studentRows[0];
   if (!student) throw notFound('MSG_STUDENT_NOT_FOUND', 'The student does not exist.');
+  return student;
+}
+
+export async function getStudentDetail(studentId) {
+  const student = await findStudent(studentId);
 
   // Current enrollment: same school year and same choice (STUDYING first, else the latest) as the UC-07 list.
   // null when the student has no class this year yet (business-rules §3) or no school year exists.
@@ -288,4 +294,72 @@ export async function getStudentDetail(studentId) {
   );
 
   return { student, currentEnrollment, enrollmentHistory, parents };
+}
+
+// --- UC-09 -----------------------------------------------------------------------------------------------------
+
+// Whitelist of the columns UC-09 may write, by table. The UPDATE is built only from these entries (never from the
+// body's keys); the controller has already rejected every other field. Login identifiers, password, account
+// status / lock fields and student_code are deliberately absent (business-rules §3, UC-99).
+const EDITABLE_COLUMNS = {
+  users: { key: 'user_id', columns: { fullName: { column: 'full_name', type: 'varchar' } } },
+  students: {
+    key: 'student_id',
+    columns: { dob: { column: 'dob', type: 'date' }, gender: { column: 'gender', type: 'varchar' } },
+  },
+};
+
+// UPDATE for one table with only the fields present in changes, or null when none of them is. The row is written
+// only if a value really differs (IS DISTINCT FROM), so an unchanged save does not fire users' set_updated_at.
+function buildUpdate(table, keyValue, changes) {
+  const { key, columns } = EDITABLE_COLUMNS[table];
+  const params = [keyValue];
+  const sets = [];
+  const differs = [];
+  for (const [field, { column, type }] of Object.entries(columns)) {
+    if (!Object.hasOwn(changes, field)) continue;
+    params.push(changes[field]);
+    sets.push(`${column} = $${params.length}::${type}`);
+    differs.push(`${column} IS DISTINCT FROM $${params.length}::${type}`);
+  }
+  if (!sets.length) return null;
+  return {
+    sql: `UPDATE ${table} SET ${sets.join(', ')} WHERE ${key} = $1 AND (${differs.join(' OR ')})`,
+    params,
+  };
+}
+
+// ASSUMPTION: the documents set no age limits. A high-school student (grades 10-12) is normally 15-18; the range
+// is kept wide for early / late starters and repeated years: at least 10 and at most 30 years old today. This
+// also rules out a date in the future. Compared in SQL so "today" is the Vietnam date (CLAUDE.md).
+const MIN_STUDENT_AGE_YEARS = 10;
+const MAX_STUDENT_AGE_YEARS = 30;
+
+// UC-09 Update Student (School Manager): full name (users), date of birth and gender (students). Returns the same
+// "student" object as UC-08. Not logged: profile edits are not in the activity_logs list (business-rules §13).
+// Decided 2026-10-27: LOCKED accounts and students who left school can still be edited; student_code is never
+// changed here (it is the matching key of the class import, UC-27).
+export async function updateStudent(studentId, changes) {
+  if (changes.dob) {
+    const { rows } = await pool.query(
+      `SELECT $1::date BETWEEN CURRENT_DATE - make_interval(years => $3::int)
+                           AND CURRENT_DATE - make_interval(years => $2::int) AS ok`,
+      [changes.dob, MIN_STUDENT_AGE_YEARS, MAX_STUDENT_AGE_YEARS],
+    );
+    if (!rows[0].ok) {
+      throw badRequest('MSG_INVALID_PARAM', 'The date of birth is not plausible for a student.', { field: 'dob' });
+    }
+  }
+
+  // users and students are written together or not at all.
+  return withTransaction(async (client) => {
+    // FOR UPDATE: two School Managers saving the same student at once are applied one after the other.
+    const { rows } = await client.query('SELECT user_id FROM students WHERE student_id = $1 FOR UPDATE', [studentId]);
+    if (!rows[0]) throw notFound('MSG_STUDENT_NOT_FOUND', 'The student does not exist.');
+
+    for (const update of [buildUpdate('users', rows[0].user_id, changes), buildUpdate('students', studentId, changes)]) {
+      if (update) await client.query(update.sql, update.params);
+    }
+    return findStudent(studentId, client);
+  });
 }

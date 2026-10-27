@@ -9,5 +9,6 @@ const router = Router();
 
 router.get('/', requireAuth, requireRole('SCHOOL_MANAGER'), ctrl.list); // UC-07
 router.get('/:studentId', requireAuth, requireRole('SCHOOL_MANAGER'), ctrl.detail); // UC-08
+router.patch('/:studentId', requireAuth, requireRole('SCHOOL_MANAGER'), ctrl.update); // UC-09
 
 export default router;

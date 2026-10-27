@@ -67,12 +67,68 @@ export async function list(req, res) {
   res.json(await studentsService.listStudents(filters));
 }
 
-// UC-08 View Student Detail
-export async function detail(req, res) {
-  const value = req.params.studentId;
-  // BIGINT ids arrive as JS numbers (db.js), so the id must be a positive safe integer.
+// BIGINT ids arrive as JS numbers (db.js), so the id must be a positive safe integer.
+function parseStudentId(value) {
   if (!/^\d+$/.test(value) || Number(value) < 1 || Number(value) > Number.MAX_SAFE_INTEGER) {
     throw invalid('studentId');
   }
-  res.json(await studentsService.getStudentDetail(Number(value)));
+  return Number(value);
+}
+
+// UC-08 View Student Detail
+export async function detail(req, res) {
+  res.json(await studentsService.getStudentDetail(parseStudentId(req.params.studentId)));
+}
+
+// --- UC-09 ---------------------------------------------------------------------------------------------------
+
+// The only fields UC-09 may change. Login identifiers (email, phone, username) belong to System Admin (UC-99,
+// business-rules §3); student_code, account status, class and nickname have their own owners. Any other key is
+// rejected with 400, never silently ignored, so School Manager does not think it was saved.
+const EDITABLE_FIELDS = ['fullName', 'dob', 'gender'];
+const GENDERS = ['MALE', 'FEMALE', 'OTHER']; // students.gender has no CHECK constraint, so it is enforced here
+const MAX_FULL_NAME_LENGTH = 150; // users.full_name VARCHAR(150)
+
+// "2011-02-30" passes the pattern but is not a real date: rebuild it and compare.
+function isRealDate(value) {
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value);
+  if (!match) return false;
+  const [y, m, d] = match.slice(1).map(Number);
+  const date = new Date(Date.UTC(y, m - 1, d));
+  return date.getUTCFullYear() === y && date.getUTCMonth() === m - 1 && date.getUTCDate() === d;
+}
+
+// UC-09 Update Student: partial update of fullName / dob / gender. Fields left out keep their value.
+export async function update(req, res) {
+  const studentId = parseStudentId(req.params.studentId);
+  const body = req.body ?? {};
+  if (typeof body !== 'object' || Array.isArray(body)) {
+    throw badRequest('MSG_INVALID_PARAM', 'The request body must be a JSON object.', { field: 'body' });
+  }
+  const keys = Object.keys(body);
+  if (keys.length === 0) throw badRequest('MSG_NO_FIELDS_TO_UPDATE', 'Send at least one field to update.');
+  const rejected = keys.filter((key) => !EDITABLE_FIELDS.includes(key));
+  if (rejected.length) {
+    throw badRequest('MSG_FIELD_NOT_EDITABLE', 'These fields cannot be changed here.', { fields: rejected });
+  }
+
+  const changes = {};
+  if ('fullName' in body) {
+    if (typeof body.fullName !== 'string') throw invalid('fullName');
+    // NFC so a name typed with combining accents is stored like the same name typed precomposed.
+    const fullName = body.fullName.normalize('NFC').trim().replace(/\s+/g, ' ');
+    // Count characters as PostgreSQL does (code points), not UTF-16 units.
+    const length = [...fullName].length;
+    if (length < 1 || length > MAX_FULL_NAME_LENGTH) throw invalid('fullName');
+    changes.fullName = fullName;
+  }
+  if ('dob' in body) {
+    if (body.dob !== null && (typeof body.dob !== 'string' || !isRealDate(body.dob))) throw invalid('dob');
+    changes.dob = body.dob; // not in the future / plausible age: checked in SQL against CURRENT_DATE (service)
+  }
+  if ('gender' in body) {
+    if (body.gender !== null && !GENDERS.includes(body.gender)) throw invalid('gender');
+    changes.gender = body.gender;
+  }
+  res.json(await studentsService.updateStudent(studentId, changes));
 }
