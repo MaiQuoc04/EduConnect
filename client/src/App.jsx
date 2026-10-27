@@ -8,6 +8,7 @@ import ForgotPasswordPage from './pages/account/ForgotPasswordPage.jsx';
 import LoginPage from './pages/account/LoginPage.jsx';
 import ProfilePage from './pages/account/ProfilePage.jsx';
 import ClassTrackPage from './pages/class-tracks/ClassTrackPage.jsx';
+import ClassListPage from './pages/classes/ClassListPage.jsx';
 import SchoolYearPage from './pages/school-years/SchoolYearPage.jsx';
 import SubjectDetailPage from './pages/subjects/SubjectDetailPage.jsx';
 import SubjectFormPage from './pages/subjects/SubjectFormPage.jsx';
@@ -87,6 +88,14 @@ export default function App() {
           element={
             <ProtectedRoute roles={['SCHOOL_MANAGER']}>
               <ClassTrackPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="classes"
+          element={
+            <ProtectedRoute roles={['SCHOOL_MANAGER']}>
+              <ClassListPage />
             </ProtectedRoute>
           }
         />

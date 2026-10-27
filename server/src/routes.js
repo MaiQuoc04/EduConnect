@@ -5,6 +5,7 @@ import authRoutes from './modules/auth/auth.routes.js';
 import schoolYearRoutes from './modules/school-years/school-years.routes.js';
 import subjectRoutes from './modules/subjects/subjects.routes.js';
 import classTrackRoutes from './modules/class-tracks/class-tracks.routes.js';
+import classRoutes from './modules/classes/classes.routes.js';
 
 // Each feature gets its own folder in src/modules and is mounted here, e.g.
 //   FE-01 account   -> /auth, /account (Quoc)
@@ -29,5 +30,6 @@ router.use('/account', accountRoutes);
 router.use('/school-years', schoolYearRoutes);
 router.use('/subjects', subjectRoutes);
 router.use('/class-tracks', classTrackRoutes);
+router.use('/classes', classRoutes);
 
 export default router;

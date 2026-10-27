@@ -60,6 +60,19 @@ const ERROR_MESSAGES = {
   MSG_TRACK_CONFIG_EXISTS: 'Năm học này đã có thiết lập môn cho các loại lớp.',
   MSG_TRACK_COPY_SAME_YEAR: 'Vui lòng chọn hai năm học khác nhau.',
   MSG_TRACK_COPY_EMPTY: 'Năm học nguồn chưa có thiết lập để sao chép.',
+  MSG_IMPORT_FILE_TYPE: 'Vui lòng chọn tệp Excel (.xlsx).',
+  MSG_IMPORT_HEADER: ({ missing } = {}) =>
+    `Tệp thiếu cột${missing?.length ? `: ${missing.join(', ')}` : ''}. Vui lòng dùng file mẫu.`,
+  MSG_IMPORT_EMPTY: 'Tệp chưa có dòng dữ liệu nào.',
+  MSG_IMPORT_TOO_MANY_ROWS: ({ maxRows } = {}) => `Tệp có quá ${maxRows ?? 2000} dòng.`,
+  MSG_IMPORT_INVALID: 'Tệp còn lỗi nên chưa nhập dòng nào. Vui lòng sửa các dòng được liệt kê.',
+  MSG_CLASS_IMPORT_CONFLICT: 'Danh sách lớp vừa thay đổi. Vui lòng kiểm tra lại tệp.',
+  MSG_CLASS_NAME_TAKEN: 'Lớp này đã có trong năm học.',
+  MSG_CLASS_NAME_FORMAT: 'Tên lớp gồm khối viết liền với chữ hoặc số, không dấu, ví dụ 10A1.',
+  MSG_CLASS_NAME_GRADE: 'Tên lớp phải bắt đầu bằng khối của lớp.',
+  MSG_CLASS_STUDENT_DUPLICATE: 'Một học sinh bị chọn hai lần.',
+  MSG_STUDENT_ALREADY_ENROLLED: ({ classes } = {}) =>
+    `Có học sinh đang học lớp khác trong năm học${classes?.length ? ` (${classes.join(', ')})` : ''}.`,
 };
 
 export function errorText({ code, message, details } = {}) {
@@ -78,3 +91,23 @@ export const ROLE_LABELS = {
 
 export const GENDER_LABELS = { MALE: 'Nam', FEMALE: 'Nữ', OTHER: 'Khác' };
 export const RELATIONSHIP_LABELS = { FATHER: 'Bố', MOTHER: 'Mẹ', GUARDIAN: 'Người giám hộ' };
+
+// UC-27 import: one message per row problem (server sends { row, code, value }).
+const IMPORT_ROW_MESSAGES = {
+  ROW_REQUIRED: () => 'Thiếu thông tin ở một hoặc nhiều cột.',
+  ROW_GRADE_INVALID: (v) => `Khối “${v}” không hợp lệ, chỉ nhận 10, 11 hoặc 12.`,
+  ROW_TRACK_NOT_FOUND: (v) => `Không có loại lớp “${v}”.`,
+  ROW_CLASS_NAME_FORMAT: (v) => `Tên lớp “${v}” không đúng dạng, ví dụ 10A1.`,
+  ROW_CLASS_NAME_GRADE: (v) => `Tên lớp “${v}” không bắt đầu bằng khối đã ghi.`,
+  ROW_CLASS_MISMATCH: (v) => `Lớp ${v} được ghi khác khối hoặc loại lớp ở các dòng khác.`,
+  ROW_CLASS_EXISTS_DIFFERENT: (v) => `Lớp ${v} đã có trong năm học với khối hoặc loại lớp khác.`,
+  ROW_STUDENT_NOT_FOUND: (v) => `Không tìm thấy học sinh mã ${v}.`,
+  ROW_STUDENT_DUPLICATE: (v) => `Mã học sinh ${v} xuất hiện nhiều lần trong tệp.`,
+  ROW_STUDENT_IN_OTHER_CLASS: (v) => `Học sinh đang học lớp ${v} trong năm học này.`,
+  ROW_STUDENT_LEFT_CLASS: (v) => `Học sinh đã chuyển đi hoặc thôi học ở lớp ${v}.`,
+  WARN_ALREADY_IN_CLASS: (v) => `Học sinh ${v} đã có trong lớp, dòng này được bỏ qua.`,
+  WARN_STUDENT_LOCKED: (v) => `Tài khoản học sinh ${v} đang bị khoá.`,
+  WARN_NO_PARENT: (v) => `Học sinh ${v} chưa liên kết phụ huynh.`,
+};
+
+export const importRowText = ({ code, value }) => IMPORT_ROW_MESSAGES[code]?.(value) ?? code;
