@@ -81,6 +81,13 @@ const ERROR_MESSAGES = {
   MSG_NICKNAME_TOO_LONG: ({ max } = {}) => `Biệt danh tối đa ${max ?? 50} ký tự.`,
   MSG_NICKNAME_INVALID: 'Biệt danh chỉ gồm chữ trên một dòng.',
   MSG_NICKNAME_NOT_STUDENT: 'Chỉ đặt biệt danh cho học sinh đang học trong lớp.',
+  MSG_GROUP_CANNOT_LEAVE: 'Không thể rời nhóm chung, nhóm học sinh hay nhóm phụ huynh của lớp. Chỉ có thể rời team.',
+  MSG_TEAM_NAME_REQUIRED: 'Vui lòng nhập tên team.',
+  MSG_TEAM_NAME_LENGTH: ({ min, max } = {}) => `Tên team gồm ${min ?? 2}–${max ?? 100} ký tự, trên một dòng.`,
+  MSG_TEAM_TOO_FEW: ({ min } = {}) => `Vui lòng chọn ít nhất ${min ?? 2} người khác cho team.`,
+  MSG_TEAM_TOO_MANY: ({ max } = {}) => `Một team có tối đa ${max ?? 50} thành viên.`,
+  MSG_TEAM_CLASS_NOT_ALLOWED: 'Bạn chỉ tạo được team trong lớp của mình.',
+  MSG_TEAM_MEMBER_NOT_ELIGIBLE: 'Có người không thuộc lớp hoặc tài khoản đang bị khoá.',
   MSG_CLASS_STUDENT_DUPLICATE: 'Một học sinh bị chọn hai lần.',
   MSG_STUDENT_ALREADY_ENROLLED: ({ classes } = {}) =>
     `Có học sinh đang học lớp khác trong năm học${classes?.length ? ` (${classes.join(', ')})` : ''}.`,

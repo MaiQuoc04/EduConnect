@@ -7,6 +7,9 @@ import { findGroupForUser, groupScopeSql } from './groupAccess.js';
 
 const GROUP_ORDER = `CASE g.group_type WHEN 'GENERAL' THEN 1 WHEN 'STUDENT' THEN 2 WHEN 'PARENT' THEN 3 ELSE 4 END`;
 const MEMBER_COUNT = `(SELECT COUNT(*) FROM group_members m WHERE m.group_id = g.group_id AND m.left_at IS NULL)`;
+// Teams of a class (UC-35) as JSON; `g` = the team, `tc` = its creator.
+const TEAM_JSON = `json_build_object('groupId', g.group_id, 'groupName', g.group_name, 'groupType', g.group_type,
+                                    'memberCount', ${MEMBER_COUNT}, 'createdByName', tc.full_name)`;
 const YEAR_COLUMNS = `sy.school_year_id AS "schoolYearId", sy.year_name AS "yearName", CURRENT_DATE > sy.end_date AS "ended"`;
 
 // Contact details (email, phone) and student codes are for teachers and the School Manager only (permissions note 2).
@@ -29,7 +32,7 @@ async function visibleYears(user) {
   return rows.map(({ schoolYearId, yearName, ended, started }) => ({ schoolYearId, yearName, ended, started }));
 }
 
-// UC-29 View Group List. The groups the user can see in one school year, grouped by class (a parent with two
+// UC-29 View Group List. The groups (and teams, UC-35) the user can see in one school year, grouped by class (a parent with two
 // children in two classes gets two cards), plus the school-wide teacher group when visible. Default year: the
 // current one (started, newest), else the newest the user has groups in.
 export async function listMyGroups(user, { schoolYearId }) {
@@ -58,10 +61,13 @@ export async function listMyGroups(user, { schoolYearId }) {
     const { rows } = await pool.query(
       `SELECT c.class_id AS "classId", c.class_name AS "className", gl.grade_level_name AS "gradeLevel",
               u.full_name AS "homeroomName", u.status AS "homeroomStatus",
-              json_agg(json_build_object('groupId', g.group_id, 'groupName', g.group_name,
-                                         'groupType', g.group_type, 'memberCount', ${MEMBER_COUNT})
-                       ORDER BY ${GROUP_ORDER}) AS "groups"
+              COALESCE(json_agg(json_build_object('groupId', g.group_id, 'groupName', g.group_name,
+                                                  'groupType', g.group_type, 'memberCount', ${MEMBER_COUNT})
+                                ORDER BY ${GROUP_ORDER}) FILTER (WHERE g.group_type <> 'TEAM_CHAT'), '[]') AS "groups",
+              COALESCE(json_agg(${TEAM_JSON} ORDER BY g.created_at, g.group_id)
+                         FILTER (WHERE g.group_type = 'TEAM_CHAT'), '[]') AS "teams"
        FROM groups g
+       LEFT JOIN users tc ON tc.user_id = g.created_by
        JOIN classes c ON c.class_id = g.class_id
        JOIN grade_levels gl ON gl.grade_level_id = c.grade_level_id
        LEFT JOIN teachers t ON t.teacher_id = c.homeroom_teacher_id
@@ -157,7 +163,7 @@ function countKinds(members) {
 }
 
 // UC-30 View Group Detail: the group, its class and school year, homeroom teacher, member counts, the user's
-// rights and the class's other groups the user can open.
+// rights, the class's other groups the user can open and the class's teams they are in (UC-35).
 export async function getGroup(user, groupId) {
   const group = await findGroupForUser(pool, user, groupId);
   const [members, info] = await Promise.all([
@@ -171,7 +177,12 @@ export async function getGroup(user, groupId) {
                   (SELECT COALESCE(json_agg(json_build_object('groupId', g.group_id, 'groupName', g.group_name,
                                                               'groupType', g.group_type) ORDER BY ${GROUP_ORDER}),
                                    '[]'::json)
-                   FROM groups g WHERE g.class_id = c.class_id AND ${groupScopeSql('$2', '$3')}) AS "classGroups"
+                   FROM groups g WHERE g.class_id = c.class_id AND g.group_type <> 'TEAM_CHAT'
+                     AND ${groupScopeSql('$2', '$3')}) AS "classGroups",
+                  (SELECT COALESCE(json_agg(${TEAM_JSON} ORDER BY g.created_at, g.group_id), '[]'::json)
+                   FROM groups g LEFT JOIN users tc ON tc.user_id = g.created_by
+                   WHERE g.class_id = c.class_id AND g.group_type = 'TEAM_CHAT'
+                     AND ${groupScopeSql('$2', '$3')}) AS "teams"
            FROM classes c
            JOIN grade_levels gl ON gl.grade_level_id = c.grade_level_id
            JOIN class_tracks ct ON ct.track_id = c.track_id
@@ -195,11 +206,14 @@ export async function getGroup(user, groupId) {
     schoolYear: row ? { schoolYearId: row.schoolYearId, yearName: row.yearName, ended: row.ended } : null,
     homeroom: row?.homeroomName ? { fullName: row.homeroomName, status: row.homeroomStatus } : null,
     classGroups: row?.classGroups ?? [],
+    teams: row?.teams ?? [],
+    createdByName: group.groupType === 'TEAM_CHAT' ? group.createdByName : null,
     counts: countKinds(members),
     readOnly: group.readOnly,
     canSeeContent: group.canSeeContent,
     canManageMembers: group.canManageMembers,
     canSetNickname: group.canSetNickname,
+    canLeave: group.canLeave,
   };
 }
 

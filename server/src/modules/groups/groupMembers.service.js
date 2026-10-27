@@ -9,13 +9,14 @@ import { byRankThenName, memberRows } from './groups.service.js';
 // note 5) and UC-34 Set Student Nickname (homeroom teacher only). Class groups of an open school year only.
 
 const conflict = (code, message, details) => new AppError(409, code, message, details);
+const CLASS_GROUP_TYPES = ['GENERAL', 'STUDENT', 'PARENT'];
 const NICKNAME_MAX = 50; // ASSUMPTION (agreed 27/10): 50 characters, although the column allows 100.
 
 // The group, if the user may change its members. Inside a transaction the group row is locked, so two people
 // adding the same member at once cannot create two active rows (schema: one active row per user, checked in code).
 async function manageableGroup(db, user, groupId, { lock = false } = {}) {
   const group = await findGroupForUser(db, user, groupId);
-  if (group.classId === null) throw forbidden();
+  if (!CLASS_GROUP_TYPES.includes(group.groupType)) throw forbidden(); // not the teacher group or a team
   if (group.readOnly) throw conflict('MSG_GROUP_READ_ONLY', 'The school year has ended; the group is read only.');
   if (!group.canManageMembers) throw forbidden();
   if (lock) await db.query('SELECT 1 FROM groups WHERE group_id = $1 FOR UPDATE', [group.groupId]);
@@ -147,10 +148,10 @@ export async function setNickname(user, groupId, studentUserId, value) {
   const targetId = Number(studentUserId);
   return withTransaction(async (client) => {
     const group = await findGroupForUser(client, user, groupId);
-    if (group.classId === null) throw forbidden();
+    if (!CLASS_GROUP_TYPES.includes(group.groupType)) throw forbidden(); // not the teacher group or a team
     if (group.readOnly) throw conflict('MSG_GROUP_READ_ONLY', 'The school year has ended; the group is read only.');
-    // UC-34 names the homeroom teacher only; the School Manager cannot set nicknames.
-    if (user.activeRole !== 'TEACHER' || !group.isHomeroom) throw forbidden();
+    // UC-34 names the homeroom teacher only, in a class group; the School Manager cannot set nicknames.
+    if (!group.canSetNickname) throw forbidden();
     const { rows } = await client.query(
       `UPDATE class_enrollments e SET nickname = NULLIF($3, '')
        FROM students s

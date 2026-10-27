@@ -4,6 +4,7 @@ export const GROUP_TYPE_LABELS = {
   STUDENT: 'Nhóm học sinh',
   PARENT: 'Nhóm phụ huynh',
   TEACHER_SCHOOL: 'Nhóm giáo viên toàn trường',
+  TEAM_CHAT: 'Team',
 };
 
 export const GROUP_TYPE_HELP = {
@@ -11,9 +12,10 @@ export const GROUP_TYPE_HELP = {
   STUDENT: 'Giáo viên chủ nhiệm và học sinh',
   PARENT: 'Giáo viên chủ nhiệm và phụ huynh',
   TEACHER_SCHOOL: 'Toàn bộ giáo viên và quản lý trường',
+  TEAM_CHAT: 'Chỉ trò chuyện giữa các thành viên được chọn',
 };
 
-export const GROUP_TYPE_ICONS = { GENERAL: 'groups', STUDENT: 'school', PARENT: 'family_restroom', TEACHER_SCHOOL: 'co_present' };
+export const GROUP_TYPE_ICONS = { GENERAL: 'groups', STUDENT: 'school', PARENT: 'family_restroom', TEACHER_SCHOOL: 'co_present', TEAM_CHAT: 'forum' };
 
 // Why someone is a member (worked out by the server).
 export const MEMBER_KIND_LABELS = {

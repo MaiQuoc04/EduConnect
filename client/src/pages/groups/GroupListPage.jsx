@@ -1,17 +1,22 @@
 import { useEffect, useState } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { api } from '../../api/client.js';
 import Icon from '../../components/Icon.jsx';
 import { errorText } from '../../messages.js';
 import { yearLabel } from '../school-years/schoolYearLabels.js';
+import ClassTeams from './ClassTeams.jsx';
 import GroupLink from './GroupLink.jsx';
+import TeamCreatePanel from './TeamCreatePanel.jsx';
 
 // SCR-22 Group List – UC-29 View Group List for teachers, students and parents ("Nhóm của tôi"): the groups they
-// belong to, one card per class. The School Manager uses the class view at /classes.
+// belong to, one card per class with the user's teams and UC-35 Create Team Chat. The School Manager uses the class
+// view at /classes.
 export default function GroupListPage() {
   const [params, setParams] = useSearchParams();
   const yearParam = params.get('schoolYearId') ?? '';
   const [state, setState] = useState({ loading: true, data: null, error: '' });
+  const [creatingIn, setCreatingIn] = useState(null); // classId while the "Tạo team" panel is open
+  const navigate = useNavigate();
 
   useEffect(() => {
     let alive = true;
@@ -65,47 +70,61 @@ export default function GroupListPage() {
           <p>Bạn chưa thuộc nhóm lớp nào. Khi nhà trường xếp lớp, các nhóm của lớp sẽ hiện ở đây.</p>
         </div>
       ) : (
-        <div className={`group-grid${state.loading ? ' is-loading' : ''}`}>
-          {data.teacherGroup && (
-            <section className="card card-outline group-card">
-              <div className="group-card-head">
-                <div>
-                  <p className="label-upper muted">Toàn trường</p>
-                  <h2 className="title-md">{data.teacherGroup.groupName}</h2>
-                </div>
-              </div>
-              <GroupLink group={data.teacherGroup} />
-            </section>
+        <>
+          {creatingIn && (
+            <TeamCreatePanel
+              classId={creatingIn}
+              onCancel={() => setCreatingIn(null)}
+              onCreated={(groupId) => navigate(`/groups/${groupId}`)}
+            />
           )}
-          {data.classes.map((c) => (
-            <section key={c.classId} className="card card-outline group-card">
-              <div className="group-card-head">
-                <div>
-                  <p className="label-upper muted">
-                    Khối {c.gradeLevel} · Năm học {yearLabel(schoolYear.yearName)}
-                  </p>
-                  <h2 className="title-md">Lớp {c.className}</h2>
+          <div className={`group-grid${state.loading ? ' is-loading' : ''}`}>
+            {data.teacherGroup && (
+              <section className="card card-outline group-card">
+                <div className="group-card-head">
+                  <div>
+                    <p className="label-upper muted">Toàn trường</p>
+                    <h2 className="title-md">{data.teacherGroup.groupName}</h2>
+                  </div>
                 </div>
-                {schoolYear.ended && <span className="pill">Chỉ xem</span>}
-              </div>
-              <p className="caption muted">
-                {c.homeroomName ? (
-                  <>
-                    Giáo viên chủ nhiệm: {c.homeroomName}
-                    {c.homeroomStatus === 'LOCKED' && ' (đã khoá)'}
-                  </>
-                ) : (
-                  <span className="class-warn">Lớp chưa có giáo viên chủ nhiệm</span>
-                )}
-              </p>
-              <div className="group-links">
-                {c.groups.map((g) => (
-                  <GroupLink key={g.groupId} group={g} />
-                ))}
-              </div>
-            </section>
-          ))}
-        </div>
+                <GroupLink group={data.teacherGroup} />
+              </section>
+            )}
+            {data.classes.map((c) => (
+              <section key={c.classId} className="card card-outline group-card">
+                <div className="group-card-head">
+                  <div>
+                    <p className="label-upper muted">
+                      Khối {c.gradeLevel} · Năm học {yearLabel(schoolYear.yearName)}
+                    </p>
+                    <h2 className="title-md">Lớp {c.className}</h2>
+                  </div>
+                  {schoolYear.ended && <span className="pill">Chỉ xem</span>}
+                </div>
+                <p className="caption muted">
+                  {c.homeroomName ? (
+                    <>
+                      Giáo viên chủ nhiệm: {c.homeroomName}
+                      {c.homeroomStatus === 'LOCKED' && ' (đã khoá)'}
+                    </>
+                  ) : (
+                    <span className="class-warn">Lớp chưa có giáo viên chủ nhiệm</span>
+                  )}
+                </p>
+                <div className="group-links">
+                  {c.groups.map((g) => (
+                    <GroupLink key={g.groupId} group={g} />
+                  ))}
+                </div>
+                <ClassTeams
+                  teams={c.teams}
+                  canCreate={!schoolYear.ended && !creatingIn}
+                  onCreate={() => setCreatingIn(c.classId)}
+                />
+              </section>
+            ))}
+          </div>
+        </>
       )}
     </>
   );
