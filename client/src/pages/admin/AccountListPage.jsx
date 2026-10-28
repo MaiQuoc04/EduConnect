@@ -159,10 +159,9 @@ export default function AccountListPage() {
               <tr>
                 <th>Người dùng</th>
                 <th>Vai trò</th>
-                <th>Email</th>
-                <th>Số điện thoại</th>
+                <th>Liên hệ</th>
                 <th>Trạng thái</th>
-                <th>Ngày tạo</th>
+                <th className="col-date">Ngày tạo</th>
               </tr>
             </thead>
             <tbody>
@@ -189,8 +188,20 @@ export default function AccountListPage() {
                       ))}
                     </span>
                   </td>
-                  <td>{a.email || <span className="muted">—</span>}</td>
-                  <td className="mono">{a.phone || <span className="muted">—</span>}</td>
+                  <td>
+                    {a.email || a.phone ? (
+                      <div className="contact-cell">
+                        {a.email && (
+                          <span className="email" title={a.email}>
+                            {a.email}
+                          </span>
+                        )}
+                        {a.phone && <span className="caption muted mono">{a.phone}</span>}
+                      </div>
+                    ) : (
+                      <span className="muted">—</span>
+                    )}
+                  </td>
                   <td>
                     <span className="status-cell">
                       <span className={`pill ${a.status === 'ACTIVE' ? 'green' : 'red'}`}>
@@ -210,19 +221,19 @@ export default function AccountListPage() {
                       )}
                     </span>
                   </td>
-                  <td className="mono">{formatDate(a.createdAt)}</td>
+                  <td className="mono col-date">{formatDate(a.createdAt)}</td>
                 </tr>
               ))}
               {data && !data.items.length && (
                 <tr>
-                  <td colSpan={6} className="empty-row">
+                  <td colSpan={5} className="empty-row">
                     Không có kết quả tìm kiếm.
                   </td>
                 </tr>
               )}
               {!data && state.loading && (
                 <tr>
-                  <td colSpan={6} className="empty-row">
+                  <td colSpan={5} className="empty-row">
                     Đang tải…
                   </td>
                 </tr>

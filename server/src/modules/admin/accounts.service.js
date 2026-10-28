@@ -144,6 +144,11 @@ export async function insertAccount(db, input, credentials = null) {
 // UC-92 Create Account: one account for any role; the temporary password is returned once and never stored as text.
 export async function createAccount({ body, actorId, ip }) {
   const { input, errors } = readAccountInput(body);
+  // ASSUMPTION (FE-13 owner, 28/10/2026, to confirm with the team lead): System Admin accounts are not created from
+  // the UI; the few IT admins are created with `npm run seed:admin`. UC-93 import never offered this role.
+  if ((!errors.roles || errors.roles === 'EXCLUSIVE') && input.roles.includes('SYSTEM_ADMIN')) {
+    errors.roles = 'SYSTEM_ADMIN_NOT_ALLOWED';
+  }
   if (Object.keys(errors).length) throwFieldErrors(errors);
 
   const duplicates = await findDuplicates(pool, input);

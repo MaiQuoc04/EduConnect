@@ -1,4 +1,4 @@
-import { Fragment, useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { listActivityLogs } from '../../api/admin.js';
 import Icon from '../../components/Icon.jsx';
@@ -22,71 +22,61 @@ export const ACTION_LABELS = {
 };
 const ACTION_TONE = { LOGIN_FAILED: 'red', ACCOUNT_LOCK: 'red', PASSWORD_RESET: 'amber', SETTING_CHANGE: 'amber', GRADE_UNLOCK: 'amber' };
 
-const DETAIL_LABELS = {
-  identifier: 'Tên đăng nhập đã nhập',
-  failed: 'Số lần sai liên tiếp',
-  username: 'Tài khoản',
-  roles: 'Vai trò',
-  by: 'Thực hiện với vai trò',
-  reason: 'Lý do',
-  type: 'Loại',
-  fileName: 'Tệp',
-  created: 'Số tài khoản tạo',
-  skipped: 'Số dòng bỏ qua',
-  key: 'Cài đặt',
-  oldValue: 'Giá trị cũ',
-  newValue: 'Giá trị mới',
-  step: 'Bước',
-};
-const VALUE_TEXT = {
-  ACCOUNT: 'Khoá tài khoản',
-  TEMPORARY: 'Khoá đăng nhập tạm thời',
-  OTP_SENT: 'Gửi mã OTP',
-  DONE: 'Hoàn tất',
-  ...ROLE_LABELS,
+const IMPORT_TYPE_TEXT = { STUDENT: 'học sinh', TEACHER: 'giáo viên', PARENT: 'phụ huynh', SCHOOL_MANAGER: 'quản lý nhà trường' };
+const SETTING_TEXT = {
+  'login.max_failed_attempts': 'Số lần nhập sai trước khi khoá tạm',
+  'login.lock_minutes_step': 'Thời gian khoá tạm tăng thêm',
+  'login.lock_minutes_max': 'Thời gian khoá tạm tối đa',
+  'otp.expiry_minutes': 'Thời hạn mã OTP',
+  'upload.max_file_mb': 'Dung lượng tối đa ảnh, tệp',
+  'upload.max_video_mb': 'Dung lượng tối đa video',
+  'attendance.edit_deadline_time': 'Giờ cuối sửa điểm danh',
 };
 
-function detailValue(value) {
-  if (value === null || value === undefined || value === '') return '—';
-  if (Array.isArray(value)) return value.map(detailValue).join(', ');
-  if (typeof value === 'object') return JSON.stringify(value);
-  return VALUE_TEXT[value] ?? String(value);
+// One readable line for the "Chi tiết" column, built from the action and its stored detail.
+function summary(l) {
+  const d = l.detail ?? {};
+  const target = l.targetType === 'USER' && l.targetFullName ? `${l.targetFullName} (${l.targetUsername})` : null;
+  const join = (...parts) => parts.filter(Boolean).join(' – ');
+  switch (l.action) {
+    case 'LOGIN_SUCCESS':
+      return null;
+    case 'LOGIN_FAILED':
+      if (d.identifier) return `Tên đăng nhập không tồn tại: ${d.identifier}`;
+      return d.failed ? `Sai mật khẩu (lần ${d.failed} liên tiếp)` : 'Sai mật khẩu';
+    case 'ACCOUNT_CREATE':
+      return join(target, d.roles?.length && `vai trò ${d.roles.map((r) => (ROLE_LABELS[r] ?? r).toLowerCase()).join(', ')}`);
+    case 'ACCOUNT_IMPORT':
+      return join(
+        `${d.created ?? 0} tài khoản ${IMPORT_TYPE_TEXT[d.type] ?? ''}`.trim(),
+        d.fileName && `tệp ${d.fileName}`,
+        d.skipped ? `bỏ qua ${d.skipped} dòng lỗi` : null,
+      );
+    case 'ACCOUNT_LOCK':
+      return join(target, d.reason && `Lý do: ${d.reason}`);
+    case 'ACCOUNT_UNLOCK':
+      return join(target, d.type === 'TEMPORARY' ? 'gỡ khoá đăng nhập tạm thời' : 'mở khoá tài khoản');
+    case 'PASSWORD_RESET':
+      if (d.step === 'OTP_SENT') return 'Gửi mã OTP qua email';
+      if (d.step === 'DONE') return 'Tự đặt lại mật khẩu bằng mã OTP';
+      return join(target, d.fromRequest && 'theo yêu cầu cấp lại mật khẩu');
+    case 'SETTING_CHANGE':
+      return `${SETTING_TEXT[d.key] ?? d.key}: ${d.oldValue} → ${d.newValue}`;
+    default:
+      return join(target, Object.entries(d).map(([k, v]) => `${k}: ${Array.isArray(v) ? v.join(', ') : v}`).join(', '));
+  }
 }
 
-function Detail({ log }) {
-  const entries = Object.entries(log.detail ?? {});
-  return (
-    <dl className="log-detail">
-      <div>
-        <dt>Mã nhật ký</dt>
-        <dd className="mono">#{log.id}</dd>
-      </div>
-      <div>
-        <dt>Thời điểm</dt>
-        <dd className="mono">{formatDateTime(log.createdAt)}</dd>
-      </div>
-      {log.targetType === 'USER' && log.targetFullName && (
-        <div>
-          <dt>Tài khoản bị tác động</dt>
-          <dd>
-            {log.targetFullName} ({log.targetUsername})
-          </dd>
-        </div>
-      )}
-      {entries.map(([k, v]) => (
-        <div key={k}>
-          <dt>{DETAIL_LABELS[k] ?? k}</dt>
-          <dd>{detailValue(v)}</dd>
-        </div>
-      ))}
-    </dl>
-  );
+// Requests made on the server itself show up as ::1 / 127.0.0.1.
+function ipText(ip) {
+  if (!ip) return null;
+  const clean = ip.replace(/^::ffff:/, '');
+  return clean === '::1' || clean === '127.0.0.1' ? 'Máy cục bộ' : clean;
 }
 
 export default function ActivityLogPage() {
   const [params, setParams] = useSearchParams();
   const [user, setUser] = useState(params.get('user') ?? '');
-  const [open, setOpen] = useState(null);
   const [state, setState] = useState({ loading: true, data: null, error: '' });
   const action = params.get('action') ?? '';
   const from = params.get('from') ?? '';
@@ -192,57 +182,36 @@ export default function ActivityLogPage() {
                 <th>Thời điểm</th>
                 <th>Người thực hiện</th>
                 <th>Thao tác</th>
-                <th>Đối tượng</th>
+                <th>Chi tiết</th>
                 <th>Địa chỉ IP</th>
-                <th aria-label="Chi tiết" />
               </tr>
             </thead>
             <tbody>
               {data?.items.map((l) => (
-                <Fragment key={l.id}>
-                  <tr className="clickable" onClick={() => setOpen(open === l.id ? null : l.id)} aria-expanded={open === l.id}>
-                    <td className="mono">{formatDateTime(l.createdAt)}</td>
-                    <td>
-                      {l.fullName ? (
-                        <span className="user-cell plain">
-                          <span>
-                            <span className="name">{l.fullName}</span>
-                            <span className="caption muted mono">{l.username}</span>
-                          </span>
+                <tr key={l.id}>
+                  <td className="mono nowrap">{formatDateTime(l.createdAt)}</td>
+                  <td>
+                    {l.fullName ? (
+                      <span className="user-cell plain">
+                        <span>
+                          <span className="name">{l.fullName}</span>
+                          <span className="caption muted mono">{l.username}</span>
                         </span>
-                      ) : (
-                        <span className="muted">Tài khoản không xác định</span>
-                      )}
-                    </td>
-                    <td>
-                      <span className={`tag ${ACTION_TONE[l.action] ?? ''}`}>{ACTION_LABELS[l.action] ?? l.action}</span>
-                    </td>
-                    <td>
-                      {l.targetType === 'USER' && l.targetFullName
-                        ? l.targetFullName
-                        : l.action === 'SETTING_CHANGE'
-                          ? <span className="mono caption">{l.detail?.key}</span>
-                          : l.detail?.identifier
-                            ? <span className="mono caption">{l.detail.identifier}</span>
-                            : <span className="muted">—</span>}
-                    </td>
-                    <td className="mono caption">{l.ip ?? '—'}</td>
-                    <td className="chevron">
-                      <Icon name={open === l.id ? 'expand_less' : 'expand_more'} size="sm" />
-                    </td>
-                  </tr>
-                  {open === l.id && (
-                    <tr className="detail-row">
-                      <td colSpan={6}>
-                        <Detail log={l} />
-                      </td>
-                    </tr>
-                  )}
-                </Fragment>
+                      </span>
+                    ) : (
+                      <span className="muted">Tài khoản không xác định</span>
+                    )}
+                  </td>
+                  <td>
+                    <span className={`tag ${ACTION_TONE[l.action] ?? ''}`}>{ACTION_LABELS[l.action] ?? l.action}</span>
+                  </td>
+                  <td className="log-summary">{summary(l) ?? <span className="muted">—</span>}</td>
+                  <td className="mono caption nowrap">{ipText(l.ip) ?? <span className="muted">—</span>}</td>
+                </tr>
               ))}
               {data && !data.items.length && (
                 <tr>
-                  <td colSpan={6} className="empty-row">
+                  <td colSpan={5} className="empty-row">
                     Không có kết quả tìm kiếm.
                   </td>
                 </tr>

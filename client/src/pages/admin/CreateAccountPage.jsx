@@ -10,8 +10,9 @@ import './admin.css';
 // SCR-61 Create Account (UC-92, FE-13). System Admin creates one account; the server generates the username and a
 // temporary password that is shown here once.
 
-const ROLE_ORDER = ['STUDENT', 'PARENT', 'TEACHER', 'SCHOOL_MANAGER', 'SYSTEM_ADMIN'];
-const EXCLUSIVE = ['SYSTEM_ADMIN', 'STUDENT']; // cannot be combined with another role
+// System Admin accounts are not created from this screen (decided 28/10/2026); see accounts.service createAccount.
+const ROLE_ORDER = ['STUDENT', 'PARENT', 'TEACHER', 'SCHOOL_MANAGER'];
+const EXCLUSIVE = ['STUDENT']; // cannot be combined with another role
 
 const EMPTY = {
   fullName: '',
@@ -222,7 +223,7 @@ export default function CreateAccountPage() {
                 id="roles"
                 label="Vai trò"
                 required
-                help="Quản trị hệ thống và Học sinh không kết hợp với vai trò khác."
+                help="Học sinh không kết hợp với vai trò khác."
                 error={err('roles')}
               >
                 <div className="role-picker" id="roles" role="group" aria-label="Vai trò">

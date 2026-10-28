@@ -93,77 +93,81 @@ export default function SystemSettingsPage() {
         </div>
       </div>
 
-      <form className="card card-outline admin-form settings-form" onSubmit={save} noValidate>
-        {grouped.map(({ group, list }, gi) => (
-          <div key={group}>
-            {gi > 0 && <div className="section-sep" />}
-            <h2 className="label-upper" style={{ marginBottom: 12 }}>
-              {group}
-            </h2>
-            <div className="settings-list">
-              {list.map((s) => {
-                const meta = META[s.key] ?? { label: s.description ?? s.key, unit: '' };
-                const changed = changedKeys.includes(s.key);
-                return (
-                  <div key={s.key} className={`setting-row${errors[s.key] ? ' invalid' : ''}${changed ? ' changed' : ''}`}>
-                    <div className="setting-text">
-                      <label htmlFor={s.key} className="setting-label">
-                        {meta.label}
-                      </label>
-                      <span className="caption muted mono">{s.key}</span>
-                      {s.updatedAt && (
-                        <span className="caption muted">
-                          Sửa lần cuối {formatDateTime(s.updatedAt)}
-                          {s.updatedByName && ` bởi ${s.updatedByName}`}
-                        </span>
-                      )}
-                      {errors[s.key] && <span className="field-error">{errorFor(errors[s.key], s.rule)}</span>}
-                    </div>
-                    <div className="setting-input">
-                      <input
-                        id={s.key}
-                        className="input"
-                        type={s.rule?.type === 'time' ? 'time' : 'number'}
-                        min={s.rule?.min}
-                        max={s.rule?.max}
-                        step={1}
-                        value={values[s.key] ?? ''}
-                        onChange={(e) => {
-                          setValues((v) => ({ ...v, [s.key]: e.target.value }));
-                          setErrors((er) => ({ ...er, [s.key]: undefined }));
-                        }}
-                      />
-                      {meta.unit && <span className="unit">{meta.unit}</span>}
-                    </div>
+      <form className="settings-form" onSubmit={save} noValidate>
+        {/* Two columns on wide screens: the sign-in group on the left, the other groups stacked on the right. */}
+        <div className="settings-columns">
+          {[grouped.slice(0, 1), grouped.slice(1)].map((column, ci) => (
+            <div key={ci} className="settings-column">
+              {column.map(({ group, list }) => (
+                <section key={group} className="card card-outline settings-group">
+                  <h2 className="label-upper">{group}</h2>
+                  <div className="settings-list">
+                    {list.map((s) => {
+                      const meta = META[s.key] ?? { label: s.description ?? s.key, unit: '' };
+                      const changed = changedKeys.includes(s.key);
+                      return (
+                        <div key={s.key} className={`setting-row${errors[s.key] ? ' invalid' : ''}${changed ? ' changed' : ''}`}>
+                          <div className="setting-text">
+                            <label htmlFor={s.key} className="setting-label">
+                              {meta.label}
+                            </label>
+                            <span className="caption muted mono">{s.key}</span>
+                            {s.updatedAt && (
+                              <span className="caption muted">
+                                Sửa lần cuối {formatDateTime(s.updatedAt)}
+                                {s.updatedByName && ` bởi ${s.updatedByName}`}
+                              </span>
+                            )}
+                            {errors[s.key] && <span className="field-error">{errorFor(errors[s.key], s.rule)}</span>}
+                          </div>
+                          <div className="setting-input">
+                            <input
+                              id={s.key}
+                              className="input"
+                              type={s.rule?.type === 'time' ? 'time' : 'number'}
+                              min={s.rule?.min}
+                              max={s.rule?.max}
+                              step={1}
+                              value={values[s.key] ?? ''}
+                              onChange={(e) => {
+                                setValues((v) => ({ ...v, [s.key]: e.target.value }));
+                                setErrors((er) => ({ ...er, [s.key]: undefined }));
+                              }}
+                            />
+                            {meta.unit && <span className="unit">{meta.unit}</span>}
+                          </div>
+                        </div>
+                      );
+                    })}
                   </div>
-                );
-              })}
+                </section>
+              ))}
             </div>
-          </div>
-        ))}
+          ))}
+        </div>
 
-        {formError && (
-          <p className="form-error" role="alert" style={{ marginTop: 20 }}>
-            <Icon name="error" size="sm" />
-            {formError}
-          </p>
-        )}
-
-        <div className="section-sep" />
-        <div className="card-footer">
-          {changedKeys.length > 0 && (
-            <span className="left">
-              <Icon name="edit_note" size="sm" />
-              {changedKeys.length} giá trị chưa lưu
-            </span>
+        <div className={`settings-footer${changedKeys.length || formError ? ' dirty' : ''}`}>
+          {formError && (
+            <p className="form-error" role="alert">
+              <Icon name="error" size="sm" />
+              {formError}
+            </p>
           )}
-          <button type="button" className="btn btn-secondary" onClick={reset} disabled={saving || !changedKeys.length}>
-            Huỷ thay đổi
-          </button>
-          <button type="submit" className="btn btn-primary" disabled={saving || !changedKeys.length}>
-            <Icon name="save" size="sm" />
-            {saving ? 'Đang lưu…' : 'Lưu cài đặt'}
-          </button>
+          <div className="card-footer">
+            {changedKeys.length > 0 && (
+              <span className="left">
+                <Icon name="edit_note" size="sm" />
+                {changedKeys.length} giá trị chưa lưu
+              </span>
+            )}
+            <button type="button" className="btn btn-secondary" onClick={reset} disabled={saving || !changedKeys.length}>
+              Huỷ thay đổi
+            </button>
+            <button type="submit" className="btn btn-primary" disabled={saving || !changedKeys.length}>
+              <Icon name="save" size="sm" />
+              {saving ? 'Đang lưu…' : 'Lưu cài đặt'}
+            </button>
+          </div>
         </div>
       </form>
     </>

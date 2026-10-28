@@ -26,7 +26,8 @@ const GENERIC = {
 const BY_FIELD = {
   roles: {
     REQUIRED: 'Vui lòng chọn ít nhất một vai trò.',
-    EXCLUSIVE: 'Quản trị hệ thống và Học sinh không thể kết hợp với vai trò khác.',
+    EXCLUSIVE: 'Học sinh không thể kết hợp với vai trò khác.',
+    SYSTEM_ADMIN_NOT_ALLOWED: 'Không thể tạo tài khoản Quản trị hệ thống tại màn hình này.',
   },
   email: { INVALID: 'Email không hợp lệ.', DUPLICATE: 'Email này đã được dùng cho tài khoản khác.' },
   phone: {
