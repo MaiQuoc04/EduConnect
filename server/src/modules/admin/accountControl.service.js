@@ -143,7 +143,7 @@ function readId(value) {
 async function loadAccount(db, id) {
   const { rows } = await db.query(
     `SELECT u.user_id AS id, u.username, u.full_name AS "fullName", u.email, u.phone, u.avatar_url AS "avatarUrl",
-            u.status, u.must_change_password AS "mustChangePassword", u.failed_login_count AS "failedLoginCount",
+            u.address, u.status, u.must_change_password AS "mustChangePassword", u.failed_login_count AS "failedLoginCount",
             CASE WHEN u.locked_until > NOW() THEN u.locked_until END AS "lockedUntil",
             COALESCE(u.locked_until > NOW(), FALSE) AS "tempLocked",
             u.created_at AS "createdAt", u.updated_at AS "updatedAt",
@@ -164,7 +164,7 @@ export async function getAccount(idParam) {
   const [student, teacher, parent, lastLogin] = await Promise.all([
     pool.query('SELECT student_code AS code, dob, gender FROM students WHERE user_id = $1', [id]),
     pool.query('SELECT teacher_code AS code, department FROM teachers WHERE user_id = $1', [id]),
-    pool.query('SELECT occupation, address FROM parents WHERE user_id = $1', [id]),
+    pool.query('SELECT occupation FROM parents WHERE user_id = $1', [id]),
     pool.query(
       `SELECT MAX(created_at) AS at FROM activity_logs WHERE user_id = $1 AND action = 'LOGIN_SUCCESS'`,
       [id],

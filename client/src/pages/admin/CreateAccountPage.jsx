@@ -162,7 +162,8 @@ export default function CreateAccountPage() {
         phone: form.phone,
         student: has('STUDENT') ? { studentCode: form.studentCode, dob: form.dob, gender: form.gender } : undefined,
         teacher: has('TEACHER') ? { teacherCode: form.teacherCode, department: form.department } : undefined,
-        parent: has('PARENT') ? { occupation: form.occupation, address: form.address } : undefined,
+        address: form.address,
+        parent: has('PARENT') ? { occupation: form.occupation } : undefined,
       };
       setResult(await createAccount(payload));
     } catch (err) {
@@ -262,6 +263,18 @@ export default function CreateAccountPage() {
                 autoComplete="off"
               />
             </Field>
+            <div className="span-2">
+              <Field id="address" label="Địa chỉ" hint="Người dùng có thể tự cập nhật sau" error={err('address')}>
+                <input
+                  id="address"
+                  className="input"
+                  value={form.address}
+                  onChange={set('address')}
+                  maxLength={500}
+                  autoComplete="off"
+                />
+              </Field>
+            </div>
           </div>
 
           {has('STUDENT') && (
@@ -346,17 +359,6 @@ export default function CreateAccountPage() {
                     maxLength={100}
                   />
                 </Field>
-                <div className="span-2">
-                  <Field id="address" label="Địa chỉ" error={err('address')}>
-                    <input
-                      id="address"
-                      className="input"
-                      value={form.address}
-                      onChange={set('address')}
-                      maxLength={500}
-                    />
-                  </Field>
-                </div>
               </div>
               <p className="caption muted" style={{ marginTop: 12 }}>
                 Liên kết phụ huynh với học sinh do quản lý nhà trường thực hiện sau khi tạo tài khoản.

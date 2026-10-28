@@ -95,6 +95,9 @@ export default function AccountDetailPage() {
             </Item>
             <Item label="Email">{a.email}</Item>
             <Item label="Số điện thoại">{a.phone && <span className="mono">{a.phone}</span>}</Item>
+            <Item label="Địa chỉ" wide>
+              {a.address}
+            </Item>
             <Item label="Đăng nhập gần nhất">{a.lastLoginAt && formatDateTime(a.lastLoginAt)}</Item>
             <Item label="Ngày tạo">{formatDate(a.createdAt)}</Item>
             <Item label="Cập nhật lần cuối">{a.updatedAt && formatDateTime(a.updatedAt)}</Item>
@@ -128,9 +131,6 @@ export default function AccountDetailPage() {
             {a.parent && (
               <>
                 <Item label="Nghề nghiệp">{a.parent.occupation}</Item>
-                <Item label="Địa chỉ" wide>
-                  {a.parent.address}
-                </Item>
               </>
             )}
           </dl>

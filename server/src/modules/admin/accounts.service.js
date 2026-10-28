@@ -42,7 +42,11 @@ export function readAccountInput(body = {}) {
   if (phone && !PHONE_RE.test(phone)) errors.phone = 'INVALID';
   if (!phone && roles.includes('PARENT')) errors.phone = 'REQUIRED_FOR_PARENT';
 
-  const input = { fullName, roles, email, phone, student: null, teacher: null, parent: null };
+  // Address: users.address for every role (business-rules §3, moved from parents on 28/10/2026).
+  const address = optional(body.address);
+  maxLength('address', address, 500);
+
+  const input = { fullName, roles, email, phone, address, student: null, teacher: null, parent: null };
 
   if (roles.includes('STUDENT')) {
     const s = body.student ?? {};
@@ -67,9 +71,8 @@ export function readAccountInput(body = {}) {
   }
   if (roles.includes('PARENT')) {
     const p = body.parent ?? {};
-    const parent = { occupation: optional(p.occupation), address: optional(p.address) };
+    const parent = { occupation: optional(p.occupation) };
     maxLength('occupation', parent.occupation, 100);
-    maxLength('address', parent.address, 500);
     input.parent = parent;
   }
   return { input, errors };
@@ -107,9 +110,9 @@ export async function prepareCredentials(db, input, username = null) {
 export async function insertAccount(db, input, credentials = null) {
   const { username, temporaryPassword, passwordHash } = credentials ?? (await prepareCredentials(db, input));
   const { rows } = await db.query(
-    `INSERT INTO users (username, email, phone, password_hash, full_name, status, must_change_password)
-     VALUES ($1, $2, $3, $4, $5, 'ACTIVE', TRUE) RETURNING user_id`,
-    [username, input.email, input.phone, passwordHash, input.fullName],
+    `INSERT INTO users (username, email, phone, password_hash, full_name, address, status, must_change_password)
+     VALUES ($1, $2, $3, $4, $5, $6, 'ACTIVE', TRUE) RETURNING user_id`,
+    [username, input.email, input.phone, passwordHash, input.fullName, input.address],
   );
   const userId = rows[0].user_id;
   await db.query(
@@ -132,11 +135,7 @@ export async function insertAccount(db, input, credentials = null) {
     ]);
   }
   if (input.parent) {
-    await db.query('INSERT INTO parents (user_id, occupation, address) VALUES ($1, $2, $3)', [
-      userId,
-      input.parent.occupation,
-      input.parent.address,
-    ]);
+    await db.query('INSERT INTO parents (user_id, occupation) VALUES ($1, $2)', [userId, input.parent.occupation]);
   }
   return { id: userId, username, temporaryPassword };
 }

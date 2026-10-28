@@ -29,10 +29,10 @@ const COL = {
   address: { key: 'address', header: 'Địa chỉ', width: 40 },
 };
 const TEMPLATES = {
-  STUDENT: { name: 'hoc-sinh', label: 'Học sinh', columns: ['fullName', 'studentCode', 'dob', 'gender', 'email', 'phone'], required: ['fullName', 'studentCode'] },
-  TEACHER: { name: 'giao-vien', label: 'Giáo viên', columns: ['fullName', 'teacherCode', 'department', 'email', 'phone'], required: ['fullName', 'teacherCode'] },
+  STUDENT: { name: 'hoc-sinh', label: 'Học sinh', columns: ['fullName', 'studentCode', 'dob', 'gender', 'email', 'phone', 'address'], required: ['fullName', 'studentCode'] },
+  TEACHER: { name: 'giao-vien', label: 'Giáo viên', columns: ['fullName', 'teacherCode', 'department', 'email', 'phone', 'address'], required: ['fullName', 'teacherCode'] },
   PARENT: { name: 'phu-huynh', label: 'Phụ huynh', columns: ['fullName', 'phone', 'email', 'occupation', 'address'], required: ['fullName', 'phone'] },
-  SCHOOL_MANAGER: { name: 'quan-ly', label: 'Quản lý nhà trường', columns: ['fullName', 'email', 'phone'], required: ['fullName'] },
+  SCHOOL_MANAGER: { name: 'quan-ly', label: 'Quản lý nhà trường', columns: ['fullName', 'email', 'phone', 'address'], required: ['fullName'] },
 };
 const CODE_FIELD = { STUDENT: 'studentCode', TEACHER: 'teacherCode' };
 const GENDER_WORDS = { nam: 'MALE', male: 'MALE', nu: 'FEMALE', female: 'FEMALE', khac: 'OTHER', other: 'OTHER' };
@@ -201,7 +201,8 @@ async function analyse(file, type) {
       phone: toPhone(values.phone),
       student: { studentCode: values.studentCode, dob: dob === 'invalid' ? '' : dob, gender: GENDER_WORDS[genderWord] ?? '' },
       teacher: { teacherCode: values.teacherCode, department: values.department },
-      parent: { occupation: values.occupation, address: values.address },
+      address: values.address,
+      parent: { occupation: values.occupation },
     };
     const { input, errors } = readAccountInput(body); // same rules as UC-92
     if (dob === 'invalid' || (dob && !isRealDate(dob))) errors.dob = 'INVALID';
@@ -269,7 +270,7 @@ const rowView = (r) => ({
   email: r.input.email,
   phone: r.input.phone,
   occupation: r.input.parent?.occupation ?? null,
-  address: r.input.parent?.address ?? null,
+  address: r.input.address,
   username: r.username ?? null,
   errors: r.errors,
   duplicateOf: r.duplicateOf,
@@ -323,9 +324,10 @@ export async function importAccounts({ file, type, actorId, ip }) {
   try {
     await withTransaction(async (client) => {
       const { rows: users } = await client.query(
-        `INSERT INTO users (username, email, phone, password_hash, full_name, status, must_change_password)
-         SELECT u.username, u.email, u.phone, u.hash, u.full_name, 'ACTIVE', TRUE
-         FROM unnest($1::text[], $2::text[], $3::text[], $4::text[], $5::text[]) AS u(username, email, phone, hash, full_name)
+        `INSERT INTO users (username, email, phone, password_hash, full_name, address, status, must_change_password)
+         SELECT u.username, u.email, u.phone, u.hash, u.full_name, u.address, 'ACTIVE', TRUE
+         FROM unnest($1::text[], $2::text[], $3::text[], $4::text[], $5::text[], $6::text[])
+              AS u(username, email, phone, hash, full_name, address)
          RETURNING user_id, username`,
         [
           credentials.map((c) => c.username),
@@ -333,6 +335,7 @@ export async function importAccounts({ file, type, actorId, ip }) {
           valid.map((r) => r.input.phone),
           credentials.map((c) => c.passwordHash),
           valid.map((r) => r.input.fullName),
+          valid.map((r) => r.input.address),
         ],
       );
       const idOf = new Map(users.map((u) => [u.username, u.user_id]));
@@ -360,9 +363,8 @@ export async function importAccounts({ file, type, actorId, ip }) {
         );
       } else if (type === 'PARENT') {
         await client.query(
-          `INSERT INTO parents (user_id, occupation, address)
-           SELECT * FROM unnest($1::bigint[], $2::text[], $3::text[])`,
-          [ids, valid.map((r) => r.input.parent.occupation), valid.map((r) => r.input.parent.address)],
+          `INSERT INTO parents (user_id, occupation) SELECT * FROM unnest($1::bigint[], $2::text[])`,
+          [ids, valid.map((r) => r.input.parent.occupation)],
         );
       }
     });
