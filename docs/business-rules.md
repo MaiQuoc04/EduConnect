@@ -59,6 +59,12 @@ Boundaries that are easy to get wrong:
 - `username` is required and generated: first name + initials of family name and middle name, no accents
   (Nguyen The Anh → `anhnt`); if taken add a number (`anhnt1`, `anhnt2`). Not all digits, no `@`.
   Only SA changes email / phone / username.
+- **Own profile** (agreed 28/10/2026): the address (`users.address`, max 500 characters, may be cleared) is the only
+  profile field users change themselves (UC-108), besides the avatar (UC-06) and the password (UC-05). Every other
+  field is managed by the school (SM profiles, SA login identifiers). Not logged.
+- **Address lives in `users.address`** for every role (moved from `parents.address`, which no longer exists, on
+  28/10/2026). Every screen that shows or edits a parent's address reads / writes `users.address`: student detail and
+  linked parents (FE-02), account create / import / detail (FE-13), parent detail and UC-107 Update Parent (FE-14).
 - Email optional for everyone. **Phone required for parents** (it identifies a parent with several children),
   optional for students and teachers. Email and phone are unique when present.
 - Password: 8–32 characters with a digit, a lowercase letter, an uppercase letter and a special character; not equal

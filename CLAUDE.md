@@ -8,7 +8,7 @@ stay in English; the client maps each API error `code` to Vietnamese in `client/
 ## Read before coding
 1. `docs/business-rules.md` – **all agreed business rules**. They override any "usual" assumption. Never invent a
    rule; if something is not covered, stop and ask.
-2. `docs/use-cases.md` – the 107 use cases (UC-01..UC-107) by feature. Reference UC IDs in code comments and PRs.
+2. `docs/use-cases.md` – the 108 use cases (UC-01..UC-108) by feature. Reference UC IDs in code comments and PRs.
 3. `docs/permissions.md` – who can do what, per role. Enforce it on the **server**.
 4. `docs/screens.md` – the 71 screens.
 5. `database/educonnect_schema_v0.3.sql` – the database (46 tables, PostgreSQL). Comments in the file explain each
