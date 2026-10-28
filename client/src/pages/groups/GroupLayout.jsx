@@ -7,7 +7,7 @@ import { useToast } from '../../context/ToastContext.jsx';
 import { errorText } from '../../messages.js';
 import { yearLabel } from '../school-years/schoolYearLabels.js';
 import ConfirmDialog from './ConfirmDialog.jsx';
-import { GROUP_TYPE_ICONS, GROUP_TYPE_LABELS } from './groupLabels.js';
+import { GROUP_TYPE_ICONS, GROUP_TYPE_LABELS, groupHasFeed } from './groupLabels.js';
 
 // SCR-23 Group Detail – UC-30 View Group Detail: the group (or team, UC-35) header and its tabs. The overview and members tabs are
 // FE-04; FE-05 (Group Feed) and FE-06 (Messaging) add their tabs here as nested routes, shown only when the group's
@@ -36,6 +36,9 @@ export default function GroupLayout() {
 
   const manager = activeRole === 'SCHOOL_MANAGER';
   const g = state.group;
+  const team = g?.groupType === 'TEAM_CHAT';
+  // "10A1 – Nhóm chung"; teams and the teacher group keep their own name.
+  const title = g && (g.class && !team ? `${g.class.className} – ${GROUP_TYPE_LABELS[g.groupType]}` : g.groupName);
 
   async function leaveTeam() {
     const { data } = await api.post(`/groups/${g.groupId}/leave`);
@@ -48,7 +51,7 @@ export default function GroupLayout() {
       <nav className="breadcrumb" aria-label="Breadcrumb">
         <span>EduConnect</span>/
         {manager ? <Link to="/classes">Lớp & nhóm lớp</Link> : <Link to="/groups">Nhóm của tôi</Link>}/
-        <span className="current">{g?.groupName ?? 'Nhóm'}</span>
+        <span className="current">{title ?? 'Nhóm'}</span>
       </nav>
 
       {state.error ? (
@@ -57,50 +60,56 @@ export default function GroupLayout() {
         <p className="loading">Đang tải nhóm…</p>
       ) : (
         <>
-          <header className="card card-outline group-header">
-            <span className="group-header-icon">
-              <Icon name={GROUP_TYPE_ICONS[g.groupType]} />
-            </span>
-            <div className="group-header-main">
-              <p className="label-upper muted">
-                {GROUP_TYPE_LABELS[g.groupType]}
-                {g.groupType === 'TEAM_CHAT' && g.class && ` · Lớp ${g.class.className}`}
-                {g.schoolYear && ` · Năm học ${yearLabel(g.schoolYear.yearName)}`}
+          <header className="gd-header">
+            <div className="gd-header-main">
+              <p className="gd-eyebrow">
+                <span className={`my-badge ${team ? 'ink' : 'grey'}`}>{GROUP_TYPE_LABELS[g.groupType]}</span>
+                {g.schoolYear && <span className="my-badge grey">Năm học {yearLabel(g.schoolYear.yearName)}</span>}
+                {g.readOnly && <span className="my-badge amber">Chỉ xem</span>}
               </p>
-              <h1 className="headline-lg">{g.groupName}</h1>
-              <p className="group-header-meta caption">
-                <span>
-                  <Icon name="person" size="sm" /> {g.counts.total} thành viên
-                  {g.class && ` (${g.counts.teachers} giáo viên, ${g.counts.students} học sinh, ${g.counts.parents} phụ huynh)`}
+              <div className="gd-title">
+                <span className={`my-card-icon type-${g.groupType.toLowerCase()}`} aria-hidden="true">
+                  <Icon name={GROUP_TYPE_ICONS[g.groupType]} />
                 </span>
-                {g.groupType === 'TEAM_CHAT' ? (
-                  g.createdByName && (
-                    <span>
-                      <Icon name="edit" size="sm" /> Do {g.createdByName} tạo
-                    </span>
-                  )
-                ) : (
-                  g.class &&
-                  (g.homeroom ? (
-                    <span>
-                      <Icon name="badge" size="sm" /> Giáo viên chủ nhiệm: {g.homeroom.fullName}
-                      {g.homeroom.status === 'LOCKED' && ' (đã khoá)'}
-                    </span>
-                  ) : (
-                    <span className="class-warn">
-                      <Icon name="warning" size="sm" /> Lớp chưa có giáo viên chủ nhiệm
-                    </span>
-                  ))
-                )}
+                <h1 className="headline-lg">{title}</h1>
+              </div>
+              <p className="gd-meta">
+                <span>
+                  <Icon name="group" size="sm" />
+                  <strong>{g.counts.total} thành viên</strong>
+                  {g.class && ` (${g.counts.teachers} giáo viên · ${g.counts.students} học sinh · ${g.counts.parents} phụ huynh)`}
+                </span>
+                {team
+                  ? g.createdByName && (
+                      <span>
+                        <Icon name="edit" size="sm" /> Do {g.createdByName} tạo
+                      </span>
+                    )
+                  : g.class &&
+                    (g.homeroom ? (
+                      <span>
+                        <Icon name="badge" size="sm" /> GVCN: <strong>{g.homeroom.fullName}</strong>
+                        {g.homeroom.status === 'LOCKED' && <span className="pill red">Đã khoá</span>}
+                      </span>
+                    ) : (
+                      <span className="class-warn">
+                        <Icon name="warning" size="sm" /> Lớp chưa có giáo viên chủ nhiệm
+                      </span>
+                    ))}
               </p>
             </div>
-            {g.readOnly && <span className="pill">Chỉ xem</span>}
-            {g.canLeave && (
-              <button type="button" className="btn btn-secondary btn-danger" onClick={() => setLeaving(true)}>
-                <Icon name="logout" size="sm" />
-                Rời team
-              </button>
-            )}
+            <div className="gd-actions">
+              <Link to="members" className="btn btn-secondary">
+                <Icon name="group" size="sm" />
+                Thành viên ({g.counts.total})
+              </Link>
+              {g.canLeave && (
+                <button type="button" className="btn btn-secondary btn-danger" onClick={() => setLeaving(true)}>
+                  <Icon name="logout" size="sm" />
+                  Rời team
+                </button>
+              )}
+            </div>
           </header>
           {leaving && (
             <ConfirmDialog
@@ -117,18 +126,39 @@ export default function GroupLayout() {
             </ConfirmDialog>
           )}
 
-          <nav className="group-tabs" aria-label="Mục của nhóm">
-            <NavLink to="" end>
-              <Icon name="info" size="sm" />
-              Tổng quan
-            </NavLink>
-            <NavLink to="members">
-              <Icon name="group" size="sm" />
-              Thành viên ({g.counts.total})
-            </NavLink>
-          </nav>
+          <div className="gd-tabbar">
+            <nav className="group-tabs" aria-label="Mục của nhóm">
+              <NavLink to="" end>
+                <Icon name="info" size="sm" />
+                Tổng quan
+              </NavLink>
+              {/* FE-05 / FE-06 tabs: only for people who may see the group's content. */}
+              {g.canSeeContent && groupHasFeed(g.groupType) && (
+                <NavLink to="feed">
+                  <Icon name="dynamic_feed" size="sm" />
+                  Bảng tin
+                </NavLink>
+              )}
+              {g.canSeeContent && (
+                <NavLink to={`/chat/${g.groupId}`}>
+                  <Icon name="forum" size="sm" />
+                  Trò chuyện
+                </NavLink>
+              )}
+              <NavLink to="members">
+                <Icon name="group" size="sm" />
+                Thành viên <span className="gd-tab-count">{g.counts.total}</span>
+              </NavLink>
+            </nav>
+            {!g.canSeeContent && (
+              <span className="gd-lock caption">
+                <Icon name="lock" size="sm" />
+                Chỉ xem thông tin và thành viên
+              </span>
+            )}
+          </div>
 
-          <Outlet context={{ ...g, reload: () => setVersion((v) => v + 1) }} />
+          <Outlet context={{ ...g, title, reload: () => setVersion((v) => v + 1) }} />
         </>
       )}
     </>

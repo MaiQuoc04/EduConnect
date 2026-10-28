@@ -6,47 +6,31 @@ import { useAuth } from '../../context/AuthContext.jsx';
 import { errorText } from '../../messages.js';
 import { yearLabel } from '../school-years/schoolYearLabels.js';
 import { fold } from '../subjects/subjectText.js';
-import { GROUP_TYPE_DESC, GROUP_TYPE_ICONS, GROUP_TYPE_LABELS } from './groupLabels.js';
+import { GROUP_TYPE_HELP, GROUP_TYPE_ICONS, GROUP_TYPE_LABELS, groupHasFeed } from './groupLabels.js';
 import TeamCreatePanel from './TeamCreatePanel.jsx';
 
 const ROLE_LABELS = { STUDENT: 'Học sinh', PARENT: 'Phụ huynh' };
 const SCOPE_TABS = [
-  { value: '', label: 'Tất cả nhóm' },
+  { value: '', label: 'Tất cả lớp' },
   { value: 'homeroom', label: 'Lớp chủ nhiệm' },
   { value: 'subject', label: 'Lớp bộ môn' },
-  { value: 'school', label: 'Toàn trường' },
 ];
 
-// My role in a group, from the active role and whether I am the class's homeroom teacher.
+// My role in a class, from the active role and whether I am its homeroom teacher.
 function roleText(activeRole, cls) {
-  if (!cls) return 'Giáo viên';
   if (activeRole === 'TEACHER') return cls.isHomeroom ? 'Giáo viên chủ nhiệm' : 'Giáo viên bộ môn';
   return ROLE_LABELS[activeRole] ?? 'Thành viên';
 }
 
-// Small label on a card: what kind of group it is for me.
-function badgeOf(item, activeRole) {
-  const { group, cls } = item;
-  if (group.groupType === 'TEACHER_SCHOOL') return { text: 'Nội bộ giáo viên', tone: 'grey' };
-  if (group.groupType === 'TEAM_CHAT') return { text: 'Team', tone: 'ink' };
-  if (group.groupType === 'STUDENT') return { text: 'Học sinh', tone: 'green' };
-  if (group.groupType === 'PARENT') return { text: 'Phụ huynh', tone: 'blue' };
-  if (activeRole === 'TEACHER') return cls.isHomeroom ? { text: 'Chủ nhiệm', tone: 'ink' } : { text: 'Bộ môn', tone: 'amber' };
-  return { text: 'Nhóm lớp', tone: 'ink' };
-}
-
-const titleOf = ({ group, cls }) =>
-  !cls ? group.groupName : `${cls.className} – ${group.groupType === 'TEAM_CHAT' ? group.groupName : GROUP_TYPE_LABELS[group.groupType]}`;
-
 // SCR-22 Group List – UC-29 View Group List for teachers, students and parents ("Nhóm của tôi") and UC-35 Create
-// Team Chat. The general group of the homeroom class (students / parents: of their first class) is the featured
-// card with the class's teams; every other group or team is a card. A subject teacher only sees the general group
-// of their classes (groupAccess.js). The School Manager uses the class view at /classes.
+// Team Chat. One card per class holding all its groups and the user's teams there (homeroom classes first), plus
+// the school-wide teacher group. A subject teacher only gets the general group of their classes (groupAccess.js).
+// The School Manager uses the class view at /classes.
 export default function GroupListPage() {
   const [params, setParams] = useSearchParams();
   const yearParam = params.get('schoolYearId') ?? '';
   const [state, setState] = useState({ loading: true, data: null, error: '' });
-  const [creating, setCreating] = useState(false); // the "Tạo team" panel
+  const [creating, setCreating] = useState(null); // null | { classId } while the "Tạo team" panel is open
   const [scope, setScope] = useState('');
   const [query, setQuery] = useState('');
   const navigate = useNavigate();
@@ -68,46 +52,30 @@ export default function GroupListPage() {
   const data = state.data;
   const schoolYear = data?.schoolYear ?? null;
   const readOnly = Boolean(schoolYear?.ended);
+  const classes = useMemo(
+    () => [...(data?.classes ?? [])].sort((a, b) => Number(b.isHomeroom) - Number(a.isHomeroom)),
+    [data],
+  );
+  const homeroomCount = classes.filter((c) => c.isHomeroom).length;
+  const counts = { '': classes.length, homeroom: homeroomCount, subject: classes.length - homeroomCount };
+  // The tabs only help a teacher who has both kinds of class.
+  const showTabs = teacher && homeroomCount > 0 && homeroomCount < classes.length;
 
-  // Featured class first, then every group and team as one flat list of cards.
-  const { featured, items } = useMemo(() => {
-    const classes = [...(data?.classes ?? [])].sort((a, b) => Number(b.isHomeroom) - Number(a.isHomeroom));
-    const featuredClass = teacher ? classes.find((c) => c.isHomeroom) : classes[0];
-    const featuredGroup = featuredClass?.groups.find((g) => g.groupType === 'GENERAL');
-    const scopeOf = (cls) => (!teacher ? 'class' : cls.isHomeroom ? 'homeroom' : 'subject');
-    const list = [];
-    classes.forEach((cls) => {
-      cls.groups.forEach((group) => {
-        if (group !== featuredGroup) list.push({ key: `g${group.groupId}`, group, cls, scope: scopeOf(cls) });
-      });
-      if (!featuredGroup || cls !== featuredClass) {
-        cls.teams.forEach((group) => list.push({ key: `t${group.groupId}`, group, cls, scope: scopeOf(cls) }));
-      }
-    });
-    if (data?.teacherGroup) list.push({ key: 'school', group: data.teacherGroup, cls: null, scope: 'school' });
-    return {
-      featured: featuredGroup ? { group: featuredGroup, cls: featuredClass, scope: scopeOf(featuredClass) } : null,
-      items: list,
-    };
-  }, [data, teacher]);
+  const q = fold(query.trim());
+  const shown = classes.filter(
+    (c) =>
+      (!scope || (scope === 'homeroom') === Boolean(c.isHomeroom)) &&
+      (!q || fold(`lớp ${c.className}`).includes(q) || c.teams.some((t) => fold(t.groupName).includes(q))),
+  );
+  const teacherGroup = data?.teacherGroup;
+  const showTeacherGroup = teacherGroup && !scope && (!q || fold(teacherGroup.groupName).includes(q));
+  const empty = data && !classes.length && !teacherGroup;
+  const showToolbar = showTabs || classes.length > 3 || data?.schoolYears.length > 1;
 
-  // Cards per tab; the featured card counts with its teams.
-  const counts = useMemo(() => {
-    const scopes = items.map((i) => i.scope);
-    if (featured) scopes.push(...Array(1 + featured.cls.teams.length).fill(featured.scope));
-    return Object.fromEntries(SCOPE_TABS.map((t) => [t.value, scopes.filter((s) => !t.value || s === t.value).length]));
-  }, [featured, items]);
-
-  const matches = (item) => {
-    const q = fold(query.trim());
-    return (!scope || item.scope === scope) && (!q || fold(titleOf(item)).includes(q));
-  };
-  const showFeatured = featured && (!scope || featured.scope === scope) && (!query.trim() || matches(featured));
-  const shown = items.filter(matches);
-  const empty = data && !featured && !items.length;
-  const showToolbar = teacher || items.length > 4 || data?.schoolYears.length > 1;
-  const tabs = SCOPE_TABS.filter((t) => !t.value || counts[t.value] > 0);
-  const filtered = Boolean(scope || query.trim());
+  function clearFilters() {
+    setScope('');
+    setQuery('');
+  }
 
   return (
     <>
@@ -124,8 +92,8 @@ export default function GroupListPage() {
           <h1 className="headline-lg">Nhóm của tôi</h1>
           <p>Nơi trao đổi với giáo viên, học sinh và phụ huynh trong các lớp bạn tham gia.</p>
         </div>
-        {!empty && data && !readOnly && (
-          <button type="button" className="btn btn-primary" onClick={() => setCreating(true)} disabled={creating}>
+        {classes.length > 0 && !readOnly && (
+          <button type="button" className="btn btn-primary" onClick={() => setCreating({ classId: null })} disabled={Boolean(creating)}>
             <Icon name="add_circle" size="sm" />
             Tạo team
           </button>
@@ -134,9 +102,9 @@ export default function GroupListPage() {
 
       {data && showToolbar && !empty && (
         <div className="card card-outline my-groups-toolbar">
-          {teacher && (
-            <div className="pill-tabs" role="tablist" aria-label="Lọc nhóm">
-              {tabs.map((t) => (
+          {showTabs && (
+            <div className="pill-tabs" role="tablist" aria-label="Lọc lớp">
+              {SCOPE_TABS.map((t) => (
                 <button key={t.value} type="button" role="tab" aria-selected={scope === t.value} onClick={() => setScope(t.value)}>
                   {t.label} ({counts[t.value]})
                 </button>
@@ -163,10 +131,10 @@ export default function GroupListPage() {
               <input
                 className="input"
                 type="search"
-                placeholder="Tìm theo tên nhóm, lớp…"
+                placeholder="Tìm lớp hoặc team…"
                 value={query}
                 onChange={(e) => setQuery(e.target.value)}
-                aria-label="Tìm nhóm"
+                aria-label="Tìm lớp hoặc team"
               />
             </div>
           </div>
@@ -175,8 +143,8 @@ export default function GroupListPage() {
 
       {creating && (
         <TeamCreatePanel
-          classId={null}
-          onCancel={() => setCreating(false)}
+          classId={creating.classId}
+          onCancel={() => setCreating(null)}
           onCreated={(groupId) => navigate(`/groups/${groupId}`)}
         />
       )}
@@ -192,34 +160,51 @@ export default function GroupListPage() {
         </div>
       ) : (
         <div className={`my-groups${state.loading ? ' is-loading' : ''}`}>
-          {showFeatured && (
-            <FeaturedGroup item={featured} activeRole={activeRole} canCreate={!readOnly && !creating} onCreate={() => setCreating(true)} />
-          )}
-
           {shown.length > 0 && (
-            <div className="my-group-grid">
-              {shown.map((item) => (
-                <GroupCard key={item.key} item={item} activeRole={activeRole} />
+            <div className="mc-grid">
+              {shown.map((c) => (
+                <ClassGroupsCard
+                  key={c.classId}
+                  cls={c}
+                  teacher={teacher}
+                  role={roleText(activeRole, c)}
+                  readOnly={readOnly}
+                  canCreateTeam={!readOnly && !creating}
+                  onCreateTeam={() => setCreating({ classId: c.classId })}
+                />
               ))}
             </div>
           )}
 
-          {!showFeatured && !shown.length && (
+          {showTeacherGroup && (
+            <section className="card card-outline mc-card mc-school" aria-labelledby="school-group">
+              <header className="mc-head">
+                <span className="my-card-icon type-teacher_school" aria-hidden="true">
+                  <Icon name={GROUP_TYPE_ICONS.TEACHER_SCHOOL} />
+                </span>
+                <div className="mc-title">
+                  <div className="mc-name">
+                    <h2 id="school-group" className="title-sm">
+                      Toàn trường
+                    </h2>
+                    <span className="my-badge grey">Nội bộ giáo viên</span>
+                  </div>
+                  <p className="caption muted">Toàn bộ giáo viên và quản lý trường</p>
+                </div>
+              </header>
+              <ul className="mc-groups">
+                <GroupRow group={teacherGroup} label={teacherGroup.groupName} />
+              </ul>
+            </section>
+          )}
+
+          {!shown.length && !showTeacherGroup && (
             <div className="card card-outline class-empty">
               <Icon name="search_off" />
-              <p>Không tìm thấy nhóm phù hợp.</p>
-              {filtered && (
-                <button
-                  type="button"
-                  className="btn btn-tertiary"
-                  onClick={() => {
-                    setScope('');
-                    setQuery('');
-                  }}
-                >
-                  Xoá bộ lọc
-                </button>
-              )}
+              <p>Không tìm thấy lớp hoặc team phù hợp.</p>
+              <button type="button" className="btn btn-tertiary" onClick={clearFilters}>
+                Xoá bộ lọc
+              </button>
             </div>
           )}
 
@@ -242,106 +227,96 @@ export default function GroupListPage() {
   );
 }
 
-// The main group: big card with my role, member count and the class's teams as sub-channels.
-function FeaturedGroup({ item, activeRole, canCreate, onCreate }) {
-  const { group, cls } = item;
-  const teams = cls.teams;
+// One class: its groups as rows (open, feed, chat) and the user's teams in the class.
+function ClassGroupsCard({ cls, teacher, role, readOnly, canCreateTeam, onCreateTeam }) {
   return (
-    <section className="card card-outline my-featured" aria-labelledby="featured-title">
-      <header className="my-featured-head">
-        <span className="my-card-icon type-general" aria-hidden="true">
-          <Icon name={GROUP_TYPE_ICONS.GENERAL} />
+    <section className={`card card-outline mc-card${cls.isHomeroom ? ' is-homeroom' : ''}`} aria-labelledby={`class-${cls.classId}`}>
+      <header className="mc-head">
+        <span className="mc-grade" aria-hidden="true">
+          {cls.gradeLevel}
         </span>
-        <div className="my-featured-main">
-          <p className="my-featured-badges">
-            <span className="stamp-solid">{cls.isHomeroom ? 'Nhóm chủ nhiệm' : 'Lớp của tôi'}</span>
-            <span className="chip ink">Khối {cls.gradeLevel}</span>
-          </p>
-          <h2 id="featured-title" className="title-md">
-            {titleOf(item)}
-          </h2>
-          <p className="my-card-role">
-            Vai trò của tôi: <strong>{roleText(activeRole, cls)}</strong> · {group.memberCount} thành viên
-            {!cls.isHomeroom && cls.homeroomName && <> · GVCN {cls.homeroomName}</>}
+        <div className="mc-title">
+          <div className="mc-name">
+            <h2 id={`class-${cls.classId}`} className="title-sm">
+              Lớp {cls.className}
+            </h2>
+            {teacher && (
+              <span className={`my-badge ${cls.isHomeroom ? 'ink' : 'amber'}`}>{cls.isHomeroom ? 'Chủ nhiệm' : 'Bộ môn'}</span>
+            )}
+            {readOnly && <span className="my-badge grey">Chỉ xem</span>}
+          </div>
+          <p className="caption muted">
+            Vai trò của tôi: <strong>{role}</strong>
+            {!cls.isHomeroom &&
+              (cls.homeroomName ? (
+                <>
+                  {' '}
+                  · GVCN {cls.homeroomName}
+                  {cls.homeroomStatus === 'LOCKED' && ' (đã khoá)'}
+                </>
+              ) : (
+                <span className="class-warn"> · Chưa có GVCN</span>
+              ))}
           </p>
         </div>
       </header>
-      <p className="my-featured-desc">{GROUP_TYPE_DESC.GENERAL}</p>
 
-      {(teams.length > 0 || canCreate) && (
-        <div className="my-featured-teams">
-          <p className="label-upper">
-            {teams.length ? `${teams.length} team của lớp` : 'Team của lớp'}
-          </p>
-          <div className="my-subchannels">
-            {teams.map((t) => (
-              <Link key={t.groupId} to={`/groups/${t.groupId}`} className="my-subchannel">
-                <Icon name={GROUP_TYPE_ICONS.TEAM_CHAT} size="sm" className="my-subchannel-icon" />
-                <span className="my-subchannel-text">
-                  <span className="my-subchannel-name">{t.groupName}</span>
-                  <span className="caption muted">
-                    {t.memberCount} thành viên{t.createdByName ? ` · Do ${t.createdByName} tạo` : ''}
-                  </span>
-                </span>
+      <ul className="mc-groups" aria-label={`Nhóm của lớp ${cls.className}`}>
+        {cls.groups.map((g) => (
+          <GroupRow key={g.groupId} group={g} label={GROUP_TYPE_LABELS[g.groupType]} />
+        ))}
+      </ul>
+
+      {(cls.teams.length > 0 || canCreateTeam) && (
+        <div className="mc-teams">
+          <span className="label-upper">Team{cls.teams.length ? ` (${cls.teams.length})` : ''}</span>
+          <div className="mc-team-list">
+            {cls.teams.map((t) => (
+              <Link key={t.groupId} to={`/chat/${t.groupId}`} className="mc-team" title={t.createdByName ? `Do ${t.createdByName} tạo` : undefined}>
+                <Icon name={GROUP_TYPE_ICONS.TEAM_CHAT} size="sm" />
+                {t.groupName}
+                <span className="mc-team-count">{t.memberCount}</span>
               </Link>
             ))}
-            {canCreate && (
-              <button type="button" className="my-subchannel is-new" onClick={onCreate}>
-                <Icon name="add" size="sm" className="my-subchannel-icon" />
-                <span className="my-subchannel-text">
-                  <span className="my-subchannel-name">Tạo team mới</span>
-                  <span className="caption muted">Trò chuyện riêng theo tổ hoặc nhiệm vụ</span>
-                </span>
+            {canCreateTeam && (
+              <button type="button" className="mc-team is-new" onClick={onCreateTeam}>
+                <Icon name="add" size="sm" />
+                Tạo team
               </button>
             )}
           </div>
         </div>
       )}
-
-      <footer className="my-featured-foot">
-        <Link to={`/groups/${group.groupId}`} className="btn btn-secondary my-open-main">
-          Mở nhóm
-          <Icon name="arrow_forward" size="sm" />
-        </Link>
-      </footer>
     </section>
   );
 }
 
-// Any other group or team.
-function GroupCard({ item, activeRole }) {
-  const { group, cls } = item;
+// One group inside a card: the name opens the group; the icons jump to its feed and chat.
+function GroupRow({ group, label }) {
   const type = group.groupType;
-  const badge = badgeOf(item, activeRole);
-  const team = type === 'TEAM_CHAT';
   return (
-    <article className="card card-outline my-card">
-      <header className="my-card-head">
-        <span className={`my-card-icon type-${type.toLowerCase()}`} aria-hidden="true">
-          <Icon name={GROUP_TYPE_ICONS[type]} />
+    <li className="mc-row">
+      <Link to={`/groups/${group.groupId}`} className="mc-row-main">
+        <span className={`gd-mini-icon type-${type.toLowerCase()}`} aria-hidden="true">
+          <Icon name={GROUP_TYPE_ICONS[type]} size="sm" />
         </span>
-        <span className={`my-badge ${badge.tone}`}>{badge.text}</span>
-      </header>
-      <h3 className="title-sm my-card-title">{titleOf(item)}</h3>
-      <p className="my-card-role">
-        {team && group.createdByName ? (
-          <>
-            Do <strong>{group.createdByName}</strong> tạo
-          </>
-        ) : (
-          <>
-            Vai trò: <strong>{roleText(activeRole, cls)}</strong>
-          </>
+        <span className="mc-row-text">
+          <span className="mc-row-name">{label}</span>
+          <span className="caption muted">
+            {group.memberCount} thành viên · {GROUP_TYPE_HELP[type]}
+          </span>
+        </span>
+      </Link>
+      <span className="mc-row-actions">
+        {groupHasFeed(type) && (
+          <Link to={`/groups/${group.groupId}/feed`} className="btn-icon mc-icon-btn" title="Bảng tin" aria-label={`Bảng tin ${label}`}>
+            <Icon name="dynamic_feed" size="sm" />
+          </Link>
         )}
-      </p>
-      <p className="my-card-desc">{GROUP_TYPE_DESC[type]}</p>
-      <footer className="my-card-foot">
-        <span className="caption muted">{group.memberCount} thành viên</span>
-        <Link to={`/groups/${group.groupId}`} className="btn btn-secondary my-open">
-          Mở nhóm
-          <Icon name="chevron_right" size="sm" />
+        <Link to={`/chat/${group.groupId}`} className="btn-icon mc-icon-btn" title="Trò chuyện" aria-label={`Trò chuyện ${label}`}>
+          <Icon name="forum" size="sm" />
         </Link>
-      </footer>
-    </article>
+      </span>
+    </li>
   );
 }

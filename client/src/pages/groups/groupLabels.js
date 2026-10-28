@@ -15,6 +15,9 @@ export const GROUP_TYPE_HELP = {
   TEAM_CHAT: 'Chỉ trò chuyện giữa các thành viên được chọn',
 };
 
+// Only the general class group and the teacher group have a feed; every group has a chat (business-rules §4).
+export const groupHasFeed = (groupType) => groupType === 'GENERAL' || groupType === 'TEACHER_SCHOOL';
+
 // What each group is for (business-rules §4: GENERAL and the teacher group have a feed, the others are chat only).
 export const GROUP_TYPE_DESC = {
   GENERAL: 'Bảng tin và trò chuyện chung của lớp với giáo viên, học sinh và phụ huynh.',
