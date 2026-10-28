@@ -9,5 +9,6 @@ const router = Router();
 router.get('/profile', requireAuth, ctrl.profile); // UC-04
 router.put('/password', requireAuthAllowingPasswordChange, ctrl.changePassword); // UC-05 (+ forced change of UC-01)
 router.put('/avatar', requireAuth, uploadSingle('avatar'), ctrl.changeAvatar); // UC-06
+router.put('/address', requireAuth, ctrl.updateAddress); // UC-108
 
 export default router;

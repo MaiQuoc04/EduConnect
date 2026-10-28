@@ -29,6 +29,7 @@ const ERROR_MESSAGES = {
   MSG_FILE_TOO_LARGE: ({ maxMb } = {}) => `Tệp vượt quá dung lượng cho phép (tối đa ${maxMb} MB).`,
   MSG_UPLOAD_FAILED: 'Không tải được tệp lên. Vui lòng thử lại.',
   MSG_INVALID_IMAGE: 'Chỉ chấp nhận ảnh JPG, PNG hoặc WebP.',
+  MSG_ADDRESS_TOO_LONG: ({ max } = {}) => `Địa chỉ không được vượt quá ${max ?? 500} ký tự.`,
   // FE-13 System Administration
   MSG_ACCOUNT_INVALID: 'Vui lòng kiểm tra lại các thông tin được đánh dấu.',
   MSG_REQUEST_HANDLED: 'Yêu cầu này đã được xử lý. Danh sách đã được cập nhật.',

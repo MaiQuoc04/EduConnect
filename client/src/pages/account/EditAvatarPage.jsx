@@ -9,6 +9,7 @@ import { errorText } from '../../messages.js';
 import { useProfile } from './useProfile.js';
 
 const ACCEPTED = ['image/jpeg', 'image/png', 'image/webp'];
+const ADDRESS_MAX = 500;
 
 function ReadOnlyField({ label, value, help }) {
   return (
@@ -25,7 +26,8 @@ function ReadOnlyField({ label, value, help }) {
   );
 }
 
-// SCR-04 Edit Profile (UC-06 Change Avatar). Only the avatar can be changed online; the rest is read only.
+// SCR-04 Edit Profile (UC-06 Change Avatar, UC-108 Update Address). Only the avatar and the address can be changed
+// online; the rest is read only.
 export default function EditAvatarPage() {
   const { loading, data, error: loadError } = useProfile();
   const { updateUser } = useAuth();
@@ -35,6 +37,7 @@ export default function EditAvatarPage() {
   const [file, setFile] = useState(null);
   const [preview, setPreview] = useState('');
   const [dragging, setDragging] = useState(false);
+  const [address, setAddress] = useState(null); // null = not edited yet, show the saved one
   const [error, setError] = useState('');
   const [saving, setSaving] = useState(false);
 
@@ -45,6 +48,8 @@ export default function EditAvatarPage() {
 
   const { user, student, teacher, avatarMaxMb } = data;
   const code = student?.studentCode ?? teacher?.teacherCode;
+  const addressValue = address ?? user.address ?? '';
+  const addressChanged = addressValue.trim() !== (user.address ?? '');
 
   function pick(chosen) {
     setError('');
@@ -59,11 +64,14 @@ export default function EditAvatarPage() {
     setSaving(true);
     setError('');
     try {
-      const form = new FormData();
-      form.append('avatar', file);
-      const { data: result } = await api.put('/account/avatar', form);
-      updateUser({ avatarUrl: result.avatarUrl });
-      toast('Đã cập nhật ảnh đại diện.');
+      if (file) {
+        const form = new FormData();
+        form.append('avatar', file);
+        const { data: result } = await api.put('/account/avatar', form);
+        updateUser({ avatarUrl: result.avatarUrl });
+      }
+      if (addressChanged) await api.put('/account/address', { address: addressValue });
+      toast('Đã cập nhật hồ sơ.');
       navigate('/profile');
     } catch (err) {
       setError(errorText(err));
@@ -74,12 +82,12 @@ export default function EditAvatarPage() {
   return (
     <div className="narrow">
       <nav className="breadcrumb" aria-label="Breadcrumb">
-        <span>EduConnect</span>/<Link to="/profile">Hồ sơ cá nhân</Link>/<span className="current">Sửa ảnh đại diện</span>
+        <span>EduConnect</span>/<Link to="/profile">Hồ sơ cá nhân</Link>/<span className="current">Chỉnh sửa hồ sơ</span>
       </nav>
       <div className="page-header">
         <div>
           <h1 className="headline-lg">Chỉnh sửa hồ sơ</h1>
-          <p>Chỉ ảnh đại diện có thể cập nhật trực tuyến. Các thông tin khác do văn phòng nhà trường quản lý.</p>
+          <p>Bạn có thể cập nhật ảnh đại diện và địa chỉ. Các thông tin khác do văn phòng nhà trường quản lý.</p>
         </div>
       </div>
 
@@ -160,6 +168,28 @@ export default function EditAvatarPage() {
         <div className="section-sep" />
 
         <h2 className="card-title title-sm">
+          <Icon name="home" />
+          Địa chỉ
+        </h2>
+        <label className="field">
+          <span className="field-label">
+            Địa chỉ liên hệ
+            <span className="caption muted">
+              {addressValue.length}/{ADDRESS_MAX}
+            </span>
+          </span>
+          <textarea
+            className="input"
+            value={addressValue}
+            onChange={(e) => setAddress(e.target.value.slice(0, ADDRESS_MAX))}
+            placeholder="Ví dụ: 12 Lê Lợi, phường Hải Châu, TP. Đà Nẵng"
+          />
+          <span className="field-help">Để trống nếu muốn xoá địa chỉ đã lưu.</span>
+        </label>
+
+        <div className="section-sep" />
+
+        <h2 className="card-title title-sm">
           <Icon name="assignment_ind" />
           Thông tin hồ sơ (chỉ đọc)
           <span className="aside stamp">Do nhà trường quản lý</span>
@@ -167,7 +197,7 @@ export default function EditAvatarPage() {
         <div className="notice amber" style={{ marginBottom: 20 }}>
           <Icon name="lock_person" />
           <p>
-            Bạn không thể tự thay đổi họ tên, ngày sinh, lớp hay số điện thoại. Để điều chỉnh các thông tin này, vui lòng
+            Bạn không thể tự thay đổi họ tên, ngày sinh, lớp, email hay số điện thoại. Để điều chỉnh các thông tin này, vui lòng
             liên hệ văn phòng nhà trường.
           </p>
         </div>
@@ -194,7 +224,7 @@ export default function EditAvatarPage() {
           <Link to="/profile" className="btn btn-secondary">
             Huỷ
           </Link>
-          <button type="button" className="btn btn-primary" onClick={save} disabled={!file || saving}>
+          <button type="button" className="btn btn-primary" onClick={save} disabled={(!file && !addressChanged) || saving}>
             <Icon name="save" size="sm" />
             {saving ? 'Đang lưu…' : 'Lưu thay đổi'}
           </button>

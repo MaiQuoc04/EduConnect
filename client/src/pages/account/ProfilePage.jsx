@@ -37,7 +37,8 @@ function CopyCode({ value }) {
   );
 }
 
-// SCR-03 User Profile (UC-04): personal, school, class and role information. Read only, except the avatar (UC-06).
+// SCR-03 User Profile (UC-04): personal, school, class and role information. Read only, except the avatar (UC-06)
+// and the address (UC-108), both edited on SCR-04.
 export default function ProfilePage() {
   const { loading, data, error } = useProfile();
   const { signOut } = useAuth();
@@ -65,8 +66,8 @@ export default function ProfilePage() {
           <p>Thông tin cá nhân và dữ liệu học vụ do nhà trường quản lý.</p>
         </div>
         <Link to="/profile/avatar" className="btn btn-primary">
-          <Icon name="photo_camera" size="sm" />
-          Sửa ảnh đại diện
+          <Icon name="edit" size="sm" />
+          Chỉnh sửa hồ sơ
         </Link>
       </div>
 
@@ -120,7 +121,7 @@ export default function ProfilePage() {
             </Link>
             <Link to="/profile/avatar" className="menu-row">
               <Icon name="account_circle" />
-              Cập nhật ảnh đại diện
+              Cập nhật ảnh đại diện, địa chỉ
               <Icon name="chevron_right" />
             </Link>
           </section>
@@ -142,7 +143,7 @@ export default function ProfilePage() {
               <Item label="Email">{user.email}</Item>
               <Item label="Số điện thoại">{user.phone && <span className="mono">{user.phone}</span>}</Item>
               {parent && <Item label="Nghề nghiệp">{parent.occupation}</Item>}
-              {parent && <Item label="Địa chỉ" wide>{parent.address}</Item>}
+              <Item label="Địa chỉ" wide>{user.address}</Item>
             </dl>
           </section>
 
@@ -246,7 +247,7 @@ export default function ProfilePage() {
             <div>
               <p className="notice-title">Quy định chỉnh sửa dữ liệu</p>
               <p className="caption" style={{ fontStyle: 'italic' }}>
-                Bạn chỉ tự cập nhật được ảnh đại diện và mật khẩu. Họ tên, ngày sinh, lớp, email, số điện thoại và tên
+                Bạn chỉ tự cập nhật được ảnh đại diện, địa chỉ và mật khẩu. Họ tên, ngày sinh, lớp, email, số điện thoại và tên
                 đăng nhập do nhà trường quản lý; vui lòng liên hệ văn phòng nhà trường hoặc giáo viên chủ nhiệm khi cần
                 điều chỉnh.
               </p>

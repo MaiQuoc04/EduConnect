@@ -73,7 +73,7 @@ async function teacherInfo(userId, yearId) {
 }
 
 async function parentInfo(userId, yearId) {
-  const { rows } = await pool.query('SELECT parent_id, occupation, address FROM parents WHERE user_id = $1', [userId]);
+  const { rows } = await pool.query('SELECT parent_id, occupation FROM parents WHERE user_id = $1', [userId]);
   if (!rows.length) return null;
   const { parent_id: parentId, ...parent } = rows[0];
   const { rows: children } = await pool.query(
@@ -97,7 +97,7 @@ async function parentInfo(userId, yearId) {
 // UC-04 View Profile: personal, school, class and role information of the signed-in user (all their roles).
 export async function getProfile({ userId, roles, activeRole }) {
   const { rows } = await pool.query(
-    `SELECT user_id AS id, username, full_name AS "fullName", email, phone, avatar_url AS "avatarUrl", status,
+    `SELECT user_id AS id, username, full_name AS "fullName", email, phone, avatar_url AS "avatarUrl", address, status,
             created_at AS "createdAt"
      FROM users WHERE user_id = $1`,
     [userId],
@@ -147,4 +147,26 @@ export async function changeAvatar({ userId, file }) {
   const avatarUrl = await saveFile('avatars', file.buffer, extension);
   await pool.query('UPDATE users SET avatar_url = $1 WHERE user_id = $2', [avatarUrl, userId]);
   return { avatarUrl };
+}
+
+const ADDRESS_MAX = 500;
+
+// UC-108 Update Address: the address is the only profile field users change themselves (business rules §3).
+// An empty address clears it.
+export async function updateAddress({ userId, address }) {
+  if (address !== null && address !== undefined && typeof address !== 'string') {
+    throw badRequest('MSG_REQUIRED', 'Please enter the address as text.');
+  }
+  address = (address ?? '').trim().replace(/\s+/g, ' ');
+  if (address.length > ADDRESS_MAX) {
+    throw badRequest('MSG_ADDRESS_TOO_LONG', `The address must not exceed ${ADDRESS_MAX} characters.`, {
+      max: ADDRESS_MAX,
+    });
+  }
+  const { rows } = await pool.query('UPDATE users SET address = $1 WHERE user_id = $2 RETURNING address', [
+    address || null,
+    userId,
+  ]);
+  if (!rows.length) throw unauthorized('AUTH_INVALID', 'Please sign in again.');
+  return { address: rows[0].address };
 }
