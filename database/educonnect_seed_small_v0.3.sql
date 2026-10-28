@@ -123,22 +123,22 @@ INSERT INTO time_slots (period_number, start_time, end_time) VALUES
   (10, '17:00:00', '17:45:00');
 
 -- Accounts (password: Educonnect@2026)
-INSERT INTO users (username, email, phone, password_hash, full_name, status, must_change_password) VALUES
-  ('huynq', 'huynq@educonnect.test', '0905000001', '$2b$10$S9ddJnte6vO3Tv2Xu5AqVuOZVGjK8nnZpTEupYY3G/kQABDyXB.Pe', 'Nguyễn Quốc Huy', 'ACTIVE', FALSE),
-  ('ductm', 'ductm@educonnect.test', '0905000002', '$2b$10$S9ddJnte6vO3Tv2Xu5AqVuOZVGjK8nnZpTEupYY3G/kQABDyXB.Pe', 'Trần Minh Đức', 'ACTIVE', FALSE),
-  ('honglt', 'honglt@educonnect.test', '0905000003', '$2b$10$S9ddJnte6vO3Tv2Xu5AqVuOZVGjK8nnZpTEupYY3G/kQABDyXB.Pe', 'Lê Thị Hồng', 'ACTIVE', FALSE),
-  ('binhnv', 'binhnv@educonnect.test', '0905000011', '$2b$10$S9ddJnte6vO3Tv2Xu5AqVuOZVGjK8nnZpTEupYY3G/kQABDyXB.Pe', 'Nguyễn Văn Bình', 'ACTIVE', FALSE),
-  ('haltt', 'haltt@educonnect.test', '0905000012', '$2b$10$S9ddJnte6vO3Tv2Xu5AqVuOZVGjK8nnZpTEupYY3G/kQABDyXB.Pe', 'Lê Thị Thu Hà', 'ACTIVE', FALSE),
-  ('vinhpq', 'vinhpq@educonnect.test', '0905000013', '$2b$10$S9ddJnte6vO3Tv2Xu5AqVuOZVGjK8nnZpTEupYY3G/kQABDyXB.Pe', 'Phạm Quang Vinh', 'ACTIVE', FALSE),
-  ('lannt', 'lannt@educonnect.test', '0905000021', '$2b$10$S9ddJnte6vO3Tv2Xu5AqVuOZVGjK8nnZpTEupYY3G/kQABDyXB.Pe', 'Nguyễn Thị Lan', 'ACTIVE', FALSE),
-  ('longhv', 'longhv@educonnect.test', '0905000022', '$2b$10$S9ddJnte6vO3Tv2Xu5AqVuOZVGjK8nnZpTEupYY3G/kQABDyXB.Pe', 'Hoàng Văn Long', 'ACTIVE', FALSE),
-  ('maitt', 'maitt@educonnect.test', '0905000023', '$2b$10$S9ddJnte6vO3Tv2Xu5AqVuOZVGjK8nnZpTEupYY3G/kQABDyXB.Pe', 'Trần Thị Mai', 'ACTIVE', FALSE),
-  ('baopg', 'baopg@educonnect.test', NULL, '$2b$10$S9ddJnte6vO3Tv2Xu5AqVuOZVGjK8nnZpTEupYY3G/kQABDyXB.Pe', 'Phạm Gia Bảo', 'ACTIVE', FALSE),
-  ('khanglm', NULL, NULL, '$2b$10$S9ddJnte6vO3Tv2Xu5AqVuOZVGjK8nnZpTEupYY3G/kQABDyXB.Pe', 'Lê Minh Khang', 'ACTIVE', FALSE),
-  ('tramlnb', 'tramlnb@educonnect.test', '0905000033', '$2b$10$S9ddJnte6vO3Tv2Xu5AqVuOZVGjK8nnZpTEupYY3G/kQABDyXB.Pe', 'Lê Ngọc Bảo Trâm', 'ACTIVE', TRUE),
-  ('toanpv', 'toanpv@educonnect.test', '0905000041', '$2b$10$S9ddJnte6vO3Tv2Xu5AqVuOZVGjK8nnZpTEupYY3G/kQABDyXB.Pe', 'Phạm Văn Toàn', 'ACTIVE', FALSE),
-  ('hanttn', 'hanttn@educonnect.test', '0905000042', '$2b$10$S9ddJnte6vO3Tv2Xu5AqVuOZVGjK8nnZpTEupYY3G/kQABDyXB.Pe', 'Trần Thị Ngọc Hân', 'ACTIVE', FALSE),
-  ('oanhntk', NULL, '0905000043', '$2b$10$S9ddJnte6vO3Tv2Xu5AqVuOZVGjK8nnZpTEupYY3G/kQABDyXB.Pe', 'Nguyễn Thị Kim Oanh', 'LOCKED', FALSE);
+INSERT INTO users (username, email, phone, password_hash, full_name, address, status, must_change_password) VALUES
+  ('huynq', 'huynq@educonnect.test', '0905000001', '$2b$10$dDqytRPtGiLiCWVwWsvbWu1oyaQiluOkpBR1YG1VV4Y69b1chF1Ba', 'Nguyễn Quốc Huy', NULL, 'ACTIVE', FALSE),
+  ('ductm', 'ductm@educonnect.test', '0905000002', '$2b$10$dDqytRPtGiLiCWVwWsvbWu1oyaQiluOkpBR1YG1VV4Y69b1chF1Ba', 'Trần Minh Đức', NULL, 'ACTIVE', FALSE),
+  ('honglt', 'honglt@educonnect.test', '0905000003', '$2b$10$dDqytRPtGiLiCWVwWsvbWu1oyaQiluOkpBR1YG1VV4Y69b1chF1Ba', 'Lê Thị Hồng', NULL, 'ACTIVE', FALSE),
+  ('binhnv', 'binhnv@educonnect.test', '0905000011', '$2b$10$dDqytRPtGiLiCWVwWsvbWu1oyaQiluOkpBR1YG1VV4Y69b1chF1Ba', 'Nguyễn Văn Bình', NULL, 'ACTIVE', FALSE),
+  ('haltt', 'haltt@educonnect.test', '0905000012', '$2b$10$dDqytRPtGiLiCWVwWsvbWu1oyaQiluOkpBR1YG1VV4Y69b1chF1Ba', 'Lê Thị Thu Hà', NULL, 'ACTIVE', FALSE),
+  ('vinhpq', 'vinhpq@educonnect.test', '0905000013', '$2b$10$dDqytRPtGiLiCWVwWsvbWu1oyaQiluOkpBR1YG1VV4Y69b1chF1Ba', 'Phạm Quang Vinh', NULL, 'ACTIVE', FALSE),
+  ('lannt', 'lannt@educonnect.test', '0905000021', '$2b$10$dDqytRPtGiLiCWVwWsvbWu1oyaQiluOkpBR1YG1VV4Y69b1chF1Ba', 'Nguyễn Thị Lan', NULL, 'ACTIVE', FALSE),
+  ('longhv', 'longhv@educonnect.test', '0905000022', '$2b$10$dDqytRPtGiLiCWVwWsvbWu1oyaQiluOkpBR1YG1VV4Y69b1chF1Ba', 'Hoàng Văn Long', NULL, 'ACTIVE', FALSE),
+  ('maitt', 'maitt@educonnect.test', '0905000023', '$2b$10$dDqytRPtGiLiCWVwWsvbWu1oyaQiluOkpBR1YG1VV4Y69b1chF1Ba', 'Trần Thị Mai', NULL, 'ACTIVE', FALSE),
+  ('baopg', 'baopg@educonnect.test', NULL, '$2b$10$dDqytRPtGiLiCWVwWsvbWu1oyaQiluOkpBR1YG1VV4Y69b1chF1Ba', 'Phạm Gia Bảo', NULL, 'ACTIVE', FALSE),
+  ('khanglm', NULL, NULL, '$2b$10$dDqytRPtGiLiCWVwWsvbWu1oyaQiluOkpBR1YG1VV4Y69b1chF1Ba', 'Lê Minh Khang', NULL, 'ACTIVE', FALSE),
+  ('tramlnb', 'tramlnb@educonnect.test', '0905000033', '$2b$10$dDqytRPtGiLiCWVwWsvbWu1oyaQiluOkpBR1YG1VV4Y69b1chF1Ba', 'Lê Ngọc Bảo Trâm', NULL, 'ACTIVE', TRUE),
+  ('toanpv', 'toanpv@educonnect.test', '0905000041', '$2b$10$dDqytRPtGiLiCWVwWsvbWu1oyaQiluOkpBR1YG1VV4Y69b1chF1Ba', 'Phạm Văn Toàn', '12 Lê Lợi, phường Hải Châu, TP. Đà Nẵng', 'ACTIVE', FALSE),
+  ('hanttn', 'hanttn@educonnect.test', '0905000042', '$2b$10$dDqytRPtGiLiCWVwWsvbWu1oyaQiluOkpBR1YG1VV4Y69b1chF1Ba', 'Trần Thị Ngọc Hân', '45 Hùng Vương, phường Hải Châu, TP. Đà Nẵng', 'ACTIVE', FALSE),
+  ('oanhntk', NULL, '0905000043', '$2b$10$dDqytRPtGiLiCWVwWsvbWu1oyaQiluOkpBR1YG1VV4Y69b1chF1Ba', 'Nguyễn Thị Kim Oanh', '12 Lê Lợi, phường Hải Châu, TP. Đà Nẵng', 'LOCKED', FALSE);
 
 INSERT INTO user_roles (user_id, role_id)
 SELECT u.user_id, r.role_id FROM users u JOIN roles r ON r.role_code = 'SYSTEM_ADMIN'
@@ -174,13 +174,13 @@ FROM (VALUES
 ) AS v(username, code, dob, gender)
 JOIN users u ON u.username = v.username;
 
-INSERT INTO parents (user_id, occupation, address)
-SELECT u.user_id, v.occupation, v.address
+INSERT INTO parents (user_id, occupation)
+SELECT u.user_id, v.occupation
 FROM (VALUES
-  ('toanpv', 'Kỹ sư', '12 Lê Lợi, phường Hải Châu, TP. Đà Nẵng'),
-  ('hanttn', 'Kế toán', '45 Hùng Vương, phường Hải Châu, TP. Đà Nẵng'),
-  ('oanhntk', 'Nội trợ', '12 Lê Lợi, phường Hải Châu, TP. Đà Nẵng')
-) AS v(username, occupation, address)
+  ('toanpv', 'Kỹ sư'),
+  ('hanttn', 'Kế toán'),
+  ('oanhntk', 'Nội trợ')
+) AS v(username, occupation)
 JOIN users u ON u.username = v.username;
 
 INSERT INTO student_parents (student_id, parent_id, relationship_type)

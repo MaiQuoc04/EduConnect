@@ -5,7 +5,7 @@ Code base chung của nhóm: **React (Vite)** + **Node.js/Express** + **Socket.i
 ```
 educonnect/
 ├── CLAUDE.md   hướng dẫn cho AI agent (Claude Code tự đọc file này)
-├── docs/       quy tắc nghiệp vụ đã chốt, 107 UC, phân quyền, 71 màn
+├── docs/       quy tắc nghiệp vụ đã chốt, 108 UC, phân quyền, 71 màn
 ├── database/   educonnect_schema_v0.3.sql (47 bảng, PostgreSQL) + educonnect_seed_small_v0.3.sql (dữ liệu mẫu)
 ├── server/     API Express – http://localhost:5000/api/v1
 └── client/     Web React – http://localhost:5173

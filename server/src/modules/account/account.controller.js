@@ -12,3 +12,7 @@ export async function changePassword(req, res) {
 export async function changeAvatar(req, res) {
   res.json(await accountService.changeAvatar({ userId: req.user.userId, file: req.file }));
 }
+
+export async function updateAddress(req, res) {
+  res.json(await accountService.updateAddress({ userId: req.user.userId, address: req.body?.address }));
+}

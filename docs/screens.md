@@ -36,7 +36,7 @@ Source: Report 3 section 5.1 (draft v1.3). Screen numbers here are Report 3's; t
 | 30 | Update Time Table | FE-10 | Allows School Manager to update existing timetable information. |
 | 31 | Create School Post | FE-08 | Allows School Manager to create a new school announcement or news post. |
 | 32 | Forgot Password | FE-01 | Allows User to start the password recovery process by email OTP, or to send a password reset request to System Admin / School Manager when the email cannot be used. |
-| 33 | Edit Profile | FE-01 | Allows User to update permitted personal profile information. |
+| 33 | Edit Profile | FE-01 | Allows User to update permitted personal profile information (avatar and address). |
 | 34 | Change Password | FE-01 | Allows authenticated User to change the current password. |
 | 35 | Group Feed | FE-05 | Displays posts and community content within a selected class group. |
 | 36 | Create Group Post | FE-05 | Allows an authorized User to create a new post in a class group. |
