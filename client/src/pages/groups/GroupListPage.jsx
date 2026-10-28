@@ -176,27 +176,7 @@ export default function GroupListPage() {
             </div>
           )}
 
-          {showTeacherGroup && (
-            <section className="card card-outline mc-card mc-school" aria-labelledby="school-group">
-              <header className="mc-head">
-                <span className="my-card-icon type-teacher_school" aria-hidden="true">
-                  <Icon name={GROUP_TYPE_ICONS.TEACHER_SCHOOL} />
-                </span>
-                <div className="mc-title">
-                  <div className="mc-name">
-                    <h2 id="school-group" className="title-sm">
-                      Toàn trường
-                    </h2>
-                    <span className="my-badge grey">Nội bộ giáo viên</span>
-                  </div>
-                  <p className="caption muted">Toàn bộ giáo viên và quản lý trường</p>
-                </div>
-              </header>
-              <ul className="mc-groups">
-                <GroupRow group={teacherGroup} label={teacherGroup.groupName} />
-              </ul>
-            </section>
-          )}
+          {showTeacherGroup && <SchoolGroupCard group={teacherGroup} />}
 
           {!shown.length && !showTeacherGroup && (
             <div className="card card-outline class-empty">
@@ -227,11 +207,29 @@ export default function GroupListPage() {
   );
 }
 
-// One class: its groups as rows (open, feed, chat) and the user's teams in the class.
+// Clicking the empty area of a card opens its feed; links and buttons inside keep their own target.
+function useFeedClick(feedPath) {
+  const navigate = useNavigate();
+  return (e) => {
+    if (feedPath && !e.target.closest('a, button')) navigate(feedPath);
+  };
+}
+
+// One class: the whole card opens the class feed (the general group's, the only class group with a feed); its groups
+// are rows (open, chat) and the user's teams in the class.
 function ClassGroupsCard({ cls, teacher, role, readOnly, canCreateTeam, onCreateTeam }) {
+  const general = cls.groups.find((g) => groupHasFeed(g.groupType));
+  const feedPath = general && `/groups/${general.groupId}/feed`;
+  const onClick = useFeedClick(feedPath);
+  const Head = feedPath ? Link : 'div';
+
   return (
-    <section className={`card card-outline mc-card${cls.isHomeroom ? ' is-homeroom' : ''}`} aria-labelledby={`class-${cls.classId}`}>
-      <header className="mc-head">
+    <section
+      className={`card card-outline mc-card${cls.isHomeroom ? ' is-homeroom' : ''}${feedPath ? ' is-clickable' : ''}`}
+      aria-labelledby={`class-${cls.classId}`}
+      onClick={onClick}
+    >
+      <Head {...(feedPath ? { to: feedPath, title: 'Mở bảng tin của lớp' } : {})} className="mc-head">
         <span className="mc-grade" aria-hidden="true">
           {cls.gradeLevel}
         </span>
@@ -259,7 +257,8 @@ function ClassGroupsCard({ cls, teacher, role, readOnly, canCreateTeam, onCreate
               ))}
           </p>
         </div>
-      </header>
+        {feedPath && <FeedHint />}
+      </Head>
 
       <ul className="mc-groups" aria-label={`Nhóm của lớp ${cls.className}`}>
         {cls.groups.map((g) => (
@@ -291,7 +290,45 @@ function ClassGroupsCard({ cls, teacher, role, readOnly, canCreateTeam, onCreate
   );
 }
 
-// One group inside a card: the name opens the group; the icons jump to its feed and chat.
+function FeedHint() {
+  return (
+    <span className="mc-feed-hint caption">
+      <Icon name="dynamic_feed" size="sm" />
+      Bảng tin
+      <Icon name="chevron_right" size="sm" />
+    </span>
+  );
+}
+
+// The school-wide teacher group: like a class card, clicking it opens its feed.
+function SchoolGroupCard({ group }) {
+  const feedPath = `/groups/${group.groupId}/feed`;
+  const onClick = useFeedClick(feedPath);
+  return (
+    <section className="card card-outline mc-card mc-school is-clickable" aria-labelledby="school-group" onClick={onClick}>
+      <Link to={feedPath} title="Mở bảng tin toàn trường" className="mc-head">
+        <span className="my-card-icon type-teacher_school" aria-hidden="true">
+          <Icon name={GROUP_TYPE_ICONS.TEACHER_SCHOOL} />
+        </span>
+        <div className="mc-title">
+          <div className="mc-name">
+            <h2 id="school-group" className="title-sm">
+              Toàn trường
+            </h2>
+            <span className="my-badge grey">Nội bộ giáo viên</span>
+          </div>
+          <p className="caption muted">Toàn bộ giáo viên và quản lý trường</p>
+        </div>
+        <FeedHint />
+      </Link>
+      <ul className="mc-groups">
+        <GroupRow group={group} label={group.groupName} />
+      </ul>
+    </section>
+  );
+}
+
+// One group inside a card: the name opens the group; the icon jumps to its chat.
 function GroupRow({ group, label }) {
   const type = group.groupType;
   return (
@@ -308,11 +345,6 @@ function GroupRow({ group, label }) {
         </span>
       </Link>
       <span className="mc-row-actions">
-        {groupHasFeed(type) && (
-          <Link to={`/groups/${group.groupId}/feed`} className="btn-icon mc-icon-btn" title="Bảng tin" aria-label={`Bảng tin ${label}`}>
-            <Icon name="dynamic_feed" size="sm" />
-          </Link>
-        )}
         <Link to={`/chat/${group.groupId}`} className="btn-icon mc-icon-btn" title="Trò chuyện" aria-label={`Trò chuyện ${label}`}>
           <Icon name="forum" size="sm" />
         </Link>
