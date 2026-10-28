@@ -7,7 +7,7 @@ Source: Report 3 section 4.4 (draft v1.3). Full = all records; Restricted (n) = 
 | User account | Create / import / export | Full | No | No | No | No | No |
 | User account | Change login identifiers | Full | No | No | No | No | No |
 | User account | Reset password, lock / unlock | Full | Restricted (1) | No | No | No | No |
-| Own account | Sign in, change password, change avatar | Full | Full | Full | Full | Full | Full |
+| Own account | Sign in, change password, change avatar, update address | Full | Full | Full | Full | Full | Full |
 | System settings, maintenance banner, activity log | View / change | Full | No | No | No | No | No |
 | Student / Parent / Teacher profile | View / update | No | Full | Restricted (2) | Restricted (2) | No | No |
 | Parent–student link | Link / unlink / import | No | Full | No | No | No | No |

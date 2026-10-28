@@ -9,7 +9,7 @@ export function errorHandler(err, _req, res, _next) {
   if (err instanceof AppError) {
     return res.status(err.status).json({ code: err.code, message: err.message, details: err.details });
   }
-  if (err.code === 'ER_DUP_ENTRY') {
+  if (err.code === '23505') { // PostgreSQL unique_violation
     return res.status(409).json({ code: 'DUPLICATE', message: 'This value already exists.' });
   }
   console.error(err);

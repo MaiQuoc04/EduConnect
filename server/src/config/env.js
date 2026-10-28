@@ -17,7 +17,7 @@ export const env = {
     password: process.env.DB_PASSWORD || '',
     database: process.env.DB_NAME || 'postgres',
     ssl: process.env.DB_SSL === 'true',
-    sslCa: process.env.DB_SSL_CA || '',
+    sslCa: process.env.DB_SSL_CA || '', // empty: SSL without verifying the server certificate
     poolMax: Number(process.env.DB_POOL_MAX || 3),
   },
   jwt: {

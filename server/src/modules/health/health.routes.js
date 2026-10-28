@@ -5,7 +5,7 @@ const router = Router();
 
 // GET /api/v1/health – checks that the API runs and the database answers.
 router.get('/', async (_req, res) => {
-  const [rows] = await pool.query('SELECT VERSION() AS version, current_database() AS db');
+  const { rows } = await pool.query(`SELECT current_setting('server_version') AS version, current_database() AS db`);
   res.json({ status: 'ok', postgres: rows[0].version, database: rows[0].db });
 });
 

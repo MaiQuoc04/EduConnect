@@ -25,7 +25,7 @@ FE-10 is split: timetable in It2, class calendar in It3.
 
 ## Iteration 1 (19/10 – 30/10/2026)
 
-### Quoc: FE-01 Personal Account (6 UC)
+### Quoc: FE-01 Personal Account (7 UC)
 
 Also: seed data for the shared DB (school year, semesters, subjects, classes, sample accounts).
 
@@ -37,6 +37,7 @@ Also: seed data for the shared DB (school year, semesters, subjects, classes, sa
 | UC-04 | View Profile | User |
 | UC-05 | Change Password | User |
 | UC-06 | Change Avatar | User |
+| UC-108 | Update Address | User |
 
 ### Anh: FE-02 Student Management (8 UC)
 
@@ -225,4 +226,4 @@ Class calendar (UC-76..80) + job: class event reminder 1 day before. Moved from 
 | UC-88 | View Grades | Teacher, Student, Parent, School Manager |
 | UC-89 | View Class Ranking | Teacher, Student, Parent, School Manager |
 
-Total: 107 use cases.
+Total: 108 use cases.
