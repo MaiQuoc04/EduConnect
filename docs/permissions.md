@@ -9,7 +9,7 @@ Source: Report 3 section 4.4 (draft v1.3). Full = all records; Restricted (n) = 
 | User account | Reset password, lock / unlock | Full | Restricted (1) | No | No | No | No |
 | Password reset request | Send (Forgot Password screen, not signed in) | Full | Full | Full | Full | Full | Full |
 | Password reset request | View / handle (reset with UC-100 or reject) | Full | Restricted (1) | No | No | No | No |
-| Own account | Sign in, change password, change avatar | Full | Full | Full | Full | Full | Full |
+| Own account | Sign in, change password, change avatar, update address | Full | Full | Full | Full | Full | Full |
 | System settings, maintenance banner, activity log | View / change | Full | No | No | No | No | No |
 | Student / Parent / Teacher profile | View / update | No | Full | Restricted (2) | Restricted (2) | No | No |
 | Parent–student link | Link / unlink / import | No | Full | No | No | No | No |
