@@ -4,6 +4,7 @@ import { api } from '../../api/client.js';
 import Icon from '../../components/Icon.jsx';
 import { errorText } from '../../messages.js';
 import { yearLabel } from '../school-years/schoolYearLabels.js';
+import ClassAddStudentsPanel from './ClassAddStudentsPanel.jsx';
 import ClassCard from './ClassCard.jsx';
 import ClassCreateForm from './ClassCreateForm.jsx';
 import ClassImportPanel from './ClassImportPanel.jsx';
@@ -25,7 +26,8 @@ export default function ClassListPage() {
   const [years, setYears] = useState([]);
   const [state, setState] = useState({ loading: true, data: null, error: '' });
   const [version, setVersion] = useState(0);
-  const [mode, setMode] = useState(null); // null | 'import' | 'create'
+  const [mode, setMode] = useState(null); // null | 'import' | 'create' | 'add'
+  const [adding, setAdding] = useState(null); // the class getting students while mode is 'add'
   const [grade, setGrade] = useState(''); // '' = every grade
   const [query, setQuery] = useState('');
   const [onlyMissing, setOnlyMissing] = useState(false); // classes without a homeroom teacher
@@ -97,8 +99,15 @@ export default function ClassListPage() {
     setQuery('');
   }
 
+  function openAdd(cls) {
+    setAdding(cls);
+    setMode('add');
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  }
+
   function handleDone() {
     setMode(null);
+    setAdding(null);
     setVersion((v) => v + 1);
   }
 
@@ -148,7 +157,24 @@ export default function ClassListPage() {
         <ClassImportPanel schoolYear={schoolYear} onCancel={() => setMode(null)} onDone={handleDone} />
       )}
       {mode === 'create' && schoolYear && (
-        <ClassCreateForm schoolYear={schoolYear} onCancel={() => setMode(null)} onDone={handleDone} />
+        <ClassCreateForm
+          schoolYear={schoolYear}
+          takenNames={classes.map((c) => c.className)}
+          onCancel={() => setMode(null)}
+          onDone={handleDone}
+        />
+      )}
+      {mode === 'add' && schoolYear && adding && (
+        <ClassAddStudentsPanel
+          key={adding.classId}
+          schoolYear={schoolYear}
+          cls={adding}
+          onCancel={() => {
+            setMode(null);
+            setAdding(null);
+          }}
+          onDone={handleDone}
+        />
       )}
 
       <div className="card card-outline class-toolbar">
@@ -257,7 +283,7 @@ export default function ClassListPage() {
                   </header>
                   <div className="class-grid">
                     {s.items.map((c) => (
-                      <ClassCard key={c.classId} cls={c} />
+                      <ClassCard key={c.classId} cls={c} onAddStudents={canChange && !mode ? openAdd : undefined} />
                     ))}
                   </div>
                 </section>

@@ -7,6 +7,7 @@ import {
   conflict,
   enrollAndSyncGroups,
   lockOpenYear,
+  MAX_CLASS_SIZE,
   normalizeClassName,
   resolveYear,
 } from './classes.service.js';
@@ -48,7 +49,9 @@ async function analyze(db, year, rows) {
   const [{ rows: existing }, { rows: students }] = await Promise.all([
     db.query(
       `SELECT c.class_id AS "classId", c.class_name AS "className", c.grade_level_id AS "gradeLevelId",
-              c.track_id AS "trackId", c.homeroom_teacher_id IS NOT NULL AS "hasHomeroom"
+              c.track_id AS "trackId", c.homeroom_teacher_id IS NOT NULL AS "hasHomeroom",
+              (SELECT COUNT(*) FROM class_enrollments e
+               WHERE e.class_id = c.class_id AND e.status = 'STUDYING') AS "studentCount"
        FROM classes c
        WHERE c.school_year_id = $1 AND c.class_name = ANY($2::text[]) AND c.deleted_at IS NULL`,
       [year.schoolYearId, names],
@@ -118,6 +121,7 @@ async function analyze(db, year, rows) {
           classId: old?.classId ?? null,
           exists: Boolean(old),
           hasHomeroom: Boolean(old?.hasHomeroom),
+          current: old?.studentCount ?? 0,
           studentIds: [],
           skipped: 0,
           parentIds: new Set(),
@@ -156,6 +160,11 @@ async function analyze(db, year, rows) {
     if (here) {
       add(warnings, row, 'WARN_ALREADY_IN_CLASS', item.studentCode);
       target.skipped += 1;
+      continue;
+    }
+    // At most MAX_CLASS_SIZE studying students per class (agreed 29/10): the rows past the limit are errors.
+    if (target.current + target.studentIds.length >= MAX_CLASS_SIZE) {
+      add(errors, row, 'ROW_CLASS_FULL', item.className);
       continue;
     }
     // ASSUMPTION (agreed 27/10): a locked account is still imported, with a warning (business-rules §3).

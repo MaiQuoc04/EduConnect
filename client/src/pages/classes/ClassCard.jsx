@@ -1,12 +1,15 @@
 import { Link } from 'react-router-dom';
 import Icon from '../../components/Icon.jsx';
+import { MAX_CLASS_SIZE } from './studentPick.js';
 import { GROUP_TYPE_ICONS, GROUP_TYPE_LABELS } from '../groups/groupLabels.js';
 
 const GROUP_ORDER = ['GENERAL', 'STUDENT', 'PARENT'];
 
 // One class on SCR-22 (UC-29): homeroom teacher, head count and its three groups. Each group row opens the group's
-// members – the School Manager never opens a class feed or chat from here.
-export default function ClassCard({ cls }) {
+// members – the School Manager never opens a class feed or chat from here. `onAddStudents` (UC-28) is set while the
+// school year is open.
+export default function ClassCard({ cls, onAddStudents }) {
+  const full = cls.studentCount >= MAX_CLASS_SIZE;
   const groups = [...cls.groups].sort((a, b) => GROUP_ORDER.indexOf(a.groupType) - GROUP_ORDER.indexOf(b.groupType));
   return (
     <article className="card card-outline class-card">
@@ -42,7 +45,20 @@ export default function ClassCard({ cls }) {
             <Icon name="badge" size="sm" />
             Sĩ số
           </dt>
-          <dd className="mono">{cls.studentCount} học sinh</dd>
+          <dd>
+            <span className="mono">
+              {cls.studentCount}/{MAX_CLASS_SIZE} học sinh
+            </span>
+            {onAddStudents &&
+              (full ? (
+                <span className="pill">Đủ sĩ số</span>
+              ) : (
+                <button type="button" className="link-button class-card-add" onClick={() => onAddStudents(cls)}>
+                  <Icon name="person_add" size="sm" />
+                  Thêm
+                </button>
+              ))}
+          </dd>
         </div>
       </dl>
 

@@ -88,6 +88,8 @@ Boundaries that are easy to get wrong:
   `track_subjects` holds, per school year, each subject's **weight** and **periods per week** for that type; copied
   from the previous year by default; editable, but weights **lock once the year has grades**.
 - Homeroom teacher may be empty → show a warning so SM assigns one.
+- A class has at most **45 studying students** (agreed 29/10, FE-04): checked when creating a class, adding
+  students to it and importing a class list.
 - `teacher_subjects`: which subjects a teacher can teach (one teacher may teach several). Teaching assignments only
   for subjects the teacher can teach.
 - Importing a class creates 3 groups automatically: **GENERAL** (feed + chat), **STUDENT** (chat), **PARENT** (chat).
