@@ -1,3 +1,5 @@
+import { DEPARTMENT_REASON_TEXT, NAME_REASON_TEXT } from './utils/teacherValidation.js';
+
 // Vietnamese UI text for API error codes. The server keeps its messages in English; the client shows these.
 // Add a line here whenever a module introduces a new error code.
 const ERROR_MESSAGES = {
@@ -28,7 +30,54 @@ const ERROR_MESSAGES = {
   MSG_FILE_TOO_LARGE: ({ maxMb } = {}) => `Tệp vượt quá dung lượng cho phép (tối đa ${maxMb} MB).`,
   MSG_UPLOAD_FAILED: 'Không tải được tệp lên. Vui lòng thử lại.',
   MSG_INVALID_IMAGE: 'Chỉ chấp nhận ảnh JPG, PNG hoặc WebP.',
+  // FE-03 Teacher Management
+  TEACHER_NOT_FOUND: 'Không tìm thấy giáo viên này.',
+  INVALID_DATE: 'Ngày không hợp lệ.',
+  MSG_FIELD_TOO_LONG: ({ field, max } = {}) =>
+    `${{ fullName: 'Họ và tên', department: 'Tên tổ', search: 'Từ khoá tìm kiếm', subject: 'Tên môn' }[field] ?? 'Nội dung'} quá dài (tối đa ${max ?? ''} ký tự).`,
+  MSG_SUBJECT_INVALID: 'Có môn học không còn tồn tại. Vui lòng tải lại trang.',
+  MSG_SUBJECT_IN_USE: ({ subjects = [] } = {}) =>
+    `Không thể bỏ ${subjects.map((s) => `môn ${s.name} (đang dạy ${s.classes.join(', ')})`).join('; ')}. ` +
+    'Hãy phân công lại giảng dạy trước.',
+  MSG_INVALID_INPUT: 'Dữ liệu gửi lên không hợp lệ. Vui lòng tải lại trang.',
+  MSG_TOO_MANY: ({ field, max } = {}) =>
+    field === 'subjectIds' ? `Chỉ chọn tối đa ${max} môn.` : 'Quá nhiều thay đổi trong một lần lưu.',
+  MSG_INVALID_NAME: ({ reason } = {}) => NAME_REASON_TEXT[reason] ?? 'Họ và tên không hợp lệ.',
+  MSG_INVALID_DEPARTMENT: ({ reason } = {}) => DEPARTMENT_REASON_TEXT[reason] ?? 'Tên tổ chuyên môn không hợp lệ.',
+  MSG_LOGIN_IDENTIFIER_READONLY: 'Chỉ Quản trị hệ thống mới được đổi tên đăng nhập, email và số điện thoại.',
+  MSG_UNKNOWN_FIELD: 'Dữ liệu gửi lên có trường không được phép. Vui lòng tải lại trang.',
+  SCHOOL_YEAR_NOT_FOUND: 'Không tìm thấy năm học.',
+  MSG_HOMEROOM_STALE: ({ classes = [] } = {}) =>
+    `Lớp ${classes.join(', ')} vừa được người khác thay đổi. Hãy tải lại dữ liệu rồi phân công lại.`,
+  MSG_TEACHER_LOCKED: ({ teachers = [] } = {}) =>
+    `Không thể phân công ${teachers.join(', ')} làm chủ nhiệm vì tài khoản đã bị khoá.`,
+  MSG_HOMEROOM_LIMIT: ({ max = 1, conflicts = [] } = {}) =>
+    `Mỗi giáo viên chủ nhiệm tối đa ${max} lớp: ` +
+    conflicts.map((c) => `${c.teacher} (${c.classes.join(', ')})`).join('; ') + '.',
+  MSG_EFFECTIVE_DATE: ({ min, max } = {}) =>
+    `Ngày áp dụng phải từ ${formatVnDate(min)} đến ${formatVnDate(max)} (không sửa phân công trong quá khứ).`,
+  MSG_SUBJECT_NOT_IN_CLASS: 'Lớp này không học môn đã chọn trong năm học.',
+  MSG_ASSIGNMENT_STALE: ({ cells = [] } = {}) =>
+    `Ô ${cells.join(', ')} vừa được người khác thay đổi. Hãy tải lại dữ liệu rồi phân công lại.`,
+  MSG_TEACHER_NOT_QUALIFIED: ({ items = [] } = {}) =>
+    `Giáo viên chưa đăng ký dạy môn: ${items.map((i) => `${i.teacher} (${i.cell})`).join('; ')}.`,
+  MSG_ASSIGNMENT_IN_TIMETABLE: ({ items = [] } = {}) =>
+    `Không thể bỏ trống ${items.map((i) => `${i.cell} (còn ${i.periods} tiết trên thời khoá biểu)`).join('; ')}. ` +
+    'Hãy chọn giáo viên khác hoặc sửa thời khoá biểu trước.',
+  MSG_TIMETABLE_CLASH: ({ items = [] } = {}) =>
+    'Trùng lịch dạy: ' +
+    items
+      .map((i) => `${i.cell} – giáo viên mới đã dạy ${i.items.map((x) => `${x.otherClass} tiết ${x.period} ngày ${formatVnDate(x.date)}`).join(', ')}`)
+      .join('; ') +
+    '.',
 };
+
+// 'YYYY-MM-DD' -> 'DD/MM/YYYY' (kept local so messages.js has no imports)
+function formatVnDate(v) {
+  if (!v) return '';
+  const [y, m, d] = String(v).slice(0, 10).split('-');
+  return d ? `${d}/${m}/${y}` : String(v);
+}
 
 export function errorText({ code, message, details } = {}) {
   const entry = ERROR_MESSAGES[code];

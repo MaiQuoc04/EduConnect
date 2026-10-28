@@ -2,11 +2,15 @@ import { Router } from 'express';
 import healthRoutes from './modules/health/health.routes.js';
 import accountRoutes from './modules/account/account.routes.js';
 import authRoutes from './modules/auth/auth.routes.js';
+// FE-03 uses the layered structure: routes/ → validators/ → controllers/ → services/ → repositories/ (+ models/, constants/)
+import homeroomRoutes from './routes/homeroom.routes.js';
+import teacherRoutes from './routes/teacher.routes.js';
+import teachingRoutes from './routes/teachingAssignment.routes.js';
 
 // Each feature gets its own folder in src/modules and is mounted here, e.g.
 //   FE-01 account   -> /auth, /account (Quoc)
 //   FE-02 students  -> /students      (Anh)
-//   FE-03 teachers  -> /teachers      (Dung)
+//   FE-03 teachers  -> /teachers, /homeroom-assignments, /teaching-assignments (Dung)
 //   FE-04 classes   -> /classes, /groups, /subjects (Khanh)
 //   FE-05 feed      -> /posts         (Anh)
 //   FE-06 chat      -> /conversations (Anh, + src/sockets)
@@ -23,5 +27,8 @@ const router = Router();
 router.use('/health', healthRoutes);
 router.use('/auth', authRoutes);
 router.use('/account', accountRoutes);
+router.use('/teachers', teacherRoutes);
+router.use('/homeroom-assignments', homeroomRoutes);
+router.use('/teaching-assignments', teachingRoutes);
 
 export default router;
