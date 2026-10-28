@@ -3,6 +3,7 @@ import { Link, NavLink, Outlet, useLocation, useNavigate } from 'react-router-do
 import { useAuth } from '../context/AuthContext.jsx';
 import { ROLE_LABELS } from '../messages.js';
 import { navFor } from '../navigation.js';
+import MaintenanceBanner from '../pages/admin/MaintenanceBanner.jsx'; // FE-13 UC-100
 import Avatar from './Avatar.jsx';
 import Icon from './Icon.jsx';
 
@@ -97,6 +98,7 @@ export default function AppLayout() {
             <Avatar src={user.avatarUrl} name={user.fullName} size={36} />
           </Link>
         </header>
+        <MaintenanceBanner />
         <main className="content">
           <Outlet />
         </main>
