@@ -138,6 +138,7 @@ img { display: block; }
 .input:focus { outline: none; border-color: var(--ink-600); box-shadow: 0 0 0 0.5px var(--ink-600); }
 .input:disabled { background: var(--graphite-50); color: var(--graphite-600); }
 .input.has-action { padding-right: 44px; }
+textarea.input { height: auto; min-height: 88px; padding: 10px 14px; resize: vertical; }
 .input-action {
   position: absolute;
   top: 0;

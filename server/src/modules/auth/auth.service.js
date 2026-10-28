@@ -231,6 +231,70 @@ export async function resetPassword({ resetToken, newPassword, ip }) {
   return { ok: true };
 }
 
+// ---------- UC-02 alternative flow: no usable email → ask SA / SM to reset (they then use UC-100) ----------
+
+const REQUEST_REASON_MAX = 500;
+
+// Always answers the same way, so nobody can find out which sign-in names exist. One PENDING request per account;
+// a second one is ignored. Not logged: PASSWORD_RESET is logged when SA / SM actually resets (UC-100).
+export async function requestAdminPasswordReset({ identifier, reason }) {
+  identifier = typeof identifier === 'string' ? identifier.trim() : '';
+  if (!identifier) throw badRequest('MSG_REQUIRED', 'Please enter your sign-in name.');
+  reason = typeof reason === 'string' ? reason.trim() : '';
+  if (reason.length > REQUEST_REASON_MAX) {
+    throw badRequest('MSG_REASON_TOO_LONG', `The reason must not exceed ${REQUEST_REASON_MAX} characters.`, {
+      max: REQUEST_REASON_MAX,
+    });
+  }
+
+  const { rows: users } = await pool.query(
+    `SELECT user_id, full_name, username FROM users
+     WHERE (username = $1 OR email = $1 OR phone = $1) AND status = 'ACTIVE' LIMIT 1`,
+    [identifier],
+  );
+  const user = users[0];
+  if (!user) return { ok: true };
+
+  await withTransaction(async (client) => {
+    const { rows: inserted } = await client.query(
+      `INSERT INTO password_reset_requests (user_id, reason) VALUES ($1, $2)
+       ON CONFLICT (user_id) WHERE status = 'PENDING' DO NOTHING
+       RETURNING request_id`,
+      [user.user_id, reason || null],
+    );
+    if (!inserted.length) return;
+
+    // Who can handle it (same scope as UC-100): every active SA; SMs too unless the account is an SA or SM.
+    const roles = await getRoles(user.user_id);
+    const smCanHandle = !roles.includes('SYSTEM_ADMIN') && !roles.includes('SCHOOL_MANAGER');
+    const { rows: handlers } = await client.query(
+      `SELECT DISTINCT u.user_id FROM users u
+       JOIN user_roles ur ON ur.user_id = u.user_id JOIN roles r ON r.role_id = ur.role_id
+       WHERE u.status = 'ACTIVE' AND u.user_id <> $1
+         AND (r.role_code = 'SYSTEM_ADMIN' OR (r.role_code = 'SCHOOL_MANAGER' AND $2::boolean))`,
+      [user.user_id, smCanHandle],
+    );
+    if (!handlers.length) return;
+
+    // ASSUMPTION: stored as a SYSTEM notification now; the bell / real-time push comes with FE-09 (It3).
+    const { rows: [notification] } = await client.query(
+      `INSERT INTO notifications (type, title, detail, is_personal, target_type, target_id)
+       VALUES ('SYSTEM', $1, $2, TRUE, 'PASSWORD_RESET_REQUEST', $3)
+       RETURNING notification_id`,
+      [
+        `Yêu cầu cấp lại mật khẩu: ${user.full_name}`,
+        `Tài khoản ${user.username} yêu cầu cấp lại mật khẩu.${reason ? ` Lý do: ${reason}` : ''}`,
+        inserted[0].request_id,
+      ],
+    );
+    await client.query(
+      `INSERT INTO notification_recipients (notification_id, user_id) SELECT $1, UNNEST($2::bigint[])`,
+      [notification.notification_id, handlers.map((h) => h.user_id)],
+    );
+  });
+  return { ok: true };
+}
+
 function escapeHtml(s) {
   return String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
 }

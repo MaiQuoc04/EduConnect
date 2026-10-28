@@ -6,7 +6,7 @@ Code base chung của nhóm: **React (Vite)** + **Node.js/Express** + **Socket.i
 educonnect/
 ├── CLAUDE.md   hướng dẫn cho AI agent (Claude Code tự đọc file này)
 ├── docs/       quy tắc nghiệp vụ đã chốt, 107 UC, phân quyền, 71 màn
-├── database/   educonnect_schema_v0.3.sql (46 bảng, PostgreSQL) + educonnect_seed_small_v0.3.sql (dữ liệu mẫu)
+├── database/   educonnect_schema_v0.3.sql (47 bảng, PostgreSQL) + educonnect_seed_small_v0.3.sql (dữ liệu mẫu)
 ├── server/     API Express – http://localhost:5000/api/v1
 └── client/     Web React – http://localhost:5173
 ```
@@ -24,7 +24,7 @@ copy .env.example .env      # macOS/Linux: cp .env.example .env
 ```
 - Cách nhanh nhất: xin nhóm trưởng file `.env` (gửi riêng, không gửi vào nhóm chat) rồi đặt vào `server/.env`.
 - Hoặc tự điền: `DB_PASSWORD` (mật khẩu database Supabase – nhóm trưởng gửi riêng) và `JWT_SECRET` (chuỗi ngẫu nhiên ≥ 32 ký tự, cả nhóm dùng **giống nhau**). Các giá trị `DB_HOST`, `DB_USER`… đã có sẵn trong `.env.example`.
-- Kiểm tra kết nối: `npm run db:check` → phải báo `PostgreSQL 17…, 46 tables` và `time zone Asia/Ho_Chi_Minh`.
+- Kiểm tra kết nối: `npm run db:check` → phải báo `PostgreSQL 17…, 47 tables` và `time zone Asia/Ho_Chi_Minh`.
 
 ```bash
 cd ../client

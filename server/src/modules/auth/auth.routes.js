@@ -14,5 +14,6 @@ router.get('/me', requireAuthAllowingPasswordChange, ctrl.me);
 router.post('/forgot-password', ctrl.forgotPassword);
 router.post('/forgot-password/verify', ctrl.verifyOtp);
 router.post('/forgot-password/reset', ctrl.resetPassword);
+router.post('/password-reset-requests', ctrl.requestAdminReset); // no usable email: ask SA / SM (then UC-100)
 
 export default router;

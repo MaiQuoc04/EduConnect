@@ -24,6 +24,11 @@ export async function verifyOtp(req, res) {
   res.json(await authService.verifyPasswordOtp({ email, otp }));
 }
 
+export async function requestAdminReset(req, res) {
+  const { identifier, reason } = req.body ?? {};
+  res.status(202).json(await authService.requestAdminPasswordReset({ identifier, reason }));
+}
+
 export async function resetPassword(req, res) {
   const { resetToken, newPassword } = req.body ?? {};
   res.json(await authService.resetPassword({ resetToken, newPassword, ip: req.ip }));

@@ -7,7 +7,7 @@ Source: Report 3 section 4.2 (draft v1.3). Actor "User" = any signed-in account.
 | ID | Use case | Actor | Sub-feature | Description |
 |---|---|---|---|---|
 | UC-01 | Sign In | User | Authentication | Sign in with email, phone number or username and a password; temporary sign-in lock after 5 failed attempts; forced password change at first sign-in. |
-| UC-02 | Reset Forgotten Password | User, Email Service | Password Management | Receive an OTP by email, verify it and set a new password. |
+| UC-02 | Reset Forgotten Password | User, Email Service | Password Management | Receive an OTP by email, verify it and set a new password. Without a usable email: send a reset request to System Admin / School Manager. |
 | UC-03 | Sign Out | User | Authentication | End the current session. |
 | UC-04 | View Profile | User | Personal Profile | View personal, school, class and role information. |
 | UC-05 | Change Password | User | Password Management | Change the current password following the password rules. |
@@ -165,7 +165,7 @@ Source: Report 3 section 4.2 (draft v1.3). Actor "User" = any signed-in account.
 | UC-97 | View Account List | System Admin | Account Provisioning | List all accounts, filtered by role and status. |
 | UC-98 | Export Account List | System Admin | Account Provisioning | Export accounts with usernames and initial passwords for handover outside the system. |
 | UC-99 | Update Login Identifiers | System Admin | Account Control | Change an account's email, phone number or username. |
-| UC-100 | Reset Password | System Admin, School Manager | Account Control | Reset a password to a random temporary one (School Manager: student, parent and teacher accounts only). |
+| UC-100 | Reset Password | System Admin, School Manager | Account Control | Reset a password to a random temporary one (School Manager: student, parent and teacher accounts only). Can be started from a password reset request (then marks it done) or reject the request. |
 | UC-101 | Lock / Unlock Account | System Admin, School Manager | Account Control | Lock or unlock an account, or clear a temporary sign-in lock (same scope as UC-100). |
 | UC-102 | Configure System Settings | System Admin | System Configuration & Maintenance | Change system settings. |
 | UC-103 | Post Maintenance Announcement | System Admin | System Configuration & Maintenance | Schedule maintenance: notify all accounts and show a banner beforehand; during maintenance users cannot sign in and see a maintenance message. |
