@@ -211,13 +211,15 @@ export async function listStudents({ q, classId, schoolYearId, status, accountSt
 // FE-13 (business-rules §2) – this only returns the account state the screen needs to show those buttons.
 // Queries run one after the other (DB_POOL_MAX=3, README §6). Viewing is not logged (business-rules §13).
 // The "student" object of UC-08, also returned by UC-09 so the client uses one shape. Throws 404 when missing.
+// address lives on users (moved from parents by the team lead). Shown read only: UC-09 does not edit it yet – who
+// updates a student's address (SM in UC-09 or SA) is not decided.
 async function findStudent(studentId, db = pool) {
   // lockedUntil is the automatic temporary sign-in lock (business-rules §3), not the manual LOCKED status.
   // ASSUMPTION: a lock that has already expired is returned as null, so the UI never shows a past lock.
   const { rows: studentRows } = await db.query(
     `SELECT s.student_id AS "studentId", u.user_id AS "userId", s.student_code AS "studentCode",
             u.full_name AS "fullName", u.username AS "username", u.avatar_url AS "avatarUrl", s.dob, s.gender,
-            u.email, u.phone, u.status AS "accountStatus", u.must_change_password AS "mustChangePassword",
+            u.email, u.phone, u.address, u.status AS "accountStatus", u.must_change_password AS "mustChangePassword",
             CASE WHEN u.locked_until > NOW() THEN u.locked_until END AS "lockedUntil", u.created_at AS "createdAt"
      FROM students s
      JOIN users u ON u.user_id = s.user_id
