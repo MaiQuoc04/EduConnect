@@ -59,6 +59,7 @@ const LIST_SQL = `
          COALESCE(ARRAY(SELECT r.role_code FROM user_roles ur JOIN roles r ON r.role_id = ur.role_id
                         WHERE ur.user_id = u.user_id ORDER BY r.role_id), '{}') AS roles,
          COALESCE(s.student_code, t.teacher_code) AS code,
+         u.address, s.dob, s.gender, t.department, p.occupation,
          (SELECT string_agg(DISTINCT c.class_name, ', ' ORDER BY c.class_name)
           FROM classes c
           WHERE c.deleted_at IS NULL AND c.school_year_id = ${CURRENT_YEAR_SQL}
@@ -126,7 +127,11 @@ const ROLE_TEXT = {
   PARENT: 'Phụ huynh',
 };
 
-// UC-95 Export Account List: every matching account (not only one page). No passwords – they are only hashes.
+const GENDER_TEXT = { MALE: 'Nam', FEMALE: 'Nữ', OTHER: 'Khác' };
+const dmy = (value) => (value ? String(value).slice(0, 10).split('-').reverse().join('/') : '');
+
+// UC-95 Export Account List: every matching account (not only one page) with all its profile fields, in the same
+// words as the UC-93 templates. No passwords – they are only hashes.
 export async function exportAccounts(query) {
   const rows = await queryAccounts(readFilters(query), EXPORT_LIMIT, 0);
   const wb = new ExcelJS.Workbook();
@@ -138,8 +143,13 @@ export async function exportAccounts(query) {
     { header: 'Vai trò', key: 'roles', width: 26 },
     { header: 'Mã HS/GV', key: 'code', width: 14 },
     { header: 'Lớp', key: 'classNames', width: 14 },
+    { header: 'Ngày sinh', key: 'dob', width: 12 },
+    { header: 'Giới tính', key: 'gender', width: 10 },
+    { header: 'Tổ chuyên môn', key: 'department', width: 20 },
+    { header: 'Nghề nghiệp', key: 'occupation', width: 20 },
     { header: 'Email', key: 'email', width: 30 },
     { header: 'Số điện thoại', key: 'phone', width: 16, style: { numFmt: '@' } },
+    { header: 'Địa chỉ', key: 'address', width: 40 },
     { header: 'Trạng thái', key: 'status', width: 14 },
     { header: 'Phải đổi mật khẩu', key: 'mustChange', width: 18 },
     { header: 'Ngày tạo', key: 'createdAt', width: 12 },
@@ -154,11 +164,16 @@ export async function exportAccounts(query) {
       roles: r.roles.map((c) => ROLE_TEXT[c] ?? c).join(', '),
       code: r.code ?? '',
       classNames: r.classNames ?? '',
+      dob: dmy(r.dob),
+      gender: GENDER_TEXT[r.gender] ?? '',
+      department: r.department ?? '',
+      occupation: r.occupation ?? '',
       email: r.email ?? '',
       phone: r.phone ?? '',
+      address: r.address ?? '',
       status: r.status === 'ACTIVE' ? 'Hoạt động' : 'Đã khoá',
       mustChange: r.mustChangePassword ? 'Có' : 'Không',
-      createdAt: String(r.createdAt).slice(0, 10).split('-').reverse().join('/'),
+      createdAt: dmy(r.createdAt),
     }),
   );
   const date = new Date().toLocaleDateString('sv-SE', { timeZone: 'Asia/Ho_Chi_Minh' }).replaceAll('-', '');
