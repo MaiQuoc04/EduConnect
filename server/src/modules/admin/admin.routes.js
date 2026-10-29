@@ -35,6 +35,5 @@ router.post('/maintenance', ...systemAdmin, ctrl.createMaintenance); // UC-100
 router.put('/maintenance/:id', ...systemAdmin, ctrl.updateMaintenance); // UC-100 3a
 router.post('/maintenance/:id/end', ...systemAdmin, ctrl.endMaintenance); // UC-100 3b
 router.post('/maintenance/:id/cancel', ...systemAdmin, ctrl.cancelMaintenance); // UC-100 3c
-router.get('/activity-logs', ...systemAdmin, ctrl.listActivityLogs); // UC-101 ?action&user&from&to&page
 
 export default router;

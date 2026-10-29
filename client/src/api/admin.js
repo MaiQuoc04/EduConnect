@@ -137,11 +137,6 @@ export async function currentMaintenance() {
   return data.maintenance;
 }
 
-export async function listActivityLogs(params) {
-  const { data } = await api.get('/admin/activity-logs', { params });
-  return data;
-}
-
 // ---------------------------------------------------------------- password reset requests (FE-01 sends, FE-13 handles)
 export async function listResetRequests(params) {
   const { data } = await api.get('/admin/password-reset-requests', { params });

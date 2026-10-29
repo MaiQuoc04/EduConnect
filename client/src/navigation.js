@@ -11,7 +11,6 @@ export const NAV_SECTIONS = [
       { to: '/admin/password-reset-requests', label: 'Yêu cầu cấp lại mật khẩu', icon: 'key', roles: ['SYSTEM_ADMIN', 'SCHOOL_MANAGER'] }, // UC-97 via FE-01 requests
       { to: '/admin/settings', label: 'Cài đặt hệ thống', icon: 'settings', roles: ['SYSTEM_ADMIN'] }, // UC-99
       { to: '/admin/maintenance', label: 'Bảo trì hệ thống', icon: 'engineering', roles: ['SYSTEM_ADMIN'] }, // UC-100
-      { to: '/admin/activity-logs', label: 'Nhật ký hoạt động', icon: 'history', roles: ['SYSTEM_ADMIN'] }, // UC-101
     ],
   },
   {

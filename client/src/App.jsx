@@ -11,7 +11,6 @@ import CreateAccountPage from './pages/admin/CreateAccountPage.jsx';
 import ImportAccountsPage from './pages/admin/ImportAccountsPage.jsx';
 import AccountDetailPage from './pages/admin/AccountDetailPage.jsx';
 import AccountListPage from './pages/admin/AccountListPage.jsx';
-import ActivityLogPage from './pages/admin/ActivityLogPage.jsx';
 import EditIdentifiersPage from './pages/admin/EditIdentifiersPage.jsx';
 import MaintenancePage from './pages/admin/MaintenancePage.jsx';
 import SystemSettingsPage from './pages/admin/SystemSettingsPage.jsx';
@@ -54,7 +53,6 @@ export default function App() {
           ['admin/accounts/:id/edit', <EditIdentifiersPage />], // UC-96
           ['admin/settings', <SystemSettingsPage />], // UC-99
           ['admin/maintenance', <MaintenancePage />], // UC-100
-          ['admin/activity-logs', <ActivityLogPage />], // UC-101
         ].map(([path, page]) => (
           <Route key={path} path={path} element={<ProtectedRoute roles={['SYSTEM_ADMIN']}>{page}</ProtectedRoute>} />
         ))}

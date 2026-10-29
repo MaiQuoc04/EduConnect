@@ -1,7 +1,6 @@
 import * as accountImport from './accountImport.service.js';
 import * as accounts from './accounts.service.js';
 import * as control from './accountControl.service.js';
-import * as logs from './activityLogs.service.js';
 import * as maintenance from './maintenance.service.js';
 import * as settings from './settings.service.js';
 
@@ -118,11 +117,6 @@ export async function cancelMaintenance(req, res) {
 
 export async function currentMaintenance(_req, res) {
   res.json(await maintenance.currentMaintenance());
-}
-
-// ---------------------------------------------------------------- UC-101 activity log
-export async function listActivityLogs(req, res) {
-  res.json(await logs.listActivityLogs(req.query));
 }
 
 // ---------------------------------------------------------------- password reset requests
