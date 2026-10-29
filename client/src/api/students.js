@@ -28,6 +28,15 @@ export async function getStudentParents(studentId, { signal } = {}) {
   return data;
 }
 
+// TEMPORARY (UC-13): GET /students/parents/lookup?phone= -> { found: true, parent: { parentId, userId, fullName,
+// avatarUrl, phone, email, occupation, address, accountStatus, linkedStudentCount } } or { found: false } (200).
+// The server drops spaces, dots and dashes and reads +84 as 0; 400 MSG_INVALID_PARAM for an invalid number.
+// TODO FE-14 (Khanh): switch to the UC-105 parent list endpoint once it exists; the server endpoint is removed then.
+export async function lookupParentByPhone(phone, { signal } = {}) {
+  const { data } = await api.get('/students/parents/lookup', { params: { phone }, signal });
+  return data;
+}
+
 // UC-13 POST /students/:studentId/parents -> { student, parents, canLinkMore, warnings } (the UC-12 shape plus
 // warnings). The body is only { parentId, relationshipType }: the server rejects any other key, and
 // relationshipType must be exactly FATHER | MOTHER | GUARDIAN (upper case).

@@ -1,6 +1,6 @@
 import { useEffect, useId, useRef, useState } from 'react';
 import { Link, useLocation, useNavigate, useParams } from 'react-router-dom';
-import { getStudentParents, linkParent, listStudents, unlinkParent } from '../../api/students.js';
+import { getStudentParents, linkParent, listStudents, lookupParentByPhone, unlinkParent } from '../../api/students.js';
 import Avatar from '../../components/Avatar.jsx';
 import Icon from '../../components/Icon.jsx';
 import { useToast } from '../../context/ToastContext.jsx';
@@ -13,6 +13,9 @@ const RELATIONSHIP_TYPES = ['FATHER', 'MOTHER', 'GUARDIAN']; // sent exactly lik
 const MIN_QUERY_LENGTH = 2;
 const SEARCH_DELAY_MS = 300;
 const SEARCH_PAGE_SIZE = 8;
+const PHONE_DELAY_MS = 400;
+// Same rule as the server (students.controller.js): 0 followed by 9 or 10 digits once normalised.
+const PHONE_PATTERN = /^0\d{9,10}$/;
 const LOAD_ERROR = 'Không tải được thông tin phụ huynh. Vui lòng thử lại.';
 const LINK_ERROR = 'Không liên kết được phụ huynh. Vui lòng thử lại.';
 const UNLINK_ERROR = 'Không gỡ được liên kết. Vui lòng thử lại.';
@@ -43,6 +46,12 @@ const WARNING_TEXTS = {
 const WARNING_FALLBACK = 'Thao tác đã hoàn tất nhưng còn một việc chưa thực hiện được. Vui lòng kiểm tra lại nhóm lớp.';
 
 const relationshipLabel = (type) => RELATIONSHIP_LABELS[type] ?? type;
+
+// Same normalisation as the server: spaces, dots and dashes dropped, a leading +84 read as 0.
+function normalizePhone(value) {
+  const compact = value.replace(/[\s.-]/g, '');
+  return compact.startsWith('+84') ? `0${compact.slice(3)}` : compact;
+}
 
 function actionErrorText(err, fallback) {
   const general = errorText({ code: 'SERVER_ERROR' });
@@ -218,15 +227,102 @@ function LinkedParent({ parent, disabled, onUnlink }) {
   );
 }
 
-// Picking an EXISTING parent account. ASSUMPTION / TODO FE-14 (Khanh): there is no parent search endpoint yet
-// (UC-105 View Parent List is not built, and server/src/routes.js has nothing else that lists parents). Until then
-// two read-only ways, both through FE-02's own endpoints:
-//  - "Qua anh chị em": search a student who studies at the school (GET /students?q=), then pick one of THEIR linked
-//    parents (GET /students/:id/parents) – the usual case of a parent with several children (business-rules §3),
-//    and the name and phone are shown before linking.
-//  - "Mã phụ huynh": type the parent id given by whoever created the account. The name cannot be looked up before
-//    linking, so the confirmation says so and the linked person is shown right after the link.
-// Replace both with a search by name / phone on GET /parents once FE-14 has it.
+// Picking an EXISTING parent account. TODO FE-14 (Khanh): there is no parent list endpoint yet (UC-105 View Parent
+// List is not built). Until then two read-only ways, both through FE-02's own endpoints, and both show the parent's
+// name before linking:
+//  - "Tìm theo số điện thoại" (default): the phone identifies a parent (required for parents, business-rules §3) and
+//    School Manager has it in the student's file. Exact match on the TEMPORARY GET /students/parents/lookup.
+//  - "Qua anh, chị, em": search a student who studies at the school (GET /students?q=), then pick one of THEIR
+//    linked parents (GET /students/:id/parents) – useful when the phone number is not at hand.
+// Switch the phone lookup to Khanh's endpoint once FE-14 has it.
+function PhoneLookup({ disabled, onSelect }) {
+  const [phone, setPhone] = useState('');
+  const [result, setResult] = useState(null); // { found, parent? } for the number currently typed
+  const [searching, setSearching] = useState(false);
+  const [lookupError, setLookupError] = useState('');
+  const normalized = normalizePhone(phone);
+  const complete = PHONE_PATTERN.test(normalized);
+  const malformed = normalized !== '' && !complete && (!/^\+?\d*$/.test(normalized) || normalized.length > 11);
+
+  // Looks the number up once typing stops; typing again aborts the running request, so an older answer never
+  // replaces a newer one.
+  useEffect(() => {
+    setResult(null);
+    setLookupError('');
+    if (!complete) {
+      setSearching(false);
+      return undefined;
+    }
+    const controller = new AbortController();
+    setSearching(true);
+    const timer = setTimeout(() => {
+      lookupParentByPhone(normalized, { signal: controller.signal })
+        .then((data) => {
+          setResult(data);
+          if (data.found) onSelect(data.parent);
+        })
+        .catch((err) => {
+          if (controller.signal.aborted) return;
+          setLookupError(err.code === 'MSG_INVALID_PARAM'
+            ? 'Số điện thoại không hợp lệ.'
+            : 'Không tra cứu được số điện thoại. Vui lòng thử lại.');
+        })
+        .finally(() => {
+          if (!controller.signal.aborted) setSearching(false);
+        });
+    }, PHONE_DELAY_MS);
+    return () => {
+      clearTimeout(timer);
+      controller.abort();
+    };
+    // onSelect only calls state setters of the page; the lookup depends on the number alone.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [normalized, complete]);
+
+  return (
+    <>
+      <label className="field-label" htmlFor="update-relationship-phone">
+        Số điện thoại phụ huynh
+      </label>
+      <div className="input-wrap">
+        <Icon name="call" size="sm" className="update-relationship-input-icon" />
+        <input
+          id="update-relationship-phone"
+          className="input mono update-relationship-search"
+          type="tel"
+          inputMode="tel"
+          autoComplete="off"
+          value={phone}
+          onChange={(e) => {
+            setPhone(e.target.value);
+            onSelect(null);
+          }}
+          placeholder="Ví dụ: 0905000041"
+          disabled={disabled}
+          aria-describedby="update-relationship-phone-help"
+        />
+      </div>
+      <span id="update-relationship-phone-help" className="field-help">
+        Tìm theo số điện thoại phụ huynh đã đăng ký với nhà trường, khớp chính xác từng chữ số.
+      </span>
+      <div aria-live="polite">
+        {malformed && <p className="caption muted">Số điện thoại gồm 10 hoặc 11 chữ số, ví dụ 0905000041.</p>}
+        {lookupError && <p className="field-error">{lookupError}</p>}
+        {searching && <p className="caption muted">Đang tra cứu…</p>}
+        {!searching && result && !result.found && (
+          <div className="notice update-relationship-not-found">
+            <Icon name="person_search" size="sm" />
+            <p>
+              Không có tài khoản phụ huynh nào dùng số điện thoại này. Nếu phụ huynh chưa có tài khoản, vui lòng liên hệ
+              quản trị hệ thống để tạo trước, sau đó quay lại liên kết.
+            </p>
+          </div>
+        )}
+      </div>
+    </>
+  );
+}
+
 function SiblingPicker({ studentId, linkedIds, disabled, selected, onSelect }) {
   const [query, setQuery] = useState('');
   const [results, setResults] = useState(null);
@@ -395,32 +491,30 @@ function SiblingPicker({ studentId, linkedIds, disabled, selected, onSelect }) {
   );
 }
 
-function SelectedParent({ parent }) {
-  if (parent.known) {
-    return (
-      <div className="update-relationship-selected">
-        <Avatar src={parent.avatarUrl} name={parent.fullName} size={40} />
-        <div>
-          <p className="label-upper">Phụ huynh được chọn</p>
-          <p className="strong">{parent.fullName}</p>
-          <p className="caption muted">
-            <span className="mono">{parent.phone || 'Thiếu số điện thoại'}</span>
-            {parent.email && ` · ${parent.email}`}
-          </p>
-          {parent.accountStatus === 'LOCKED' && (
-            <p className="caption update-relationship-locked">Tài khoản này đang bị khoá. Liên kết vẫn được lưu.</p>
-          )}
-        </div>
-      </div>
-    );
-  }
+// The parent about to be linked, always with a name: School Manager checks the person before linking.
+// linkedStudentCount comes from the phone lookup only; occupation from both ways.
+function SelectedParent({ parent, alreadyLinked }) {
   return (
-    <div className="notice amber update-relationship-unverified">
-      <Icon name="help" size="sm" />
-      <p>
-        Mã phụ huynh <span className="mono strong">{parent.parentId}</span>: hệ thống chưa tra được họ tên trước khi
-        liên kết. Vui lòng kiểm tra kỹ mã với bộ phận cấp tài khoản.
-      </p>
+    <div className="update-relationship-selected">
+      <Avatar src={parent.avatarUrl} name={parent.fullName} size={40} />
+      <div>
+        <p className="label-upper">Phụ huynh được chọn</p>
+        <p className="strong">{parent.fullName}</p>
+        <p className="caption muted">
+          <span className="mono">{parent.phone || 'Thiếu số điện thoại'}</span>
+          {parent.email && ` · ${parent.email}`}
+        </p>
+        {parent.occupation && <p className="caption muted">Nghề nghiệp: {parent.occupation}</p>}
+        {parent.linkedStudentCount > 0 && (
+          <p className="caption muted">Đang liên kết với {parent.linkedStudentCount} học sinh</p>
+        )}
+        {parent.accountStatus === 'LOCKED' && (
+          <p className="caption update-relationship-locked">Tài khoản đang bị khoá. Vẫn có thể liên kết.</p>
+        )}
+        {alreadyLinked && (
+          <p className="caption strong update-relationship-locked">Phụ huynh này đã được liên kết với học sinh này.</p>
+        )}
+      </div>
     </div>
   );
 }
@@ -429,8 +523,8 @@ function SelectedParent({ parent }) {
 // Design: Stitch "SCR-12 Update Student Relationship" (the Stitch numbers are one behind docs/screens.md): a page of
 // its own with the linked parents on the left and the "new link" panel on the right. Left out of the design on
 // purpose: the unlink reason (student_parents has no column for it), the permission checkboxes and the extra
-// relationship types (the schema has only FATHER / MOTHER / GUARDIAN), search by name / phone / ID card (no parent
-// search endpoint yet, see SiblingPicker).
+// relationship types (the schema has only FATHER / MOTHER / GUARDIAN), search by name / ID card (no parent list
+// endpoint yet; the parent is found by exact phone or through a sibling, see PhoneLookup).
 // Both actions answer with the whole UC-12 data, which replaces the page state: no extra GET after a success.
 export default function UpdateStudentRelationshipPage() {
   const { studentId } = useParams();
@@ -451,9 +545,8 @@ export default function UpdateStudentRelationshipPage() {
   const [loadError, setLoadError] = useState(null);
   const [attempt, setAttempt] = useState(0);
 
-  const [mode, setMode] = useState('sibling'); // 'sibling' | 'code'
-  const [selected, setSelected] = useState(null); // { parentId, known, fullName?, phone?, ... }
-  const [codeInput, setCodeInput] = useState('');
+  const [mode, setMode] = useState('phone'); // 'phone' | 'sibling'
+  const [selected, setSelected] = useState(null); // { parentId, fullName, phone, ... } of the parent to link
   const [relationship, setRelationship] = useState('');
   const [parentError, setParentError] = useState('');
   const [relationshipError, setRelationshipError] = useState('');
@@ -541,10 +634,11 @@ export default function UpdateStudentRelationshipPage() {
   const { student, parents, canLinkMore } = data;
   const linkedIds = new Set(parents.map((p) => p.parentId));
   const locked = !canLinkMore || busy;
+  const alreadyLinked = Boolean(selected && linkedIds.has(selected.parentId));
+  const canSubmit = Boolean(selected) && !alreadyLinked && RELATIONSHIP_TYPES.includes(relationship);
 
   function resetForm() {
     setSelected(null);
-    setCodeInput('');
     setRelationship('');
     setParentError('');
     setRelationshipError('');
@@ -556,7 +650,6 @@ export default function UpdateStudentRelationshipPage() {
     if (next === mode) return;
     setMode(next);
     setSelected(null);
-    setCodeInput('');
     setParentError('');
     setFormError('');
   }
@@ -567,20 +660,12 @@ export default function UpdateStudentRelationshipPage() {
     setFormError('');
   }
 
-  function changeCode(value) {
-    setCodeInput(value);
-    setParentError('');
-    setFormError('');
-    const trimmed = value.trim();
-    setSelected(/^[1-9]\d{0,15}$/.test(trimmed) && Number.isSafeInteger(Number(trimmed)) ? { parentId: Number(trimmed), known: false } : null);
-  }
-
   function askLink(e) {
     e.preventDefault();
     if (!canLinkMore) return;
     let ok = true;
     if (!selected) {
-      setParentError(mode === 'code' && codeInput.trim() ? 'Mã phụ huynh phải là số nguyên dương.' : 'Vui lòng chọn phụ huynh.');
+      setParentError('Vui lòng chọn phụ huynh.');
       ok = false;
     } else if (linkedIds.has(selected.parentId)) {
       setParentError(ACTION_ERRORS.MSG_LINK_ALREADY_EXISTS);
@@ -798,16 +883,18 @@ export default function UpdateStudentRelationshipPage() {
             <fieldset className="update-relationship-fieldset" disabled={locked}>
               <legend className="field-label">Chọn phụ huynh</legend>
               <div className="update-relationship-modes" role="group" aria-label="Cách chọn phụ huynh">
+                <button type="button" className={mode === 'phone' ? 'active' : undefined} aria-pressed={mode === 'phone'} onClick={() => chooseMode('phone')}>
+                  Tìm theo số điện thoại
+                </button>
                 <button type="button" className={mode === 'sibling' ? 'active' : undefined} aria-pressed={mode === 'sibling'} onClick={() => chooseMode('sibling')}>
                   Qua anh, chị, em
-                </button>
-                <button type="button" className={mode === 'code' ? 'active' : undefined} aria-pressed={mode === 'code'} onClick={() => chooseMode('code')}>
-                  Nhập mã phụ huynh
                 </button>
               </div>
 
               <div className={parentError ? 'field invalid' : 'field'}>
-                {mode === 'sibling' ? (
+                {mode === 'phone' ? (
+                  <PhoneLookup key={pickerKey} disabled={locked} onSelect={chooseParent} />
+                ) : (
                   <SiblingPicker
                     key={pickerKey}
                     studentId={student.studentId}
@@ -816,28 +903,6 @@ export default function UpdateStudentRelationshipPage() {
                     selected={selected}
                     onSelect={chooseParent}
                   />
-                ) : (
-                  <>
-                    <label className="field-label" htmlFor="update-relationship-code">
-                      Mã phụ huynh
-                    </label>
-                    <div className="input-wrap">
-                      <input
-                        id="update-relationship-code"
-                        className="input mono"
-                        inputMode="numeric"
-                        autoComplete="off"
-                        value={codeInput}
-                        onChange={(e) => changeCode(e.target.value)}
-                        placeholder="Ví dụ: 125"
-                        aria-invalid={Boolean(parentError)}
-                        aria-describedby="update-relationship-code-help"
-                      />
-                    </div>
-                    <span id="update-relationship-code-help" className="field-help">
-                      Mã số tài khoản phụ huynh do bộ phận quản trị hệ thống cung cấp.
-                    </span>
-                  </>
                 )}
                 {parentError && (
                   <span className="field-error" role="alert">
@@ -846,7 +911,7 @@ export default function UpdateStudentRelationshipPage() {
                 )}
               </div>
 
-              {selected && <SelectedParent parent={selected} />}
+              {selected && <SelectedParent parent={selected} alreadyLinked={alreadyLinked} />}
 
               <div className={relationshipError ? 'field invalid' : 'field'}>
                 <label className="field-label" htmlFor="update-relationship-type">
@@ -886,7 +951,13 @@ export default function UpdateStudentRelationshipPage() {
                 </div>
               )}
 
-              <button type="submit" className="btn btn-primary update-relationship-submit" aria-describedby={canLinkMore ? undefined : 'update-relationship-full'}>
+              {/* Enabled only once a parent with a name is chosen, not already linked, and a relationship is picked. */}
+              <button
+                type="submit"
+                className="btn btn-primary update-relationship-submit"
+                disabled={!canSubmit}
+                aria-describedby={canLinkMore ? undefined : 'update-relationship-full'}
+              >
                 <Icon name="add_link" size="sm" />
                 Liên kết phụ huynh
               </button>
@@ -912,19 +983,11 @@ export default function UpdateStudentRelationshipPage() {
             <dl className="update-relationship-dialog-facts">
               <dt>Phụ huynh</dt>
               <dd>
-                {selected.known ? (
+                <span className="strong">{selected.fullName}</span>
+                {selected.phone && (
                   <>
-                    <span className="strong">{selected.fullName}</span>
-                    {selected.phone && (
-                      <>
-                        {' · '}
-                        <span className="mono">{selected.phone}</span>
-                      </>
-                    )}
-                  </>
-                ) : (
-                  <>
-                    Mã phụ huynh <span className="mono strong">{selected.parentId}</span> (chưa tra được họ tên)
+                    {' · '}
+                    <span className="mono">{selected.phone}</span>
                   </>
                 )}
               </dd>
