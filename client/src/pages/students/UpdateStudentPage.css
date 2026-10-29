@@ -83,6 +83,15 @@
   cursor: default;
   text-overflow: ellipsis;
 }
+.update-student .update-student-locked-text {
+  height: auto;
+  min-height: 40px;
+  padding-top: 9px;
+  padding-bottom: 9px;
+  overflow-wrap: anywhere;
+}
+.update-student .update-student-locked-text.empty { color: var(--graphite-400); }
+.update-student .update-student-locked-text + .update-student-lock-icon { top: 20px; }
 .update-student .update-student-locked:focus { border-color: var(--graphite-300); box-shadow: none; }
 .update-student .update-student-notice { margin-bottom: 16px; padding: 12px; }
 .update-student .update-student-notice .caption { margin-top: 2px; color: var(--graphite-700); }

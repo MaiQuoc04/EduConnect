@@ -272,18 +272,31 @@ function NotFound({ backTo }) {
   );
 }
 
-function ReadOnlyField({ label, value, help, mono }) {
+// multiline: a long value (the address) wraps in a box instead of being cut by a one-line input.
+function ReadOnlyField({ label, value, help, mono, multiline, wide }) {
   return (
-    <div className="field">
+    <div className={`field${wide ? ' wide' : ''}`}>
       <span className="field-label">{label}</span>
       <div className="input-wrap">
-        <input
-          className={`input update-student-locked${mono && value ? ' mono' : ''}`}
-          value={value || EMPTY_VALUE}
-          readOnly
-          aria-readonly="true"
-          aria-label={label}
-        />
+        {multiline ? (
+          <div
+            className={`input update-student-locked update-student-locked-text${value ? '' : ' empty'}`}
+            role="textbox"
+            aria-readonly="true"
+            aria-multiline="true"
+            aria-label={label}
+          >
+            {value || EMPTY_VALUE}
+          </div>
+        ) : (
+          <input
+            className={`input update-student-locked${mono && value ? ' mono' : ''}`}
+            value={value || EMPTY_VALUE}
+            readOnly
+            aria-readonly="true"
+            aria-label={label}
+          />
+        )}
         <Icon name="lock" size="sm" className="update-student-lock-icon" />
       </div>
       <span className="field-help">{help}</span>
@@ -651,6 +664,14 @@ export default function UpdateStudentPage() {
             <ReadOnlyField label="Tên đăng nhập" value={student.username} mono help={SA_ONLY} />
             <ReadOnlyField label="Email" value={student.email} help={SA_ONLY} />
             <ReadOnlyField label="Số điện thoại" value={student.phone} mono help={SA_ONLY} />
+            {/* ASSUMPTION: not editable and no owner named until the team decides who updates a student's address. */}
+            <ReadOnlyField
+              label="Địa chỉ"
+              value={student.address}
+              multiline
+              wide
+              help="Chưa sửa được ở màn này."
+            />
           </div>
         </section>
 
