@@ -97,6 +97,32 @@ function parseParentId(value) {
   return Number(value);
 }
 
+// Phone numbers are stored as "0" + 9 digits (checked on Supabase on 2026-10-28). Spaces, dots and dashes are
+// dropped, and a leading +84 becomes 0, so "+84 905.000.041" and "0905-000-041" find the same account.
+// ASSUMPTION: the documents do not say how a phone is written; +84 and 0 are treated as the same number, and a
+// valid number is 0 followed by 9 or 10 digits (10-digit mobile numbers, 11-digit landline numbers).
+const PHONE_PATTERN = /^0\d{9,10}$/;
+
+function normalizePhone(value) {
+  const compact = value.replace(/[\s.-]/g, '');
+  return compact.startsWith('+84') ? `0${compact.slice(3)}` : compact;
+}
+
+// TEMPORARY (UC-13, SCR-13): GET /students/parents/lookup?phone=. Read-only lookup of ONE existing parent account
+// by its exact phone number, so School Manager sees the parent's name before linking. It exists only because FE-14
+// (UC-105 View Parent List, owner: Khanh) is not built yet: remove it and switch SCR-13 to Khanh's endpoint then.
+// Not finding anyone is a normal answer (200 { found: false }), not a 404.
+export async function lookupParent(req, res) {
+  const query = req.query ?? {};
+  rejectUnknownKeys(query, ['phone']);
+  const raw = optionalString(query, 'phone');
+  if (!raw) throw invalid('phone');
+  const phone = normalizePhone(raw);
+  if (!PHONE_PATTERN.test(phone)) throw invalid('phone');
+  const parent = await studentsService.findParentByPhone(phone);
+  res.json(parent ? { found: true, parent } : { found: false });
+}
+
 // UC-13 Link Parent–Student: { parentId, relationshipType }. Unknown keys are rejected, as in UC-09 / UC-10.
 export async function linkParent(req, res) {
   const studentId = parseStudentId(req.params.studentId);
