@@ -14,6 +14,12 @@ const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 // ASSUMPTION: a Vietnamese phone number is 10 digits starting with 0 (spaces, dots and dashes are removed first).
 const PHONE_RE = /^0\d{9}$/;
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
+// ASSUMPTION (FE-13 owner, 29/10/2026, to confirm with the team lead and add to business-rules §3): student code =
+// "HS" + 4 digits (HS0001), teacher code = "GV" + 4 digits (GV0001). Typed lower case is accepted and upper-cased.
+// Only checked when an account is created or imported; codes already in the database are not changed.
+const STUDENT_CODE_RE = /^HS\d{4}$/;
+const TEACHER_CODE_RE = /^GV\d{4}$/;
+const code = (value) => text(value).replace(/\s+/g, '').toUpperCase();
 
 const text = (value) => (typeof value === 'string' ? value.trim() : '');
 const optional = (value) => text(value) || null;
@@ -51,21 +57,21 @@ export function readAccountInput(body = {}) {
   if (roles.includes('STUDENT')) {
     const s = body.student ?? {};
     const student = {
-      studentCode: text(s.studentCode),
+      studentCode: code(s.studentCode),
       dob: optional(s.dob),
       gender: optional(s.gender),
     };
     if (!student.studentCode) errors.studentCode = 'REQUIRED';
-    maxLength('studentCode', student.studentCode, 50);
+    else if (!STUDENT_CODE_RE.test(student.studentCode)) errors.studentCode = 'INVALID';
     if (student.dob && (!DATE_RE.test(student.dob) || Number.isNaN(Date.parse(student.dob)))) errors.dob = 'INVALID';
     if (student.gender && !GENDERS.includes(student.gender)) errors.gender = 'INVALID';
     input.student = student;
   }
   if (roles.includes('TEACHER')) {
     const t = body.teacher ?? {};
-    const teacher = { teacherCode: text(t.teacherCode), department: optional(t.department) };
+    const teacher = { teacherCode: code(t.teacherCode), department: optional(t.department) };
     if (!teacher.teacherCode) errors.teacherCode = 'REQUIRED';
-    maxLength('teacherCode', teacher.teacherCode, 50);
+    else if (!TEACHER_CODE_RE.test(teacher.teacherCode)) errors.teacherCode = 'INVALID';
     maxLength('department', teacher.department, 100);
     input.teacher = teacher;
   }

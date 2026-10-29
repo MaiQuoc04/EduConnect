@@ -28,6 +28,10 @@ const EMPTY = {
   address: '',
 };
 
+// Same rule as the server (ASSUMPTION, FE-13 29/10/2026): HS / GV + 4 digits.
+const CODE_RE = { studentCode: /^HS\d{4}$/, teacherCode: /^GV\d{4}$/ };
+const normCode = (v) => v.replace(/\s+/g, '').toUpperCase();
+
 const today = () => new Date().toLocaleDateString('sv-SE'); // YYYY-MM-DD in local time
 
 function Field({ id, label, required, hint, help, error, children }) {
@@ -123,6 +127,7 @@ export default function CreateAccountPage() {
     setForm((f) => ({ ...f, [key]: e.target.value }));
     setErrors((errs) => ({ ...errs, [key]: undefined }));
   };
+  const setCode = (key) => (e) => set(key)({ target: { value: normCode(e.target.value) } });
 
   // System Admin and Student stand alone: picking one of them clears the others, and the reverse.
   function toggleRole(role) {
@@ -140,8 +145,11 @@ export default function CreateAccountPage() {
     if (!form.fullName.trim()) e.fullName = 'REQUIRED';
     if (!form.roles.length) e.roles = 'REQUIRED';
     if (has('PARENT') && !form.phone.trim()) e.phone = 'REQUIRED_FOR_PARENT';
-    if (has('STUDENT') && !form.studentCode.trim()) e.studentCode = 'REQUIRED';
-    if (has('TEACHER') && !form.teacherCode.trim()) e.teacherCode = 'REQUIRED';
+    for (const [role, key] of [['STUDENT', 'studentCode'], ['TEACHER', 'teacherCode']]) {
+      if (!has(role)) continue;
+      if (!form[key].trim()) e[key] = 'REQUIRED';
+      else if (!CODE_RE[key].test(normCode(form[key]))) e[key] = 'INVALID';
+    }
     return e;
   }
 
@@ -285,13 +293,15 @@ export default function CreateAccountPage() {
                 Thông tin học sinh
               </h2>
               <div className="form-grid">
-                <Field id="studentCode" label="Mã học sinh" required error={err('studentCode')}>
+                <Field id="studentCode" label="Mã học sinh" required hint="HS + 4 chữ số" error={err('studentCode')}>
                   <input
                     id="studentCode"
                     className="input mono"
                     value={form.studentCode}
-                    onChange={set('studentCode')}
-                    maxLength={50}
+                    onChange={setCode('studentCode')}
+                    maxLength={6}
+                    placeholder="HS0001"
+                    autoComplete="off"
                   />
                 </Field>
                 <Field id="dob" label="Ngày sinh" error={err('dob')}>
@@ -319,13 +329,15 @@ export default function CreateAccountPage() {
                 Thông tin giáo viên
               </h2>
               <div className="form-grid">
-                <Field id="teacherCode" label="Mã giáo viên" required error={err('teacherCode')}>
+                <Field id="teacherCode" label="Mã giáo viên" required hint="GV + 4 chữ số" error={err('teacherCode')}>
                   <input
                     id="teacherCode"
                     className="input mono"
                     value={form.teacherCode}
-                    onChange={set('teacherCode')}
-                    maxLength={50}
+                    onChange={setCode('teacherCode')}
+                    maxLength={6}
+                    placeholder="GV0001"
+                    autoComplete="off"
                   />
                 </Field>
                 <Field id="department" label="Tổ chuyên môn" error={err('department')}>

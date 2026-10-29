@@ -35,8 +35,8 @@ const BY_FIELD = {
     DUPLICATE: 'Số điện thoại này đã được dùng cho tài khoản khác.',
     REQUIRED_FOR_PARENT: 'Tài khoản phụ huynh bắt buộc có số điện thoại.',
   },
-  studentCode: { DUPLICATE: 'Mã học sinh này đã tồn tại.' },
-  teacherCode: { DUPLICATE: 'Mã giáo viên này đã tồn tại.' },
+  studentCode: { INVALID: 'Mã học sinh gồm HS và 4 chữ số, ví dụ HS0001.', DUPLICATE: 'Mã học sinh này đã tồn tại.' },
+  teacherCode: { INVALID: 'Mã giáo viên gồm GV và 4 chữ số, ví dụ GV0001.', DUPLICATE: 'Mã giáo viên này đã tồn tại.' },
   dob: { INVALID: 'Ngày sinh không hợp lệ (dạng dd/mm/yyyy, không sau hôm nay).' },
   gender: { INVALID: 'Giới tính ghi Nam, Nữ hoặc Khác.' },
 };

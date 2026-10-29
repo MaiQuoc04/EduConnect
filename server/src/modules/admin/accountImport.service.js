@@ -18,10 +18,10 @@ const MAX_ROWS = 500;
 // Columns of each template, in order. `key` = field name used by readAccountInput (UC-92 rules).
 const COL = {
   fullName: { key: 'fullName', header: 'Họ và tên', width: 28 },
-  studentCode: { key: 'studentCode', header: 'Mã học sinh', width: 16, text: true },
+  studentCode: { key: 'studentCode', header: 'Mã học sinh (HS + 4 số)', width: 22, text: true },
   dob: { key: 'dob', header: 'Ngày sinh (dd/mm/yyyy)', width: 22, text: true },
   gender: { key: 'gender', header: 'Giới tính (Nam/Nữ/Khác)', width: 22 },
-  teacherCode: { key: 'teacherCode', header: 'Mã giáo viên', width: 16, text: true },
+  teacherCode: { key: 'teacherCode', header: 'Mã giáo viên (GV + 4 số)', width: 22, text: true },
   department: { key: 'department', header: 'Tổ chuyên môn', width: 22 },
   email: { key: 'email', header: 'Email', width: 30 },
   phone: { key: 'phone', header: 'Số điện thoại', width: 16, text: true },
@@ -73,6 +73,7 @@ export async function buildTemplate(type) {
     'Mỗi dòng của trang "Tai khoan" là một tài khoản. Không đổi tên hay thứ tự các cột ở dòng 1.',
     'Cột có dấu * là bắt buộc. Email và số điện thoại không được trùng với tài khoản khác hoặc dòng khác trong file.',
     'Số điện thoại gồm 10 chữ số, bắt đầu bằng 0. Phụ huynh bắt buộc có số điện thoại.',
+    'Mã học sinh gồm HS và 4 chữ số (ví dụ HS0001); mã giáo viên gồm GV và 4 chữ số (ví dụ GV0001). Mã không được trùng.',
     'Ngày sinh ghi theo dạng dd/mm/yyyy, ví dụ 05/09/2010. Giới tính ghi Nam, Nữ hoặc Khác.',
     'Tên đăng nhập và mật khẩu tạm thời do hệ thống tạo; tải file kết quả ngay sau khi nhập vì mật khẩu chỉ hiển thị một lần.',
     `Tối đa ${MAX_ROWS} dòng mỗi file.`,
