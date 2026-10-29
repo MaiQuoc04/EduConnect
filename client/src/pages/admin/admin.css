@@ -110,7 +110,8 @@
 /* List pages: one frame only – no outline around the card and no box around the table, just row dividers. */
 .list-card.card-outline { outline: none; }
 .list-card .table-scroll { border: 0; border-radius: 0; }
-.filters { display: grid; grid-template-columns: minmax(0, 1fr) 190px 170px auto; gap: 12px; align-items: end; }
+.filters { display: grid; grid-template-columns: minmax(0, 1fr) 180px 140px 160px auto; gap: 12px; align-items: end; }
+.class-names { display: block; margin-top: 4px; }
 .search-box .input-icon { position: absolute; left: 12px; top: 50%; transform: translateY(-50%); color: var(--graphite-500); display: flex; }
 .input.has-icon { padding-left: 38px; }
 .date-filter { display: grid; gap: 4px; }

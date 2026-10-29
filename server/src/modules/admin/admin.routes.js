@@ -10,9 +10,10 @@ const systemAdmin = [requireAuth, requireRole('SYSTEM_ADMIN')];
 const accountControl = [requireAuth, requireRole('SYSTEM_ADMIN', 'SCHOOL_MANAGER')];
 
 // Accounts
-router.get('/accounts', ...systemAdmin, ctrl.listAccounts); // UC-94 ?search&role&status&page
+router.get('/accounts', ...systemAdmin, ctrl.listAccounts); // UC-94 ?search&role&status&classId&page
 router.post('/accounts', ...systemAdmin, ctrl.createAccount); // UC-92
-router.get('/accounts/export', ...systemAdmin, ctrl.exportAccounts); // UC-95 ?search&role&status
+router.get('/accounts/export', ...systemAdmin, ctrl.exportAccounts); // UC-95 ?search&role&status&classId
+router.get('/accounts/classes', ...systemAdmin, ctrl.listClassOptions); // UC-94 class filter options
 router.get('/accounts/import/template', ...systemAdmin, ctrl.importTemplate); // UC-93 ?type=STUDENT|TEACHER|PARENT|SCHOOL_MANAGER
 router.post('/accounts/import/preview', ...systemAdmin, uploadSingle('file'), ctrl.previewImport); // UC-93 (multipart: type, file)
 router.post('/accounts/import', ...systemAdmin, uploadSingle('file'), ctrl.importAccounts); // UC-93

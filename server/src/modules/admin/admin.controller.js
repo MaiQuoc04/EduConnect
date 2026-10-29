@@ -48,6 +48,10 @@ export async function listAccounts(req, res) {
   res.json(await control.listAccounts(req.query)); // UC-94
 }
 
+export async function listClassOptions(_req, res) {
+  res.json(await control.listClassOptions()); // UC-94 class filter
+}
+
 export async function exportAccounts(req, res) {
   const { fileName, contentType, buffer } = await control.exportAccounts(req.query); // UC-95
   res

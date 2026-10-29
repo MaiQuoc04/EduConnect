@@ -28,10 +28,29 @@ function readFilters(query = {}) {
   const search = typeof query.search === 'string' ? removeAccents(query.search.trim().toLowerCase()).slice(0, 100) : '';
   const role = ROLE_CODES.includes(query.role) ? query.role : null;
   const status = STATUSES.includes(query.status) ? query.status : null;
-  return { search: search || null, role, status };
+  const classId = /^\d{1,15}$/.test(String(query.classId ?? '')) ? Number(query.classId) : null;
+  return { search: search || null, role, status, classId };
 }
 
-// One SQL for the list and the export. $1 search, $2 role, $3 status, $4 / $5 letters for translate(), $6 limit, $7 offset.
+// The current school year: the one containing today, otherwise the latest one.
+// ASSUMPTION: "current" is decided by the school_years dates; FE-04 may add an explicit current year later.
+const CURRENT_YEAR_SQL = `(SELECT school_year_id FROM school_years
+                           ORDER BY (CURRENT_DATE BETWEEN start_date AND end_date) DESC, start_date DESC LIMIT 1)`;
+
+// Classes of the current school year, for the class filter of SCR-59.
+export async function listClassOptions() {
+  const { rows } = await pool.query(
+    `SELECT c.class_id AS id, c.class_name AS name, g.grade_level_name AS "gradeLevel"
+     FROM classes c JOIN grade_levels g ON g.grade_level_id = c.grade_level_id
+     WHERE c.deleted_at IS NULL AND c.school_year_id = ${CURRENT_YEAR_SQL}
+     ORDER BY g.grade_level_name, c.class_name`,
+  );
+  return { items: rows };
+}
+
+// One SQL for the list and the export. $1 search, $2 role, $3 status, $4 / $5 letters for translate(), $6 limit, $7 offset,
+// $8 class. A class matches its students (still STUDYING), their parents (student_parents) and its homeroom teacher.
+// "classNames" lists the same links for the current school year.
 const LIST_SQL = `
   SELECT u.user_id AS id, u.username, u.full_name AS "fullName", u.email, u.phone, u.status,
          u.must_change_password AS "mustChangePassword",
@@ -40,10 +59,20 @@ const LIST_SQL = `
          COALESCE(ARRAY(SELECT r.role_code FROM user_roles ur JOIN roles r ON r.role_id = ur.role_id
                         WHERE ur.user_id = u.user_id ORDER BY r.role_id), '{}') AS roles,
          COALESCE(s.student_code, t.teacher_code) AS code,
+         (SELECT string_agg(DISTINCT c.class_name, ', ' ORDER BY c.class_name)
+          FROM classes c
+          WHERE c.deleted_at IS NULL AND c.school_year_id = ${CURRENT_YEAR_SQL}
+            AND (c.homeroom_teacher_id = t.teacher_id
+                 OR EXISTS (SELECT 1 FROM class_enrollments e
+                            WHERE e.class_id = c.class_id AND e.status = 'STUDYING'
+                              AND (e.student_id = s.student_id
+                                   OR e.student_id IN (SELECT sp.student_id FROM student_parents sp
+                                                       WHERE sp.parent_id = p.parent_id))))) AS "classNames",
          COUNT(*) OVER() AS total
   FROM users u
   LEFT JOIN students s ON s.user_id = u.user_id
   LEFT JOIN teachers t ON t.user_id = u.user_id
+  LEFT JOIN parents p ON p.user_id = u.user_id
   WHERE ($1::text IS NULL
          OR translate(LOWER(u.full_name), $4, $5) LIKE '%' || $1 || '%'
          OR u.username LIKE '%' || $1 || '%'
@@ -53,6 +82,12 @@ const LIST_SQL = `
     AND ($2::text IS NULL OR EXISTS (SELECT 1 FROM user_roles ur JOIN roles r ON r.role_id = ur.role_id
                                      WHERE ur.user_id = u.user_id AND r.role_code = $2))
     AND ($3::text IS NULL OR u.status = $3)
+    AND ($8::bigint IS NULL
+         OR EXISTS (SELECT 1 FROM classes c WHERE c.class_id = $8 AND c.homeroom_teacher_id = t.teacher_id)
+         OR EXISTS (SELECT 1 FROM class_enrollments e
+                    WHERE e.class_id = $8 AND e.status = 'STUDYING'
+                      AND (e.student_id = s.student_id
+                           OR e.student_id IN (SELECT sp.student_id FROM student_parents sp WHERE sp.parent_id = p.parent_id))))
   ORDER BY u.created_at DESC, u.user_id DESC
   LIMIT $6 OFFSET $7`;
 
@@ -65,11 +100,12 @@ async function queryAccounts(filters, limit, offset) {
     VN_FOLDED,
     limit,
     offset,
+    filters.classId,
   ]);
   return rows;
 }
 
-// UC-94 View Account List: search by name / username / email / phone / code, filter by role and status.
+// UC-94 View Account List: search by name / username / email / phone / code, filter by role, status and class.
 export async function listAccounts(query) {
   const filters = readFilters(query);
   const page = Math.max(1, Number.parseInt(query.page, 10) || 1);
@@ -101,6 +137,7 @@ export async function exportAccounts(query) {
     { header: 'Họ và tên', key: 'fullName', width: 28 },
     { header: 'Vai trò', key: 'roles', width: 26 },
     { header: 'Mã HS/GV', key: 'code', width: 14 },
+    { header: 'Lớp', key: 'classNames', width: 14 },
     { header: 'Email', key: 'email', width: 30 },
     { header: 'Số điện thoại', key: 'phone', width: 16, style: { numFmt: '@' } },
     { header: 'Trạng thái', key: 'status', width: 14 },
@@ -116,6 +153,7 @@ export async function exportAccounts(query) {
       fullName: r.fullName,
       roles: r.roles.map((c) => ROLE_TEXT[c] ?? c).join(', '),
       code: r.code ?? '',
+      classNames: r.classNames ?? '',
       email: r.email ?? '',
       phone: r.phone ?? '',
       status: r.status === 'ACTIVE' ? 'Hoạt động' : 'Đã khoá',

@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
-import { exportAccounts, listAccounts } from '../../api/admin.js';
+import { exportAccounts, listAccounts, listClassOptions } from '../../api/admin.js';
 import Avatar from '../../components/Avatar.jsx';
 import Icon from '../../components/Icon.jsx';
 import { useToast } from '../../context/ToastContext.jsx';
@@ -9,7 +9,8 @@ import { formatDate } from '../../utils/format.js';
 import './admin.css';
 
 // SCR-59 Account List (UC-94 View Account List, UC-95 Export Account List). The System Admin home page.
-// Filters live in the URL (?search=&role=&status=&page=) so Back returns to the same list.
+// Filters live in the URL (?search=&role=&status=&classId=&page=) so Back returns to the same list. A class shows its
+// students, their parents and its homeroom teacher (current school year).
 
 const ROLE_OPTIONS = ['STUDENT', 'PARENT', 'TEACHER', 'SCHOOL_MANAGER', 'SYSTEM_ADMIN'];
 
@@ -30,6 +31,8 @@ export default function AccountListPage() {
   const debounced = useDebounced(search.trim(), 350);
   const role = params.get('role') ?? '';
   const status = params.get('status') ?? '';
+  const classId = params.get('classId') ?? '';
+  const [classes, setClasses] = useState([]);
   const page = Number(params.get('page')) || 1;
   const [state, setState] = useState({ loading: true, data: null, error: '' });
   const [exporting, setExporting] = useState(false);
@@ -50,20 +53,34 @@ export default function AccountListPage() {
   }, [debounced]);
 
   useEffect(() => {
+    listClassOptions()
+      .then(setClasses)
+      .catch(() => setClasses([]));
+  }, []);
+
+  const filterParams = () => ({
+    search: params.get('search') || undefined,
+    role: role || undefined,
+    status: status || undefined,
+    classId: classId || undefined,
+  });
+
+  useEffect(() => {
     let alive = true;
     setState((s) => ({ ...s, loading: true }));
-    listAccounts({ search: params.get('search') || undefined, role: role || undefined, status: status || undefined, page })
+    listAccounts({ ...filterParams(), page })
       .then((data) => alive && setState({ loading: false, data, error: '' }))
       .catch((err) => alive && setState({ loading: false, data: null, error: errorText(err) }));
     return () => {
       alive = false;
     };
-  }, [params, role, status, page]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [params, role, status, classId, page]);
 
   async function handleExport() {
     setExporting(true);
     try {
-      await exportAccounts({ search: params.get('search') || undefined, role: role || undefined, status: status || undefined });
+      await exportAccounts(filterParams());
     } catch (err) {
       toast(errorText(err), { type: 'error' });
     } finally {
@@ -73,7 +90,7 @@ export default function AccountListPage() {
 
   const { data } = state;
   const pages = data ? Math.max(1, Math.ceil(data.total / data.pageSize)) : 1;
-  const filtered = Boolean(params.get('search') || role || status);
+  const filtered = Boolean(params.get('search') || role || status || classId);
 
   return (
     <>
@@ -116,6 +133,15 @@ export default function AccountListPage() {
             {ROLE_OPTIONS.map((r) => (
               <option key={r} value={r}>
                 {ROLE_LABELS[r]}
+              </option>
+            ))}
+          </select>
+          <select className="input" value={classId} onChange={(e) => update({ classId: e.target.value })} aria-label="Lọc theo lớp">
+            <option value="">Tất cả lớp</option>
+            {classId && !classes.some((c) => String(c.id) === classId) && <option value={classId}>Lớp đã chọn</option>}
+            {classes.map((c) => (
+              <option key={c.id} value={c.id}>
+                {c.name}
               </option>
             ))}
           </select>
@@ -187,6 +213,7 @@ export default function AccountListPage() {
                         </span>
                       ))}
                     </span>
+                    {a.classNames && <span className="caption muted class-names">Lớp {a.classNames}</span>}
                   </td>
                   <td>
                     {a.email || a.phone ? (

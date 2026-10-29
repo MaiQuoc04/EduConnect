@@ -55,6 +55,11 @@ export async function listAccounts(params) {
   return data;
 }
 
+export async function listClassOptions() {
+  const { data } = await api.get('/admin/accounts/classes'); // UC-94 class filter
+  return data.items;
+}
+
 export async function exportAccounts(params) {
   const res = await api.get('/admin/accounts/export', { params, responseType: 'blob' }); // UC-95
   saveBlob(res.data, fileName(res, 'educonnect-accounts.xlsx'));
