@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
+import { Link } from 'react-router-dom';
 import {
   clearTemporaryLock,
   getSecurityState,
@@ -107,11 +108,12 @@ export default function AccountSecurityActions({ userId, account: given, onChang
           <div className="notice ink">
             <Icon name="key" />
             <div>
-              <p className="notice-title">Có yêu cầu cấp lại mật khẩu đang chờ</p>
+              <p className="notice-title">Đã cấp mật khẩu dùng một lần theo yêu cầu</p>
               <p>
-                Gửi lúc {formatDateTime(account.pendingResetRequest.createdAt)}
-                {account.pendingResetRequest.reason && `: “${account.pendingResetRequest.reason}”`}. Xác minh danh tính rồi bấm
-                Đặt lại mật khẩu; yêu cầu sẽ được đánh dấu đã cấp lại.
+                Người dùng gửi yêu cầu lúc {formatDateTime(account.pendingResetRequest.createdAt)}
+                {account.pendingResetRequest.reason && `: “${account.pendingResetRequest.reason}”`}. Mật khẩu xem tại trang{' '}
+                <Link to="/admin/password-reset-requests">Yêu cầu cấp lại mật khẩu</Link> và dùng được đến khi người dùng
+                đăng nhập.
               </p>
             </div>
           </div>

@@ -7,6 +7,7 @@ import { sendMail } from '../../utils/mailer.js';
 import { assertNewPassword, hashPassword } from '../../utils/password.js';
 import { getNumberSetting } from '../../utils/settings.js';
 import { signAccessToken, signPurposeToken, verifyPurposeToken } from '../../utils/token.js';
+import { closeRequestsAfterSignIn, issueRequestPassword } from '../admin/resetRequests.js';
 
 const OTP_MAX_ATTEMPTS = 5; // business-rules §3: invalid after 5 wrong attempts
 const RESET_TOKEN_TTL = '10m';
@@ -81,6 +82,7 @@ export async function signIn({ identifier, password, ip }) {
   }
 
   await pool.query('UPDATE users SET failed_login_count = 0, locked_until = NULL WHERE user_id = $1', [user.user_id]);
+  await closeRequestsAfterSignIn(user.user_id); // FE-13: a waiting password reset request has been used
   await logActivity({ userId: user.user_id, action: 'LOGIN_SUCCESS', ip });
 
   const activeRole = roles[0];
@@ -236,8 +238,9 @@ export async function resetPassword({ resetToken, newPassword, ip }) {
 const REQUEST_REASON_MAX = 500;
 
 // Always answers the same way, so nobody can find out which sign-in names exist. One PENDING request per account;
-// a second one is ignored. Not logged: PASSWORD_RESET is logged when SA / SM actually resets (UC-100).
-export async function requestAdminPasswordReset({ identifier, reason }) {
+// a second one is ignored. The system issues the one-time password at once (FE-13 resetRequests.js, 31/10/2026);
+// SA / SM read it on the requests page and hand it over.
+export async function requestAdminPasswordReset({ identifier, reason, ip }) {
   identifier = typeof identifier === 'string' ? identifier.trim() : '';
   if (!identifier) throw badRequest('MSG_REQUIRED', 'Please enter your sign-in name.');
   reason = typeof reason === 'string' ? reason.trim() : '';
@@ -248,13 +251,14 @@ export async function requestAdminPasswordReset({ identifier, reason }) {
   }
 
   const { rows: users } = await pool.query(
-    `SELECT user_id, full_name, username FROM users
+    `SELECT user_id, full_name, username, phone FROM users
      WHERE (username = $1 OR email = $1 OR phone = $1) AND status = 'ACTIVE' LIMIT 1`,
     [identifier],
   );
   const user = users[0];
   if (!user) return { ok: true };
 
+  let issued = false;
   await withTransaction(async (client) => {
     const { rows: inserted } = await client.query(
       `INSERT INTO password_reset_requests (user_id, reason) VALUES ($1, $2)
@@ -263,6 +267,8 @@ export async function requestAdminPasswordReset({ identifier, reason }) {
       [user.user_id, reason || null],
     );
     if (!inserted.length) return;
+    await issueRequestPassword(client, user, inserted[0].request_id);
+    issued = true;
 
     // Who can handle it (same scope as UC-100): every active SA; SMs too unless the account is an SA or SM.
     const roles = await getRoles(user.user_id);
@@ -283,7 +289,7 @@ export async function requestAdminPasswordReset({ identifier, reason }) {
        RETURNING notification_id`,
       [
         `Yêu cầu cấp lại mật khẩu: ${user.full_name}`,
-        `Tài khoản ${user.username} yêu cầu cấp lại mật khẩu.${reason ? ` Lý do: ${reason}` : ''}`,
+        `Tài khoản ${user.username} yêu cầu cấp lại mật khẩu. Hệ thống đã tạo mật khẩu dùng một lần; xác minh danh tính rồi bàn giao cho người dùng.${reason ? ` Lý do: ${reason}` : ''}`,
         inserted[0].request_id,
       ],
     );
@@ -292,6 +298,16 @@ export async function requestAdminPasswordReset({ identifier, reason }) {
       [notification.notification_id, handlers.map((h) => h.user_id)],
     );
   });
+  if (issued) {
+    await logActivity({
+      userId: user.user_id,
+      action: 'PASSWORD_RESET',
+      targetType: 'USER',
+      targetId: user.user_id,
+      detail: { step: 'REQUEST' },
+      ip,
+    });
+  }
   return { ok: true };
 }
 

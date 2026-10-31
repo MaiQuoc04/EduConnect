@@ -195,6 +195,9 @@
 .request-item .who { display: grid; gap: 8px; }
 .request-item .who a { color: inherit; }
 .request-item .what { display: grid; gap: 4px; }
+.request-password { display: grid; gap: 6px; min-width: 260px; }
+.request-password .code-box { max-width: none; font-size: 16px; gap: 4px; }
+.request-password .code-box > span:first-child { flex: 1; }
 
 @media (max-width: 1200px) {
   .accounts-table .col-date { display: none; }

@@ -127,7 +127,3 @@ export async function currentMaintenance(_req, res) {
 export async function listResetRequests(req, res) {
   res.json(await control.listResetRequests({ query: req.query, actor: actorOf(req) }));
 }
-
-export async function rejectResetRequest(req, res) {
-  res.json(await control.rejectResetRequest({ idParam: req.params.id, actor: actorOf(req) }));
-}

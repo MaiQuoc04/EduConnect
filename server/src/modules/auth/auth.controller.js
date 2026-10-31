@@ -26,7 +26,7 @@ export async function verifyOtp(req, res) {
 
 export async function requestAdminReset(req, res) {
   const { identifier, reason } = req.body ?? {};
-  res.status(202).json(await authService.requestAdminPasswordReset({ identifier, reason }));
+  res.status(202).json(await authService.requestAdminPasswordReset({ identifier, reason, ip: req.ip }));
 }
 
 export async function resetPassword(req, res) {

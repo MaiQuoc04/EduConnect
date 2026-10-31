@@ -3,6 +3,7 @@ import { pool, withTransaction } from '../../config/db.js';
 import { AppError, badRequest, forbidden, notFound } from '../../utils/AppError.js';
 import { logActivity } from '../../utils/activityLog.js';
 import { hashPassword } from '../../utils/password.js';
+import { open as openSecret } from '../../utils/secretBox.js';
 import { generateTemporaryPassword } from '../../utils/tempPassword.js';
 import { isValidUsername, removeAccents } from '../../utils/username.js';
 import { ROLE_CODES } from './accounts.service.js';
@@ -314,9 +315,10 @@ export async function resetPassword({ idParam, actor, ip }) {
       `UPDATE password_reset_otps SET expires_at = NOW() WHERE user_id = $1 AND used_at IS NULL AND expires_at > NOW()`,
       [id],
     );
-    // business-rules §3 (27/10): resetting answers the account's pending password reset request (marked DONE).
+    // business-rules §3 (27/10): resetting answers the account's pending password reset request (marked DONE); the
+    // one-time password issued with the request no longer works, so its stored copy is cleared.
     const { rowCount } = await client.query(
-      `UPDATE password_reset_requests SET status = 'DONE', handled_by = $2, handled_at = NOW()
+      `UPDATE password_reset_requests SET status = 'DONE', handled_by = $2, handled_at = NOW(), temp_password_enc = NULL
        WHERE user_id = $1 AND status = 'PENDING'`,
       [id, actor.userId],
     );
@@ -428,11 +430,12 @@ export async function getSecurityState({ idParam, actor }) {
 }
 
 // ---------------------------------------------------------------- password reset requests (business-rules §3, 27/10)
-// Users who cannot use the OTP email send a request from the Forgot Password screen (FE-01). System Admin handles
-// every request, School Manager those of student / parent / teacher accounts. Handling = UC-97 Reset Password
-// (marks the request DONE, see resetPassword) or reject. Sending / rejecting is not logged; the reset is.
+// Users who cannot use the OTP email send a request from the Forgot Password screen (FE-01). The system issues a
+// one-time password at once (resetRequests.js). System Admin sees every request, School Manager those of student /
+// parent / teacher accounts; they read the password and hand it over. The request is DONE when the user signs in
+// (or an admin resets the password from the account page). No accept / reject step (31/10/2026).
 
-const REQUEST_STATUSES = ['PENDING', 'DONE', 'REJECTED'];
+const REQUEST_STATUSES = ['PENDING', 'DONE'];
 
 // School Manager sees only requests of accounts without the System Admin / School Manager role.
 const SM_SCOPE_SQL = `NOT EXISTS (SELECT 1 FROM user_roles ur2 JOIN roles r2 ON r2.role_id = ur2.role_id
@@ -443,6 +446,7 @@ export async function listResetRequests({ query = {}, actor }) {
   const page = Math.max(1, Number.parseInt(query.page, 10) || 1);
   const { rows } = await pool.query(
     `SELECT q.request_id AS id, q.reason, q.status, q.created_at AS "createdAt", q.handled_at AS "handledAt",
+            q.temp_password_enc AS "sealed",
             u.user_id AS "userId", u.username, u.full_name AS "fullName", u.email, u.phone, u.status AS "accountStatus",
             COALESCE(ARRAY(SELECT r.role_code FROM user_roles ur JOIN roles r ON r.role_id = ur.role_id
                            WHERE ur.user_id = u.user_id ORDER BY r.role_id), '{}') AS roles,
@@ -465,27 +469,12 @@ export async function listResetRequests({ query = {}, actor }) {
     [actor.activeRole === 'SYSTEM_ADMIN'],
   );
   return {
-    items: rows.map(({ total, ...r }) => r),
+    // temporaryPassword: only while PENDING; null if it cannot be read (e.g. JWT_SECRET changed).
+    items: rows.map(({ total, sealed, ...r }) => ({ ...r, temporaryPassword: r.status === 'PENDING' ? openSecret(sealed) : null })),
     total: rows[0]?.total ?? 0,
     pendingCount: count[0].n,
     status,
     page,
     pageSize: PAGE_SIZE,
   };
-}
-
-// Reject: e.g. the identity could not be confirmed. The account itself is not changed.
-export async function rejectResetRequest({ idParam, actor }) {
-  const id = Number(idParam);
-  if (!Number.isSafeInteger(id) || id <= 0) throw notFound('NOT_FOUND', 'Request not found.');
-  const { rows } = await pool.query('SELECT user_id, status FROM password_reset_requests WHERE request_id = $1', [id]);
-  if (!rows.length) throw notFound('NOT_FOUND', 'Request not found.');
-  assertScope(actor, await loadAccount(pool, rows[0].user_id));
-  const { rowCount } = await pool.query(
-    `UPDATE password_reset_requests SET status = 'REJECTED', handled_by = $2, handled_at = NOW()
-     WHERE request_id = $1 AND status = 'PENDING'`,
-    [id, actor.userId],
-  );
-  if (!rowCount) throw new AppError(409, 'MSG_REQUEST_HANDLED', 'This request has already been handled.');
-  return { id, status: 'REJECTED' };
 }

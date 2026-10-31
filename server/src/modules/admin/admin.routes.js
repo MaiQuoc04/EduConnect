@@ -24,11 +24,10 @@ router.post('/accounts/:id/reset-password', ...accountControl, ctrl.resetPasswor
 router.post('/accounts/:id/lock', ...accountControl, ctrl.lockAccount); // UC-98
 router.post('/accounts/:id/unlock', ...accountControl, ctrl.unlockAccount); // UC-98
 router.post('/accounts/:id/clear-temporary-lock', ...accountControl, ctrl.clearTemporaryLock); // UC-98 1b
-// Password reset requests sent from Forgot Password (FE-01); handled with UC-97 (reset) or rejected.
-router.get('/password-reset-requests', ...accountControl, ctrl.listResetRequests); // ?status=PENDING|DONE|REJECTED&page
-router.post('/password-reset-requests/:id/reject', ...accountControl, ctrl.rejectResetRequest);
+// Password reset requests sent from Forgot Password (FE-01): the system issues a one-time password, SA / SM read it.
+router.get('/password-reset-requests', ...accountControl, ctrl.listResetRequests); // ?status=PENDING|DONE&page
 
-// System settings, maintenance, activity log
+// System settings, maintenance
 router.get('/settings', ...systemAdmin, ctrl.listSettings); // UC-99
 router.put('/settings', ...systemAdmin, ctrl.updateSettings); // UC-99 { values: { key: value } }
 router.get('/maintenance', ...systemAdmin, ctrl.listMaintenance); // UC-100

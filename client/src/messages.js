@@ -32,7 +32,6 @@ const ERROR_MESSAGES = {
   MSG_ADDRESS_TOO_LONG: ({ max } = {}) => `Địa chỉ không được vượt quá ${max ?? 500} ký tự.`,
   // FE-13 System Administration
   MSG_ACCOUNT_INVALID: 'Vui lòng kiểm tra lại các thông tin được đánh dấu.',
-  MSG_REQUEST_HANDLED: 'Yêu cầu này đã được xử lý. Danh sách đã được cập nhật.',
   MSG_NOTHING_CHANGED: 'Bạn chưa thay đổi thông tin nào.',
   MSG_CANNOT_LOCK_SELF: 'Bạn không thể tự khoá tài khoản của mình.',
   MSG_ACCOUNT_STATE: 'Trạng thái tài khoản vừa thay đổi. Vui lòng tải lại trang.',

@@ -281,8 +281,8 @@ export default function ForgotPasswordPage() {
             <div>
               <h2 className="title-md">Gửi yêu cầu cấp lại mật khẩu</h2>
               <p className="muted" style={{ marginTop: 4 }}>
-                Dùng khi bạn không nhận được mã qua email. Quản trị viên hoặc quản lý nhà trường sẽ xác minh và cấp mật
-                khẩu tạm thời cho bạn.
+                Dùng khi bạn không nhận được mã qua email. Hệ thống sẽ cấp một mật khẩu dùng một lần; nhà trường sẽ xác
+                minh và đưa mật khẩu đó cho bạn. Sau khi gửi, mật khẩu hiện tại của bạn không dùng được nữa.
               </p>
             </div>
             <label className="field">
@@ -327,8 +327,8 @@ export default function ForgotPasswordPage() {
               <div>
                 <p className="notice-title">Đã gửi yêu cầu</p>
                 <p>
-                  Nếu tài khoản tồn tại, nhà trường sẽ liên hệ để xác minh và cấp mật khẩu tạm thời cho bạn. Bạn sẽ đổi
-                  mật khẩu ở lần đăng nhập tiếp theo.
+                  Nếu tài khoản tồn tại, hệ thống đã cấp mật khẩu dùng một lần. Hãy liên hệ quản trị viên hoặc nhà trường
+                  để được xác minh và nhận mật khẩu. Lần đầu đăng nhập bằng mật khẩu đó, bạn sẽ đặt mật khẩu mới.
                 </p>
               </div>
             </div>

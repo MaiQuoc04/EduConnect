@@ -147,8 +147,3 @@ export async function listResetRequests(params) {
   const { data } = await api.get('/admin/password-reset-requests', { params });
   return data;
 }
-
-export async function rejectResetRequest(id) {
-  const { data } = await api.post(`/admin/password-reset-requests/${id}/reject`);
-  return data;
-}
