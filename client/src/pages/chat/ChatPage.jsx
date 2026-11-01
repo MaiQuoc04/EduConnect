@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Link, NavLink, useParams } from 'react-router-dom';
+import { Link, NavLink, useLocation, useParams } from 'react-router-dom';
 import { api } from '../../api/client.js';
 import Icon from '../../components/Icon.jsx';
 import { errorText } from '../../messages.js';
@@ -10,8 +10,12 @@ import { GROUP_TYPE_HELP, GROUP_TYPE_ICONS, GROUP_TYPE_LABELS } from '../groups/
 // ASSUMPTION: shell built in FE-04 (Khanh) from the UC-29 group list so "Trò chuyện" links have a home; FE-06
 // Messaging (owner: Anh, SCR-43 Group Chat / SCR-50 Chat Room) replaces <ChatPending> with the real message list
 // and composer, and adds 1-1 chats to the left list. Who may chat where is still checked by GET /groups/:id.
+// Opened from a group or from "Nhóm của tôi", the router state { backTo, backLabel } (groupLabels.js) adds a
+// "Quay lại" button at the top left; it is passed on while the user switches chats so the way back stays.
 export default function ChatPage() {
   const { groupId } = useParams();
+  const back = useLocation().state;
+  const backState = back?.backTo ? back : undefined;
   const [list, setList] = useState({ loading: true, data: null, error: '' });
   const [query, setQuery] = useState('');
 
@@ -48,73 +52,83 @@ export default function ChatPage() {
   }, [list.data, query]);
 
   return (
-    <div className={`chat-shell${groupId ? ' has-chat' : ''}`}>
-      <aside className="chat-list" aria-label="Danh sách nhóm trò chuyện">
-        <div className="chat-list-head">
-          <h1 className="title-md">Trò chuyện</h1>
-          <div className="input-wrap subject-search">
-            <Icon name="search" size="sm" className="subject-search-icon" />
-            <input
-              className="input"
-              type="search"
-              placeholder="Tìm nhóm…"
-              value={query}
-              onChange={(e) => setQuery(e.target.value)}
-              aria-label="Tìm nhóm"
-            />
+    <>
+      {backState && (
+        <div className="chat-topbar">
+          <Link to={backState.backTo} className="btn btn-tertiary chat-return">
+            <Icon name="arrow_back" size="sm" />
+            Quay lại {backState.backLabel}
+          </Link>
+        </div>
+      )}
+      <div className={`chat-shell${groupId ? ' has-chat' : ''}${backState ? ' has-topbar' : ''}`}>
+        <aside className="chat-list" aria-label="Danh sách nhóm trò chuyện">
+          <div className="chat-list-head">
+            <h1 className="title-md">Trò chuyện</h1>
+            <div className="input-wrap subject-search">
+              <Icon name="search" size="sm" className="subject-search-icon" />
+              <input
+                className="input"
+                type="search"
+                placeholder="Tìm nhóm…"
+                value={query}
+                onChange={(e) => setQuery(e.target.value)}
+                aria-label="Tìm nhóm"
+              />
+            </div>
           </div>
-        </div>
-        <div className="chat-list-body">
-          {list.error ? (
-            <p className="form-error chat-list-note">{list.error}</p>
-          ) : list.loading ? (
-            <p className="loading chat-list-note">Đang tải nhóm…</p>
-          ) : !sections.length ? (
-            <p className="muted chat-list-note">{query ? 'Không tìm thấy nhóm phù hợp.' : 'Bạn chưa thuộc nhóm nào.'}</p>
-          ) : (
-            sections.map((s) => (
-              <section key={s.key} className="chat-section">
-                <h2 className="label-upper chat-section-title">{s.title}</h2>
-                <ul>
-                  {s.items.map((g) => (
-                    <li key={g.groupId}>
-                      <NavLink to={`/chat/${g.groupId}`} className="chat-item">
-                        <span className={`gd-mini-icon type-${g.groupType.toLowerCase()}`} aria-hidden="true">
-                          <Icon name={GROUP_TYPE_ICONS[g.groupType]} size="sm" />
-                        </span>
-                        <span className="chat-item-text">
-                          <span className="chat-item-name">{g.title}</span>
-                          <span className="caption muted">{g.sub}</span>
-                        </span>
-                      </NavLink>
-                    </li>
-                  ))}
-                </ul>
-              </section>
-            ))
-          )}
-        </div>
-      </aside>
+          <div className="chat-list-body">
+            {list.error ? (
+              <p className="form-error chat-list-note">{list.error}</p>
+            ) : list.loading ? (
+              <p className="loading chat-list-note">Đang tải nhóm…</p>
+            ) : !sections.length ? (
+              <p className="muted chat-list-note">{query ? 'Không tìm thấy nhóm phù hợp.' : 'Bạn chưa thuộc nhóm nào.'}</p>
+            ) : (
+              sections.map((s) => (
+                <section key={s.key} className="chat-section">
+                  <h2 className="label-upper chat-section-title">{s.title}</h2>
+                  <ul>
+                    {s.items.map((g) => (
+                      <li key={g.groupId}>
+                        <NavLink to={`/chat/${g.groupId}`} state={backState} className="chat-item">
+                          <span className={`gd-mini-icon type-${g.groupType.toLowerCase()}`} aria-hidden="true">
+                            <Icon name={GROUP_TYPE_ICONS[g.groupType]} size="sm" />
+                          </span>
+                          <span className="chat-item-text">
+                            <span className="chat-item-name">{g.title}</span>
+                            <span className="caption muted">{g.sub}</span>
+                          </span>
+                        </NavLink>
+                      </li>
+                    ))}
+                  </ul>
+                </section>
+              ))
+            )}
+          </div>
+        </aside>
 
-      <section className="chat-room" aria-label="Khung trò chuyện">
-        {groupId ? (
-          <ChatRoom key={groupId} groupId={groupId} />
-        ) : (
-          <div className="chat-empty">
-            <span className="gd-pending-icon" aria-hidden="true">
-              <Icon name="forum" />
-            </span>
-            <h2 className="title-md">Chọn một nhóm để trò chuyện</h2>
-            <p className="muted">Các nhóm lớp và team của bạn nằm ở cột bên trái.</p>
-          </div>
-        )}
-      </section>
-    </div>
+        <section className="chat-room" aria-label="Khung trò chuyện">
+          {groupId ? (
+            <ChatRoom key={groupId} groupId={groupId} backState={backState} />
+          ) : (
+            <div className="chat-empty">
+              <span className="gd-pending-icon" aria-hidden="true">
+                <Icon name="forum" />
+              </span>
+              <h2 className="title-md">Chọn một nhóm để trò chuyện</h2>
+              <p className="muted">Các nhóm lớp và team của bạn nằm ở cột bên trái.</p>
+            </div>
+          )}
+        </section>
+      </div>
+    </>
   );
 }
 
 // Right pane: the chosen group's header, then the chat (FE-06).
-function ChatRoom({ groupId }) {
+function ChatRoom({ groupId, backState }) {
   const [state, setState] = useState({ loading: true, group: null, error: '' });
 
   useEffect(() => {
@@ -134,7 +148,7 @@ function ChatRoom({ groupId }) {
   return (
     <>
       <header className="chat-room-head">
-        <Link to="/chat" className="btn btn-icon chat-back" aria-label="Về danh sách nhóm">
+        <Link to="/chat" state={backState} className="btn btn-icon chat-back" aria-label="Về danh sách nhóm">
           <Icon name="arrow_back" />
         </Link>
         <span className={`gd-mini-icon type-${g.groupType.toLowerCase()}`} aria-hidden="true">

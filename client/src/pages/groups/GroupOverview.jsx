@@ -4,7 +4,14 @@ import Icon from '../../components/Icon.jsx';
 import { useAuth } from '../../context/AuthContext.jsx';
 import { formatDate } from '../../utils/format.js';
 import { yearLabel } from '../school-years/schoolYearLabels.js';
-import { GROUP_TYPE_DESC, GROUP_TYPE_HELP, GROUP_TYPE_ICONS, GROUP_TYPE_LABELS, groupHasFeed } from './groupLabels.js';
+import {
+  chatBackFromGroup,
+  GROUP_TYPE_DESC,
+  GROUP_TYPE_HELP,
+  GROUP_TYPE_ICONS,
+  GROUP_TYPE_LABELS,
+  groupHasFeed,
+} from './groupLabels.js';
 import TeamCreatePanel from './TeamCreatePanel.jsx';
 
 // SCR-23 – UC-30 View Group Detail, overview tab: what the group is for, the class's other groups and "Team của lớp"
@@ -54,7 +61,7 @@ export default function GroupOverview() {
             </li>
             <li className="is-on">
               {g.canSeeContent ? (
-                <Link to={`/chat/${g.groupId}`}>
+                <Link to={`/chat/${g.groupId}`} state={chatBackFromGroup(g, g.title)}>
                   <Icon name="forum" size="sm" />
                   Trò chuyện
                 </Link>

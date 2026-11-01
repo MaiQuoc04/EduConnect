@@ -6,7 +6,7 @@ import { useAuth } from '../../context/AuthContext.jsx';
 import { errorText } from '../../messages.js';
 import { yearLabel } from '../school-years/schoolYearLabels.js';
 import { fold } from '../subjects/subjectText.js';
-import { GROUP_TYPE_HELP, GROUP_TYPE_ICONS, GROUP_TYPE_LABELS, groupHasFeed } from './groupLabels.js';
+import { CHAT_BACK_FROM_LIST, GROUP_TYPE_HELP, GROUP_TYPE_ICONS, GROUP_TYPE_LABELS, groupHasFeed } from './groupLabels.js';
 import TeamCreatePanel from './TeamCreatePanel.jsx';
 
 const ROLE_LABELS = { STUDENT: 'Học sinh', PARENT: 'Phụ huynh' };
@@ -271,7 +271,7 @@ function ClassGroupsCard({ cls, teacher, role, readOnly, canCreateTeam, onCreate
           <span className="label-upper">Team{cls.teams.length ? ` (${cls.teams.length})` : ''}</span>
           <div className="mc-team-list">
             {cls.teams.map((t) => (
-              <Link key={t.groupId} to={`/chat/${t.groupId}`} className="mc-team" title={t.createdByName ? `Do ${t.createdByName} tạo` : undefined}>
+              <Link key={t.groupId} to={`/chat/${t.groupId}`} state={CHAT_BACK_FROM_LIST} className="mc-team" title={t.createdByName ? `Do ${t.createdByName} tạo` : undefined}>
                 <Icon name={GROUP_TYPE_ICONS.TEAM_CHAT} size="sm" />
                 {t.groupName}
                 <span className="mc-team-count">{t.memberCount}</span>
@@ -345,7 +345,7 @@ function GroupRow({ group, label }) {
         </span>
       </Link>
       <span className="mc-row-actions">
-        <Link to={`/chat/${group.groupId}`} className="btn-icon mc-icon-btn" title="Trò chuyện" aria-label={`Trò chuyện ${label}`}>
+        <Link to={`/chat/${group.groupId}`} state={CHAT_BACK_FROM_LIST} className="btn-icon mc-icon-btn" title="Trò chuyện" aria-label={`Trò chuyện ${label}`}>
           <Icon name="forum" size="sm" />
         </Link>
       </span>

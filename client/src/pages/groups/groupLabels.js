@@ -18,6 +18,18 @@ export const GROUP_TYPE_HELP = {
 // Only the general class group and the teacher group have a feed; every group has a chat (business-rules §4).
 export const groupHasFeed = (groupType) => groupType === 'GENERAL' || groupType === 'TEACHER_SCHOOL';
 
+// Router state for a link to /chat/:id opened from inside a group: the chat view then shows "Quay lại" to the
+// group's feed (or to its overview for a chat-only group). group = GET /groups/:id.
+export function chatBackFromGroup(group, title) {
+  if (groupHasFeed(group.groupType)) {
+    return { backTo: `/groups/${group.groupId}/feed`, backLabel: `Bảng tin ${group.class?.className ?? group.groupName}` };
+  }
+  return { backTo: `/groups/${group.groupId}`, backLabel: title };
+}
+
+// Router state for a chat link on "Nhóm của tôi".
+export const CHAT_BACK_FROM_LIST = { backTo: '/groups', backLabel: 'Nhóm của tôi' };
+
 // What each group is for (business-rules §4: GENERAL and the teacher group have a feed, the others are chat only).
 export const GROUP_TYPE_DESC = {
   GENERAL: 'Bảng tin và trò chuyện chung của lớp với giáo viên, học sinh và phụ huynh.',

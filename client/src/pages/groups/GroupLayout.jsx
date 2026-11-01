@@ -7,7 +7,7 @@ import { useToast } from '../../context/ToastContext.jsx';
 import { errorText } from '../../messages.js';
 import { yearLabel } from '../school-years/schoolYearLabels.js';
 import ConfirmDialog from './ConfirmDialog.jsx';
-import { GROUP_TYPE_ICONS, GROUP_TYPE_LABELS, groupHasFeed } from './groupLabels.js';
+import { chatBackFromGroup, GROUP_TYPE_ICONS, GROUP_TYPE_LABELS, groupHasFeed } from './groupLabels.js';
 
 // SCR-23 Group Detail – UC-30 View Group Detail: the group (or team, UC-35) header and its tabs. The overview and members tabs are
 // FE-04; FE-05 (Group Feed) and FE-06 (Messaging) add their tabs here as nested routes, shown only when the group's
@@ -140,7 +140,7 @@ export default function GroupLayout() {
                 </NavLink>
               )}
               {g.canSeeContent && (
-                <NavLink to={`/chat/${g.groupId}`}>
+                <NavLink to={`/chat/${g.groupId}`} state={chatBackFromGroup(g, title)}>
                   <Icon name="forum" size="sm" />
                   Trò chuyện
                 </NavLink>
