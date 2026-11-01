@@ -270,8 +270,10 @@ export async function requestAdminPasswordReset({ identifier, fullName, reason, 
   }
   if (user.status !== 'ACTIVE') throw badRequest('MSG_ACCOUNT_LOCKED', 'This account is locked.');
 
+  // A PENDING request whose password the school still has to hand over blocks a new one; an emailed one does not
+  // (the user may not have received the email) – only the cooldown below limits it.
   const { rows: pending } = await pool.query(
-    `SELECT 1 FROM password_reset_requests WHERE user_id = $1 AND status = 'PENDING' LIMIT 1`,
+    `SELECT 1 FROM password_reset_requests WHERE user_id = $1 AND status = 'PENDING' AND delivery = 'SCHOOL' LIMIT 1`,
     [user.user_id],
   );
   if (pending.length) {
@@ -294,23 +296,26 @@ export async function requestAdminPasswordReset({ identifier, fullName, reason, 
 
   const delivery = user.email ? 'EMAIL' : 'SCHOOL';
   await withTransaction(async (client) => {
+    // Every reset is listed for SA / SM (tab "waiting for sign-in"): EMAIL = sent by email, SCHOOL = to hand over.
+    // An emailed request still PENDING is reused (one PENDING row per account).
+    const { rows: [request] } = await client.query(
+      `INSERT INTO password_reset_requests (user_id, reason, delivery) VALUES ($1, $2, $3)
+       ON CONFLICT (user_id) WHERE status = 'PENDING' DO UPDATE
+         SET reason = EXCLUDED.reason, delivery = EXCLUDED.delivery, temp_password_enc = NULL, created_at = NOW()
+         WHERE password_reset_requests.delivery = 'EMAIL'
+       RETURNING request_id`,
+      [user.user_id, reason || null, delivery],
+    );
+    if (!request) {
+      throw badRequest('MSG_REQUEST_PENDING', 'A request for this account is already waiting to be handled.');
+    }
     if (delivery === 'EMAIL') {
       const password = await resetToTemporaryPassword(client, user);
-      // Sent before the commit: if the email cannot be sent, the old password stays.
+      // Sent before the commit: if the email cannot be sent, nothing changes (old password, no request).
       await sendTemporaryPasswordMail(user, password);
       return;
     }
-
-    const { rows: inserted } = await client.query(
-      `INSERT INTO password_reset_requests (user_id, reason) VALUES ($1, $2)
-       ON CONFLICT (user_id) WHERE status = 'PENDING' DO NOTHING
-       RETURNING request_id`,
-      [user.user_id, reason || null],
-    );
-    if (!inserted.length) {
-      throw badRequest('MSG_REQUEST_PENDING', 'A request for this account is already waiting to be handled.');
-    }
-    await issueRequestPassword(client, user, inserted[0].request_id);
+    await issueRequestPassword(client, user, request.request_id);
 
     // Who can read the password (same scope as UC-100): every active SA; SMs too unless the account is an SA or SM.
     const roles = await getRoles(user.user_id);
@@ -332,7 +337,7 @@ export async function requestAdminPasswordReset({ identifier, fullName, reason, 
       [
         `Yêu cầu cấp lại mật khẩu: ${user.full_name}`,
         `Tài khoản ${user.username} (không có email) yêu cầu cấp lại mật khẩu. Hệ thống đã tạo mật khẩu dùng một lần; xác minh danh tính rồi bàn giao cho người dùng.${reason ? ` Lý do: ${reason}` : ''}`,
-        inserted[0].request_id,
+        request.request_id,
       ],
     );
     await client.query(

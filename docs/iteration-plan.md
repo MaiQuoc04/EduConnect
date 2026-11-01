@@ -30,10 +30,13 @@ Last updated: 01/11/2026.
 - **Shared DB (Supabase):** schema v0.3 + `patch_v0.3_password_reset_requests.sql` (27/10) +
   `patch_v0.3_users_address.sql` (28/10: `users.address` added, `parents.address` dropped) +
   `patch_v0.3_reset_request_password.sql` (31/10: `password_reset_requests.temp_password_enc`) +
-  `patch_v0.3_reset_cooldown_codes.sql` (01/11: reset cooldown setting, GV / HS codes padded to 4 digits). 47 tables.
+  `patch_v0.3_reset_cooldown_codes.sql` (01/11: reset cooldown setting, GV / HS codes padded to 4 digits) +
+  `patch_v0.3_reset_request_delivery.sql` (01/11: `password_reset_requests.delivery`). 47 tables.
 - **develop:**
   - FE-01 complete for It1 (merged 01/11): UC-01..UC-06, UC-107 Update Address, UC-108 Update Occupation,
-    UC-109 View Child Profile, password reset request with sign-in name + full name check.
+    UC-109 View Child Profile, password reset request with sign-in name + full name check; forced password change
+    after a temporary password asks only for the new password (01/11); the requests page lists emailed resets too
+    ("sent by email" / "to hand over", 01/11).
   - FE-13 (Linh) merged 01/11 with the team lead's decisions applied: automatic reset from a request (email or
     SA / SM read the password), cooldown setting, role-based usernames, HS / GV + 4-digit codes, phone format,
     no SA creation from screens, settings ranges, UC numbers fixed. UC-95..UC-103 built; "View Activity Log"

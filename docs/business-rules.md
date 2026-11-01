@@ -92,7 +92,8 @@ Boundaries that are easy to get wrong:
   to the previous password; must not contain the username or phone number.
 - Initial / reset password: random, shown **once** to SA/SM (on screen after creating one account or a reset; in
   the result file of an import) and never stored as text; `must_change_password = TRUE` forces a change at the next
-  sign-in. Users without email get it outside the system. Lost before handover → reset again (UC-100). The account
+  sign-in. In that forced change the user only types the new password twice – no need to type the temporary one
+  again (01/11/2026); a normal change (UC-05) still asks for the current password. Users without email get it outside the system. Lost before handover → reset again (UC-100). The account
   list export (UC-98) has no passwords. (Exception: the encrypted copy of a password reset request, see below.)
 - **Temporary sign-in lock** (automatic, different from a manual account lock): after 5 wrong passwords lock for
   5 minutes; each further group of 5 adds 5 minutes, max 30; one correct sign-in resets the counter; SM/SA can clear
@@ -113,8 +114,11 @@ Boundaries that are easy to get wrong:
     OTPs expire. Logged as `PASSWORD_RESET`.
   - At most one such reset per account every `password_reset.request_cooldown_minutes` (system setting, default
     15) – earlier → "try again in N minutes".
-  - **Account with an email:** the temporary password is sent to that email. No request row, no notification.
-  - **Account without an email:** a PENDING `password_reset_requests` row keeps an encrypted copy of the temporary
+  - Every such reset is a `password_reset_requests` row with `delivery` = `EMAIL` or `SCHOOL`, listed for SA / SM
+    in the tab "waiting for sign-in" as "sent by email" or "to hand over" (the tab counter counts only the latter).
+  - **Account with an email:** the temporary password is sent to that email (`delivery = EMAIL`, nothing stored, no
+    notification). A new request after the cooldown replaces the waiting one (the user may not have got the email).
+  - **Account without an email:** the PENDING request (`delivery = SCHOOL`) keeps an encrypted copy of the temporary
     password (`temp_password_enc`); SA (any account) and SM (student / parent / teacher accounts) are notified and
     can read the password on the requests page. How the user gets it (contacting the school, a teacher…) is outside
     the system. The request becomes DONE and the copy is cleared when the user signs in. While a request is PENDING

@@ -446,7 +446,7 @@ export async function listResetRequests({ query = {}, actor }) {
   const page = Math.max(1, Number.parseInt(query.page, 10) || 1);
   const { rows } = await pool.query(
     `SELECT q.request_id AS id, q.reason, q.status, q.created_at AS "createdAt", q.handled_at AS "handledAt",
-            q.temp_password_enc AS "sealed",
+            q.temp_password_enc AS "sealed", q.delivery,
             u.user_id AS "userId", u.username, u.full_name AS "fullName", u.email, u.phone, u.status AS "accountStatus",
             COALESCE(ARRAY(SELECT r.role_code FROM user_roles ur JOIN roles r ON r.role_id = ur.role_id
                            WHERE ur.user_id = u.user_id ORDER BY r.role_id), '{}') AS roles,
@@ -459,20 +459,21 @@ export async function listResetRequests({ query = {}, actor }) {
      LEFT JOIN teachers t ON t.user_id = u.user_id
      LEFT JOIN users h ON h.user_id = q.handled_by
      WHERE q.status = $1 AND ($2::boolean OR ${SM_SCOPE_SQL})
-     ORDER BY CASE WHEN q.status = 'PENDING' THEN q.created_at END ASC, q.handled_at DESC NULLS LAST, q.request_id DESC
+     ORDER BY CASE WHEN q.status = 'PENDING' AND q.delivery = 'SCHOOL' THEN 0 ELSE 1 END,
+              CASE WHEN q.status = 'PENDING' THEN q.created_at END ASC, q.handled_at DESC NULLS LAST, q.request_id DESC
      LIMIT $3 OFFSET $4`,
     [status, actor.activeRole === 'SYSTEM_ADMIN', PAGE_SIZE, (page - 1) * PAGE_SIZE],
   );
   const { rows: count } = await pool.query(
     `SELECT COUNT(*) AS n FROM password_reset_requests q JOIN users u ON u.user_id = q.user_id
-     WHERE q.status = 'PENDING' AND ($1::boolean OR ${SM_SCOPE_SQL})`,
+     WHERE q.status = 'PENDING' AND q.delivery = 'SCHOOL' AND ($1::boolean OR ${SM_SCOPE_SQL})`,
     [actor.activeRole === 'SYSTEM_ADMIN'],
   );
   return {
     // temporaryPassword: only while PENDING; null if it cannot be read (e.g. JWT_SECRET changed).
     items: rows.map(({ total, sealed, ...r }) => ({ ...r, temporaryPassword: r.status === 'PENDING' ? openSecret(sealed) : null })),
     total: rows[0]?.total ?? 0,
-    pendingCount: count[0].n,
+    pendingCount: count[0].n, // only the passwords still to hand over (delivery SCHOOL); emailed ones need no action
     status,
     page,
     pageSize: PAGE_SIZE,

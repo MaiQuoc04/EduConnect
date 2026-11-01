@@ -7,9 +7,9 @@ import { generateTemporaryPassword } from '../../utils/tempPassword.js';
 // Business rules §3 (agreed 01/11/2026):
 // - A request whose sign-in name and full name match resets the password at once: the old password stops working,
 //   the account must change its password at the next sign-in, a temporary sign-in lock is cleared.
-// - Account with an email: the temporary password is emailed (auth.service.js), nothing is stored.
-// - Account without an email: System Admin / School Manager read the password on the requests page until the user
-//   signs in; then the request becomes DONE and the stored (encrypted) copy is cleared.
+// - Every reset is a request row: delivery EMAIL (password emailed by auth.service.js, nothing stored) or SCHOOL
+//   (no email: System Admin / School Manager read the password on the requests page until the user signs in).
+// - The request becomes DONE when the user signs in; the stored (encrypted) copy is then cleared.
 
 // Inside the caller's transaction. `user` = { user_id, username, phone }. Returns the new temporary password.
 export async function resetToTemporaryPassword(client, user) {

@@ -9,6 +9,8 @@
 --   patch_v0.3_users_address.sql.
 -- 01/11/2026: + setting password_reset.request_cooldown_minutes; student / teacher codes are HS / GV + 4 digits.
 --   Existing database: run patch_v0.3_reset_cooldown_codes.sql.
+-- 01/11/2026: + password_reset_requests.delivery (emailed resets are listed too). Existing database: run
+--   patch_v0.3_reset_request_delivery.sql.
 -- How to run: Supabase > SQL Editor > paste the whole file > Run (on an empty database).
 -- Conventions:
 --   * Soft delete everywhere (deleted_at / deleted_by). Hard delete only for: post_likes (unlike),
@@ -667,13 +669,15 @@ CREATE TABLE password_reset_requests (
   user_id     BIGINT NOT NULL,
   reason      VARCHAR(500) NULL,
   temp_password_enc TEXT NULL,                         -- encrypted one-time password, shown to SA / SM; NULL once used (31/10)
+  delivery    VARCHAR(10) NOT NULL DEFAULT 'SCHOOL',   -- EMAIL (sent by email) or SCHOOL (handed over by SA / SM) (01/11)
   status      VARCHAR(20) NOT NULL DEFAULT 'PENDING',  -- PENDING (waiting for sign-in), DONE (used); REJECTED = old requests
   handled_by  BIGINT NULL,
   handled_at  TIMESTAMPTZ NULL,
   created_at  TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
   FOREIGN KEY (user_id)    REFERENCES users(user_id),
   FOREIGN KEY (handled_by) REFERENCES users(user_id),
-  CHECK (status IN ('PENDING','DONE','REJECTED'))
+  CHECK (status IN ('PENDING','DONE','REJECTED')),
+  CHECK (delivery IN ('EMAIL','SCHOOL'))
 );
 
 -- 14. INDEXES AND TRIGGERS --------------------------------------------------------

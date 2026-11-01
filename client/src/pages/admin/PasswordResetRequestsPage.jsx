@@ -9,10 +9,16 @@ import { errorText, ROLE_LABELS } from '../../messages.js';
 import { formatDateTime } from './format.js';
 import './admin.css';
 
-// Password reset requests (business-rules §3; FE-13 change of 31/10/2026, see server resetRequests.js). Users who
-// cannot use the OTP email send a request from the Forgot Password screen (FE-01); the system issues a one-time
-// password at once. System Admin sees all requests, School Manager those of student, parent and teacher accounts.
-// They read the password here and hand it over; the request is "used" once the user signs in with it.
+// Password reset requests (business-rules §3, agreed 01/11/2026; see server resetRequests.js). A request sent from
+// the Forgot Password screen (FE-01) whose sign-in name and full name match resets the password at once. Each row has
+// a delivery: EMAIL = the temporary password was emailed (nothing to do), SCHOOL = no email, SA / SM read the
+// password here and hand it over. The request is "used" once the user signs in. System Admin sees all requests,
+// School Manager those of student, parent and teacher accounts.
+
+const DELIVERY = {
+  PENDING: { SCHOOL: { label: 'Cần bàn giao', tone: 'amber', icon: 'key' }, EMAIL: { label: 'Đã gửi qua email', tone: 'green', icon: 'mail' } },
+  DONE: { SCHOOL: { label: 'Nhà trường bàn giao', tone: 'grey', icon: 'key' }, EMAIL: { label: 'Qua email', tone: 'grey', icon: 'mail' } },
+};
 
 const TABS = [
   { status: 'PENDING', label: 'Chờ người dùng đăng nhập' },
@@ -87,8 +93,8 @@ export default function PasswordResetRequestsPage() {
         <div>
           <h1 className="headline-lg">Yêu cầu cấp lại mật khẩu</h1>
           <p>
-            Khi người dùng gửi yêu cầu từ màn Quên mật khẩu, hệ thống cấp ngay một mật khẩu dùng một lần và mật khẩu cũ
-            không còn dùng được.
+            Khi tên đăng nhập và họ tên trong yêu cầu khớp, hệ thống đặt lại mật khẩu ngay và mật khẩu cũ không còn dùng
+            được. Tài khoản có email nhận mật khẩu qua email; tài khoản không có email cần nhà trường bàn giao.
             {activeRole === 'SCHOOL_MANAGER' && ' Bạn thấy yêu cầu của học sinh, phụ huynh và giáo viên.'}
           </p>
         </div>
@@ -103,8 +109,8 @@ export default function PasswordResetRequestsPage() {
         <div>
           <p className="notice-title">Xác minh danh tính trước khi bàn giao</p>
           <p>
-            Bất kỳ ai biết tên đăng nhập đều có thể gửi yêu cầu. Hãy liên hệ trực tiếp người dùng (hoặc phụ huynh, giáo viên
-            chủ nhiệm) để xác nhận, rồi mới đưa mật khẩu. Mật khẩu hiển thị ở đây cho đến khi người dùng đăng nhập; lần đầu
+            Người gửi yêu cầu chỉ cần biết tên đăng nhập và họ tên. Với các yêu cầu cần bàn giao, hãy liên hệ trực tiếp người
+            dùng (hoặc phụ huynh, giáo viên chủ nhiệm) để xác nhận, rồi mới đưa mật khẩu. Mật khẩu hiển thị ở đây cho đến khi người dùng đăng nhập; lần đầu
             đăng nhập, họ phải đặt mật khẩu mới.
           </p>
         </div>
@@ -159,6 +165,12 @@ export default function PasswordResetRequestsPage() {
                         {ROLE_LABELS[role] ?? role}
                       </span>
                     ))}
+                    {DELIVERY[r.status]?.[r.delivery] && (
+                      <span className={`tag ${DELIVERY[r.status][r.delivery].tone}`}>
+                        <Icon name={DELIVERY[r.status][r.delivery].icon} size="sm" />
+                        {DELIVERY[r.status][r.delivery].label}
+                      </span>
+                    )}
                     {r.accountStatus === 'LOCKED' && <span className="tag red">Tài khoản đã khoá</span>}
                   </span>
                 </div>
@@ -185,7 +197,13 @@ export default function PasswordResetRequestsPage() {
                     <p className="caption muted">Tài khoản đang bị khoá: người dùng chỉ đăng nhập được sau khi được mở khoá.</p>
                   )}
                 </div>
-                {r.status === 'PENDING' && <PasswordBox value={r.temporaryPassword} />}
+                {r.status === 'PENDING' && r.delivery === 'SCHOOL' && <PasswordBox value={r.temporaryPassword} />}
+                {r.status === 'PENDING' && r.delivery === 'EMAIL' && (
+                  <p className="caption muted request-password">
+                    Mật khẩu tạm thời đã được gửi tới {r.email ? <span className="mono">{r.email}</span> : 'email của tài khoản'}.
+                    Không cần bàn giao.
+                  </p>
+                )}
               </article>
             );
           })}

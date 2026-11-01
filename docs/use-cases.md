@@ -10,7 +10,7 @@ Source: Report 3 section 4.2 (draft v1.3). Actor "User" = any signed-in account.
 | UC-02 | Reset Forgotten Password | User, Email Service | Password Management | Receive an OTP by email, verify it and set a new password. Or send a reset request (sign-in name + full name must match): the system resets the password at once and emails it, or, without an email, shows it to System Admin / School Manager. |
 | UC-03 | Sign Out | User | Authentication | End the current session. |
 | UC-04 | View Profile | User | Personal Profile | View personal, school, class and role information. |
-| UC-05 | Change Password | User | Password Management | Change the current password following the password rules. |
+| UC-05 | Change Password | User | Password Management | Change the current password following the password rules (current password asked, except in the forced change right after signing in with a temporary password). |
 | UC-06 | Change Avatar | User | Personal Profile | Upload or replace the profile picture. |
 | UC-107 | Update Address | User | Personal Profile | Update or clear one's own address, the only profile field users edit themselves (added 28/10/2026). |
 | UC-108 | Update Occupation | Parent | Personal Profile | Update or clear one's own occupation (added 29/10/2026). |

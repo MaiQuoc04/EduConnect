@@ -137,18 +137,22 @@ export async function getChildProfile({ userId, studentId }) {
 }
 
 // UC-05 Change Password: needs the current password; also ends the "temporary password" state of UC-01.
+// Forced change (business rules §3, 01/11/2026): right after signing in with a temporary password the user only
+// types the new password – the token says mustChangePassword and the account still has must_change_password.
 // Returns a fresh token because the old one still says mustChangePassword.
 export async function changePassword({ user: claims, currentPassword, newPassword }) {
-  if (!currentPassword || !newPassword) {
-    throw badRequest('MSG_REQUIRED', 'Please enter the current and the new password.');
-  }
   const { rows } = await pool.query(
-    `SELECT user_id, username, phone, password_hash FROM users WHERE user_id = $1 AND status = 'ACTIVE'`,
+    `SELECT user_id, username, phone, password_hash, must_change_password FROM users
+     WHERE user_id = $1 AND status = 'ACTIVE'`,
     [claims.userId],
   );
   const user = rows[0];
   if (!user) throw unauthorized('AUTH_INVALID', 'Please sign in again.');
-  if (!(await bcrypt.compare(String(currentPassword), user.password_hash))) {
+  const forced = Boolean(claims.mustChangePassword && user.must_change_password);
+  if ((!forced && !currentPassword) || !newPassword) {
+    throw badRequest('MSG_REQUIRED', 'Please enter the current and the new password.');
+  }
+  if (!forced && !(await bcrypt.compare(String(currentPassword), user.password_hash))) {
     throw badRequest('MSG_WRONG_CURRENT_PASSWORD', 'The current password is not correct.');
   }
   await assertNewPassword(newPassword, user);
