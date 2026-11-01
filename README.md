@@ -5,7 +5,7 @@ Code base chung của nhóm: **React (Vite)** + **Node.js/Express** + **Socket.i
 ```
 educonnect/
 ├── CLAUDE.md   hướng dẫn cho AI agent (Claude Code tự đọc file này)
-├── docs/       quy tắc nghiệp vụ đã chốt, 110 UC, phân quyền, 71 màn
+├── docs/       quy tắc nghiệp vụ đã chốt, 109 UC, phân quyền, 70 màn
 ├── database/   educonnect_schema_v0.3.sql (47 bảng, PostgreSQL) + educonnect_seed_small_v0.3.sql (dữ liệu mẫu)
 ├── server/     API Express – http://localhost:5000/api/v1
 └── client/     Web React – http://localhost:5173
@@ -45,7 +45,7 @@ File seed sinh bằng `npm run seed:generate:small` (không sửa tay; muốn đ
 Cần thêm một System Admin (vd DB local chưa nạp seed):
 ```bash
 cd server
-npm run seed:admin -- admin "System Admin" "<mật khẩu>"
+npm run seed:admin -- sa.admin "System Admin" "<mật khẩu>"
 ```
 
 ## 4. Quy ước code

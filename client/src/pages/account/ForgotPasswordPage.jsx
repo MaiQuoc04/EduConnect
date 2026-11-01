@@ -43,6 +43,7 @@ export default function ForgotPasswordPage() {
   const [identifier, setIdentifier] = useState('');
   const [fullName, setFullName] = useState('');
   const [reason, setReason] = useState('');
+  const [delivery, setDelivery] = useState(''); // EMAIL | SCHOOL, from the reset request answer
   const [otp, setOtp] = useState('');
   const [resetToken, setResetToken] = useState('');
   const [password, setPassword] = useState('');
@@ -92,11 +93,12 @@ export default function ForgotPasswordPage() {
 
   const sendRequest = () =>
     run(async () => {
-      await api.post('/auth/password-reset-requests', {
+      const { data } = await api.post('/auth/password-reset-requests', {
         identifier: identifier.trim(),
         fullName: fullName.trim(),
         reason: reason.trim(),
       });
+      setDelivery(data.delivery);
       setStep('requested');
     });
 
@@ -286,8 +288,9 @@ export default function ForgotPasswordPage() {
             <div>
               <h2 className="title-md">Gửi yêu cầu cấp lại mật khẩu</h2>
               <p className="muted" style={{ marginTop: 4 }}>
-                Dùng khi bạn không nhận được mã qua email. Quản trị viên hoặc quản lý nhà trường sẽ xác minh và cấp mật
-                khẩu tạm thời cho bạn.
+                Nhập đúng tên đăng nhập và họ tên của tài khoản. Hệ thống sẽ đặt lại mật khẩu ngay: nếu tài khoản có
+                email, mật khẩu tạm thời được gửi qua email; nếu không, nhà trường sẽ xác minh và đưa mật khẩu cho bạn.
+                Sau khi gửi, mật khẩu hiện tại không dùng được nữa.
               </p>
             </div>
             <label className="field">
@@ -341,10 +344,11 @@ export default function ForgotPasswordPage() {
             <div className="notice ink">
               <Icon name="check_circle" />
               <div>
-                <p className="notice-title">Đã gửi yêu cầu</p>
+                <p className="notice-title">Đã đặt lại mật khẩu</p>
                 <p>
-                  Nhà trường sẽ liên hệ để xác minh và cấp mật khẩu tạm thời cho bạn. Bạn sẽ đổi mật khẩu ở lần đăng
-                  nhập tiếp theo.
+                  {delivery === 'EMAIL'
+                    ? 'Mật khẩu tạm thời đã được gửi tới email của tài khoản. Lần đăng nhập tiếp theo, bạn sẽ đặt mật khẩu mới.'
+                    : 'Hệ thống đã cấp mật khẩu tạm thời. Vui lòng liên hệ nhà trường để được xác minh và nhận mật khẩu. Lần đăng nhập tiếp theo, bạn sẽ đặt mật khẩu mới.'}
                 </p>
               </div>
             </div>

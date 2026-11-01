@@ -28,20 +28,29 @@ FE-10 is split: timetable in It2, class calendar in It3.
 Last updated: 01/11/2026.
 
 - **Shared DB (Supabase):** schema v0.3 + `patch_v0.3_password_reset_requests.sql` (27/10) +
-  `patch_v0.3_users_address.sql` (run 28/10: `users.address` added, `parents.address` dropped). 47 tables.
-- **develop:** FE-01 complete for It1 (merged 01/11): UC-01..UC-06, password reset request to SA/SM with sign-in
-  name + full name check (UC-02; handled with UC-100 in FE-13), UC-108 Update Address, UC-109 Update Occupation,
-  UC-110 View Child Profile.
+  `patch_v0.3_users_address.sql` (28/10: `users.address` added, `parents.address` dropped) +
+  `patch_v0.3_reset_request_password.sql` (31/10: `password_reset_requests.temp_password_enc`) +
+  `patch_v0.3_reset_cooldown_codes.sql` (01/11: reset cooldown setting, GV / HS codes padded to 4 digits). 47 tables.
+- **develop:**
+  - FE-01 complete for It1 (merged 01/11): UC-01..UC-06, UC-107 Update Address, UC-108 Update Occupation,
+    UC-109 View Child Profile, password reset request with sign-in name + full name check.
+  - FE-13 (Linh) merged 01/11 with the team lead's decisions applied: automatic reset from a request (email or
+    SA / SM read the password), cooldown setting, role-based usernames, HS / GV + 4-digit codes, phone format,
+    no SA creation from screens, settings ranges, UC numbers fixed. UC-95..UC-103 built; "View Activity Log"
+    removed (log kept in the DB only).
 - **Pushed, not merged yet:** `feature/fe-02-student-management` (Anh), `feature/fe-03-teacher-management` (Dung),
-  `feature/fe-04-class-group-management` (Khanh), `feature/fe-13-system-administration` (Linh). Each should merge
-  `develop` into its branch before its PR.
-- **Use cases added after the plan:** UC-108 Update Address (User, 28/10), UC-109 Update Occupation (Parent, 29/10),
-  UC-110 View Child Profile (Parent, 01/11), all FE-01 (Quoc, It1).
+  `feature/fe-04-class-group-management` (Khanh). Each should merge `develop` into its branch before its PR.
+- **Numbering changes (01/11):** UC-104 View Activity Log and SCR-64 Activity Log removed; UC-105..UC-110 became
+  UC-104..UC-109 and SCR-65..SCR-71 became SCR-64..SCR-70. 109 use cases, 70 screens.
+- **Use cases added after the plan:** UC-107 Update Address (User, 28/10), UC-108 Update Occupation (Parent, 29/10),
+  UC-109 View Child Profile (Parent, 01/11), all FE-01 (Quoc, It1).
 - **Follow-ups owed:**
-  - FE-02 (Anh) and FE-13 (Linh) still read / write `parents.address`, which no longer exists in the shared DB →
-    switch to `users.address` (business rules §3). Those screens fail until then.
-  - FE-14 (Khanh, It2): a parent's address is `users.address`; occupation stays `parents.occupation`.
-  - FE-13 (Linh): the reset request screen now sends `fullName` too; the request list / UC-100 is unchanged.
+  - FE-13 (Linh): pull `develop` and continue from it; do not run SQL patches on the shared DB before the lead
+    approves them.
+  - FE-02 (Anh): `parents.address` → `users.address`; phone input = business rules §3 (use `utils/phone.js`, only
+    `0` + 9 digits); UC references to FE-14 shift by one (UC-105 → UC-104).
+  - FE-04 (Khanh): screen references shift by one (SCR-66 → SCR-65, SCR-70 → SCR-69, SCR-71 → SCR-70); FE-14 (It2)
+    uses UC-104..UC-106, a parent's address is `users.address`, occupation stays `parents.occupation`.
 
 ## Iteration 1 (19/10 – 30/10/2026)
 
@@ -57,9 +66,9 @@ Also: seed data for the shared DB (school year, semesters, subjects, classes, sa
 | UC-04 | View Profile | User |
 | UC-05 | Change Password | User |
 | UC-06 | Change Avatar | User |
-| UC-108 | Update Address | User |
-| UC-109 | Update Occupation | Parent |
-| UC-110 | View Child Profile | Parent |
+| UC-107 | Update Address | User |
+| UC-108 | Update Occupation | Parent |
+| UC-109 | View Child Profile | Parent |
 
 ### Anh: FE-02 Student Management (8 UC)
 
@@ -105,7 +114,7 @@ Also: seed data for the shared DB (school year, semesters, subjects, classes, sa
 | UC-34 | Set Student Nickname | Homeroom Teacher |
 | UC-35 | Create Team Chat | Teacher, Student, Parent |
 
-### Linh: FE-13 System Administration (10 UC)
+### Linh: FE-13 System Administration (9 UC)
 
 | ID | Use case | Actor |
 |---|---|---|
@@ -118,7 +127,6 @@ Also: seed data for the shared DB (school year, semesters, subjects, classes, sa
 | UC-101 | Lock / Unlock Account | System Admin, School Manager |
 | UC-102 | Configure System Settings | System Admin |
 | UC-103 | Post Maintenance Announcement | System Admin |
-| UC-104 | View Activity Log | System Admin |
 
 ## Iteration 2 (02/11 – 13/11/2026)
 
@@ -171,9 +179,9 @@ Reuses FE-02 parent–student linking (UC-12..14), do not duplicate it.
 
 | ID | Use case | Actor |
 |---|---|---|
-| UC-105 | View Parent List | School Manager |
-| UC-106 | View Parent Detail | School Manager |
-| UC-107 | Update Parent Information | School Manager |
+| UC-104 | View Parent List | School Manager |
+| UC-105 | View Parent Detail | School Manager |
+| UC-106 | Update Parent Information | School Manager |
 
 ### Linh: Testing and integration of It1 + It2 features.
 
@@ -248,4 +256,4 @@ Class calendar (UC-76..80) + job: class event reminder 1 day before. Moved from 
 | UC-88 | View Grades | Teacher, Student, Parent, School Manager |
 | UC-89 | View Class Ranking | Teacher, Student, Parent, School Manager |
 
-Total: 110 use cases.
+Total: 109 use cases.

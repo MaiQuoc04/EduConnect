@@ -24,6 +24,8 @@ const ERROR_MESSAGES = {
   MSG_OTP_INVALID: 'Mã xác thực không hợp lệ hoặc đã hết hạn. Vui lòng yêu cầu mã mới.',
   MSG_RESET_EXPIRED: 'Phiên đặt lại mật khẩu đã hết hạn. Vui lòng thực hiện lại từ đầu.',
   MSG_ACCOUNT_NOT_MATCH: 'Thông tin tài khoản không khớp. Vui lòng kiểm tra lại tên đăng nhập và họ tên.',
+  MSG_RESET_TOO_SOON: ({ minutesLeft } = {}) =>
+    `Mật khẩu của tài khoản này vừa được đặt lại. Vui lòng thử lại sau ${minutesLeft ?? 'ít'} phút.`,
   MSG_REQUEST_PENDING: 'Bạn đã gửi yêu cầu trước đó. Vui lòng chờ nhà trường xử lý.',
   MSG_REASON_TOO_LONG: ({ max } = {}) => `Lý do không được vượt quá ${max ?? 500} ký tự.`,
   MSG_PASSWORD_RULES:'Mật khẩu mới chưa đáp ứng các yêu cầu bảo mật.',
@@ -33,6 +35,22 @@ const ERROR_MESSAGES = {
   MSG_INVALID_IMAGE: 'Chỉ chấp nhận ảnh JPG, PNG hoặc WebP.',
   MSG_OCCUPATION_TOO_LONG: ({ max } = {}) => `Nghề nghiệp không được vượt quá ${max ?? 100} ký tự.`,
   MSG_ADDRESS_TOO_LONG: ({ max } = {}) => `Địa chỉ không được vượt quá ${max ?? 500} ký tự.`,
+  // FE-13 System Administration
+  MSG_ACCOUNT_INVALID: 'Vui lòng kiểm tra lại các thông tin được đánh dấu.',
+  MSG_NOTHING_CHANGED: 'Bạn chưa thay đổi thông tin nào.',
+  MSG_CANNOT_LOCK_SELF: 'Bạn không thể tự khoá tài khoản của mình.',
+  MSG_ACCOUNT_STATE: 'Trạng thái tài khoản vừa thay đổi. Vui lòng tải lại trang.',
+  MSG_SETTINGS_INVALID: 'Một số giá trị chưa hợp lệ. Vui lòng kiểm tra các ô được đánh dấu.',
+  MSG_MAINTENANCE_INVALID: 'Vui lòng kiểm tra lại các thông tin được đánh dấu.',
+  MSG_MAINTENANCE_STATE: 'Trạng thái đợt bảo trì vừa thay đổi. Vui lòng tải lại trang.',
+  MSG_IMPORT_TYPE: 'Vui lòng chọn loại tài khoản của file.',
+  MSG_IMPORT_FILE: 'Chỉ nhập được file .xlsx hoặc .csv tạo từ file mẫu.',
+  MSG_IMPORT_TEMPLATE: ({ missing } = {}) =>
+    `File không đúng mẫu: thiếu cột ${(missing ?? []).join(', ')}. Vui lòng tải file mẫu và điền lại.`,
+  MSG_IMPORT_EMPTY: 'File chưa có dòng dữ liệu nào.',
+  MSG_IMPORT_TOO_MANY_ROWS: ({ max } = {}) => `Mỗi file chỉ được tối đa ${max} dòng. Vui lòng chia nhỏ file.`,
+  MSG_IMPORT_NO_VALID_ROWS: 'File không có dòng hợp lệ nào để nhập.',
+  MSG_IMPORT_CONFLICT: 'Dữ liệu vừa thay đổi trong lúc nhập nên chưa có tài khoản nào được lưu. Kết quả kiểm tra đã được cập nhật, vui lòng xem lại.',
 };
 
 export function errorText({ code, message, details } = {}) {

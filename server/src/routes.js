@@ -1,6 +1,8 @@
 import { Router } from 'express';
 import healthRoutes from './modules/health/health.routes.js';
 import accountRoutes from './modules/account/account.routes.js';
+import adminRoutes from './modules/admin/admin.routes.js';
+import maintenanceRoutes from './modules/admin/maintenance.routes.js';
 import authRoutes from './modules/auth/auth.routes.js';
 
 // Each feature gets its own folder in src/modules and is mounted here, e.g.
@@ -23,5 +25,7 @@ const router = Router();
 router.use('/health', healthRoutes);
 router.use('/auth', authRoutes);
 router.use('/account', accountRoutes);
+router.use('/admin', adminRoutes);
+router.use('/maintenance', maintenanceRoutes);
 
 export default router;

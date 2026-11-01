@@ -7,7 +7,7 @@ import { errorText, GENDER_LABELS, RELATIONSHIP_LABELS } from '../../messages.js
 import { formatDate } from '../../utils/format.js';
 import Item from './ProfileItem.jsx';
 
-// UC-110 View Child Profile (part of SCR-03): a parent views the profile of one linked child. Read only.
+// UC-109 View Child Profile (part of SCR-03): a parent views the profile of one linked child. Read only.
 export default function ChildProfilePage() {
   const { studentId } = useParams();
   const [state, setState] = useState({ loading: true, data: null, error: '' });

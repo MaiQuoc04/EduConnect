@@ -8,10 +8,10 @@ import * as ctrl from './account.controller.js';
 const router = Router();
 
 router.get('/profile', requireAuth, ctrl.profile); // UC-04
-router.get('/children/:studentId', requireAuth, requireRole('PARENT'), ctrl.childProfile); // UC-110, linked children only
+router.get('/children/:studentId', requireAuth, requireRole('PARENT'), ctrl.childProfile); // UC-109, linked children only
 router.put('/password', requireAuthAllowingPasswordChange, ctrl.changePassword); // UC-05 (+ forced change of UC-01)
 router.put('/avatar', requireAuth, uploadSingle('avatar'), ctrl.changeAvatar); // UC-06
-router.put('/address', requireAuth, ctrl.updateAddress); // UC-108
-router.put('/occupation', requireAuth, requireRole('PARENT'), ctrl.updateOccupation); // UC-109, parents only
+router.put('/address', requireAuth, ctrl.updateAddress); // UC-107
+router.put('/occupation', requireAuth, requireRole('PARENT'), ctrl.updateOccupation); // UC-108, parents only
 
 export default router;

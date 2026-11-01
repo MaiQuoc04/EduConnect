@@ -5,8 +5,10 @@ import { AppError, badRequest, forbidden, unauthorized } from '../../utils/AppEr
 import { logActivity } from '../../utils/activityLog.js';
 import { sendMail } from '../../utils/mailer.js';
 import { assertNewPassword, hashPassword } from '../../utils/password.js';
+import { normalizeSignInName } from '../../utils/phone.js';
 import { getNumberSetting } from '../../utils/settings.js';
 import { signAccessToken, signPurposeToken, verifyPurposeToken } from '../../utils/token.js';
+import { closeRequestsAfterSignIn, issueRequestPassword, resetToTemporaryPassword } from '../admin/resetRequests.js';
 
 const OTP_MAX_ATTEMPTS = 5; // business-rules §3: invalid after 5 wrong attempts
 const RESET_TOKEN_TTL = '10m';
@@ -36,6 +38,7 @@ async function isUnderMaintenance() {
 // only allows changing it (see requireAuth).
 export async function signIn({ identifier, password, ip }) {
   if (!identifier || !password) throw badRequest('MSG_REQUIRED', 'Please enter your sign-in name and password.');
+  identifier = normalizeSignInName(identifier); // "+84 905…" signs in like "0905…" (business rules §3)
 
   const { rows: users } = await pool.query(
     `SELECT user_id, username, full_name, avatar_url, password_hash, status, must_change_password, failed_login_count,
@@ -81,6 +84,7 @@ export async function signIn({ identifier, password, ip }) {
   }
 
   await pool.query('UPDATE users SET failed_login_count = 0, locked_until = NULL WHERE user_id = $1', [user.user_id]);
+  await closeRequestsAfterSignIn(user.user_id); // FE-13: a waiting password reset request has been used
   await logActivity({ userId: user.user_id, action: 'LOGIN_SUCCESS', ip });
 
   const activeRole = roles[0];
@@ -231,18 +235,20 @@ export async function resetPassword({ resetToken, newPassword, ip }) {
   return { ok: true };
 }
 
-// ---------- UC-02 alternative flow: no usable email → ask SA / SM to reset (they then use UC-100) ----------
+// ---------- UC-02 alternative flow: password reset request (business rules §3, 01/11/2026) ----------
 
 const REQUEST_REASON_MAX = 500;
 
 // Same spelling rules for both sides: Unicode NFC (some keyboards type Vietnamese as NFD), single spaces, any case.
 const normalizeName = (s) => s.normalize('NFC').trim().replace(/\s+/g, ' ').toLocaleLowerCase('vi');
 
-// The sign-in name (username / email / phone) and the full name must belong to the same account (business rules §3,
-// 01/11/2026); otherwise the user is told the details do not match. One PENDING request per account: a second one
-// is refused with MSG_REQUEST_PENDING. Not logged: PASSWORD_RESET is logged when SA / SM actually resets (UC-100).
-export async function requestAdminPasswordReset({ identifier, fullName, reason }) {
-  identifier = typeof identifier === 'string' ? identifier.trim() : '';
+// The sign-in name (username / email / phone) and the full name must belong to the same account. When they match,
+// the system resets the password at once (FE-13 resetRequests.js): an account with an email gets the temporary
+// password by email; an account without one gets a PENDING request that keeps an encrypted copy for SA / SM.
+// At most one such reset per account every `password_reset.request_cooldown_minutes`; while a request is PENDING
+// a new one is refused and the password does not change.
+export async function requestAdminPasswordReset({ identifier, fullName, reason, ip }) {
+  identifier = typeof identifier === 'string' ? normalizeSignInName(identifier) : '';
   fullName = typeof fullName === 'string' ? normalizeName(fullName) : '';
   if (!identifier || !fullName) throw badRequest('MSG_REQUIRED', 'Please enter your sign-in name and full name.');
   reason = typeof reason === 'string' ? reason.trim() : '';
@@ -254,7 +260,8 @@ export async function requestAdminPasswordReset({ identifier, fullName, reason }
 
   // One input can be several accounts' username / email / phone; keep the one whose full name matches.
   const { rows: candidates } = await pool.query(
-    'SELECT user_id, full_name, username, status FROM users WHERE username = $1 OR email = $1 OR phone = $1',
+    `SELECT user_id, full_name, username, email, phone, status FROM users
+     WHERE username = $1 OR email = $1 OR phone = $1`,
     [identifier],
   );
   const user = candidates.find((u) => normalizeName(u.full_name) === fullName);
@@ -263,7 +270,37 @@ export async function requestAdminPasswordReset({ identifier, fullName, reason }
   }
   if (user.status !== 'ACTIVE') throw badRequest('MSG_ACCOUNT_LOCKED', 'This account is locked.');
 
+  const { rows: pending } = await pool.query(
+    `SELECT 1 FROM password_reset_requests WHERE user_id = $1 AND status = 'PENDING' LIMIT 1`,
+    [user.user_id],
+  );
+  if (pending.length) {
+    throw badRequest('MSG_REQUEST_PENDING', 'A request for this account is already waiting to be handled.');
+  }
+  const cooldown = await getNumberSetting('password_reset.request_cooldown_minutes', 15);
+  const { rows: [recent] } = await pool.query(
+    `SELECT CEIL(EXTRACT(EPOCH FROM created_at + make_interval(mins => $2::int) - NOW()) / 60)::int AS "minutesLeft"
+     FROM activity_logs
+     WHERE user_id = $1 AND action = 'PASSWORD_RESET' AND detail LIKE '%"step":"REQUEST"%'
+       AND created_at > NOW() - make_interval(mins => $2::int)
+     ORDER BY created_at DESC LIMIT 1`,
+    [user.user_id, cooldown],
+  );
+  if (recent) {
+    throw badRequest('MSG_RESET_TOO_SOON', 'This account was reset a moment ago. Please try again later.', {
+      minutesLeft: Math.max(1, recent.minutesLeft),
+    });
+  }
+
+  const delivery = user.email ? 'EMAIL' : 'SCHOOL';
   await withTransaction(async (client) => {
+    if (delivery === 'EMAIL') {
+      const password = await resetToTemporaryPassword(client, user);
+      // Sent before the commit: if the email cannot be sent, the old password stays.
+      await sendTemporaryPasswordMail(user, password);
+      return;
+    }
+
     const { rows: inserted } = await client.query(
       `INSERT INTO password_reset_requests (user_id, reason) VALUES ($1, $2)
        ON CONFLICT (user_id) WHERE status = 'PENDING' DO NOTHING
@@ -273,8 +310,9 @@ export async function requestAdminPasswordReset({ identifier, fullName, reason }
     if (!inserted.length) {
       throw badRequest('MSG_REQUEST_PENDING', 'A request for this account is already waiting to be handled.');
     }
+    await issueRequestPassword(client, user, inserted[0].request_id);
 
-    // Who can handle it (same scope as UC-100): every active SA; SMs too unless the account is an SA or SM.
+    // Who can read the password (same scope as UC-100): every active SA; SMs too unless the account is an SA or SM.
     const roles = await getRoles(user.user_id);
     const smCanHandle = !roles.includes('SYSTEM_ADMIN') && !roles.includes('SCHOOL_MANAGER');
     const { rows: handlers } = await client.query(
@@ -293,7 +331,7 @@ export async function requestAdminPasswordReset({ identifier, fullName, reason }
        RETURNING notification_id`,
       [
         `Yêu cầu cấp lại mật khẩu: ${user.full_name}`,
-        `Tài khoản ${user.username} yêu cầu cấp lại mật khẩu.${reason ? ` Lý do: ${reason}` : ''}`,
+        `Tài khoản ${user.username} (không có email) yêu cầu cấp lại mật khẩu. Hệ thống đã tạo mật khẩu dùng một lần; xác minh danh tính rồi bàn giao cho người dùng.${reason ? ` Lý do: ${reason}` : ''}`,
         inserted[0].request_id,
       ],
     );
@@ -302,7 +340,35 @@ export async function requestAdminPasswordReset({ identifier, fullName, reason }
       [notification.notification_id, handlers.map((h) => h.user_id)],
     );
   });
-  return { ok: true };
+  await logActivity({
+    userId: user.user_id,
+    action: 'PASSWORD_RESET',
+    targetType: 'USER',
+    targetId: user.user_id,
+    detail: { step: 'REQUEST', delivery },
+    ip,
+  });
+  return { delivery };
+}
+
+async function sendTemporaryPasswordMail(user, password) {
+  await sendMail({
+    to: user.email,
+    subject: 'EduConnect – Mật khẩu tạm thời',
+    text:
+      `Xin chào ${user.full_name},\n\n` +
+      `Mật khẩu EduConnect của tài khoản ${user.username} đã được đặt lại theo yêu cầu của bạn.\n` +
+      `Mật khẩu tạm thời: ${password}\n` +
+      'Lần đăng nhập tiếp theo, bạn sẽ được yêu cầu đặt mật khẩu mới. Không chia sẻ mật khẩu này cho bất kỳ ai.\n\n' +
+      'Nếu bạn không gửi yêu cầu này, vui lòng liên hệ nhà trường.',
+    html:
+      `<p>Xin chào ${escapeHtml(user.full_name)},</p>` +
+      `<p>Mật khẩu EduConnect của tài khoản <b>${escapeHtml(user.username)}</b> đã được đặt lại theo yêu cầu của bạn.</p>` +
+      '<p>Mật khẩu tạm thời:</p>' +
+      `<p style="font-size:22px;font-weight:600;letter-spacing:2px;color:#4A2F85">${escapeHtml(password)}</p>` +
+      '<p>Lần đăng nhập tiếp theo, bạn sẽ được yêu cầu đặt mật khẩu mới. Không chia sẻ mật khẩu này cho bất kỳ ai.</p>' +
+      '<p>Nếu bạn không gửi yêu cầu này, vui lòng liên hệ nhà trường.</p>',
+  });
 }
 
 function escapeHtml(s) {

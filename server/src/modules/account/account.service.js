@@ -114,7 +114,7 @@ export async function getProfile({ userId, roles, activeRole }) {
   return { user: rows[0], roles, activeRole, schoolYear: year?.name ?? null, student, teacher, parent, avatarMaxMb };
 }
 
-// UC-110 View Child Profile: a parent (active role PARENT, checked by the route) views the profile of one of their
+// UC-109 View Child Profile: a parent (active role PARENT, checked by the route) views the profile of one of their
 // linked children (student_parents). Read only. Not linked or not found -> 404, so other students stay hidden.
 export async function getChildProfile({ userId, studentId }) {
   const id = Number(studentId);
@@ -173,7 +173,7 @@ export async function changeAvatar({ userId, file }) {
 
 const ADDRESS_MAX = 500;
 
-// UC-108 Update Address: besides the parent's occupation, the only profile field users change themselves
+// UC-107 Update Address: besides the parent's occupation, the only profile field users change themselves
 // (business rules §3).
 // An empty address clears it.
 export async function updateAddress({ userId, address }) {
@@ -196,7 +196,7 @@ export async function updateAddress({ userId, address }) {
 
 const OCCUPATION_MAX = 100; // parents.occupation VARCHAR(100)
 
-// UC-109 Update Occupation: a parent (active role PARENT, checked by the route) changes their own occupation.
+// UC-108 Update Occupation: a parent (active role PARENT, checked by the route) changes their own occupation.
 // An empty occupation clears it.
 export async function updateOccupation({ userId, occupation }) {
   if (occupation !== null && occupation !== undefined && typeof occupation !== 'string') {

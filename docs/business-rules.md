@@ -9,7 +9,7 @@ The app serves **one high school** (grades 10–12). Users never self-register.
 ## 1. Actors and roles
 | Role code | Who | Scope |
 |---|---|---|
-| `SYSTEM_ADMIN` | IT admin | Accounts and system only: create / import / export accounts, change login identifiers, reset passwords and lock / unlock **any** account, system settings, activity log, maintenance. **Cannot see any content** (feeds, chats, grades, school posts), is in no group, cannot create teams. |
+| `SYSTEM_ADMIN` | IT admin | Accounts and system only: create / import / export accounts, change login identifiers, reset passwords and lock / unlock **any** account, system settings, maintenance. **Cannot see any content** (feeds, chats, grades, school posts), is in no group, cannot create teams. |
 | `SCHOOL_MANAGER` | Principal / office staff (several, equal rights) | All school business. Views and updates student / parent / teacher profiles (cannot create or delete them). Resets passwords and locks / unlocks student, parent and teacher accounts. Manages the **school-wide teacher group** (pin / hide / approve) and the school feed. **Does not see class feeds or class chats.** Private messages only with people in the teacher group. Views grades and rankings of the whole school (read only), unlocks grades, views grade history, corrects attendance after the day, sees school-wide attendance statistics. |
 | `TEACHER` | Teachers | Teaches assigned classes / subjects. A teacher becomes **Homeroom Teacher** of a class when `classes.homeroom_teacher_id` points to them – this is **not a separate role**. |
 | `STUDENT` | Students | Own data, own classes and groups. |
@@ -55,29 +55,45 @@ Boundaries that are easy to get wrong:
 ## 3. Accounts and sign-in (FE-01, FE-13)
 - Flow: the school collects data outside the system → SA imports / creates accounts → SM manages profiles.
   Importing accounts (SA) is separate from importing classes (SM); a class import needs the accounts to exist.
+- **System Admin accounts are never created from the screens or the import** (01/11/2026): SA is a sensitive role;
+  the few IT admins are created with `npm run seed:admin` (username typed by hand, use `sa.<name>`).
+- **Codes** (01/11/2026): student code = `HS` + 4 digits (`HS0123`), teacher code = `GV` + 4 digits (`GV0042`);
+  typed lower case is accepted and stored upper case. Parents, School Managers and System Admins have no code.
 - Sign in with **email, phone number or username** + password.
-- `username` is required and generated: first name + initials of family name and middle name, no accents
-  (Nguyen The Anh → `anhnt`); if taken add a number (`anhnt1`, `anhnt2`). Not all digits, no `@`.
-  Only SA changes email / phone / username.
+- `username` is required and **generated when the account is created** (formats agreed 01/11/2026). Name part =
+  first name + initials of family name and middle name, no accents (Nguyen The Anh → `anhnt`). By role:
+  - Student: name + student code in lower case → `anhnths0123`; Teacher: name + teacher code → `anhntgv0042`
+    (unique because the codes are).
+  - School Manager: `sm.` + name → `sm.anhnt`; Parent: `ph.` + name → `ph.anhnt`; if taken add a number
+    (`ph.anhnt1`, `ph.anhnt2`). System Admin: `sa.` + name (created by hand, see above).
+  - Several roles: Student > Teacher > School Manager > Parent. Adding or removing a role later does not rename.
+  - Allowed characters for every username: `a–z`, `0–9`, `.` and `_`, 3–50 characters, not all digits, no `@`.
+  - Only SA changes email / phone / username; an edited username only has to meet the character rule and be
+    unique, not the generated format. Existing usernames (sample data: `huynq`, `lannt`…) are kept.
 - **Own profile** (agreed 28/10/2026, occupation added 29/10/2026): users change only these profile fields
   themselves, besides the avatar (UC-06) and the password (UC-05): the address (`users.address`, max 500 characters,
-  every user, UC-108) and, for a parent, the occupation (`parents.occupation`, max 100 characters, with the Parent role
-  active, UC-109). Both may be cleared. Every other field is managed by the school (SM profiles, SA login
+  every user, UC-107) and, for a parent, the occupation (`parents.occupation`, max 100 characters, with the Parent role
+  active, UC-108). Both may be cleared. Every other field is managed by the school (SM profiles, SA login
   identifiers). Not logged.
-- **Parent views a child's profile** (agreed 01/11/2026, UC-110): with the Parent role active, a parent opens the
+- **Parent views a child's profile** (agreed 01/11/2026, UC-109): with the Parent role active, a parent opens the
   profile of each linked child (`student_parents`) from their own profile: personal information (name, username,
   date of birth, gender, email, phone, address, avatar, account status), student code, current class, class type,
   homeroom teacher and class nickname. Read only. Any other student → "not found" (does not reveal that the student
   exists).
 - **Address lives in `users.address`** for every role (moved from `parents.address`, which no longer exists, on
   28/10/2026). Every screen that shows or edits a parent's address reads / writes `users.address`: student detail and
-  linked parents (FE-02), account create / import / detail (FE-13), parent detail and UC-107 Update Parent (FE-14).
+  linked parents (FE-02), account create / import / detail (FE-13), parent detail and UC-106 Update Parent (FE-14).
 - Email optional for everyone. **Phone required for parents** (it identifies a parent with several children),
   optional for students and teachers. Email and phone are unique when present.
+- **Phone format** (01/11/2026): stored as `0` + 9 digits. Everywhere a phone is typed (create, import, edit,
+  lookup, sign-in, password reset request) spaces, dots and dashes are removed and a leading `+84` becomes `0`
+  before checking or comparing (`server/src/utils/phone.js`).
 - Password: 8–32 characters with a digit, a lowercase letter, an uppercase letter and a special character; not equal
   to the previous password; must not contain the username or phone number.
-- Initial / reset password: random, shown **once** to SA/SM; `must_change_password = TRUE` forces a change at the
-  next sign-in. Users without email get it outside the system.
+- Initial / reset password: random, shown **once** to SA/SM (on screen after creating one account or a reset; in
+  the result file of an import) and never stored as text; `must_change_password = TRUE` forces a change at the next
+  sign-in. Users without email get it outside the system. Lost before handover → reset again (UC-100). The account
+  list export (UC-98) has no passwords. (Exception: the encrypted copy of a password reset request, see below.)
 - **Temporary sign-in lock** (automatic, different from a manual account lock): after 5 wrong passwords lock for
   5 minutes; each further group of 5 adds 5 minutes, max 30; one correct sign-in resets the counter; SM/SA can clear
   it. Values come from `system_settings`.
@@ -87,16 +103,23 @@ Boundaries that are easy to get wrong:
   teacher nobody approves that class's posts, and the class shows a warning.
 - Max **2 parents per student** (check in code).
 - Forgot password: 6-digit OTP by email, valid 5 minutes, stored **hashed**, invalid after 5 wrong attempts.
-- **Password reset request** (agreed 27/10/2026, matching check 01/11/2026): a user who cannot use the OTP (no
-  email, lost mailbox…) sends a request from the Forgot Password screen: sign-in name (username / email / phone) +
-  **full name** + optional reason (max 500 characters). The sign-in name and the full name must belong to the same
-  account (full name compared ignoring case and extra spaces) – otherwise "the details do not match"; a matching
-  locked account → "account locked"; at most one PENDING request per account – a second one → "a request is already
-  waiting". (This replaces the earlier "always answer request sent" rule.)
-  SA handles any account, SM only student / parent / teacher accounts; all of them get a notification. The handler
-  checks the person's identity outside the system, then resets with UC-100 (marks the request DONE) or rejects it.
-  SA / SM can still reset directly from the account screens without a request. Sending a request is not logged;
-  the reset is (`PASSWORD_RESET`).
+- **Password reset request** (agreed 27/10/2026, matching check and automatic reset 01/11/2026): a user who cannot
+  use the OTP sends a request from the Forgot Password screen: sign-in name (username / email / phone) + **full
+  name** + optional reason (max 500 characters). The sign-in name and the full name must belong to the same account
+  (full name compared ignoring case and extra spaces) – otherwise "the details do not match"; a matching locked
+  account → "account locked".
+  - When they match, the **system resets the password at once**: a random temporary password replaces the old one
+    (the old one stops working), `must_change_password = TRUE`, the temporary sign-in lock is cleared and unused
+    OTPs expire. Logged as `PASSWORD_RESET`.
+  - At most one such reset per account every `password_reset.request_cooldown_minutes` (system setting, default
+    15) – earlier → "try again in N minutes".
+  - **Account with an email:** the temporary password is sent to that email. No request row, no notification.
+  - **Account without an email:** a PENDING `password_reset_requests` row keeps an encrypted copy of the temporary
+    password (`temp_password_enc`); SA (any account) and SM (student / parent / teacher accounts) are notified and
+    can read the password on the requests page. How the user gets it (contacting the school, a teacher…) is outside
+    the system. The request becomes DONE and the copy is cleared when the user signs in. While a request is PENDING
+    a second one is refused ("a request is already waiting"), the password does not change.
+  - SA / SM can still reset any time with UC-100 from the account screens.
 - During **maintenance** (`maintenance_announcements` window) nobody except System Admin can sign in; users see
   "The system is under maintenance". When SA schedules maintenance, all accounts are notified and a banner shows
   beforehand.
@@ -212,9 +235,13 @@ Boundaries that are easy to get wrong:
 
 ## 13. System administration (FE-13)
 - `system_settings` (key–value, loaded by SQL; SA edits values only): sign-in lock thresholds, upload limits, OTP
-  lifetime, attendance edit deadline.
+  lifetime, password reset request cooldown, attendance edit deadline. Allowed values (01/11/2026): wrong passwords
+  before a lock 3–10; lock step 1–60 min; lock max 1–1440 min; images / files 1–50 MB; videos 1–200 MB; OTP lifetime
+  1–30 min; reset request cooldown 1–1440 min (default 15); attendance deadline a time `HH:MM`.
 - `activity_logs` (never deleted) records only important actions: sign-in success / failure, account create /
-  import / lock / unlock, password reset, role change, setting change, grade unlock.
+  import / lock / unlock, password reset, role change, setting change, grade unlock. **The log is only kept in the
+  database – there is no screen to view it** (UC "View Activity Log" and its screen removed 01/11/2026 on the
+  supervisor's advice).
 
 ## 14. Deleting data
 - **Every delete in the system is a soft delete** (`deleted_at`, often `deleted_by`): never `DELETE` business rows,

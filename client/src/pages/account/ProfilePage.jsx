@@ -30,7 +30,7 @@ function CopyCode({ value }) {
 }
 
 // SCR-03 User Profile (UC-04): personal, school, class and role information. Read only, except the avatar (UC-06)
-// the address (UC-108) and a parent's occupation (UC-109), all edited on SCR-04.
+// the address (UC-107) and a parent's occupation (UC-108), all edited on SCR-04.
 export default function ProfilePage() {
   const { loading, data, error } = useProfile();
   const { signOut, activeRole } = useAuth();
@@ -220,7 +220,7 @@ export default function ProfilePage() {
               </h2>
               {parent.children.length === 0 && <p className="muted">Chưa liên kết với học sinh nào.</p>}
               {parent.children.map((c) => {
-                // UC-110: the child's profile opens with the Parent role active (the server checks it too).
+                // UC-109: the child's profile opens with the Parent role active (the server checks it too).
                 const canOpen = activeRole === 'PARENT';
                 const Row = canOpen ? Link : 'div';
                 const rowProps = canOpen
