@@ -9,7 +9,7 @@ import { errorText, ROLE_LABELS } from '../../messages.js';
 import { formatDateTime } from './format.js';
 import './admin.css';
 
-// Password reset requests (business-rules §3, agreed 01/11/2026; see server resetRequests.js). A request sent from
+// SCR-71 Password Reset Requests (business-rules §3, agreed 01/11/2026; see server resetRequests.js). A request sent from
 // the Forgot Password screen (FE-01) whose sign-in name and full name match resets the password at once. Each row has
 // a delivery: EMAIL = the temporary password was emailed (nothing to do), SCHOOL = no email, SA / SM read the
 // password here and hand it over. The request is "used" once the user signs in. System Admin sees all requests,

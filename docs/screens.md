@@ -1,4 +1,4 @@
-# Screen list (70)
+# Screen list (71)
 
 Source: Report 3 section 5.1 (draft v1.3). Screen numbers here are Report 3's; the numbering in `Screen_List_Report3_v1.2` (ordered by FE) differs. Besides desktop, 8 screens also need a mobile layout (decided 18/10): Login Page, Group Feed, Group Post Detail, Chat Room, School Feed, Timetable View, Academic Results, Child Attendance. No dashboard screen.
 
@@ -74,3 +74,4 @@ Source: Report 3 section 5.1 (draft v1.3). Screen numbers here are Report 3's; t
 | 68 | Grade Control | FE-11 | Allows School Manager to unlock finalized grades of a class, subject and semester and to view who changed which grade and when. |
 | 69 | Parent List | FE-14 | Allows School Manager to search and filter parents. |
 | 70 | Class Types & Subject Weights | FE-04 | Allows School Manager to define class types and set each subject's weight and periods per week for a school year. |
+| 71 | Password Reset Requests | FE-13 | Lists the automatic resets from password reset requests (tab waiting for sign-in / used): "sent by email" or "to hand over" with the temporary password; System Admin sees all, School Manager student, parent and teacher accounts (added 01/11/2026). |

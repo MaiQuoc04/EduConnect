@@ -30,7 +30,7 @@ function CopyCode({ value }) {
 }
 
 // SCR-03 User Profile (UC-04): personal, school, class and role information. Read only, except the avatar (UC-06)
-// the address (UC-107) and a parent's occupation (UC-108), all edited on SCR-04.
+// the address (UC-107) and a parent's occupation (UC-108), all edited on SCR-33.
 export default function ProfilePage() {
   const { loading, data, error } = useProfile();
   const { signOut, activeRole } = useAuth();

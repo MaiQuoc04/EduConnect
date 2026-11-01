@@ -44,7 +44,8 @@ Last updated: 01/11/2026.
 - **Pushed, not merged yet:** `feature/fe-02-student-management` (Anh), `feature/fe-03-teacher-management` (Dung),
   `feature/fe-04-class-group-management` (Khanh). Each should merge `develop` into its branch before its PR.
 - **Numbering changes (01/11):** UC-104 View Activity Log and SCR-64 Activity Log removed; UC-105..UC-110 became
-  UC-104..UC-109 and SCR-65..SCR-71 became SCR-64..SCR-70. 109 use cases, 70 screens.
+  UC-104..UC-109 and SCR-65..SCR-71 became SCR-64..SCR-70; then SCR-71 Password Reset Requests (FE-13) was added.
+  109 use cases, 71 screens.
 - **Use cases added after the plan:** UC-107 Update Address (User, 28/10), UC-108 Update Occupation (Parent, 29/10),
   UC-109 View Child Profile (Parent, 01/11), all FE-01 (Quoc, It1).
 - **Follow-ups owed:**

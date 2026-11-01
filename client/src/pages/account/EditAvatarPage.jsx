@@ -27,7 +27,7 @@ function ReadOnlyField({ label, value, help }) {
   );
 }
 
-// SCR-04 Edit Profile (UC-06 Change Avatar, UC-107 Update Address, UC-108 Update Occupation). Only the avatar, the
+// SCR-33 Edit Profile (UC-06 Change Avatar, UC-107 Update Address, UC-108 Update Occupation). Only the avatar, the
 // address and, for a parent, the occupation can be changed online; the rest is read only.
 export default function EditAvatarPage() {
   const { loading, data, error: loadError } = useProfile();

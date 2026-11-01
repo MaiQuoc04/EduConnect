@@ -35,7 +35,7 @@ function FormError({ text }) {
   );
 }
 
-// SCR-02 Forgot Password (UC-02): email → 6-digit OTP (valid N minutes, 5 tries) → new password.
+// SCR-32 Forgot Password (UC-02): email → 6-digit OTP (valid N minutes, 5 tries) → new password.
 // Without a usable email the user sends a request to SA / SM instead (steps request → requested).
 export default function ForgotPasswordPage() {
   const [step, setStep] = useState('email'); // email | otp | password | done | request | requested

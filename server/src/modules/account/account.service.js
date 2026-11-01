@@ -110,7 +110,7 @@ export async function getProfile({ userId, roles, activeRole }) {
     roles.includes('TEACHER') ? teacherInfo(userId, yearId) : null,
     roles.includes('PARENT') ? parentInfo(userId, yearId) : null,
   ]);
-  const avatarMaxMb = await getNumberSetting('upload.max_file_mb', 10); // shown on SCR-04
+  const avatarMaxMb = await getNumberSetting('upload.max_file_mb', 10); // shown on SCR-33
   return { user: rows[0], roles, activeRole, schoolYear: year?.name ?? null, student, teacher, parent, avatarMaxMb };
 }
 

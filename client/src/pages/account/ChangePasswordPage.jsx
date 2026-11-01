@@ -9,7 +9,7 @@ import { useToast } from '../../context/ToastContext.jsx';
 import { errorText } from '../../messages.js';
 import { evaluatePassword } from '../../utils/passwordRules.js';
 
-// SCR-05 Change Password (UC-05). Also the forced change of a temporary password right after sign-in (UC-01):
+// SCR-34 Change Password (UC-05). Also the forced change of a temporary password right after sign-in (UC-01):
 // then only the new password is asked (business rules §3, 01/11/2026).
 export default function ChangePasswordPage() {
   const { user, passwordChanged } = useAuth();
