@@ -10,6 +10,7 @@ import { useProfile } from './useProfile.js';
 
 const ACCEPTED = ['image/jpeg', 'image/png', 'image/webp'];
 const ADDRESS_MAX = 500;
+const OCCUPATION_MAX = 100;
 
 function ReadOnlyField({ label, value, help }) {
   return (
@@ -26,11 +27,11 @@ function ReadOnlyField({ label, value, help }) {
   );
 }
 
-// SCR-04 Edit Profile (UC-06 Change Avatar, UC-108 Update Address). Only the avatar and the address can be changed
-// online; the rest is read only.
+// SCR-04 Edit Profile (UC-06 Change Avatar, UC-108 Update Address, UC-109 Update Occupation). Only the avatar, the
+// address and, for a parent, the occupation can be changed online; the rest is read only.
 export default function EditAvatarPage() {
   const { loading, data, error: loadError } = useProfile();
-  const { updateUser } = useAuth();
+  const { updateUser, activeRole } = useAuth();
   const toast = useToast();
   const navigate = useNavigate();
   const inputRef = useRef(null);
@@ -38,6 +39,7 @@ export default function EditAvatarPage() {
   const [preview, setPreview] = useState('');
   const [dragging, setDragging] = useState(false);
   const [address, setAddress] = useState(null); // null = not edited yet, show the saved one
+  const [occupation, setOccupation] = useState(null);
   const [error, setError] = useState('');
   const [saving, setSaving] = useState(false);
 
@@ -46,10 +48,14 @@ export default function EditAvatarPage() {
   if (loading) return <p className="loading">Đang tải hồ sơ…</p>;
   if (loadError) return <p className="form-error">{loadError}</p>;
 
-  const { user, student, teacher, avatarMaxMb } = data;
+  const { user, student, teacher, parent, avatarMaxMb } = data;
   const code = student?.studentCode ?? teacher?.teacherCode;
   const addressValue = address ?? user.address ?? '';
   const addressChanged = addressValue.trim() !== (user.address ?? '');
+  // The occupation belongs to the parent record; it is edited with the Parent role active (server checks it too).
+  const canEditOccupation = Boolean(parent) && activeRole === 'PARENT';
+  const occupationValue = occupation ?? parent?.occupation ?? '';
+  const occupationChanged = canEditOccupation && occupationValue.trim() !== (parent.occupation ?? '');
 
   function pick(chosen) {
     setError('');
@@ -71,6 +77,7 @@ export default function EditAvatarPage() {
         updateUser({ avatarUrl: result.avatarUrl });
       }
       if (addressChanged) await api.put('/account/address', { address: addressValue });
+      if (occupationChanged) await api.put('/account/occupation', { occupation: occupationValue });
       toast('Đã cập nhật hồ sơ.');
       navigate('/profile');
     } catch (err) {
@@ -169,8 +176,24 @@ export default function EditAvatarPage() {
 
         <h2 className="card-title title-sm">
           <Icon name="home" />
-          Địa chỉ
+          {canEditOccupation ? 'Thông tin liên hệ' : 'Địa chỉ'}
         </h2>
+        {canEditOccupation && (
+          <label className="field" style={{ marginBottom: 16 }}>
+            <span className="field-label">
+              Nghề nghiệp
+              <span className="caption muted">
+                {occupationValue.length}/{OCCUPATION_MAX}
+              </span>
+            </span>
+            <input
+              className="input"
+              value={occupationValue}
+              onChange={(e) => setOccupation(e.target.value.slice(0, OCCUPATION_MAX))}
+              placeholder="Ví dụ: Kỹ sư xây dựng"
+            />
+          </label>
+        )}
         <label className="field">
           <span className="field-label">
             Địa chỉ liên hệ
@@ -224,7 +247,7 @@ export default function EditAvatarPage() {
           <Link to="/profile" className="btn btn-secondary">
             Huỷ
           </Link>
-          <button type="button" className="btn btn-primary" onClick={save} disabled={(!file && !addressChanged) || saving}>
+          <button type="button" className="btn btn-primary" onClick={save} disabled={(!file && !addressChanged && !occupationChanged) || saving}>
             <Icon name="save" size="sm" />
             {saving ? 'Đang lưu…' : 'Lưu thay đổi'}
           </button>

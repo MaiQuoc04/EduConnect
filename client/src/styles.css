@@ -452,6 +452,9 @@ textarea.input { height: auto; min-height: 88px; padding: 10px 14px; resize: ver
 .child-row:last-child { border-bottom: 0; padding-bottom: 0; }
 .child-row:first-child { padding-top: 0; }
 .child-row > div { min-width: 0; flex: 1; }
+a.link-row { color: inherit; text-decoration: none; }
+a.link-row:hover { background: var(--graphite-50); text-decoration: none; }
+a.link-row .icon:last-child { color: var(--graphite-400); }
 .actions-row { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; }
 .actions-row .push { margin-left: auto; }
 

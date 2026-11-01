@@ -6,7 +6,7 @@ Source: Report 3 section 5.1 (draft v1.3). Screen numbers here are Report 3's; t
 |---|---|---|---|
 | 1 | Login Page | FE-01 | Allows User to authenticate using the school-issued account |
 | 2 | School Feed | FE-08 | Displays school-wide posts and provides access to school feed management. |
-| 3 | User Profile | FE-01 | Displays the User's profile information. |
+| 3 | User Profile | FE-01 | Displays the User's profile information; a Parent also opens each linked child's profile from it (UC-110). |
 | 4 | Notifications | FE-09 | Displays notifications and reminders relevant to User. |
 | 5 | School Post Detail | FE-08 | Displays details of a school announcement or news post. |
 | 6 | Update School Post | FE-08 | Allows School Manager to update an existing school announcement or news post. |
@@ -35,8 +35,8 @@ Source: Report 3 section 5.1 (draft v1.3). Screen numbers here are Report 3's; t
 | 29 | Time Table View | FE-10 | Displays timetable information managed by School Manager . |
 | 30 | Update Time Table | FE-10 | Allows School Manager to update existing timetable information. |
 | 31 | Create School Post | FE-08 | Allows School Manager to create a new school announcement or news post. |
-| 32 | Forgot Password | FE-01 | Allows User to start the password recovery process by email OTP, or to send a password reset request to System Admin / School Manager when the email cannot be used. |
-| 33 | Edit Profile | FE-01 | Allows User to update permitted personal profile information (avatar and address). |
+| 32 | Forgot Password | FE-01 | Allows User to start the password recovery process by email OTP, or to send a password reset request to System Admin / School Manager when the email cannot be used (sign-in name + full name, checked against the account). |
+| 33 | Edit Profile | FE-01 | Allows User to update permitted personal profile information (avatar, address and, for a parent, occupation). |
 | 34 | Change Password | FE-01 | Allows authenticated User to change the current password. |
 | 35 | Group Feed | FE-05 | Displays posts and community content within a selected class group. |
 | 36 | Create Group Post | FE-05 | Allows an authorized User to create a new post in a class group. |

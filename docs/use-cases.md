@@ -1,4 +1,4 @@
-# Use cases (108) – numbering after the 20/10/2026 database review
+# Use cases (110) – numbering after the 20/10/2026 database review
 
 Source: Report 3 section 4.2 (draft v1.3). Actor "User" = any signed-in account. "Homeroom Teacher" is not a role: it is a Teacher who is `classes.homeroom_teacher_id` of that class.
 
@@ -7,12 +7,14 @@ Source: Report 3 section 4.2 (draft v1.3). Actor "User" = any signed-in account.
 | ID | Use case | Actor | Sub-feature | Description |
 |---|---|---|---|---|
 | UC-01 | Sign In | User | Authentication | Sign in with email, phone number or username and a password; temporary sign-in lock after 5 failed attempts; forced password change at first sign-in. |
-| UC-02 | Reset Forgotten Password | User, Email Service | Password Management | Receive an OTP by email, verify it and set a new password. Without a usable email: send a reset request to System Admin / School Manager. |
+| UC-02 | Reset Forgotten Password | User, Email Service | Password Management | Receive an OTP by email, verify it and set a new password. Without a usable email: send a reset request to System Admin / School Manager (sign-in name and full name must match the account). |
 | UC-03 | Sign Out | User | Authentication | End the current session. |
 | UC-04 | View Profile | User | Personal Profile | View personal, school, class and role information. |
 | UC-05 | Change Password | User | Password Management | Change the current password following the password rules. |
 | UC-06 | Change Avatar | User | Personal Profile | Upload or replace the profile picture. |
 | UC-108 | Update Address | User | Personal Profile | Update or clear one's own address, the only profile field users edit themselves (added 28/10/2026). |
+| UC-109 | Update Occupation | Parent | Personal Profile | Update or clear one's own occupation (added 29/10/2026). |
+| UC-110 | View Child Profile | Parent | Personal Profile | View the profile of a linked child: personal, school and class information, read only (added 01/11/2026). |
 
 ## FE-02 Student Management
 

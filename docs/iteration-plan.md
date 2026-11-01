@@ -23,9 +23,31 @@ Code due dates: It1 30/10, It2 13/11, It3 27/11.
 
 FE-10 is split: timetable in It2, class calendar in It3.
 
+## Current status (read first; update after every merge, schema patch or new decision)
+
+Last updated: 01/11/2026.
+
+- **Shared DB (Supabase):** schema v0.3 + `patch_v0.3_password_reset_requests.sql` (27/10) +
+  `patch_v0.3_users_address.sql` (run 28/10: `users.address` added, `parents.address` dropped). 47 tables.
+- **develop:** FE-01 UC-01..UC-06 (PR #1–#3) + docs commit "address moves from parents to users" (28/10).
+- **Pushed, not merged yet:**
+  - `feature/fe-01-personal-account` (Quoc): password reset request to SA/SM (UC-02, UC-100 side),
+    UC-108 Update Address, UC-109 Update Occupation, UC-110 View Child Profile, reset request now checks sign-in
+    name + full name (01/11) (UC-109/110 and the matching check not committed yet).
+  - `feature/fe-02-student-management` (Anh), `feature/fe-03-teacher-management` (Dung),
+    `feature/fe-04-class-group-management` (Khanh), `feature/fe-13-system-administration` (Linh).
+- **Use cases added after the plan:** UC-108 Update Address (User, 28/10), UC-109 Update Occupation (Parent, 29/10),
+  UC-110 View Child Profile (Parent, 01/11), all FE-01 (Quoc, It1).
+- **Follow-ups owed:**
+  - FE-02 (Anh) and FE-13 (Linh) still read / write `parents.address`, which no longer exists in the shared DB →
+    switch to `users.address` (business rules §3). Those screens fail until then.
+  - FE-14 (Khanh, It2): a parent's address is `users.address`; occupation stays `parents.occupation`.
+  - develop still has the old `server/scripts/generate-seed-small.js` (writes `parents.address`) until the FE-01 PR
+    is merged; do not regenerate the seed on develop before that.
+
 ## Iteration 1 (19/10 – 30/10/2026)
 
-### Quoc: FE-01 Personal Account (7 UC)
+### Quoc: FE-01 Personal Account (9 UC)
 
 Also: seed data for the shared DB (school year, semesters, subjects, classes, sample accounts).
 
@@ -38,6 +60,8 @@ Also: seed data for the shared DB (school year, semesters, subjects, classes, sa
 | UC-05 | Change Password | User |
 | UC-06 | Change Avatar | User |
 | UC-108 | Update Address | User |
+| UC-109 | Update Occupation | Parent |
+| UC-110 | View Child Profile | Parent |
 
 ### Anh: FE-02 Student Management (8 UC)
 
@@ -226,4 +250,4 @@ Class calendar (UC-76..80) + job: class event reminder 1 day before. Moved from 
 | UC-88 | View Grades | Teacher, Student, Parent, School Manager |
 | UC-89 | View Class Ranking | Teacher, Student, Parent, School Manager |
 
-Total: 108 use cases.
+Total: 110 use cases.

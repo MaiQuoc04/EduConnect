@@ -41,6 +41,7 @@ export default function ForgotPasswordPage() {
   const [step, setStep] = useState('email'); // email | otp | password | done | request | requested
   const [email, setEmail] = useState('');
   const [identifier, setIdentifier] = useState('');
+  const [fullName, setFullName] = useState('');
   const [reason, setReason] = useState('');
   const [otp, setOtp] = useState('');
   const [resetToken, setResetToken] = useState('');
@@ -91,7 +92,11 @@ export default function ForgotPasswordPage() {
 
   const sendRequest = () =>
     run(async () => {
-      await api.post('/auth/password-reset-requests', { identifier: identifier.trim(), reason: reason.trim() });
+      await api.post('/auth/password-reset-requests', {
+        identifier: identifier.trim(),
+        fullName: fullName.trim(),
+        reason: reason.trim(),
+      });
       setStep('requested');
     });
 
@@ -297,6 +302,17 @@ export default function ForgotPasswordPage() {
               />
             </label>
             <label className="field">
+              <span className="field-label">Họ và tên</span>
+              <input
+                className="input"
+                value={fullName}
+                onChange={(e) => setFullName(e.target.value)}
+                autoComplete="name"
+                placeholder="Họ tên đầy đủ như trong hồ sơ nhà trường"
+                required
+              />
+            </label>
+            <label className="field">
               <span className="field-label">
                 Lý do (không bắt buộc)
                 <span className="caption muted">
@@ -311,7 +327,7 @@ export default function ForgotPasswordPage() {
               />
             </label>
             <FormError text={error} />
-            <button className="btn btn-primary btn-block" type="submit" disabled={busy || !identifier.trim()}>
+            <button className="btn btn-primary btn-block" type="submit" disabled={busy || !identifier.trim() || !fullName.trim()}>
               {busy ? 'Đang gửi…' : 'Gửi yêu cầu'}
             </button>
             <button type="button" className="link-button" onClick={() => setStep('email')}>
@@ -327,8 +343,8 @@ export default function ForgotPasswordPage() {
               <div>
                 <p className="notice-title">Đã gửi yêu cầu</p>
                 <p>
-                  Nếu tài khoản tồn tại, nhà trường sẽ liên hệ để xác minh và cấp mật khẩu tạm thời cho bạn. Bạn sẽ đổi
-                  mật khẩu ở lần đăng nhập tiếp theo.
+                  Nhà trường sẽ liên hệ để xác minh và cấp mật khẩu tạm thời cho bạn. Bạn sẽ đổi mật khẩu ở lần đăng
+                  nhập tiếp theo.
                 </p>
               </div>
             </div>

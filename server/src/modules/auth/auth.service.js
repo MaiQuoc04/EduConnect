@@ -235,11 +235,16 @@ export async function resetPassword({ resetToken, newPassword, ip }) {
 
 const REQUEST_REASON_MAX = 500;
 
-// Always answers the same way, so nobody can find out which sign-in names exist. One PENDING request per account;
-// a second one is ignored. Not logged: PASSWORD_RESET is logged when SA / SM actually resets (UC-100).
-export async function requestAdminPasswordReset({ identifier, reason }) {
+// Same spelling rules for both sides: Unicode NFC (some keyboards type Vietnamese as NFD), single spaces, any case.
+const normalizeName = (s) => s.normalize('NFC').trim().replace(/\s+/g, ' ').toLocaleLowerCase('vi');
+
+// The sign-in name (username / email / phone) and the full name must belong to the same account (business rules §3,
+// 01/11/2026); otherwise the user is told the details do not match. One PENDING request per account: a second one
+// is refused with MSG_REQUEST_PENDING. Not logged: PASSWORD_RESET is logged when SA / SM actually resets (UC-100).
+export async function requestAdminPasswordReset({ identifier, fullName, reason }) {
   identifier = typeof identifier === 'string' ? identifier.trim() : '';
-  if (!identifier) throw badRequest('MSG_REQUIRED', 'Please enter your sign-in name.');
+  fullName = typeof fullName === 'string' ? normalizeName(fullName) : '';
+  if (!identifier || !fullName) throw badRequest('MSG_REQUIRED', 'Please enter your sign-in name and full name.');
   reason = typeof reason === 'string' ? reason.trim() : '';
   if (reason.length > REQUEST_REASON_MAX) {
     throw badRequest('MSG_REASON_TOO_LONG', `The reason must not exceed ${REQUEST_REASON_MAX} characters.`, {
@@ -247,13 +252,16 @@ export async function requestAdminPasswordReset({ identifier, reason }) {
     });
   }
 
-  const { rows: users } = await pool.query(
-    `SELECT user_id, full_name, username FROM users
-     WHERE (username = $1 OR email = $1 OR phone = $1) AND status = 'ACTIVE' LIMIT 1`,
+  // One input can be several accounts' username / email / phone; keep the one whose full name matches.
+  const { rows: candidates } = await pool.query(
+    'SELECT user_id, full_name, username, status FROM users WHERE username = $1 OR email = $1 OR phone = $1',
     [identifier],
   );
-  const user = users[0];
-  if (!user) return { ok: true };
+  const user = candidates.find((u) => normalizeName(u.full_name) === fullName);
+  if (!user) {
+    throw badRequest('MSG_ACCOUNT_NOT_MATCH', 'The sign-in name and full name do not match any account.');
+  }
+  if (user.status !== 'ACTIVE') throw badRequest('MSG_ACCOUNT_LOCKED', 'This account is locked.');
 
   await withTransaction(async (client) => {
     const { rows: inserted } = await client.query(
@@ -262,7 +270,9 @@ export async function requestAdminPasswordReset({ identifier, reason }) {
        RETURNING request_id`,
       [user.user_id, reason || null],
     );
-    if (!inserted.length) return;
+    if (!inserted.length) {
+      throw badRequest('MSG_REQUEST_PENDING', 'A request for this account is already waiting to be handled.');
+    }
 
     // Who can handle it (same scope as UC-100): every active SA; SMs too unless the account is an SA or SM.
     const roles = await getRoles(user.user_id);

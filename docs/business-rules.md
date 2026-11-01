@@ -59,9 +59,16 @@ Boundaries that are easy to get wrong:
 - `username` is required and generated: first name + initials of family name and middle name, no accents
   (Nguyen The Anh → `anhnt`); if taken add a number (`anhnt1`, `anhnt2`). Not all digits, no `@`.
   Only SA changes email / phone / username.
-- **Own profile** (agreed 28/10/2026): the address (`users.address`, max 500 characters, may be cleared) is the only
-  profile field users change themselves (UC-108), besides the avatar (UC-06) and the password (UC-05). Every other
-  field is managed by the school (SM profiles, SA login identifiers). Not logged.
+- **Own profile** (agreed 28/10/2026, occupation added 29/10/2026): users change only these profile fields
+  themselves, besides the avatar (UC-06) and the password (UC-05): the address (`users.address`, max 500 characters,
+  every user, UC-108) and, for a parent, the occupation (`parents.occupation`, max 100 characters, with the Parent role
+  active, UC-109). Both may be cleared. Every other field is managed by the school (SM profiles, SA login
+  identifiers). Not logged.
+- **Parent views a child's profile** (agreed 01/11/2026, UC-110): with the Parent role active, a parent opens the
+  profile of each linked child (`student_parents`) from their own profile: personal information (name, username,
+  date of birth, gender, email, phone, address, avatar, account status), student code, current class, class type,
+  homeroom teacher and class nickname. Read only. Any other student → "not found" (does not reveal that the student
+  exists).
 - **Address lives in `users.address`** for every role (moved from `parents.address`, which no longer exists, on
   28/10/2026). Every screen that shows or edits a parent's address reads / writes `users.address`: student detail and
   linked parents (FE-02), account create / import / detail (FE-13), parent detail and UC-107 Update Parent (FE-14).
@@ -80,9 +87,12 @@ Boundaries that are easy to get wrong:
   teacher nobody approves that class's posts, and the class shows a warning.
 - Max **2 parents per student** (check in code).
 - Forgot password: 6-digit OTP by email, valid 5 minutes, stored **hashed**, invalid after 5 wrong attempts.
-- **Password reset request** (agreed 27/10/2026): a user who cannot use the OTP (no email, lost mailbox…) sends a
-  request from the Forgot Password screen (sign-in name + optional reason, max 500 characters). The screen always
-  answers "request sent" (does not reveal whether the account exists); at most one PENDING request per account.
+- **Password reset request** (agreed 27/10/2026, matching check 01/11/2026): a user who cannot use the OTP (no
+  email, lost mailbox…) sends a request from the Forgot Password screen: sign-in name (username / email / phone) +
+  **full name** + optional reason (max 500 characters). The sign-in name and the full name must belong to the same
+  account (full name compared ignoring case and extra spaces) – otherwise "the details do not match"; a matching
+  locked account → "account locked"; at most one PENDING request per account – a second one → "a request is already
+  waiting". (This replaces the earlier "always answer request sent" rule.)
   SA handles any account, SM only student / parent / teacher accounts; all of them get a notification. The handler
   checks the person's identity outside the system, then resets with UC-100 (marks the request DONE) or rejects it.
   SA / SM can still reset directly from the account screens without a request. Sending a request is not logged;
