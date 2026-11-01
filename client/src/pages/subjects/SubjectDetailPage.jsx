@@ -4,7 +4,6 @@ import { api } from '../../api/client.js';
 import Icon from '../../components/Icon.jsx';
 import { errorText } from '../../messages.js';
 import { yearLabel } from '../school-years/schoolYearLabels.js';
-import { formatWeight } from './subjectText.js';
 
 const TEACHERS_SHOWN = 5; // longer lists open with "+n giáo viên khác"
 const MISSING = 'MISSING'; // table filter: classes without an active teacher
@@ -18,8 +17,8 @@ function classStatus(teacher) {
   return { label: 'Đang dạy', pill: 'green' };
 }
 
-// SCR-20 Subject Detail – UC-23 View Subject Detail (School Manager): the subject, its class types, periods and
-// weights for the chosen school year, the classes that study it with their teacher, and who can teach it.
+// SCR-20 Subject Detail – UC-23 View Subject Detail (School Manager): the subject, its class types and periods
+// per week for the chosen school year, the classes that study it with their teacher, and who can teach it.
 // The year lives in ?schoolYearId= so the list and this page stay on the same year.
 export default function SubjectDetailPage() {
   const { id } = useParams();
@@ -163,14 +162,13 @@ export default function SubjectDetailPage() {
 
         <div className="subject-split">
           <div>
-            <p className="label-upper muted">Tiết & hệ số theo loại lớp</p>
+            <p className="label-upper muted">Số tiết theo loại lớp</p>
             {tracks.length ? (
               <table className="mini-table">
                 <thead>
                   <tr>
                     <th>Loại lớp</th>
                     <th className="num">Tiết/tuần</th>
-                    <th className="num">Hệ số</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -178,7 +176,6 @@ export default function SubjectDetailPage() {
                     <tr key={t.trackId}>
                       <td>{t.trackName}</td>
                       <td className="num">{t.periodsPerWeek}</td>
-                      <td className="num">{formatWeight(t.weight)}</td>
                     </tr>
                   ))}
                 </tbody>

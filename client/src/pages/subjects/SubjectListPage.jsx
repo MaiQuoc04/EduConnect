@@ -225,8 +225,8 @@ export default function SubjectListPage() {
       <div className="notice subject-note">
         <Icon name="info" />
         <p>
-          Số tiết/tuần và hệ số của môn được thiết lập theo loại lớp cho từng năm học, tại màn{' '}
-          <Link to="/class-tracks">Loại lớp & hệ số</Link>.
+          Số tiết/tuần của môn được thiết lập theo loại lớp cho từng năm học, tại màn{' '}
+          <Link to="/class-tracks">Loại lớp & số tiết</Link>.
         </p>
       </div>
     </>

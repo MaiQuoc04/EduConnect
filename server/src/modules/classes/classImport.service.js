@@ -2,6 +2,7 @@ import ExcelJS from 'exceljs';
 import { pool, withTransaction } from '../../config/db.js';
 import { badRequest } from '../../utils/AppError.js';
 import { assertXlsx, readSheet } from '../../utils/excel.js';
+import { parseTrackName } from '../class-tracks/trackName.js';
 import {
   classNameProblem,
   conflict,
@@ -42,7 +43,15 @@ async function analyze(db, year, rows) {
     db.query('SELECT track_id AS "id", track_name AS "name" FROM class_tracks WHERE deleted_at IS NULL'),
   ]);
   const gradeByName = new Map(grades.map((g) => [g.name, g]));
-  const trackByName = new Map(tracks.map((t) => [fold(t.name), t]));
+  // "Khối A" on a grade-11 row = the type "11 · Khối A", else the type "Khối A" for every grade (trackName.js); the
+  // full name "11 · Khối A" works too. otherGrade = the name exists, but only for other grades.
+  const trackList = tracks.map((t) => ({ id: t.id, full: t.name, ...parseTrackName(t.name) }));
+  const findTrack = (text, gradeName) => {
+    const key = fold(text);
+    const same = trackList.filter((t) => fold(t.name) === key || fold(t.full) === key);
+    const track = same.find((t) => t.gradeLevel === gradeName) ?? same.find((t) => !t.gradeLevel);
+    return { track, otherGrade: !track && same.length > 0 };
+  };
 
   const names = [...new Set(items.map((i) => i.className).filter(Boolean))];
   const codes = [...new Set(items.map((i) => i.studentCode).filter(Boolean))];
@@ -94,9 +103,9 @@ async function analyze(db, year, rows) {
       add(errors, row, 'ROW_GRADE_INVALID', item.grade);
       ok = false;
     }
-    const track = trackByName.get(fold(item.track));
+    const { track, otherGrade } = findTrack(item.track, grade?.name);
     if (!track) {
-      add(errors, row, 'ROW_TRACK_NOT_FOUND', item.track);
+      add(errors, row, otherGrade ? 'ROW_TRACK_GRADE' : 'ROW_TRACK_NOT_FOUND', item.track);
       ok = false;
     }
     const nameProblem = classNameProblem(item.className, grade?.name);
@@ -117,7 +126,7 @@ async function analyze(db, year, rows) {
           gradeLevelId: grade.id,
           gradeLevel: grade.name,
           trackId: track.id,
-          trackName: track.name,
+          trackName: track.full,
           classId: old?.classId ?? null,
           exists: Boolean(old),
           hasHomeroom: Boolean(old?.hasHomeroom),
@@ -263,7 +272,7 @@ export async function buildTemplate() {
     ['Cột', 'Cách nhập'],
     ['Tên lớp', 'Khối viết liền với chữ hoặc số, không dấu, ví dụ 10A1, 11D2.'],
     ['Khối', '10, 11 hoặc 12, trùng với khối trong tên lớp.'],
-    ['Loại lớp', 'Một trong các loại lớp ở sheet "Loại lớp".'],
+    ['Loại lớp', 'Tên loại lớp ở sheet "Loại lớp", không cần ghi khối (ví dụ Khối A); phải dùng được cho khối của dòng.'],
     ['Mã học sinh', 'Mã của tài khoản học sinh đã có trong hệ thống. Mỗi học sinh một dòng.'],
     ['Lưu ý', 'Chỉ sheet đầu tiên được đọc. Mỗi học sinh chỉ học một lớp trong một năm học.'],
   ].forEach((r) => help.addRow(r));
@@ -271,10 +280,14 @@ export async function buildTemplate() {
 
   const types = workbook.addWorksheet('Loại lớp');
   types.columns = [
+    { header: 'Khối', width: 12 },
     { header: 'Loại lớp', width: 18 },
     { header: 'Mô tả', width: 60 },
   ];
-  tracks.forEach((t) => types.addRow([t.name, t.description ?? '']));
+  tracks
+    .map((t) => ({ ...t, ...parseTrackName(t.name) }))
+    .sort((a, b) => (a.gradeLevel ?? '99').localeCompare(b.gradeLevel ?? '99') || a.name.localeCompare(b.name, 'vi'))
+    .forEach((t) => types.addRow([t.gradeLevel ?? 'Mọi khối', t.name, t.description ?? '']));
   types.getRow(1).font = { bold: true };
   return workbook;
 }

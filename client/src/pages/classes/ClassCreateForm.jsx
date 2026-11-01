@@ -35,11 +35,27 @@ export default function ClassCreateForm({ schoolYear, takenNames = [], onCancel,
 
   useEffect(() => {
     api.get('/classes/grade-levels').then(({ data }) => setGrades(data)).catch(() => setGrades([]));
+  }, []);
+
+  // Only the class types usable for the chosen grade (its own and the ones for every grade).
+  useEffect(() => {
+    if (!form.gradeLevelId) {
+      setTracks([]);
+      return undefined;
+    }
+    let alive = true;
     api
-      .get('/class-tracks', { params: { schoolYearId: schoolYear.schoolYearId } })
-      .then(({ data }) => setTracks(data.tracks))
-      .catch(() => setTracks([]));
-  }, [schoolYear.schoolYearId]);
+      .get('/class-tracks', { params: { schoolYearId: schoolYear.schoolYearId, gradeLevelId: form.gradeLevelId } })
+      .then(({ data }) => {
+        if (!alive) return;
+        setTracks(data.tracks);
+        setForm((f) => (data.tracks.some((t) => String(t.trackId) === f.trackId) ? f : { ...f, trackId: '' }));
+      })
+      .catch(() => alive && setTracks([]));
+    return () => {
+      alive = false;
+    };
+  }, [form.gradeLevelId, schoolYear.schoolYearId]);
 
   const set = (key) => (e) => setForm((f) => ({ ...f, [key]: e.target.value }));
   const grade = grades.find((g) => String(g.gradeLevelId) === form.gradeLevelId);
@@ -99,7 +115,7 @@ export default function ClassCreateForm({ schoolYear, takenNames = [], onCancel,
           <p className="label-upper muted">Tạo nhóm lớp · Năm học {yearLabel(schoolYear.yearName)}</p>
           <h2 id="class-create-title" className="title-md">
             {step === 0 || !className ? 'Lớp mới' : `Lớp ${className}`}
-            {step > 0 && track && <span className="caption muted"> · Khối {grade?.gradeLevelName} · {track.trackName}</span>}
+            {step > 0 && track && <span className="caption muted"> · Khối {grade?.gradeLevelName} · {track.name}</span>}
           </h2>
         </div>
         <ol className="wizard-steps" aria-label="Các bước">
@@ -153,14 +169,23 @@ export default function ClassCreateForm({ schoolYear, takenNames = [], onCancel,
             <label className="field-label" htmlFor="class-track">
               Loại lớp
             </label>
-            <select id="class-track" className="input" value={form.trackId} onChange={set('trackId')}>
-              <option value="">Chọn loại lớp</option>
+            <select
+              id="class-track"
+              className="input"
+              value={form.trackId}
+              onChange={set('trackId')}
+              disabled={!form.gradeLevelId}
+            >
+              <option value="">{form.gradeLevelId ? 'Chọn loại lớp' : 'Chọn khối trước'}</option>
               {tracks.map((t) => (
                 <option key={t.trackId} value={t.trackId}>
-                  {t.trackName}
+                  {t.gradeLevel ? t.name : `${t.name} (mọi khối)`}
                 </option>
               ))}
             </select>
+            {form.gradeLevelId && !tracks.length && (
+              <span className="field-help">Khối này chưa có loại lớp. Thêm ở mục Loại lớp & số tiết.</span>
+            )}
           </div>
         </div>
       )}

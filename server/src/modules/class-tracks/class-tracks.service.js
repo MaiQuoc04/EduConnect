@@ -1,14 +1,17 @@
 import { pool, withTransaction } from '../../config/db.js';
 import { AppError, badRequest, notFound } from '../../utils/AppError.js';
+import { composeTrackName, hasGradePrefix, withTrackGrade } from './trackName.js';
 
-// UC-26 Manage Class Types (SCR-71). A class type (class_tracks) is shared by every school year; its subjects with
-// their weight and periods per week (track_subjects) are set per school year (business-rules §4).
+// UC-26 Manage Class Types (SCR-71 "Loại lớp & số tiết"). A class type (class_tracks) belongs to one grade or to
+// every grade (trackName.js) and is shared by every school year; its subjects and periods per week
+// (track_subjects) are set per school year (business-rules §4).
+// Agreed 01/11: every subject weight is 1 – track_subjects.weight is always written as 1.00 and no longer shown,
+// so the year average of business-rules §11 is a plain average.
 
 const conflict = (code, message) => new AppError(409, code, message);
 
-// ASSUMPTION: a weight is 0.01–10 with at most 2 decimals (DECIMAL(5,2)) and periods per week a whole number
-// 1–10; business-rules give no range (agreed 27/10).
-const WEIGHT_MAX = 10;
+const WEIGHT = '1.00';
+// ASSUMPTION: periods per week is a whole number 1–10; business-rules give no range (agreed 27/10).
 const PERIODS_MAX = 10;
 
 function parseId(value, message) {
@@ -18,8 +21,8 @@ function parseId(value, message) {
 }
 
 // configured = the year has subjects set for a class type that is not deleted (rows of deleted types are kept).
-// The year has grades = any grades row (even a cleared score) in one of its semesters. Then the weights lock
-// (business-rules §4); periods per week can still change.
+// The year has grades = any grades row (even a cleared score) in one of its semesters. Then the subject lists lock
+// (business-rules §4); periods per week can still change. The flag keeps its old name, weightsLocked.
 // ASSUMPTION: the lock covers the whole year, not only the class types whose classes have grades (agreed 27/10).
 const YEAR_SQL = `
   SELECT sy.school_year_id AS "schoolYearId", sy.year_name AS "yearName",
@@ -85,8 +88,10 @@ async function findCopySource(year) {
 
 // UC-26: every class type with, for the chosen year, its number of classes and configured subjects.
 // inUse = some class (any year) has this type, so it cannot be deleted.
-export async function listTracks({ schoolYearId }) {
+// gradeLevelId = only the types usable for that grade (its own and the ones for every grade), for the class forms.
+export async function listTracks({ schoolYearId, gradeLevelId }) {
   const schoolYear = await resolveYear(schoolYearId);
+  const grade = gradeLevelId ? await gradeName(pool, gradeLevelId) : null;
   const { rows: tracks } = await pool.query(
     `SELECT ct.track_id AS "trackId", ct.track_name AS "trackName", ct.description,
             (SELECT COUNT(*) FROM classes c
@@ -100,7 +105,26 @@ export async function listTracks({ schoolYearId }) {
      ORDER BY ct.track_name`,
     [schoolYear?.schoolYearId ?? null],
   );
-  return { schoolYear, copySource: await findCopySource(schoolYear), tracks };
+  const list = tracks.map(withTrackGrade).filter((t) => !grade || !t.gradeLevel || t.gradeLevel === grade);
+  return { schoolYear, copySource: await findCopySource(schoolYear), tracks: list };
+}
+
+async function gradeName(db, gradeLevelId) {
+  const id = parseId(gradeLevelId, 'Grade not found.');
+  const { rows } = await db.query('SELECT grade_level_name AS "name" FROM grade_levels WHERE grade_level_id = $1', [id]);
+  if (!rows.length) throw notFound('NOT_FOUND', 'Grade not found.');
+  return rows[0].name;
+}
+
+// Grades of the classes (any year) that use a class type.
+async function usedGrades(db, trackId) {
+  const { rows } = await db.query(
+    `SELECT DISTINCT gl.grade_level_name AS "name"
+     FROM classes c JOIN grade_levels gl ON gl.grade_level_id = c.grade_level_id
+     WHERE c.track_id = $1 AND c.deleted_at IS NULL`,
+    [trackId],
+  );
+  return rows.map((r) => r.name);
 }
 
 async function loadTrack(db, id) {
@@ -112,7 +136,7 @@ async function loadTrack(db, id) {
     [id],
   );
   if (!rows.length) throw notFound('NOT_FOUND', 'Class type not found.');
-  return rows[0];
+  return withTrackGrade(rows[0]);
 }
 
 // name = 1–100 characters (class_tracks.track_name), description optional, at most 255.
@@ -120,7 +144,8 @@ function validateTrack({ trackName, description }) {
   const name = typeof trackName === 'string' ? trackName.trim().replace(/\s+/g, ' ') : '';
   const desc = typeof description === 'string' ? description.trim().replace(/\s+/g, ' ') : '';
   if (!name) throw badRequest('MSG_REQUIRED', 'Please enter the class type name.');
-  if (name.length > 100) throw badRequest('MSG_TRACK_NAME_LENGTH', 'The class type name has at most 100 characters.');
+  if (hasGradePrefix(name)) throw badRequest('MSG_TRACK_NAME_PREFIX', 'Choose the grade in its own field, not in the name.');
+  if (name.length > 95) throw badRequest('MSG_TRACK_NAME_LENGTH', 'The class type name has at most 95 characters.');
   if (desc.length > 255) throw badRequest('MSG_TRACK_DESCRIPTION_LENGTH', 'The description has at most 255 characters.');
   return { name, desc: desc || null };
 }
@@ -140,32 +165,59 @@ function mapDuplicate(err) {
   return err;
 }
 
-// UC-26 create a class type. Its subjects are set per school year afterwards.
+// The grades a new class type is created for: [] or missing = one type for every grade.
+async function gradeNames(db, gradeLevelIds) {
+  if (gradeLevelIds === undefined || gradeLevelIds === null) return [null];
+  if (!Array.isArray(gradeLevelIds)) throw badRequest('MSG_REQUIRED', 'Please send the list of grades.');
+  if (!gradeLevelIds.length) return [null];
+  const names = [];
+  for (const id of gradeLevelIds) names.push(await gradeName(db, id));
+  if (new Set(names).size !== names.length) throw badRequest('MSG_TRACK_GRADE_DUPLICATE', 'A grade is listed twice.');
+  return names.sort();
+}
+
+// UC-26 create a class type – one per chosen grade ("Khối A" for 10 and 11 -> "10 · Khối A", "11 · Khối A") or one
+// for every grade. Their subjects are set per school year afterwards. Returns { tracks } of the new types.
 export async function createTrack(input) {
   const { name, desc } = validateTrack(input);
-  const id = await withTransaction(async (client) => {
+  const ids = await withTransaction(async (client) => {
     await client.query('LOCK TABLE class_tracks IN SHARE ROW EXCLUSIVE MODE'); // written rarely
-    await assertNameFree(client, name);
-    const { rows } = await client.query(
-      'INSERT INTO class_tracks (track_name, description) VALUES ($1, $2) RETURNING track_id AS "trackId"',
-      [name, desc],
-    );
-    return rows[0].trackId;
+    const grades = await gradeNames(client, input.gradeLevelIds);
+    const created = [];
+    for (const grade of grades) {
+      const full = composeTrackName(grade, name);
+      await assertNameFree(client, full);
+      const { rows } = await client.query(
+        'INSERT INTO class_tracks (track_name, description) VALUES ($1, $2) RETURNING track_id AS "trackId"',
+        [full, desc],
+      );
+      created.push(rows[0].trackId);
+    }
+    return created;
   }).catch((err) => {
     throw mapDuplicate(err);
   });
-  return loadTrack(pool, id);
+  const tracks = [];
+  for (const id of ids) tracks.push(await loadTrack(pool, id));
+  return { tracks };
 }
 
-// UC-26 rename a class type. The name is only a label, so it can change even when classes use the type.
+// UC-26 rename a class type or change its grade. The name is only a label, so it can change even when classes use
+// the type; the grade can only become one that every class using the type has (or every grade).
 export async function updateTrack(idParam, input) {
   const id = parseId(idParam, 'Class type not found.');
   const { name, desc } = validateTrack(input);
   await withTransaction(async (client) => {
     await client.query('LOCK TABLE class_tracks IN SHARE ROW EXCLUSIVE MODE');
-    await loadTrack(client, id);
-    await assertNameFree(client, name, id);
-    await client.query('UPDATE class_tracks SET track_name = $2, description = $3 WHERE track_id = $1', [id, name, desc]);
+    const track = await loadTrack(client, id);
+    let grade = track.gradeLevel;
+    if (input.gradeLevelId !== undefined) grade = input.gradeLevelId ? await gradeName(client, input.gradeLevelId) : null;
+    if (grade && grade !== track.gradeLevel && (await usedGrades(client, id)).some((g) => g !== grade)) {
+      throw conflict('MSG_TRACK_GRADE_IN_USE', 'Classes of another grade use this class type.');
+    }
+    const full = composeTrackName(grade, name);
+    await assertNameFree(client, full, id);
+    await client.query('UPDATE class_tracks SET track_name = $2, description = $3 WHERE track_id = $1', [id, full, desc]);
   }).catch((err) => {
     throw mapDuplicate(err);
   });
@@ -185,15 +237,15 @@ export async function deleteTrack(idParam) {
   });
 }
 
-// UC-26: every subject of the school with, for the chosen year, whether this class type studies it and its weight
-// and periods per week. weight stays a string ("2.00").
+// UC-26: every subject of the school with, for the chosen year, whether this class type studies it and its periods
+// per week.
 export async function getTrackSubjects(idParam, { schoolYearId }) {
   const id = parseId(idParam, 'Class type not found.');
   const track = await loadTrack(pool, id);
   const schoolYear = await resolveYear(schoolYearId);
   const { rows: subjects } = await pool.query(
     `SELECT s.subject_id AS "subjectId", s.subject_code AS "subjectCode", s.subject_name AS "subjectName",
-            ts.track_subject_id IS NOT NULL AS "configured", ts.weight, ts.periods_per_week AS "periodsPerWeek"
+            ts.track_subject_id IS NOT NULL AS "configured", ts.periods_per_week AS "periodsPerWeek"
      FROM subjects s
      LEFT JOIN track_subjects ts
        ON ts.subject_id = s.subject_id AND ts.track_id = $1 AND ts.school_year_id = $2
@@ -204,25 +256,20 @@ export async function getTrackSubjects(idParam, { schoolYearId }) {
   return { track, schoolYear, copySource: await findCopySource(schoolYear), subjects };
 }
 
-// One row of the save body -> { subjectId, weight (string with 2 decimals), periods }.
+// One row of the save body -> { subjectId, periods }. A weight sent by an older client is ignored.
 function validateItem(item) {
   const subjectId = Number(item?.subjectId);
   if (!Number.isSafeInteger(subjectId) || subjectId <= 0) throw notFound('NOT_FOUND', 'Subject not found.');
-  const rawWeight = typeof item.weight === 'number' ? String(item.weight) : String(item.weight ?? '').trim();
-  const weight = Number(rawWeight);
-  if (!/^\d+(\.\d{1,2})?$/.test(rawWeight) || weight <= 0 || weight > WEIGHT_MAX) {
-    throw badRequest('MSG_TRACK_WEIGHT_RANGE', `A weight is a number above 0 and at most ${WEIGHT_MAX}, 2 decimals.`);
-  }
   const periods = Number(item.periodsPerWeek);
   if (!Number.isInteger(periods) || periods < 1 || periods > PERIODS_MAX) {
     throw badRequest('MSG_TRACK_PERIODS_RANGE', `Periods per week is a whole number from 1 to ${PERIODS_MAX}.`);
   }
-  return { subjectId, weight: weight.toFixed(2), periods };
+  return { subjectId, periods };
 }
 
 // UC-26 save the subjects of a class type for one school year. `items` is the full list the type studies that
-// year: rows missing from it are removed. Once the year has grades only periods per week may change – adding,
-// removing or re-weighting a subject would change the year averages (business-rules §11).
+// year: rows missing from it are removed. Once the year has grades only periods per week may change – adding or
+// removing a subject would change the grade books and year averages (business-rules §11).
 // ASSUMPTION (needs team lead approval): removing a subject hard-deletes its track_subjects row, which is not on
 // the hard-delete list in CLAUDE.md; allowed only while the year has no grades and has not ended (agreed 27/10).
 export async function saveTrackSubjects(idParam, { schoolYearId, items }) {
@@ -246,17 +293,14 @@ export async function saveTrackSubjects(idParam, { schoolYearId, items }) {
     );
     if (found[0].count !== ids.length) throw notFound('NOT_FOUND', 'Subject not found.');
 
-    const { rows: current } = await client.query(
-      `SELECT subject_id AS "subjectId", weight FROM track_subjects WHERE track_id = $1 AND school_year_id = $2`,
-      [id, year.schoolYearId],
-    );
     if (year.weightsLocked) {
-      const before = new Map(current.map((r) => [r.subjectId, Number(r.weight)]));
-      const changed =
-        current.length !== wanted.length ||
-        wanted.some((w) => !before.has(w.subjectId) || before.get(w.subjectId) !== Number(w.weight));
-      if (changed) {
-        throw conflict('MSG_TRACK_WEIGHTS_LOCKED', 'This school year has grades, so subjects and weights cannot change.');
+      const { rows: current } = await client.query(
+        'SELECT subject_id AS "subjectId" FROM track_subjects WHERE track_id = $1 AND school_year_id = $2',
+        [id, year.schoolYearId],
+      );
+      const before = new Set(current.map((r) => r.subjectId));
+      if (current.length !== wanted.length || wanted.some((w) => !before.has(w.subjectId))) {
+        throw conflict('MSG_TRACK_WEIGHTS_LOCKED', 'This school year has grades, so subjects cannot be added or removed.');
       }
     }
 
@@ -268,18 +312,18 @@ export async function saveTrackSubjects(idParam, { schoolYearId, items }) {
     if (wanted.length) {
       await client.query(
         `INSERT INTO track_subjects (track_id, subject_id, school_year_id, weight, periods_per_week)
-         SELECT $1, x.subject_id, $2, x.weight, x.periods
-         FROM unnest($3::bigint[], $4::numeric[], $5::int[]) AS x(subject_id, weight, periods)
+         SELECT $1, x.subject_id, $2, $5::numeric, x.periods
+         FROM unnest($3::bigint[], $4::int[]) AS x(subject_id, periods)
          ON CONFLICT (track_id, subject_id, school_year_id)
          DO UPDATE SET weight = EXCLUDED.weight, periods_per_week = EXCLUDED.periods_per_week`,
-        [id, year.schoolYearId, ids, wanted.map((w) => w.weight), wanted.map((w) => w.periods)],
+        [id, year.schoolYearId, ids, wanted.map((w) => w.periods), WEIGHT],
       );
     }
   });
   return getTrackSubjects(id, { schoolYearId });
 }
 
-// UC-26 copy every class type's subjects, weights and periods from one year to another ("copied from the previous
+// UC-26 copy every class type's subjects and periods from one year to another ("copied from the previous
 // year by default", business-rules §4). The target must have no configuration yet, so nothing in use is overwritten.
 // Deleted class types and subjects are skipped. Returns how many rows were copied.
 export async function copyYear({ fromSchoolYearId, toSchoolYearId }) {
@@ -297,7 +341,7 @@ export async function copyYear({ fromSchoolYearId, toSchoolYearId }) {
     if (!source.length) throw notFound('NOT_FOUND', 'School year not found.');
     const { rowCount } = await client.query(
       `INSERT INTO track_subjects (track_id, subject_id, school_year_id, weight, periods_per_week)
-       SELECT ts.track_id, ts.subject_id, $2, ts.weight, ts.periods_per_week
+       SELECT ts.track_id, ts.subject_id, $2, 1.00, ts.periods_per_week
        FROM track_subjects ts
        JOIN class_tracks ct ON ct.track_id = ts.track_id AND ct.deleted_at IS NULL
        JOIN subjects s ON s.subject_id = ts.subject_id AND s.deleted_at IS NULL

@@ -85,8 +85,14 @@ Boundaries that are easy to get wrong:
 - Classes are created **per school year** (10A1 of 2026–2027 is a different row from 10A1 of 2027–2028).
   Promotion = new enrollment in the new class; transfer = old enrollment `TRANSFERRED` + new enrollment.
 - Every class has a **class type** (`class_tracks`, NOT NULL), e.g. type A = Maths/Physics/Chemistry focus.
-  `track_subjects` holds, per school year, each subject's **weight** and **periods per week** for that type; copied
-  from the previous year by default; editable, but weights **lock once the year has grades**.
+  `track_subjects` holds, per school year, the subjects and **periods per week** of that type; copied from the
+  previous year by default; editable, but subjects can no longer be added or removed **once the year has grades**
+  (periods per week stay editable).
+- A class type belongs to **one grade** (10, 11 or 12) or to every grade, so subjects and periods can differ per
+  grade (agreed 01/11). No schema change: the grade is a prefix of `track_name` ("10 · Khối A"); a name without
+  the prefix is a type for every grade. A class can only use a type of its grade or one for every grade.
+- **Every subject weight is 1** (agreed 01/11, in line with Circular 22/2021): `track_subjects.weight` is always
+  1.00 and is not shown.
 - Homeroom teacher may be empty → show a warning so SM assigns one.
 - A class has at most **45 studying students** (agreed 29/10, FE-04): checked when creating a class, adding
   students to it and importing a class list.
@@ -170,7 +176,7 @@ Boundaries that are easy to get wrong:
   once the semester has grades.**
 - Each individual score is its own `grades` row (`attempt_no`); averages are **not stored**, they are computed:
   subject semester average = weighted average of the scores present; subject year average = (S1 + 2 × S2) / 3;
-  student year average = average of subjects (weighted by `track_subjects.weight`).
+  student year average = average of subjects (every `track_subjects.weight` is 1, so a plain average).
 - Teachers enter / import grades only for their assigned class + subject.
 - **Finalize** (UC-85) locks the grade book (class × subject × semester, `grade_locks`). It is **blocked if any
   currently studying student is missing a score**. To change a finalized grade the teacher asks SM outside the

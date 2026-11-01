@@ -11,8 +11,9 @@ import TrackSubjects from './TrackSubjects.jsx';
 
 const LEAVE_TEXT = 'Các thay đổi chưa lưu sẽ bị bỏ. Bạn có muốn tiếp tục?';
 
-// SCR-71 Class Types & Subject Weights – UC-26 Manage Class Types (School Manager).
-// Class types are shared by every year; the subjects of a type (weight, periods per week) are set per school year.
+// SCR-71 "Loại lớp & số tiết" – UC-26 Manage Class Types (School Manager). A class type belongs to one grade (or to
+// every grade) and is shared by every year; its subjects and periods per week are set per school year. Every
+// subject weight is 1 and is not shown (agreed 01/11).
 // ?schoolYearId= and ?trackId= keep the selection on reload.
 export default function ClassTrackPage() {
   const toast = useToast();
@@ -64,7 +65,7 @@ export default function ClassTrackPage() {
     };
   }, [selectedId, schoolYear, version]);
 
-  // Warn before closing the tab with unsaved weights.
+  // Warn before closing the tab with unsaved subjects.
   useEffect(() => {
     if (!dirty) return undefined;
     const warn = (e) => {
@@ -95,10 +96,11 @@ export default function ClassTrackPage() {
 
   const reload = () => setVersion((v) => v + 1);
 
-  function handleTrackSaved(track, edited) {
-    toast(edited ? 'Đã lưu thay đổi loại lớp.' : `Đã thêm loại lớp ${track.trackName}.`);
+  // saved = the edited type, or the types just created (one per chosen grade).
+  function handleTrackSaved(saved, edited) {
+    toast(edited ? 'Đã lưu thay đổi loại lớp.' : `Đã thêm loại lớp ${saved.map((t) => t.trackName).join(', ')}.`);
     setMode('view');
-    select({ trackId: track.trackId });
+    select({ trackId: saved[0].trackId });
     reload();
   }
 
@@ -161,6 +163,7 @@ export default function ClassTrackPage() {
       <TrackSubjects
         key={detail.serial}
         data={detail.data}
+        tracks={tracks}
         onSaved={reload}
         onEdit={() => leave(() => setMode('edit'))}
         onDeleted={handleDeleted}
@@ -172,12 +175,12 @@ export default function ClassTrackPage() {
   return (
     <>
       <nav className="breadcrumb" aria-label="Breadcrumb">
-        <span>EduConnect</span>/<span>Đào tạo</span>/<span className="current">Loại lớp & hệ số</span>
+        <span>EduConnect</span>/<span>Đào tạo</span>/<span className="current">Loại lớp & số tiết</span>
       </nav>
       <div className="page-header">
         <div>
-          <h1 className="headline-lg">Loại lớp & hệ số môn</h1>
-          <p>Mỗi loại lớp có danh sách môn học, hệ số và số tiết mỗi tuần riêng cho từng năm học.</p>
+          <h1 className="headline-lg">Loại lớp & số tiết</h1>
+          <p>Mỗi loại lớp thuộc một khối, có danh sách môn học và số tiết mỗi tuần riêng cho từng năm học.</p>
         </div>
         <select
           className="input year-select"
@@ -209,8 +212,8 @@ export default function ClassTrackPage() {
         <div className="notice amber track-note">
           <Icon name="lock" />
           <p>
-            Năm học {yearLabel(schoolYear.yearName)} đã có điểm nên không thể thêm, bỏ môn hoặc đổi hệ số. Số tiết
-            mỗi tuần vẫn chỉnh được.
+            Năm học {yearLabel(schoolYear.yearName)} đã có điểm nên không thể thêm hoặc bỏ môn. Số tiết mỗi tuần
+            vẫn chỉnh được.
           </p>
         </div>
       ) : !schoolYear.configured && copySource ? (
@@ -220,7 +223,7 @@ export default function ClassTrackPage() {
             <div>
               <p className="notice-title">Năm học {yearLabel(schoolYear.yearName)} chưa có thiết lập môn</p>
               <p>
-                Sao chép môn học, hệ số và số tiết của tất cả loại lớp từ năm học {yearLabel(copySource.yearName)},
+                Sao chép môn học và số tiết của tất cả loại lớp từ năm học {yearLabel(copySource.yearName)},
                 sau đó chỉnh lại nếu cần.
               </p>
             </div>

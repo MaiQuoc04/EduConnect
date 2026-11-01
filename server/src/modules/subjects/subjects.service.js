@@ -87,7 +87,7 @@ async function loadSubject(db, id) {
   return rows[0];
 }
 
-// UC-23 View Subject Detail: the subject, the class types it is taught in (periods, weight) for the chosen year,
+// UC-23 View Subject Detail: the subject, the class types it is taught in (periods per week) for the chosen year,
 // every class of that year that studies it (by its class type) or has a teacher assigned for it, and the teachers
 // who can teach it.
 export async function getSubject(idParam, { schoolYearId } = {}) {
@@ -97,8 +97,7 @@ export async function getSubject(idParam, { schoolYearId } = {}) {
   const yearId = schoolYear?.schoolYearId ?? null;
 
   const { rows: tracks } = await pool.query(
-    `SELECT ct.track_id AS "trackId", ct.track_name AS "trackName", ts.periods_per_week AS "periodsPerWeek",
-            ts.weight
+    `SELECT ct.track_id AS "trackId", ct.track_name AS "trackName", ts.periods_per_week AS "periodsPerWeek"
      FROM track_subjects ts
      JOIN class_tracks ct ON ct.track_id = ts.track_id AND ct.deleted_at IS NULL
      WHERE ts.subject_id = $1 AND ts.school_year_id = $2
@@ -188,7 +187,7 @@ function mapDuplicate(err) {
   return err;
 }
 
-// UC-24 Create Subject. Its class types, periods and weights are set later (UC-26).
+// UC-24 Create Subject. Its class types and periods per week are set later (UC-26).
 export async function createSubject(input) {
   const data = validateInput(input);
   const id = await withTransaction(async (client) => {

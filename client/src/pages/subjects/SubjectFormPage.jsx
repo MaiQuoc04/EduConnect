@@ -10,8 +10,8 @@ const CODE_ERRORS = ['MSG_SUBJECT_CODE_FORMAT', 'MSG_SUBJECT_CODE_TAKEN', 'MSG_S
 const NAME_ERRORS = ['MSG_SUBJECT_NAME_LENGTH', 'MSG_SUBJECT_NAME_TAKEN'];
 
 // SCR-21 Create / Update Subject – UC-24 Create Subject (/subjects/new) and UC-25 Update Subject
-// (/subjects/:id/edit). A subject has only a code and a name; its class types, periods and weights are set in
-// "Loại lớp & hệ số môn" (UC-26). Once the subject is used, the server locks the code (codeLocked).
+// (/subjects/:id/edit). A subject has only a code and a name; its class types and periods are set in
+// "Loại lớp & số tiết" (UC-26). Once the subject is used, the server locks the code (codeLocked).
 export default function SubjectFormPage() {
   const { id } = useParams();
   const editing = Boolean(id);
@@ -130,7 +130,7 @@ export default function SubjectFormPage() {
 
         <div className="notice ink">
           <Icon name="info" />
-          <p>Số tiết/tuần và hệ số của môn theo từng loại lớp được thiết lập ở mục Loại lớp & hệ số môn.</p>
+          <p>Số tiết/tuần của môn theo từng loại lớp được thiết lập ở mục Loại lớp & số tiết.</p>
         </div>
 
         {error && !error.field && (

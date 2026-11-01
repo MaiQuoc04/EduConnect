@@ -21,6 +21,3 @@ export function periodsText({ periodsMin, periodsMax }) {
   if (periodsMin === null || periodsMin === undefined) return '—';
   return periodsMin === periodsMax ? `${periodsMin} tiết` : `${periodsMin}–${periodsMax} tiết`;
 }
-
-// NUMERIC comes as a string: "2.00" -> "2", "1.50" -> "1,5".
-export const formatWeight = (value) => String(Number(value)).replace('.', ',');

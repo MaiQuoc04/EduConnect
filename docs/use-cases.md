@@ -46,7 +46,7 @@ Source: Report 3 section 4.2 (draft v1.3). Actor "User" = any signed-in account.
 | UC-23 | View Subject Detail | School Manager | Academic Year & Subject Setup | View a subject and where it is taught. |
 | UC-24 | Create Subject | School Manager | Academic Year & Subject Setup | Add a subject. |
 | UC-25 | Update Subject | School Manager | Academic Year & Subject Setup | Update a subject. |
-| UC-26 | Manage Class Types | School Manager | Academic Year & Subject Setup | Define class types and, for each school year, each subject's weight and periods per week; weights lock once grades exist. |
+| UC-26 | Manage Class Types | School Manager | Academic Year & Subject Setup | Define class types (each for one grade or every grade) and, for each school year, their subjects and periods per week; subjects lock once grades exist. Every subject weight is 1 (not shown). |
 | UC-27 | Import Class List | School Manager | Class Groups | Import classes and their students (accounts must exist); automatically creates the general, student and parent groups of each class. |
 | UC-28 | Create Class Group | School Manager | Class Groups | Create a class group manually. |
 | UC-29 | View Group List | Teacher, Student, Parent, School Manager | Class Groups | View the groups the user belongs to (School Manager: all class groups, without their feeds or chats). |
