@@ -1,6 +1,6 @@
 import bcrypt from 'bcryptjs';
 import { pool } from '../../config/db.js';
-import { badRequest, unauthorized } from '../../utils/AppError.js';
+import { badRequest, forbidden, notFound, unauthorized } from '../../utils/AppError.js';
 import { assertNewPassword, hashPassword } from '../../utils/password.js';
 import { getNumberSetting } from '../../utils/settings.js';
 import { detectImageType, saveFile } from '../../utils/storage.js';
@@ -73,12 +73,12 @@ async function teacherInfo(userId, yearId) {
 }
 
 async function parentInfo(userId, yearId) {
-  const { rows } = await pool.query('SELECT parent_id, occupation, address FROM parents WHERE user_id = $1', [userId]);
+  const { rows } = await pool.query('SELECT parent_id, occupation FROM parents WHERE user_id = $1', [userId]);
   if (!rows.length) return null;
   const { parent_id: parentId, ...parent } = rows[0];
   const { rows: children } = await pool.query(
-    `SELECT u.full_name AS "fullName", s.student_code AS "studentCode", sp.relationship_type AS relationship,
-            cur.class_name AS "className"
+    `SELECT s.student_id AS id, u.full_name AS "fullName", u.avatar_url AS "avatarUrl", s.student_code AS "studentCode",
+            sp.relationship_type AS relationship, cur.class_name AS "className"
      FROM student_parents sp
      JOIN students s ON s.student_id = sp.student_id
      JOIN users u ON u.user_id = s.user_id
@@ -97,7 +97,7 @@ async function parentInfo(userId, yearId) {
 // UC-04 View Profile: personal, school, class and role information of the signed-in user (all their roles).
 export async function getProfile({ userId, roles, activeRole }) {
   const { rows } = await pool.query(
-    `SELECT user_id AS id, username, full_name AS "fullName", email, phone, avatar_url AS "avatarUrl", status,
+    `SELECT user_id AS id, username, full_name AS "fullName", email, phone, avatar_url AS "avatarUrl", address, status,
             created_at AS "createdAt"
      FROM users WHERE user_id = $1`,
     [userId],
@@ -112,6 +112,28 @@ export async function getProfile({ userId, roles, activeRole }) {
   ]);
   const avatarMaxMb = await getNumberSetting('upload.max_file_mb', 10); // shown on SCR-04
   return { user: rows[0], roles, activeRole, schoolYear: year?.name ?? null, student, teacher, parent, avatarMaxMb };
+}
+
+// UC-110 View Child Profile: a parent (active role PARENT, checked by the route) views the profile of one of their
+// linked children (student_parents). Read only. Not linked or not found -> 404, so other students stay hidden.
+export async function getChildProfile({ userId, studentId }) {
+  const id = Number(studentId);
+  if (!Number.isSafeInteger(id) || id <= 0) throw notFound();
+  const { rows } = await pool.query(
+    `SELECT u.user_id, u.username, u.full_name AS "fullName", u.email, u.phone, u.avatar_url AS "avatarUrl",
+            u.address, u.status, sp.relationship_type AS relationship
+     FROM student_parents sp
+     JOIN parents p ON p.parent_id = sp.parent_id
+     JOIN students s ON s.student_id = sp.student_id
+     JOIN users u ON u.user_id = s.user_id
+     WHERE p.user_id = $1 AND sp.student_id = $2`,
+    [userId, id],
+  );
+  if (!rows.length) throw notFound();
+  const { user_id: childUserId, relationship, ...user } = rows[0];
+  const year = await currentSchoolYear();
+  const student = await studentInfo(childUserId, year?.id ?? 0);
+  return { studentId: id, user, relationship, schoolYear: year?.name ?? null, student };
 }
 
 // UC-05 Change Password: needs the current password; also ends the "temporary password" state of UC-01.
@@ -147,4 +169,49 @@ export async function changeAvatar({ userId, file }) {
   const avatarUrl = await saveFile('avatars', file.buffer, extension);
   await pool.query('UPDATE users SET avatar_url = $1 WHERE user_id = $2', [avatarUrl, userId]);
   return { avatarUrl };
+}
+
+const ADDRESS_MAX = 500;
+
+// UC-108 Update Address: besides the parent's occupation, the only profile field users change themselves
+// (business rules §3).
+// An empty address clears it.
+export async function updateAddress({ userId, address }) {
+  if (address !== null && address !== undefined && typeof address !== 'string') {
+    throw badRequest('MSG_REQUIRED', 'Please enter the address as text.');
+  }
+  address = (address ?? '').trim().replace(/\s+/g, ' ');
+  if (address.length > ADDRESS_MAX) {
+    throw badRequest('MSG_ADDRESS_TOO_LONG', `The address must not exceed ${ADDRESS_MAX} characters.`, {
+      max: ADDRESS_MAX,
+    });
+  }
+  const { rows } = await pool.query('UPDATE users SET address = $1 WHERE user_id = $2 RETURNING address', [
+    address || null,
+    userId,
+  ]);
+  if (!rows.length) throw unauthorized('AUTH_INVALID', 'Please sign in again.');
+  return { address: rows[0].address };
+}
+
+const OCCUPATION_MAX = 100; // parents.occupation VARCHAR(100)
+
+// UC-109 Update Occupation: a parent (active role PARENT, checked by the route) changes their own occupation.
+// An empty occupation clears it.
+export async function updateOccupation({ userId, occupation }) {
+  if (occupation !== null && occupation !== undefined && typeof occupation !== 'string') {
+    throw badRequest('MSG_REQUIRED', 'Please enter the occupation as text.');
+  }
+  occupation = (occupation ?? '').trim().replace(/\s+/g, ' ');
+  if (occupation.length > OCCUPATION_MAX) {
+    throw badRequest('MSG_OCCUPATION_TOO_LONG', `The occupation must not exceed ${OCCUPATION_MAX} characters.`, {
+      max: OCCUPATION_MAX,
+    });
+  }
+  const { rows } = await pool.query('UPDATE parents SET occupation = $1 WHERE user_id = $2 RETURNING occupation', [
+    occupation || null,
+    userId,
+  ]);
+  if (!rows.length) throw forbidden();
+  return { occupation: rows[0].occupation };
 }

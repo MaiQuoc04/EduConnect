@@ -231,6 +231,80 @@ export async function resetPassword({ resetToken, newPassword, ip }) {
   return { ok: true };
 }
 
+// ---------- UC-02 alternative flow: no usable email → ask SA / SM to reset (they then use UC-100) ----------
+
+const REQUEST_REASON_MAX = 500;
+
+// Same spelling rules for both sides: Unicode NFC (some keyboards type Vietnamese as NFD), single spaces, any case.
+const normalizeName = (s) => s.normalize('NFC').trim().replace(/\s+/g, ' ').toLocaleLowerCase('vi');
+
+// The sign-in name (username / email / phone) and the full name must belong to the same account (business rules §3,
+// 01/11/2026); otherwise the user is told the details do not match. One PENDING request per account: a second one
+// is refused with MSG_REQUEST_PENDING. Not logged: PASSWORD_RESET is logged when SA / SM actually resets (UC-100).
+export async function requestAdminPasswordReset({ identifier, fullName, reason }) {
+  identifier = typeof identifier === 'string' ? identifier.trim() : '';
+  fullName = typeof fullName === 'string' ? normalizeName(fullName) : '';
+  if (!identifier || !fullName) throw badRequest('MSG_REQUIRED', 'Please enter your sign-in name and full name.');
+  reason = typeof reason === 'string' ? reason.trim() : '';
+  if (reason.length > REQUEST_REASON_MAX) {
+    throw badRequest('MSG_REASON_TOO_LONG', `The reason must not exceed ${REQUEST_REASON_MAX} characters.`, {
+      max: REQUEST_REASON_MAX,
+    });
+  }
+
+  // One input can be several accounts' username / email / phone; keep the one whose full name matches.
+  const { rows: candidates } = await pool.query(
+    'SELECT user_id, full_name, username, status FROM users WHERE username = $1 OR email = $1 OR phone = $1',
+    [identifier],
+  );
+  const user = candidates.find((u) => normalizeName(u.full_name) === fullName);
+  if (!user) {
+    throw badRequest('MSG_ACCOUNT_NOT_MATCH', 'The sign-in name and full name do not match any account.');
+  }
+  if (user.status !== 'ACTIVE') throw badRequest('MSG_ACCOUNT_LOCKED', 'This account is locked.');
+
+  await withTransaction(async (client) => {
+    const { rows: inserted } = await client.query(
+      `INSERT INTO password_reset_requests (user_id, reason) VALUES ($1, $2)
+       ON CONFLICT (user_id) WHERE status = 'PENDING' DO NOTHING
+       RETURNING request_id`,
+      [user.user_id, reason || null],
+    );
+    if (!inserted.length) {
+      throw badRequest('MSG_REQUEST_PENDING', 'A request for this account is already waiting to be handled.');
+    }
+
+    // Who can handle it (same scope as UC-100): every active SA; SMs too unless the account is an SA or SM.
+    const roles = await getRoles(user.user_id);
+    const smCanHandle = !roles.includes('SYSTEM_ADMIN') && !roles.includes('SCHOOL_MANAGER');
+    const { rows: handlers } = await client.query(
+      `SELECT DISTINCT u.user_id FROM users u
+       JOIN user_roles ur ON ur.user_id = u.user_id JOIN roles r ON r.role_id = ur.role_id
+       WHERE u.status = 'ACTIVE' AND u.user_id <> $1
+         AND (r.role_code = 'SYSTEM_ADMIN' OR (r.role_code = 'SCHOOL_MANAGER' AND $2::boolean))`,
+      [user.user_id, smCanHandle],
+    );
+    if (!handlers.length) return;
+
+    // ASSUMPTION: stored as a SYSTEM notification now; the bell / real-time push comes with FE-09 (It3).
+    const { rows: [notification] } = await client.query(
+      `INSERT INTO notifications (type, title, detail, is_personal, target_type, target_id)
+       VALUES ('SYSTEM', $1, $2, TRUE, 'PASSWORD_RESET_REQUEST', $3)
+       RETURNING notification_id`,
+      [
+        `Yêu cầu cấp lại mật khẩu: ${user.full_name}`,
+        `Tài khoản ${user.username} yêu cầu cấp lại mật khẩu.${reason ? ` Lý do: ${reason}` : ''}`,
+        inserted[0].request_id,
+      ],
+    );
+    await client.query(
+      `INSERT INTO notification_recipients (notification_id, user_id) SELECT $1, UNNEST($2::bigint[])`,
+      [notification.notification_id, handlers.map((h) => h.user_id)],
+    );
+  });
+  return { ok: true };
+}
+
 function escapeHtml(s) {
   return String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
 }

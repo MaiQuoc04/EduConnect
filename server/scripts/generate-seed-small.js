@@ -62,8 +62,8 @@ const TIME_SLOTS = [
 
 // ---------- people: 3 per role ----------
 // Usernames follow business rules §3 (first name + initials of family and middle names, no accents).
-const user = (username, fullName, phone, { email = true, status = 'ACTIVE', mustChange = false } = {}) => ({
-  username, fullName, email: email ? `${username}@${EMAIL_DOMAIN}` : null, phone, status, mustChange,
+const user = (username, fullName, phone, { email = true, status = 'ACTIVE', mustChange = false, address = null } = {}) => ({
+  username, fullName, email: email ? `${username}@${EMAIL_DOMAIN}` : null, phone, status, mustChange, address,
 });
 
 const admins = [
@@ -104,12 +104,12 @@ const student = (username) => students.find((s) => s.user.username === username)
 
 const ADDRESS = 'phường Hải Châu, TP. Đà Nẵng';
 const parents = [
-  { user: user('toanpv', 'Phạm Văn Toàn', '0905000041'), occupation: 'Kỹ sư', address: `12 Lê Lợi, ${ADDRESS}`,
+  { user: user('toanpv', 'Phạm Văn Toàn', '0905000041', { address: `12 Lê Lợi, ${ADDRESS}` }), occupation: 'Kỹ sư',
     children: [['baopg', 'FATHER']] },
-  { user: user('hanttn', 'Trần Thị Ngọc Hân', '0905000042'), occupation: 'Kế toán', address: `45 Hùng Vương, ${ADDRESS}`,
+  { user: user('hanttn', 'Trần Thị Ngọc Hân', '0905000042', { address: `45 Hùng Vương, ${ADDRESS}` }), occupation: 'Kế toán',
     children: [['khanglm', 'MOTHER'], ['tramlnb', 'MOTHER']] }, // two children in two classes
-  { user: user('oanhntk', 'Nguyễn Thị Kim Oanh', '0905000043', { email: false, status: 'LOCKED' }), occupation: 'Nội trợ',
-    address: `12 Lê Lợi, ${ADDRESS}`, children: [['baopg', 'MOTHER']] },
+  { user: user('oanhntk', 'Nguyễn Thị Kim Oanh', '0905000043', { email: false, status: 'LOCKED', address: `12 Lê Lợi, ${ADDRESS}` }),
+    occupation: 'Nội trợ', children: [['baopg', 'MOTHER']] },
 ];
 
 const users = [...admins, ...managers, ...teachers.map((t) => t.user), ...students.map((s) => s.user), ...parents.map((p) => p.user)];
@@ -200,8 +200,8 @@ SELECT u.user_id, r.role_id FROM users u JOIN roles r ON r.role_code = '${role}'
 WHERE u.username IN (${usernamesOf(list)});`;
 
 L.push(`-- Accounts (password: ${PASSWORD})
-INSERT INTO users (username, email, phone, password_hash, full_name, status, must_change_password) VALUES
-${users.map((u) => `  (${[u.username, u.email, u.phone, hash].map(q).join(', ')}, ${q(u.fullName)}, ${q(u.status)}, ${u.mustChange ? 'TRUE' : 'FALSE'})`).join(',\n')};
+INSERT INTO users (username, email, phone, password_hash, full_name, address, status, must_change_password) VALUES
+${users.map((u) => `  (${[u.username, u.email, u.phone, hash].map(q).join(', ')}, ${q(u.fullName)}, ${q(u.address)}, ${q(u.status)}, ${u.mustChange ? 'TRUE' : 'FALSE'})`).join(',\n')};
 
 ${roleInsert('SYSTEM_ADMIN', admins)}
 ${roleInsert('SCHOOL_MANAGER', managers)}
@@ -223,11 +223,11 @@ ${values(students.map((s) => [s.user.username, s.code, s.dob, s.gender]))}
 ) AS v(username, code, dob, gender)
 JOIN users u ON u.username = v.username;
 
-INSERT INTO parents (user_id, occupation, address)
-SELECT u.user_id, v.occupation, v.address
+INSERT INTO parents (user_id, occupation)
+SELECT u.user_id, v.occupation
 FROM (VALUES
-${values(parents.map((p) => [p.user.username, p.occupation, p.address]))}
-) AS v(username, occupation, address)
+${values(parents.map((p) => [p.user.username, p.occupation]))}
+) AS v(username, occupation)
 JOIN users u ON u.username = v.username;
 
 INSERT INTO student_parents (student_id, parent_id, relationship_type)

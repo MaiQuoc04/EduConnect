@@ -3,6 +3,7 @@ import AppLayout from './components/AppLayout.jsx';
 import { useAuth } from './context/AuthContext.jsx';
 import { HOME_BY_ROLE } from './navigation.js';
 import ChangePasswordPage from './pages/account/ChangePasswordPage.jsx';
+import ChildProfilePage from './pages/account/ChildProfilePage.jsx';
 import EditAvatarPage from './pages/account/EditAvatarPage.jsx';
 import ForgotPasswordPage from './pages/account/ForgotPasswordPage.jsx';
 import LoginPage from './pages/account/LoginPage.jsx';
@@ -35,6 +36,14 @@ export default function App() {
         {/* FE-01 Personal Account */}
         <Route path="profile" element={<ProfilePage />} />
         <Route path="profile/avatar" element={<EditAvatarPage />} />
+        <Route
+          path="profile/children/:studentId"
+          element={
+            <ProtectedRoute roles={['PARENT']}>
+              <ChildProfilePage />
+            </ProtectedRoute>
+          }
+        />
         <Route path="change-password" element={<ChangePasswordPage />} />
       </Route>
       <Route path="*" element={<Navigate to="/" replace />} />
