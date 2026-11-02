@@ -1,4 +1,4 @@
-// Client copy of the FE-03 text rules (server/src/utils/text.js) so the form shows the same errors as the API
+// Client copy of the FE-03 text rules (server/src/modules/teacher/teacher.text.js) so the form shows the same errors as the API
 // before sending. Keep both files in sync – the server is still the one that decides.
 //
 // ASSUMPTION (business-rules.md has no rule for names): letters (Vietnamese included), spaces, and an apostrophe

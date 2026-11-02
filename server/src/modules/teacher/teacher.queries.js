@@ -1,6 +1,11 @@
-import { pool } from '../config/db.js';
-import { HOMEROOM_FILTER } from '../constants/teacher.constants.js';
-import { escapeLike, foldVietnamese, phoneSearchDigits, VI_TRANSLATE } from '../utils/text.js';
+// FE-03 SQL (teachers, departments, subjects, school years, classes, teaching assignments, timetable slots).
+// Every function takes an optional `db` (pool or a transaction client from withTransaction).
+import { pool } from '../../config/db.js';
+import { AppError } from '../../utils/AppError.js';
+import { ENROLLMENT_STATUS, ERROR_CODES, HOMEROOM_FILTER } from './teacher.constants.js';
+import { escapeLike, foldVietnamese, phoneSearchDigits, VI_TRANSLATE } from './teacher.text.js';
+
+// ══ teacher ══════════════════════════════════════════════════════════════
 
 // "Current school year" as a sub-query (MOM-05: latest year that has started). Constant SQL, no user input.
 const CURRENT_YEAR_SQL = `(SELECT school_year_id FROM school_years
@@ -355,4 +360,240 @@ export async function findTeachersWithSubjectIds(teacherIds, db = pool) {
     [teacherIds],
   );
   return rows;
+}
+
+// ══ department ══════════════════════════════════════════════════════════════
+
+// departments = the list of tổ chuyên môn (database/patch_v0.3_departments.sql). teachers.department stores the NAME.
+
+// Postgres "undefined_table": the shared database has not run patch_v0.3_departments.sql yet.
+function notReady(err) {
+  if (err?.code === '42P01') {
+    return new AppError(503, ERROR_CODES.DEPARTMENTS_NOT_READY, 'Table departments is missing: run database/patch_v0.3_departments.sql.');
+  }
+  return err;
+}
+
+export async function findActiveDepartments(db = pool) {
+  try {
+    const { rows } = await db.query(
+      `SELECT department_id AS "departmentId", department_name AS "name"
+       FROM departments WHERE deleted_at IS NULL ORDER BY department_name`,
+    );
+    return rows;
+  } catch (err) {
+    throw notReady(err);
+  }
+}
+
+export async function findActiveDepartmentById(departmentId, db = pool) {
+  try {
+    const { rows } = await db.query(
+      `SELECT department_id AS "departmentId", department_name AS "name"
+       FROM departments WHERE department_id = $1 AND deleted_at IS NULL`,
+      [departmentId],
+    );
+    return rows[0] ?? null;
+  } catch (err) {
+    throw notReady(err);
+  }
+}
+
+// ══ subject ══════════════════════════════════════════════════════════════
+
+export async function findActiveSubjects(db = pool) {
+  const { rows } = await db.query(
+    `SELECT subject_id AS "subjectId", subject_code AS "code", subject_name AS "name"
+     FROM subjects WHERE deleted_at IS NULL ORDER BY subject_name`,
+  );
+  return rows;
+}
+
+// How many of the given ids are existing, not deleted subjects.
+export async function countActiveSubjectsByIds(subjectIds, db = pool) {
+  const { rows } = await db.query(
+    'SELECT subject_id AS "subjectId" FROM subjects WHERE subject_id = ANY($1::bigint[]) AND deleted_at IS NULL',
+    [subjectIds],
+  );
+  return rows.length;
+}
+
+// ══ schoolYear ══════════════════════════════════════════════════════════════
+
+// MOM-05: no is_current column; the current year is the latest one that has started.
+export async function findCurrentSchoolYear(db = pool) {
+  const { rows } = await db.query(
+    `SELECT school_year_id AS "id", year_name AS "name" FROM school_years
+     WHERE start_date <= CURRENT_DATE ORDER BY start_date DESC LIMIT 1`,
+  );
+  return rows[0] ?? null;
+}
+
+// Newest first, with "started" so the caller can tell which one is current.
+export async function findAllSchoolYears(db = pool) {
+  const { rows } = await db.query(
+    `SELECT school_year_id AS "id", year_name AS "name",
+            to_char(start_date, 'YYYY-MM-DD') AS "startDate", to_char(end_date, 'YYYY-MM-DD') AS "endDate",
+            (start_date <= CURRENT_DATE) AS "started"
+     FROM school_years ORDER BY start_date DESC`,
+  );
+  return rows;
+}
+
+export async function findSchoolYearById(id, db = pool) {
+  const { rows } = await db.query(
+    `SELECT school_year_id AS "id", year_name AS "name",
+            to_char(start_date, 'YYYY-MM-DD') AS "startDate", to_char(end_date, 'YYYY-MM-DD') AS "endDate"
+     FROM school_years WHERE school_year_id = $1`,
+    [id],
+  );
+  return rows[0] ?? null;
+}
+
+// Today's date from the database (times are compared in SQL, not in JS).
+export async function findToday(db = pool) {
+  const { rows } = await db.query(`SELECT to_char(CURRENT_DATE, 'YYYY-MM-DD') AS "today"`);
+  return rows[0].today;
+}
+
+// ══ class ══════════════════════════════════════════════════════════════
+
+// Classes of one school year with grade, track, homeroom teacher and number of studying students.
+export async function findClassesOfYear(schoolYearId, db = pool) {
+  const { rows } = await db.query(
+    `SELECT
+       c.class_id            AS "classId",
+       c.class_name          AS "className",
+       gl.grade_level_name   AS "gradeLevel",
+       ct.track_name         AS "trackName",
+       c.homeroom_teacher_id AS "homeroomTeacherId",
+       (SELECT COUNT(*) FROM class_enrollments e
+         WHERE e.class_id = c.class_id AND e.status = $1)::int AS "studentCount"
+     FROM classes c
+     JOIN grade_levels gl ON gl.grade_level_id = c.grade_level_id
+     JOIN class_tracks ct ON ct.track_id = c.track_id
+     WHERE c.school_year_id = $2 AND c.deleted_at IS NULL
+     ORDER BY gl.grade_level_name, c.class_name`,
+    [ENROLLMENT_STATUS.STUDYING, schoolYearId],
+  );
+  return rows;
+}
+
+// Locks every class row of the year (FOR UPDATE) so two managers saving at once are serialised.
+export async function lockClassesOfYear(schoolYearId, db) {
+  const { rows } = await db.query(
+    `SELECT class_id AS "classId", class_name AS "className", track_id AS "trackId",
+            homeroom_teacher_id AS "homeroomTeacherId"
+     FROM classes WHERE school_year_id = $1 AND deleted_at IS NULL
+     ORDER BY class_id FOR UPDATE`,
+    [schoolYearId],
+  );
+  return rows;
+}
+
+export async function updateHomeroomTeacher(classId, teacherId, db) {
+  await db.query('UPDATE classes SET homeroom_teacher_id = $1 WHERE class_id = $2', [teacherId, classId]);
+}
+
+// Subjects each class studies in its year (track_subjects of the class's track), with periods per week.
+export async function findClassSubjectsOfYear(schoolYearId, db = pool) {
+  const { rows } = await db.query(
+    `SELECT c.class_id AS "classId", s.subject_id AS "subjectId", s.subject_name AS "subjectName",
+            s.subject_code AS "subjectCode", tsj.periods_per_week AS "periodsPerWeek"
+     FROM classes c
+     JOIN track_subjects tsj ON tsj.track_id = c.track_id AND tsj.school_year_id = c.school_year_id
+     JOIN subjects s ON s.subject_id = tsj.subject_id AND s.deleted_at IS NULL
+     WHERE c.school_year_id = $1 AND c.deleted_at IS NULL`,
+    [schoolYearId],
+  );
+  return rows;
+}
+
+// ══ teachingAssignment ══════════════════════════════════════════════════════════════
+
+// Assignments of the year that run on `date` (start_date <= date <= end_date).
+export async function findActiveOnDate(schoolYearId, date, db = pool) {
+  const { rows } = await db.query(
+    `SELECT ta.assignment_id AS "assignmentId", ta.class_id AS "classId", ta.subject_id AS "subjectId",
+            ta.teacher_id AS "teacherId",
+            to_char(ta.start_date, 'YYYY-MM-DD') AS "startDate", to_char(ta.end_date, 'YYYY-MM-DD') AS "endDate"
+     FROM teaching_assignments ta
+     JOIN classes c ON c.class_id = ta.class_id AND c.deleted_at IS NULL
+     WHERE c.school_year_id = $1 AND ta.deleted_at IS NULL
+       AND $2::date BETWEEN ta.start_date AND ta.end_date
+     ORDER BY ta.start_date`,
+    [schoolYearId, date],
+  );
+  return rows;
+}
+
+// Rows planned to start on/after `date` are replaced → soft delete (business-rules §14).
+export async function softDeleteStartingFrom(classId, subjectId, date, db) {
+  await db.query(
+    `UPDATE teaching_assignments SET deleted_at = NOW()
+     WHERE class_id = $1 AND subject_id = $2 AND deleted_at IS NULL AND start_date >= $3::date`,
+    [classId, subjectId, date],
+  );
+}
+
+// The row running on `date` ends the day before.
+export async function endRunningBefore(classId, subjectId, date, db) {
+  await db.query(
+    `UPDATE teaching_assignments SET end_date = $1::date - 1
+     WHERE class_id = $2 AND subject_id = $3 AND deleted_at IS NULL
+       AND start_date < $4::date AND end_date >= $5::date`,
+    [date, classId, subjectId, date, date],
+  );
+}
+
+export async function insertAssignment({ classId, subjectId, teacherId, startDate, endDate }, db) {
+  await db.query(
+    `INSERT INTO teaching_assignments (class_id, subject_id, teacher_id, start_date, end_date)
+     VALUES ($1, $2, $3, $4::date, $5::date)`,
+    [classId, subjectId, teacherId, startDate, endDate],
+  );
+}
+
+// ══ timetable ══════════════════════════════════════════════════════════════
+
+// Timetable rows of one (class, subject) from a date that have no attendance yet.
+// business-rules §10: rows that already have attendance are kept as they are.
+// `first` = number of the first placeholder used here (class $first, subject $first+1, date $first+2).
+const freeSlots = (first) => `
+  FROM timetable_slots ts
+  WHERE ts.class_id = $${first} AND ts.subject_id = $${first + 1} AND ts."date" >= $${first + 2}::date
+    AND NOT EXISTS (SELECT 1 FROM attendances a WHERE a.timetable_slot_id = ts.timetable_slot_id)`;
+
+export async function countFreeSlotsFrom(classId, subjectId, date, db) {
+  const { rows } = await db.query(`SELECT COUNT(*)::int AS "n" ${freeSlots(1)}`, [classId, subjectId, date]);
+  return Number(rows[0].n);
+}
+
+// Periods where `teacherId` already teaches another lesson at the same date + period (first 5).
+export async function findTeacherClashes(teacherId, classId, subjectId, date, db) {
+  const { rows } = await db.query(
+    `SELECT to_char(ts."date", 'YYYY-MM-DD') AS "date", sl.period_number AS "period", c2.class_name AS "otherClass"
+     FROM timetable_slots ts
+     JOIN time_slots sl ON sl.slot_id = ts.slot_id
+     JOIN timetable_slots other
+       ON other.teacher_id = $1 AND other."date" = ts."date" AND other.slot_id = ts.slot_id
+      AND other.timetable_slot_id <> ts.timetable_slot_id
+     JOIN classes c2 ON c2.class_id = other.class_id
+     WHERE ts.class_id = $2 AND ts.subject_id = $3 AND ts."date" >= $4::date
+       AND NOT EXISTS (SELECT 1 FROM attendances a WHERE a.timetable_slot_id = ts.timetable_slot_id)
+     ORDER BY ts."date", sl.period_number
+     LIMIT 5`,
+    [teacherId, classId, subjectId, date],
+  );
+  return rows;
+}
+
+// No substitute teaching: the timetable teacher must match the assignment.
+export async function moveFreeSlotsToTeacher(teacherId, classId, subjectId, date, db) {
+  await db.query(`UPDATE timetable_slots SET teacher_id = $1 WHERE timetable_slot_id IN (SELECT ts.timetable_slot_id ${freeSlots(2)})`, [
+    teacherId,
+    classId,
+    subjectId,
+    date,
+  ]);
 }

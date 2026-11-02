@@ -1,17 +1,16 @@
 import { Router } from 'express';
 import { requireAuth, requireRole } from '../../middlewares/auth.js';
 import * as teacherController from './teacher.controller.js';
+import { ROLES } from './teacher.constants.js';
 
+// FE-03 (Dung) – mounted at /api/v1/teachers. Only School Manager (permissions.md).
 const router = Router();
+const sm = [requireAuth, requireRole(ROLES.SCHOOL_MANAGER)];
 
-// SCR-13 / UC-15: only School Manager can browse the teacher list
-router.get('/', requireAuth, requireRole('SCHOOL_MANAGER'), teacherController.listTeachers);
-// SCR-15: subjects to choose from (must stay above '/:id')
-router.get('/subject-options', requireAuth, requireRole('SCHOOL_MANAGER'), teacherController.subjectOptions);
-// SCR-14 / UC-16: teacher detail (profile, assignments, weekly schedule)
-router.get('/:id', requireAuth, requireRole('SCHOOL_MANAGER'), teacherController.getTeacher);
-
-// SCR-15 / UC-17: update teacher profile (not login identifiers)
-router.patch('/:id', requireAuth, requireRole('SCHOOL_MANAGER'), teacherController.updateTeacher);
+router.get('/', ...sm, teacherController.listTeachers); // SCR-13 / UC-15
+router.get('/subject-options', ...sm, teacherController.listSubjectOptions); // SCR-15 – keep above '/:id'
+router.get('/department-options', ...sm, teacherController.listDepartmentOptions); // SCR-15 – keep above '/:id'
+router.get('/:id', ...sm, teacherController.getTeacher); // SCR-14 / UC-16
+router.patch('/:id', ...sm, teacherController.updateTeacher); // SCR-15 / UC-17
 
 export default router;

@@ -4,10 +4,9 @@ import accountRoutes from './modules/account/account.routes.js';
 import adminRoutes from './modules/admin/admin.routes.js';
 import maintenanceRoutes from './modules/admin/maintenance.routes.js';
 import authRoutes from './modules/auth/auth.routes.js';
-// FE-03 uses the layered structure: routes/ → validators/ → controllers/ → services/ → repositories/ (+ models/, constants/)
-import homeroomRoutes from './routes/homeroom.routes.js';
-import teacherRoutes from './routes/teacher.routes.js';
-import teachingRoutes from './routes/teachingAssignment.routes.js';
+import homeroomRoutes from './modules/teacher/homeroom.routes.js';
+import teacherRoutes from './modules/teacher/teacher.routes.js';
+import teachingRoutes from './modules/teacher/teaching.routes.js';
 
 // Each feature gets its own folder in src/modules and is mounted here, e.g.
 //   FE-01 account   -> /auth, /account (Quoc)

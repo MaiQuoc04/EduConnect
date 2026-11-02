@@ -25,7 +25,7 @@ function formatDateTime(value) {
   return t ? `${t} · ${formatDate(d)}` : formatDate(d);
 }
 
-// Client-side checks mirror the server (validators/teacher.validator.js + utils/text.js).
+// Client-side checks mirror the server (modules/teacher/teacher.validation.js + teacher.text.js).
 function validate(form) {
   const errors = {};
   const name = validateFullName(form.fullName);

@@ -1,9 +1,12 @@
-// Text normalisation and checks for names, departments and search terms (FE-03).
-// client/src/utils/teacherValidation.js mirrors these rules – keep both in sync.
+// FE-03 text helpers: name cleaning / checking and accent-insensitive search. Accents and phone numbers reuse the
+// shared utils (utils/username.js removeAccents, utils/phone.js normalizePhone); only what is new for FE-03 is here.
+// client/src/utils/teacherValidation.js mirrors the name rules – keep both in sync.
 //
-// ASSUMPTION (business-rules.md has no rule for names): a person's name is made of letters (any language,
-// Vietnamese diacritics included), spaces, and an apostrophe or hyphen between letters (ethnic minority names
-// such as "H'Hen Niê"). No digits, no symbols, no emoji. Each word starts with a capital letter.
+// Person name (business-rules §4 "Teachers"): letters of any language (Vietnamese diacritics included), spaces, and
+// an apostrophe or hyphen between letters ("H'Hen Niê"). No digits, no symbols, no emoji. Each word starts with a
+// capital letter.
+import { normalizePhone } from '../../utils/phone.js';
+import { removeAccents } from '../../utils/username.js';
 
 // Zero-width spaces/joiners, BOM, soft hyphen, bidi marks and control characters: invisible, never wanted.
 const INVISIBLE = /[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F-\u009F­​-‏‪-‮⁠-⁤﻿]/g;
@@ -33,7 +36,7 @@ export function cleanText(value) {
 }
 
 // "phạm  thu hà" -> "Phạm Thu Hà"; "h'hen niê" -> "H'hen Niê" (only the first letter of each word changes).
-export function capitalizeWords(value) {
+function capitalizeWords(value) {
   return value.replace(/(^|[\s-])(\p{L})/gu, (_, sep, ch) => sep + ch.toLocaleUpperCase('vi'));
 }
 
@@ -59,24 +62,11 @@ export function checkPersonName(input, { min = 2, max = 150 } = {}) {
   return { value: capitalizeWords(value), reason: null };
 }
 
-// Department / group name: letters, digits, spaces and . , - ( ) & / ' – e.g. "Tổ Toán - Tin", "Tổ 1 (Khối 10)".
-const DEPARTMENT_ALLOWED = /^[\p{L}\p{M}\p{N} .,\-()&/']+$/u;
-
-/** Optional text label. Empty is allowed (→ value ''). */
-export function checkDepartment(input, { min = 2, max = 100 } = {}) {
-  const value = cleanText(input);
-  if (!value) return { value: '', reason: null };
-  if (!DEPARTMENT_ALLOWED.test(value)) return { value, reason: NAME_REASON.INVALID_CHAR };
-  if (!/\p{L}/u.test(value)) return { value, reason: NAME_REASON.NO_LETTER };
-  if (value.replace(/[^\p{L}\p{N}]/gu, '').length < min) return { value, reason: NAME_REASON.TOO_SHORT };
-  if (value.length > max) return { value, reason: NAME_REASON.TOO_LONG };
-  return { value, reason: null };
-}
-
 // ── Search helpers ──────────────────────────────────────────────────────────
 
 // Vietnamese letters (both cases) → base latin letter. Used in SQL translate() so search ignores accents
-// without depending on the Postgres "unaccent" extension or the database locale.
+// without depending on the Postgres "unaccent" extension or the database locale. In JS the same result comes from
+// removeAccents() (utils/username.js).
 const VI_FROM =
   'àáạảãâầấậẩẫăằắặẳẵèéẹẻẽêềếệểễìíịỉĩòóọỏõôồốộổỗơờớợởỡùúụủũưừứựửữỳýỵỷỹđ' +
   'ÀÁẠẢÃÂẦẤẬẨẪĂẰẮẶẲẴÈÉẸẺẼÊỀẾỆỂỄÌÍỊỈĨÒÓỌỎÕÔỒỐỘỔỖƠỜỚỢỞỠÙÚỤỦŨƯỪỨỰỬỮỲÝỴỶỸĐ';
@@ -87,12 +77,7 @@ export const VI_TRANSLATE = { from: VI_FROM, to: VI_TO };
 
 /** Lower case, no Vietnamese accents: "Nguyễn Văn Đức" -> "nguyen van duc". Same result as the SQL fold. */
 export function foldVietnamese(value) {
-  let out = '';
-  for (const ch of String(value).normalize('NFC')) {
-    const i = VI_FROM.indexOf(ch);
-    out += i >= 0 ? VI_TO[i] : ch;
-  }
-  return out.toLowerCase();
+  return removeAccents(String(value).normalize('NFC')).toLowerCase();
 }
 
 /** Escapes LIKE wildcards so "%" and "_" typed by a user are matched literally (used with ESCAPE '\'). */
@@ -101,19 +86,14 @@ export function escapeLike(value) {
 }
 
 /**
- * Phone digits for searching: "0914 882 119", "0914.882.119", "+84 914 882 119" → "0914882119".
+ * Phone digits for searching: "0914 882 119", "0914.882.119", "+84 914 882 119" → "0914882119" (utils/phone.js).
  * Returns '' when the text is not a phone-like string (letters present or fewer than 3 digits).
  */
 export function phoneSearchDigits(value) {
   const text = String(value).trim();
   if (!/^\+?[\d\s.\-()]+$/.test(text)) return '';
-  let digits = text.replace(/\D/g, '');
-  if (digits.startsWith('84') && digits.length >= 11) digits = `0${digits.slice(2)}`;
+  let digits = normalizePhone(text.replace(/[()]/g, '')).replace(/\D/g, '');
+  if (digits.startsWith('84') && digits.length >= 11) digits = `0${digits.slice(2)}`; // "84 914 882 119" without +
   return digits.length >= 3 ? digits : '';
 }
 
-/** Vietnamese mobile number for display: "0914882119" -> "0914 882 119"; other values unchanged. */
-export function formatPhone(value) {
-  const d = String(value ?? '').replace(/\D/g, '');
-  return /^0\d{9}$/.test(d) ? `${d.slice(0, 4)} ${d.slice(4, 7)} ${d.slice(7)}` : value;
-}

@@ -61,19 +61,16 @@ Last updated: 02/11/2026.
     `0` + 9 digits); UC references to FE-14 shift by one (UC-105 → UC-104).
   - FE-04 (Khanh): screen references shift by one (SCR-66 → SCR-65, SCR-70 → SCR-69, SCR-71 → SCR-70); FE-14 (It2)
     uses UC-104..UC-106, a parent's address is `users.address`, occupation stays `parents.occupation`.
-  - FE-03 (Dung), before the merge:
-    - Folder layout as in CLAUDE.md: move the code from `routes/`, `validators/`, `controllers/`, `services/`,
-      `repositories/`, `models/`, `constants/` into `server/src/modules/teacher/` (routes → controller → service,
-      SQL in the service or a file inside the module) and delete the old unused files already there
-      (`modules/teacher/*.routes.js` / `.controller.js` / `.service.js`, about 980 lines nobody imports).
-    - Delete stray files: root `package-lock.json` (empty), `server/scripts/check-cols.js`,
-      `server/scripts/check-tables.js`; fix the comment in `teacher.constants.js` that still points to schema v0.2.
-    - Reuse the existing utils instead of copies: accent removal from `utils/username.js` (`removeAccents`), phone
-      handling from `utils/phone.js`; keep only what is really new in a file inside the module. Do not add shared
-      files (`constants/errorCodes.js`, `middlewares/validate.js`, `utils/text.js`, `utils/validation.js`) without
-      asking the lead first.
-    - Do not run SQL patches on the shared DB before the lead approves them (`patch_v0.3_departments.sql` was run
-      early).
+  - FE-03 (Dung), before the merge – **done 02/11** on `feature/fe-03-teacher-management`, waiting for review:
+    - All FE-03 server code is in `server/src/modules/teacher/` (`teacher` / `homeroom` / `teaching` .routes →
+      .controller → .service, plus `teacher.queries.js` (SQL), `teacher.validation.js`, `teacher.text.js`,
+      `teacher.format.js`, `teacher.constants.js` with the error codes). The old unused files there were replaced;
+      `routes/`, `validators/`, `controllers/`, `services/`, `repositories/`, `models/`, `constants/`,
+      `middlewares/validate.js`, `utils/text.js`, `utils/validation.js` are gone (no new shared files).
+    - Accents via `utils/username.js` `removeAccents`, phone via `utils/phone.js` `normalizePhone`.
+    - Root `package-lock.json`, `server/scripts/check-cols.js`, `check-tables.js` deleted; schema comment fixed.
+    - API unchanged: 36 request cases (list / search / detail / update / homeroom / teaching, valid and invalid)
+      give the same responses before and after the move.
   - FE-03 screen numbers (lead, after all It1 merges): code uses SCR-13..17, `screens.md` has SCR-14 Teacher List,
     SCR-15 Teacher Detail, SCR-17 Update Teacher, SCR-18 Homeroom Assignment, SCR-19 Teaching Assignment.
   - FE-13 (Linh): account create / import still take free-text `teachers.department`; switch to the `departments`
