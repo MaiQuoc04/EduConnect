@@ -140,6 +140,21 @@ Boundaries that are easy to get wrong:
 - Homeroom teacher may be empty → show a warning so SM assigns one.
 - `teacher_subjects`: which subjects a teacher can teach (one teacher may teach several). Teaching assignments only
   for subjects the teacher can teach.
+- **Teachers (FE-03, agreed 02/11/2026):**
+  - SM updates a teacher's full name, department and subjects only; username / email / phone are System Admin only
+    (UC-99). A teacher keeps **at least one subject**; a subject still used by a current or future teaching
+    assignment cannot be removed.
+  - **Departments** (tổ chuyên môn) come from the `departments` list; SM picks one on Update Teacher.
+    `teachers.department` stores the department name (no foreign key yet).
+  - **Homeroom:** one homeroom teacher per class per school year, and a teacher is homeroom teacher of **at most one
+    class** per school year.
+  - A **locked teacher** gets no new homeroom class and no new teaching assignment (existing ones stay until SM
+    reassigns them).
+  - **Teaching assignment:** one teacher per (class, subject) at a time; the subject must belong to the class type
+    for that year (`track_subjects`). A change takes effect from a date **today or later** inside the school year
+    (never back-dated): the running assignment ends the day before and the new one runs to the end of the year.
+    Timetable periods from that date **without attendance** move to the new teacher; periods with attendance stay.
+    A (class, subject) cannot be left without a teacher while it still has such periods.
 - Importing a class creates 3 groups automatically: **GENERAL** (feed + chat), **STUDENT** (chat), **PARENT** (chat).
   Groups can also be created by hand. One **TEACHER_SCHOOL** group for the whole school (feed + chat, all teachers +
   SMs, managed by SM, reused across years). After promotion, last year's groups are read only.
