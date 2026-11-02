@@ -18,7 +18,8 @@ export const TEACHER_LIMITS = Object.freeze({
 });
 
 // PATCH /teachers/:id accepts only these fields (SCR-15).
-export const TEACHER_EDITABLE_FIELDS = Object.freeze(['fullName', 'department', 'subjectIds']);
+// departmentId: an id from the departments list (or null = no department); omitted = keep the current department.
+export const TEACHER_EDITABLE_FIELDS = Object.freeze(['fullName', 'departmentId', 'subjectIds']);
 // Login identifiers – System Admin only (UC-99); a School Manager request that contains them is refused.
 export const LOGIN_IDENTIFIER_FIELDS = Object.freeze(['username', 'email', 'phone']);
 

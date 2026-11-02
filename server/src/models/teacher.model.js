@@ -70,3 +70,8 @@ export function toTeacherDetail({ profile, subjects, homeroomClasses, assignment
 export function toSubjectOptions(rows) {
   return { subjects: rows };
 }
+
+// SCR-15 department picker
+export function toDepartmentOptions(rows) {
+  return { departments: rows };
+}

@@ -3,7 +3,7 @@ import Icon from './Icon.jsx';
 
 const ICONS = { pass: 'check', fail: 'close', unknown: 'radio_button_unchecked' };
 
-// Live checklist of the password rules (SCR-05). context = { username, phone, current }.
+// Live checklist of the password rules (SCR-34). context = { username, phone, current }.
 export default function PasswordChecklist({ password, context, serverFailed }) {
   const rules = evaluatePassword(password, context, serverFailed);
   const passed = rules.filter((r) => r.state === 'pass').length;

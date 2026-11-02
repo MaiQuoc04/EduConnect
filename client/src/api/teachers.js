@@ -18,7 +18,13 @@ export async function getSubjectOptions() {
   return res.data; // { subjects: [{ subjectId, code, name }] }
 }
 
-// PATCH /api/v1/teachers/:id  (SCR-15, UC-17) – { fullName, department, subjectIds }
+// GET /api/v1/teachers/department-options  (SCR-15 department picker)
+export async function getDepartmentOptions() {
+  const res = await api.get('/teachers/department-options');
+  return res.data; // { departments: [{ departmentId, name }] }
+}
+
+// PATCH /api/v1/teachers/:id  (SCR-15, UC-17) – { fullName, departmentId?, subjectIds }
 export async function updateTeacher(teacherId, body) {
   const res = await api.patch(`/teachers/${teacherId}`, body);
   return res.data;

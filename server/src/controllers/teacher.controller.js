@@ -12,6 +12,11 @@ export async function listSubjectOptions(_req, res) {
   res.json(await teacherService.listSubjectOptions());
 }
 
+// GET /api/v1/teachers/department-options  (SCR-15 department picker)
+export async function listDepartmentOptions(_req, res) {
+  res.json(await teacherService.listDepartmentOptions());
+}
+
 // GET /api/v1/teachers/:id?week=YYYY-MM-DD  (SCR-14, UC-16)
 export async function getTeacher(req, res) {
   res.json(await teacherService.getTeacherDetail(req.validated));

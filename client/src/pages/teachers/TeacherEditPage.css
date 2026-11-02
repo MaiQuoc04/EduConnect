@@ -123,3 +123,9 @@
 /* Field footer: message + character counter */
 .te-field-foot { display: flex; justify-content: space-between; align-items: flex-start; gap: 8px; }
 .te-counter { flex: none; font-size: 11px; color: var(--graphite-400); font-variant-numeric: tabular-nums; }
+
+/* Department select (02/11/2026: picked from the departments list) */
+.te-select-wrap { position: relative; }
+.te-select { appearance: none; padding-right: 40px; cursor: pointer; }
+.te-select:disabled { cursor: not-allowed; }
+.te-select-icon { position: absolute; right: 12px; top: 50%; transform: translateY(-50%); color: var(--graphite-500); pointer-events: none; }

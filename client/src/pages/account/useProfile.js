@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { api } from '../../api/client.js';
 import { errorText } from '../../messages.js';
 
-// Loads GET /account/profile (UC-04) for SCR-03 and SCR-04.
+// Loads GET /account/profile (UC-04) for SCR-03 and SCR-33.
 export function useProfile() {
   const [state, setState] = useState({ loading: true, data: null, error: '' });
   useEffect(() => {

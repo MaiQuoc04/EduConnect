@@ -5,17 +5,9 @@ import { useAuth } from '../../context/AuthContext.jsx';
 import { useToast } from '../../context/ToastContext.jsx';
 import { GENDER_LABELS, RELATIONSHIP_LABELS, ROLE_LABELS } from '../../messages.js';
 import { formatDate } from '../../utils/format.js';
+import Item from './ProfileItem.jsx';
 import { useProfile } from './useProfile.js';
 
-function Item({ label, children, wide }) {
-  const empty = children === null || children === undefined || children === '';
-  return (
-    <div className={wide ? 'wide' : undefined}>
-      <dt>{label}</dt>
-      <dd className={empty ? 'empty' : undefined}>{empty ? 'Chưa cập nhật' : children}</dd>
-    </div>
-  );
-}
 
 function CopyCode({ value }) {
   const toast = useToast();
@@ -37,10 +29,11 @@ function CopyCode({ value }) {
   );
 }
 
-// SCR-03 User Profile (UC-04): personal, school, class and role information. Read only, except the avatar (UC-06).
+// SCR-03 User Profile (UC-04): personal, school, class and role information. Read only, except the avatar (UC-06)
+// the address (UC-107) and a parent's occupation (UC-108), all edited on SCR-33.
 export default function ProfilePage() {
   const { loading, data, error } = useProfile();
-  const { signOut } = useAuth();
+  const { signOut, activeRole } = useAuth();
   const navigate = useNavigate();
 
   if (loading) return <p className="loading">Đang tải hồ sơ…</p>;
@@ -65,8 +58,8 @@ export default function ProfilePage() {
           <p>Thông tin cá nhân và dữ liệu học vụ do nhà trường quản lý.</p>
         </div>
         <Link to="/profile/avatar" className="btn btn-primary">
-          <Icon name="photo_camera" size="sm" />
-          Sửa ảnh đại diện
+          <Icon name="edit" size="sm" />
+          Chỉnh sửa hồ sơ
         </Link>
       </div>
 
@@ -120,7 +113,7 @@ export default function ProfilePage() {
             </Link>
             <Link to="/profile/avatar" className="menu-row">
               <Icon name="account_circle" />
-              Cập nhật ảnh đại diện
+              Cập nhật ảnh đại diện, địa chỉ
               <Icon name="chevron_right" />
             </Link>
           </section>
@@ -142,7 +135,7 @@ export default function ProfilePage() {
               <Item label="Email">{user.email}</Item>
               <Item label="Số điện thoại">{user.phone && <span className="mono">{user.phone}</span>}</Item>
               {parent && <Item label="Nghề nghiệp">{parent.occupation}</Item>}
-              {parent && <Item label="Địa chỉ" wide>{parent.address}</Item>}
+              <Item label="Địa chỉ" wide>{user.address}</Item>
             </dl>
           </section>
 
@@ -226,18 +219,28 @@ export default function ProfilePage() {
                 Con của tôi
               </h2>
               {parent.children.length === 0 && <p className="muted">Chưa liên kết với học sinh nào.</p>}
-              {parent.children.map((c) => (
-                <div key={c.studentCode} className="child-row">
-                  <Avatar name={c.fullName} size={36} />
-                  <div>
-                    <div style={{ fontWeight: 500 }}>{c.fullName}</div>
-                    <div className="caption muted">
-                      {c.className ? `Lớp ${c.className}` : 'Chưa xếp lớp năm học này'} · <span className="mono">{c.studentCode}</span>
+              {parent.children.map((c) => {
+                // UC-109: the child's profile opens with the Parent role active (the server checks it too).
+                const canOpen = activeRole === 'PARENT';
+                const Row = canOpen ? Link : 'div';
+                const rowProps = canOpen
+                  ? { to: `/profile/children/${c.id}`, className: 'child-row link-row' }
+                  : { className: 'child-row' };
+                return (
+                  <Row key={c.id} {...rowProps}>
+                    <Avatar src={c.avatarUrl} name={c.fullName} size={36} />
+                    <div>
+                      <div style={{ fontWeight: 500 }}>{c.fullName}</div>
+                      <div className="caption muted">
+                        {c.className ? `Lớp ${c.className}` : 'Chưa xếp lớp năm học này'} ·{' '}
+                        <span className="mono">{c.studentCode}</span>
+                      </div>
                     </div>
-                  </div>
-                  <span className="chip">{RELATIONSHIP_LABELS[c.relationship] ?? c.relationship}</span>
-                </div>
-              ))}
+                    <span className="chip">{RELATIONSHIP_LABELS[c.relationship] ?? c.relationship}</span>
+                    {canOpen && <Icon name="chevron_right" />}
+                  </Row>
+                );
+              })}
             </section>
           )}
 
@@ -246,7 +249,7 @@ export default function ProfilePage() {
             <div>
               <p className="notice-title">Quy định chỉnh sửa dữ liệu</p>
               <p className="caption" style={{ fontStyle: 'italic' }}>
-                Bạn chỉ tự cập nhật được ảnh đại diện và mật khẩu. Họ tên, ngày sinh, lớp, email, số điện thoại và tên
+                Bạn chỉ tự cập nhật được ảnh đại diện, địa chỉ, mật khẩu và nghề nghiệp (đối với phụ huynh). Họ tên, ngày sinh, lớp, email, số điện thoại và tên
                 đăng nhập do nhà trường quản lý; vui lòng liên hệ văn phòng nhà trường hoặc giáo viên chủ nhiệm khi cần
                 điều chỉnh.
               </p>

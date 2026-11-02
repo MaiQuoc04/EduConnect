@@ -1,6 +1,8 @@
 import { Router } from 'express';
 import healthRoutes from './modules/health/health.routes.js';
 import accountRoutes from './modules/account/account.routes.js';
+import adminRoutes from './modules/admin/admin.routes.js';
+import maintenanceRoutes from './modules/admin/maintenance.routes.js';
 import authRoutes from './modules/auth/auth.routes.js';
 // FE-03 uses the layered structure: routes/ → validators/ → controllers/ → services/ → repositories/ (+ models/, constants/)
 import homeroomRoutes from './routes/homeroom.routes.js';
@@ -30,5 +32,7 @@ router.use('/account', accountRoutes);
 router.use('/teachers', teacherRoutes);
 router.use('/homeroom-assignments', homeroomRoutes);
 router.use('/teaching-assignments', teachingRoutes);
+router.use('/admin', adminRoutes);
+router.use('/maintenance', maintenanceRoutes);
 
 export default router;

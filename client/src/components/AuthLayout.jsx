@@ -1,6 +1,6 @@
 import Icon from './Icon.jsx';
 
-// Centered paper layout for the signed-out screens (SCR-01 Login, SCR-02 Forgot Password). Mobile-friendly.
+// Centered paper layout for the signed-out screens (SCR-01 Login, SCR-32 Forgot Password). Mobile-friendly.
 export default function AuthLayout({ title, subtitle, children, footer }) {
   return (
     <main className="auth-page">

@@ -7,7 +7,7 @@ import {
   USER_STATUS,
 } from '../constants/teacher.constants.js';
 import { AppError, badRequest, notFound } from '../utils/AppError.js';
-import { checkDepartment, checkPersonName, cleanText } from '../utils/text.js';
+import { checkPersonName, cleanText } from '../utils/text.js';
 import { isId, isIsoDate, isPlainObject, isQueryValue, toPositiveInt } from '../utils/validation.js';
 
 function teacherId(req) {
@@ -55,7 +55,7 @@ export function teacherDetailRequest(req) {
   return { id, week: week || null };
 }
 
-// PATCH /teachers/:id  body { fullName, department, subjectIds }  (SCR-15, UC-17)
+// PATCH /teachers/:id  body { fullName, departmentId?, subjectIds }  (SCR-15, UC-17)
 export function updateTeacherRequest(req) {
   const id = teacherId(req);
   const body = req.body;
@@ -85,15 +85,13 @@ export function updateTeacherRequest(req) {
   }
   if (name.reason) throw badRequest(ERROR_CODES.INVALID_NAME, 'Invalid full name.', { field: 'fullName', reason: name.reason });
 
-  // department – optional label
-  if (body.department != null && typeof body.department !== 'string') {
-    throw badRequest(ERROR_CODES.INVALID_DEPARTMENT, 'Department must be text.', { field: 'department', reason: 'INVALID_CHAR' });
+  // departmentId – picked from the departments list (02/11/2026): omitted = keep, null / '' = no department.
+  let departmentId;
+  if ('departmentId' in body) {
+    if (body.departmentId == null || body.departmentId === '') departmentId = null;
+    else if (isId(body.departmentId)) departmentId = String(body.departmentId);
+    else throw badRequest(ERROR_CODES.DEPARTMENT_INVALID, 'Unknown department.', { field: 'departmentId' });
   }
-  const dept = checkDepartment(body.department ?? '', { min: TEACHER_LIMITS.DEPARTMENT_MIN, max: TEACHER_LIMITS.DEPARTMENT_MAX });
-  if (dept.reason === 'TOO_LONG') {
-    throw badRequest(ERROR_CODES.FIELD_TOO_LONG, 'Department is too long.', { field: 'department', max: TEACHER_LIMITS.DEPARTMENT_MAX });
-  }
-  if (dept.reason) throw badRequest(ERROR_CODES.INVALID_DEPARTMENT, 'Invalid department.', { field: 'department', reason: dept.reason });
 
   // subjectIds – list of subject ids
   if (!Array.isArray(body.subjectIds)) throw badRequest(ERROR_CODES.REQUIRED, 'subjectIds must be a list.', { field: 'subjectIds' });
@@ -105,5 +103,5 @@ export function updateTeacherRequest(req) {
   // ASSUMPTION: a teacher keeps at least one subject (SCR-15 design marks the field as required).
   if (!subjectIds.length) throw badRequest(ERROR_CODES.REQUIRED, 'Choose at least one subject.', { field: 'subjectIds' });
 
-  return { id, fullName: name.value, department: dept.value || null, subjectIds };
+  return { id, fullName: name.value, departmentId, subjectIds };
 }

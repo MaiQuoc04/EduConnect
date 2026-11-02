@@ -6,7 +6,9 @@ export const ERROR_CODES = Object.freeze({
   INVALID_DATE: 'INVALID_DATE',
   TOO_MANY: 'MSG_TOO_MANY',
   INVALID_NAME: 'MSG_INVALID_NAME', // details: { field, reason } – reason from utils/text.js NAME_REASON
-  INVALID_DEPARTMENT: 'MSG_INVALID_DEPARTMENT', // details: { field, reason }
+  INVALID_DEPARTMENT: 'MSG_INVALID_DEPARTMENT', // details: { field, reason } (kept for free-text department rules)
+  DEPARTMENT_INVALID: 'MSG_DEPARTMENT_INVALID', // departmentId not in the departments list
+  DEPARTMENTS_NOT_READY: 'MSG_DEPARTMENTS_NOT_READY', // table departments missing on this database
   LOGIN_IDENTIFIER_READONLY: 'MSG_LOGIN_IDENTIFIER_READONLY', // username / email / phone: System Admin only
   UNKNOWN_FIELD: 'MSG_UNKNOWN_FIELD',
   // teacher

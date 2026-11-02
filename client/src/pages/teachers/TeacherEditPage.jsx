@@ -1,21 +1,17 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
-import { getSubjectOptions, getTeacher, updateTeacher } from '../../api/teachers.js';
+import { getDepartmentOptions, getSubjectOptions, getTeacher, updateTeacher } from '../../api/teachers.js';
 import Avatar from '../../components/Avatar.jsx';
 import Icon from '../../components/Icon.jsx';
 import { useToast } from '../../context/ToastContext.jsx';
 import { errorText } from '../../messages.js';
 import { formatDate } from '../../utils/format.js';
 import {
-  checkDepartment,
   checkPersonName,
-  cleanText,
-  DEPARTMENT_REASON_TEXT,
   foldVietnamese,
   formatPhone,
   LIMITS,
   NAME_REASON_TEXT as NAME_TEXT,
-  validateDepartment,
   validateFullName,
 } from '../../utils/teacherValidation.js';
 import './TeacherEditPage.css';
@@ -34,8 +30,6 @@ function validate(form) {
   const errors = {};
   const name = validateFullName(form.fullName);
   if (name.error) errors.fullName = name.error;
-  const dept = validateDepartment(form.department);
-  if (dept.error) errors.department = dept.error;
   if (!form.subjectIds.length) errors.subjectIds = 'Chọn ít nhất một môn chuyên môn.';
   return errors;
 }
@@ -43,11 +37,19 @@ function validate(form) {
 // Errors shown while typing (a wrong character); the others (empty, too short…) wait until the field is left.
 const LIVE_REASONS = new Set(['HAS_DIGIT', 'INVALID_CHAR', 'TOO_LONG']);
 function liveError(name, value) {
-  const check = name === 'fullName'
-    ? checkPersonName(value, { min: LIMITS.FULL_NAME_MIN_LETTERS, max: LIMITS.FULL_NAME_MAX })
-    : checkDepartment(value, { min: LIMITS.DEPARTMENT_MIN, max: LIMITS.DEPARTMENT_MAX });
-  if (!LIVE_REASONS.has(check.reason)) return null;
-  return (name === 'fullName' ? NAME_TEXT : DEPARTMENT_REASON_TEXT)[check.reason];
+  if (name !== 'fullName') return null;
+  const check = checkPersonName(value, { min: LIMITS.FULL_NAME_MIN_LETTERS, max: LIMITS.FULL_NAME_MAX });
+  return LIVE_REASONS.has(check.reason) ? NAME_TEXT[check.reason] : null;
+}
+
+// Department select values: '' = no department, an id = that department, KEEP = an old name that is not in the
+// list (typed before 02/11/2026) – kept as it is unless the School Manager picks another one.
+const KEEP = '__keep';
+const sameName = (a, b) => foldVietnamese(String(a ?? '').trim().replace(/\s+/g, ' ')) === foldVietnamese(String(b ?? '').trim().replace(/\s+/g, ' '));
+function initialDepartment(current, departments) {
+  if (!current) return '';
+  const exact = departments.find((d) => d.name === current) ?? departments.find((d) => sameName(d.name, current));
+  return exact ? String(exact.departmentId) : KEEP;
 }
 
 // ── Subject chips + "Thêm môn" picker ───────────────────────────────────────
@@ -188,6 +190,9 @@ export default function TeacherEditPage() {
   const [teacher, setTeacher] = useState(null);
   const [assignments, setAssignments] = useState([]);
   const [options, setOptions] = useState([]);
+  const [departments, setDepartments] = useState([]);
+  const [departmentsError, setDepartmentsError] = useState(null);
+  const [initialDept, setInitialDept] = useState('');
   const [loadError, setLoadError] = useState(null);
   const [form, setForm] = useState(null);
   const [errors, setErrors] = useState({});
@@ -197,15 +202,22 @@ export default function TeacherEditPage() {
   useEffect(() => {
     let cancelled = false;
     setLoadError(null);
-    Promise.all([getTeacher(teacherId), getSubjectOptions()])
-      .then(([detail, opts]) => {
+    // The department list is optional for the page: if it cannot load, the rest of the form still works.
+    const deptsPromise = getDepartmentOptions().catch((err) => ({ error: errorText(err) }));
+    Promise.all([getTeacher(teacherId), getSubjectOptions(), deptsPromise])
+      .then(([detail, opts, depts]) => {
         if (cancelled) return;
+        const list = depts.error ? [] : depts.departments;
+        const dept = depts.error ? KEEP : initialDepartment(detail.teacher.department, list);
         setTeacher(detail.teacher);
         setAssignments(detail.assignments);
         setOptions(opts.subjects);
+        setDepartments(list);
+        setDepartmentsError(depts.error ?? null);
+        setInitialDept(dept);
         setForm({
           fullName: detail.teacher.fullName ?? '',
-          department: detail.teacher.department ?? '',
+          departmentId: dept,
           subjectIds: detail.teacher.subjects.map((s) => String(s.subjectId)),
         });
       })
@@ -227,10 +239,10 @@ export default function TeacherEditPage() {
     if (!form || !teacher) return false;
     return (
       validateFullName(form.fullName).value !== teacher.fullName ||
-      cleanText(form.department) !== (teacher.department ?? '') ||
+      form.departmentId !== initialDept ||
       !sameSet(form.subjectIds, teacher.subjects.map((s) => String(s.subjectId)))
     );
-  }, [form, teacher]);
+  }, [form, teacher, initialDept]);
 
   // Warn before closing the tab with unsaved changes.
   useEffect(() => {
@@ -248,7 +260,7 @@ export default function TeacherEditPage() {
   // Leaving a text field: show every error, and show the value as it will be saved ("phạm  thu hà" → "Phạm Thu Hà").
   function handleBlur(name) {
     setTouched((t) => ({ ...t, [name]: true }));
-    const check = name === 'fullName' ? validateFullName(form[name]) : validateDepartment(form[name]);
+    const check = validateFullName(form[name]);
     if (!check.error && check.value !== form[name]) setForm((f) => ({ ...f, [name]: check.value }));
     setErrors((e) => ({ ...e, [name]: check.error ?? undefined }));
   }
@@ -257,26 +269,27 @@ export default function TeacherEditPage() {
     e.preventDefault();
     const found = validate(form);
     setErrors(found);
-    setTouched({ fullName: true, department: true });
+    setTouched({ fullName: true });
     if (Object.keys(found).length) {
-      document.getElementById(found.fullName ? 'te-full-name' : found.department ? 'te-department' : 'te-subjects-label')?.focus();
+      document.getElementById(found.fullName ? 'te-full-name' : 'te-subjects-label')?.focus();
       return;
     }
 
     setSaving(true);
     try {
-      await updateTeacher(teacherId, {
-        fullName: validateFullName(form.fullName).value,
-        department: validateDepartment(form.department).value,
-        subjectIds: form.subjectIds.map(Number),
-      });
+      const body = { fullName: validateFullName(form.fullName).value, subjectIds: form.subjectIds.map(Number) };
+      // departmentId is sent only when it changed (omitted = the server keeps the current department)
+      if (form.departmentId !== initialDept && form.departmentId !== KEEP) {
+        body.departmentId = form.departmentId ? Number(form.departmentId) : null;
+      }
+      await updateTeacher(teacherId, body);
       toast('Đã lưu thông tin giáo viên.');
       navigate(`/teachers/${teacherId}`);
     } catch (err) {
       const message = errorText(err);
       const field = err.details?.field;
       const target = field ?? (err.code === 'MSG_SUBJECT_IN_USE' ? 'subjectIds' : null);
-      setErrors(target && ['fullName', 'department', 'subjectIds'].includes(target) ? { [target]: message } : { form: message });
+      setErrors(target && ['fullName', 'departmentId', 'subjectIds'].includes(target) ? { [target]: message } : { form: message });
     } finally {
       setSaving(false);
     }
@@ -387,29 +400,38 @@ export default function TeacherEditPage() {
                   </div>
                 </div>
 
-                <div className={`field${errors.department ? ' invalid' : ''}`}>
+                <div className={`field${errors.departmentId ? ' invalid' : ''}`}>
                   <label className="field-label" htmlFor="te-department">
                     <span>Tổ chuyên môn</span>
                   </label>
-                  <div className="input-wrap">
-                    <input
+                  <div className="input-wrap te-select-wrap">
+                    <select
                       id="te-department"
-                      className="input"
-                      value={form.department}
-                      placeholder="Ví dụ: Tổ Toán - Tin"
-                      maxLength={LIMITS.DEPARTMENT_MAX}
-                      onChange={(e) => setField('department', e.target.value)}
-                      onBlur={() => handleBlur('department')}
-                      aria-invalid={Boolean(errors.department)}
+                      className="input te-select"
+                      value={form.departmentId}
+                      onChange={(e) => setField('departmentId', e.target.value)}
+                      disabled={Boolean(departmentsError)}
+                      aria-invalid={Boolean(errors.departmentId)}
                       aria-describedby="te-department-msg"
-                      autoComplete="off"
-                    />
+                    >
+                      <option value="">— Chưa thuộc tổ nào —</option>
+                      {form.departmentId === KEEP && teacher.department && (
+                        <option value={KEEP}>{teacher.department}{departmentsError ? '' : ' (tên cũ, không có trong danh sách)'}</option>
+                      )}
+                      {departments.map((d) => (
+                        <option key={d.departmentId} value={String(d.departmentId)}>{d.name}</option>
+                      ))}
+                    </select>
+                    <Icon name="expand_more" className="te-select-icon" />
                   </div>
                   <div className="te-field-foot" id="te-department-msg">
-                    {errors.department
-                      ? <span className="field-error" role="alert">{errors.department}</span>
-                      : <span className="field-help">Để trống nếu giáo viên chưa thuộc tổ nào.</span>}
-                    <span className="te-counter">{form.department.length}/{LIMITS.DEPARTMENT_MAX}</span>
+                    {errors.departmentId ? (
+                      <span className="field-error" role="alert">{errors.departmentId}</span>
+                    ) : form.departmentId === KEEP && !departmentsError ? (
+                      <span className="field-help">Tên tổ cũ không có trong danh sách – hãy chọn lại một tổ chuẩn.</span>
+                    ) : (
+                      <span className="field-help">Chọn trong danh sách tổ của trường để mọi giáo viên cùng tổ ghi giống nhau.</span>
+                    )}
                   </div>
                 </div>
 

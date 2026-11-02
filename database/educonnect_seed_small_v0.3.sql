@@ -21,7 +21,8 @@
 -- ASSUMPTIONS (confirm with the team):
 --   * Each account has exactly one role (no SM + Teacher or Teacher + Parent combinations here).
 --   * Each teacher teaches several subjects so that every subject of both classes has a teacher.
---   * student_code = HS + entry year (2 digits) + 4-digit number; teacher_code = GV + 3 digits.
+--   * student_code = HS + 4 digits, teacher_code = GV + 4 digits (business rules §3). The sample usernames are
+--     the old short ones (huynq, lannt…), kept as if System Admin had changed them; new accounts get the role formats.
 --   * Class type weights: focus subjects 2.00, others 1.00; focus subjects get one extra period per week.
 --   * The homeroom teacher teaches HDTN of their class.
 --   * Group members: GENERAL = homeroom + subject teachers + students + parents; STUDENT = homeroom + students;
@@ -124,21 +125,21 @@ INSERT INTO time_slots (period_number, start_time, end_time) VALUES
 
 -- Accounts (password: Educonnect@2026)
 INSERT INTO users (username, email, phone, password_hash, full_name, address, status, must_change_password) VALUES
-  ('huynq', 'huynq@educonnect.test', '0905000001', '$2b$10$RlVaJs3GCGhJ4Z3fwddqeeGatl0e3SV2LziMSVdgzYzaaNJyZBoSO', 'Nguyễn Quốc Huy', NULL, 'ACTIVE', FALSE),
-  ('ductm', 'ductm@educonnect.test', '0905000002', '$2b$10$RlVaJs3GCGhJ4Z3fwddqeeGatl0e3SV2LziMSVdgzYzaaNJyZBoSO', 'Trần Minh Đức', NULL, 'ACTIVE', FALSE),
-  ('honglt', 'honglt@educonnect.test', '0905000003', '$2b$10$RlVaJs3GCGhJ4Z3fwddqeeGatl0e3SV2LziMSVdgzYzaaNJyZBoSO', 'Lê Thị Hồng', NULL, 'ACTIVE', FALSE),
-  ('binhnv', 'binhnv@educonnect.test', '0905000011', '$2b$10$RlVaJs3GCGhJ4Z3fwddqeeGatl0e3SV2LziMSVdgzYzaaNJyZBoSO', 'Nguyễn Văn Bình', NULL, 'ACTIVE', FALSE),
-  ('haltt', 'haltt@educonnect.test', '0905000012', '$2b$10$RlVaJs3GCGhJ4Z3fwddqeeGatl0e3SV2LziMSVdgzYzaaNJyZBoSO', 'Lê Thị Thu Hà', NULL, 'ACTIVE', FALSE),
-  ('vinhpq', 'vinhpq@educonnect.test', '0905000013', '$2b$10$RlVaJs3GCGhJ4Z3fwddqeeGatl0e3SV2LziMSVdgzYzaaNJyZBoSO', 'Phạm Quang Vinh', NULL, 'ACTIVE', FALSE),
-  ('lannt', 'lannt@educonnect.test', '0905000021', '$2b$10$RlVaJs3GCGhJ4Z3fwddqeeGatl0e3SV2LziMSVdgzYzaaNJyZBoSO', 'Nguyễn Thị Lan', NULL, 'ACTIVE', FALSE),
-  ('longhv', 'longhv@educonnect.test', '0905000022', '$2b$10$RlVaJs3GCGhJ4Z3fwddqeeGatl0e3SV2LziMSVdgzYzaaNJyZBoSO', 'Hoàng Văn Long', NULL, 'ACTIVE', FALSE),
-  ('maitt', 'maitt@educonnect.test', '0905000023', '$2b$10$RlVaJs3GCGhJ4Z3fwddqeeGatl0e3SV2LziMSVdgzYzaaNJyZBoSO', 'Trần Thị Mai', NULL, 'ACTIVE', FALSE),
-  ('baopg', 'baopg@educonnect.test', NULL, '$2b$10$RlVaJs3GCGhJ4Z3fwddqeeGatl0e3SV2LziMSVdgzYzaaNJyZBoSO', 'Phạm Gia Bảo', NULL, 'ACTIVE', FALSE),
-  ('khanglm', NULL, NULL, '$2b$10$RlVaJs3GCGhJ4Z3fwddqeeGatl0e3SV2LziMSVdgzYzaaNJyZBoSO', 'Lê Minh Khang', NULL, 'ACTIVE', FALSE),
-  ('tramlnb', 'tramlnb@educonnect.test', '0905000033', '$2b$10$RlVaJs3GCGhJ4Z3fwddqeeGatl0e3SV2LziMSVdgzYzaaNJyZBoSO', 'Lê Ngọc Bảo Trâm', NULL, 'ACTIVE', TRUE),
-  ('toanpv', 'toanpv@educonnect.test', '0905000041', '$2b$10$RlVaJs3GCGhJ4Z3fwddqeeGatl0e3SV2LziMSVdgzYzaaNJyZBoSO', 'Phạm Văn Toàn', '12 Lê Lợi, phường Hải Châu, TP. Đà Nẵng', 'ACTIVE', FALSE),
-  ('hanttn', 'hanttn@educonnect.test', '0905000042', '$2b$10$RlVaJs3GCGhJ4Z3fwddqeeGatl0e3SV2LziMSVdgzYzaaNJyZBoSO', 'Trần Thị Ngọc Hân', '45 Hùng Vương, phường Hải Châu, TP. Đà Nẵng', 'ACTIVE', FALSE),
-  ('oanhntk', NULL, '0905000043', '$2b$10$RlVaJs3GCGhJ4Z3fwddqeeGatl0e3SV2LziMSVdgzYzaaNJyZBoSO', 'Nguyễn Thị Kim Oanh', '12 Lê Lợi, phường Hải Châu, TP. Đà Nẵng', 'LOCKED', FALSE);
+  ('huynq', 'huynq@educonnect.test', '0905000001', '$2b$10$WyTaQucVsdDoIEG.AXse/eXWEnwa8SjKFmhmD.K6MmV0BJ.whwksW', 'Nguyễn Quốc Huy', NULL, 'ACTIVE', FALSE),
+  ('ductm', 'ductm@educonnect.test', '0905000002', '$2b$10$WyTaQucVsdDoIEG.AXse/eXWEnwa8SjKFmhmD.K6MmV0BJ.whwksW', 'Trần Minh Đức', NULL, 'ACTIVE', FALSE),
+  ('honglt', 'honglt@educonnect.test', '0905000003', '$2b$10$WyTaQucVsdDoIEG.AXse/eXWEnwa8SjKFmhmD.K6MmV0BJ.whwksW', 'Lê Thị Hồng', NULL, 'ACTIVE', FALSE),
+  ('binhnv', 'binhnv@educonnect.test', '0905000011', '$2b$10$WyTaQucVsdDoIEG.AXse/eXWEnwa8SjKFmhmD.K6MmV0BJ.whwksW', 'Nguyễn Văn Bình', NULL, 'ACTIVE', FALSE),
+  ('haltt', 'haltt@educonnect.test', '0905000012', '$2b$10$WyTaQucVsdDoIEG.AXse/eXWEnwa8SjKFmhmD.K6MmV0BJ.whwksW', 'Lê Thị Thu Hà', NULL, 'ACTIVE', FALSE),
+  ('vinhpq', 'vinhpq@educonnect.test', '0905000013', '$2b$10$WyTaQucVsdDoIEG.AXse/eXWEnwa8SjKFmhmD.K6MmV0BJ.whwksW', 'Phạm Quang Vinh', NULL, 'ACTIVE', FALSE),
+  ('lannt', 'lannt@educonnect.test', '0905000021', '$2b$10$WyTaQucVsdDoIEG.AXse/eXWEnwa8SjKFmhmD.K6MmV0BJ.whwksW', 'Nguyễn Thị Lan', NULL, 'ACTIVE', FALSE),
+  ('longhv', 'longhv@educonnect.test', '0905000022', '$2b$10$WyTaQucVsdDoIEG.AXse/eXWEnwa8SjKFmhmD.K6MmV0BJ.whwksW', 'Hoàng Văn Long', NULL, 'ACTIVE', FALSE),
+  ('maitt', 'maitt@educonnect.test', '0905000023', '$2b$10$WyTaQucVsdDoIEG.AXse/eXWEnwa8SjKFmhmD.K6MmV0BJ.whwksW', 'Trần Thị Mai', NULL, 'ACTIVE', FALSE),
+  ('baopg', 'baopg@educonnect.test', NULL, '$2b$10$WyTaQucVsdDoIEG.AXse/eXWEnwa8SjKFmhmD.K6MmV0BJ.whwksW', 'Phạm Gia Bảo', NULL, 'ACTIVE', FALSE),
+  ('khanglm', NULL, NULL, '$2b$10$WyTaQucVsdDoIEG.AXse/eXWEnwa8SjKFmhmD.K6MmV0BJ.whwksW', 'Lê Minh Khang', NULL, 'ACTIVE', FALSE),
+  ('tramlnb', 'tramlnb@educonnect.test', '0905000033', '$2b$10$WyTaQucVsdDoIEG.AXse/eXWEnwa8SjKFmhmD.K6MmV0BJ.whwksW', 'Lê Ngọc Bảo Trâm', NULL, 'ACTIVE', TRUE),
+  ('toanpv', 'toanpv@educonnect.test', '0905000041', '$2b$10$WyTaQucVsdDoIEG.AXse/eXWEnwa8SjKFmhmD.K6MmV0BJ.whwksW', 'Phạm Văn Toàn', '12 Lê Lợi, phường Hải Châu, TP. Đà Nẵng', 'ACTIVE', FALSE),
+  ('hanttn', 'hanttn@educonnect.test', '0905000042', '$2b$10$WyTaQucVsdDoIEG.AXse/eXWEnwa8SjKFmhmD.K6MmV0BJ.whwksW', 'Trần Thị Ngọc Hân', '45 Hùng Vương, phường Hải Châu, TP. Đà Nẵng', 'ACTIVE', FALSE),
+  ('oanhntk', NULL, '0905000043', '$2b$10$WyTaQucVsdDoIEG.AXse/eXWEnwa8SjKFmhmD.K6MmV0BJ.whwksW', 'Nguyễn Thị Kim Oanh', '12 Lê Lợi, phường Hải Châu, TP. Đà Nẵng', 'LOCKED', FALSE);
 
 INSERT INTO user_roles (user_id, role_id)
 SELECT u.user_id, r.role_id FROM users u JOIN roles r ON r.role_code = 'SYSTEM_ADMIN'
@@ -159,18 +160,22 @@ WHERE u.username IN ('toanpv', 'hanttn', 'oanhntk');
 INSERT INTO teachers (user_id, teacher_code, department)
 SELECT u.user_id, v.code, v.department
 FROM (VALUES
-  ('lannt', 'GV001', 'Tổ Toán – Khoa học tự nhiên'),
-  ('longhv', 'GV002', 'Tổ Ngữ văn – Khoa học xã hội'),
-  ('maitt', 'GV003', 'Tổ Ngoại ngữ – Thể chất')
+  ('lannt', 'GV0001', 'Tổ Toán – Khoa học tự nhiên'),
+  ('longhv', 'GV0002', 'Tổ Ngữ văn – Khoa học xã hội'),
+  ('maitt', 'GV0003', 'Tổ Ngoại ngữ – Thể chất')
 ) AS v(username, code, department)
 JOIN users u ON u.username = v.username;
+
+-- Departments list (FE-03): the departments used by the sample teachers
+INSERT INTO departments (department_name)
+SELECT DISTINCT department FROM teachers WHERE department IS NOT NULL ORDER BY department;
 
 INSERT INTO students (user_id, student_code, dob, gender)
 SELECT u.user_id, v.code, v.dob::date, v.gender
 FROM (VALUES
-  ('baopg', 'HS260001', '2011-03-14', 'MALE'),
-  ('khanglm', 'HS260002', '2011-07-02', 'MALE'),
-  ('tramlnb', 'HS250001', '2010-11-25', 'FEMALE')
+  ('baopg', 'HS2601', '2011-03-14', 'MALE'),
+  ('khanglm', 'HS2602', '2011-07-02', 'MALE'),
+  ('tramlnb', 'HS2501', '2010-11-25', 'FEMALE')
 ) AS v(username, code, dob, gender)
 JOIN users u ON u.username = v.username;
 
@@ -186,10 +191,10 @@ JOIN users u ON u.username = v.username;
 INSERT INTO student_parents (student_id, parent_id, relationship_type)
 SELECT s.student_id, p.parent_id, v.relationship
 FROM (VALUES
-  ('HS260001', 'toanpv', 'FATHER'),
-  ('HS260002', 'hanttn', 'MOTHER'),
-  ('HS250001', 'hanttn', 'MOTHER'),
-  ('HS260001', 'oanhntk', 'MOTHER')
+  ('HS2601', 'toanpv', 'FATHER'),
+  ('HS2602', 'hanttn', 'MOTHER'),
+  ('HS2501', 'hanttn', 'MOTHER'),
+  ('HS2601', 'oanhntk', 'MOTHER')
 ) AS v(student_code, parent_username, relationship)
 JOIN students s ON s.student_code = v.student_code
 JOIN users pu ON pu.username = v.parent_username
@@ -198,21 +203,21 @@ JOIN parents p ON p.user_id = pu.user_id;
 INSERT INTO teacher_subjects (teacher_id, subject_id)
 SELECT t.teacher_id, s.subject_id
 FROM (VALUES
-  ('GV001', 'TOAN'),
-  ('GV001', 'LY'),
-  ('GV001', 'HOA'),
-  ('GV001', 'SINH'),
-  ('GV001', 'TIN'),
-  ('GV001', 'CN'),
-  ('GV001', 'HDTN'),
-  ('GV002', 'VAN'),
-  ('GV002', 'SU'),
-  ('GV002', 'DIA'),
-  ('GV002', 'KTPL'),
-  ('GV002', 'HDTN'),
-  ('GV003', 'ANH'),
-  ('GV003', 'GDTC'),
-  ('GV003', 'QPAN')
+  ('GV0001', 'TOAN'),
+  ('GV0001', 'LY'),
+  ('GV0001', 'HOA'),
+  ('GV0001', 'SINH'),
+  ('GV0001', 'TIN'),
+  ('GV0001', 'CN'),
+  ('GV0001', 'HDTN'),
+  ('GV0002', 'VAN'),
+  ('GV0002', 'SU'),
+  ('GV0002', 'DIA'),
+  ('GV0002', 'KTPL'),
+  ('GV0002', 'HDTN'),
+  ('GV0003', 'ANH'),
+  ('GV0003', 'GDTC'),
+  ('GV0003', 'QPAN')
 ) AS v(teacher_code, subject_code)
 JOIN teachers t ON t.teacher_code = v.teacher_code
 JOIN subjects s ON s.subject_code = v.subject_code;
@@ -221,18 +226,18 @@ JOIN subjects s ON s.subject_code = v.subject_code;
 INSERT INTO classes (class_name, grade_level_id, school_year_id, track_id, homeroom_teacher_id) VALUES ('10A1',
   (SELECT grade_level_id FROM grade_levels WHERE grade_level_name = '10'), (SELECT school_year_id FROM school_years WHERE year_name = '2026-2027'),
   (SELECT track_id FROM class_tracks WHERE track_name = 'Khối A'),
-  (SELECT teacher_id FROM teachers WHERE teacher_code = 'GV001'));
+  (SELECT teacher_id FROM teachers WHERE teacher_code = 'GV0001'));
 INSERT INTO classes (class_name, grade_level_id, school_year_id, track_id, homeroom_teacher_id) VALUES ('11D1',
   (SELECT grade_level_id FROM grade_levels WHERE grade_level_name = '11'), (SELECT school_year_id FROM school_years WHERE year_name = '2026-2027'),
   (SELECT track_id FROM class_tracks WHERE track_name = 'Khối D'),
-  (SELECT teacher_id FROM teachers WHERE teacher_code = 'GV002'));
+  (SELECT teacher_id FROM teachers WHERE teacher_code = 'GV0002'));
 
 INSERT INTO class_enrollments (student_id, class_id, nickname, status, enrolled_at)
 SELECT s.student_id, c.class_id, v.nickname, 'STUDYING', v.enrolled_at::timestamptz
 FROM (VALUES
-  ('HS260001', '10A1', 'Bin', '2026-09-05 07:00:00'),
-  ('HS260002', '10A1', NULL, '2026-09-05 07:00:00'),
-  ('HS250001', '11D1', NULL, '2026-09-05 07:00:00')
+  ('HS2601', '10A1', 'Bin', '2026-09-05 07:00:00'),
+  ('HS2602', '10A1', NULL, '2026-09-05 07:00:00'),
+  ('HS2501', '11D1', NULL, '2026-09-05 07:00:00')
 ) AS v(student_code, class_name, nickname, enrolled_at)
 JOIN students s ON s.student_code = v.student_code
 JOIN classes c ON c.class_name = v.class_name AND c.school_year_id = (SELECT school_year_id FROM school_years WHERE year_name = '2026-2027');
@@ -240,28 +245,28 @@ JOIN classes c ON c.class_name = v.class_name AND c.school_year_id = (SELECT sch
 INSERT INTO teaching_assignments (class_id, subject_id, teacher_id, start_date, end_date)
 SELECT c.class_id, s.subject_id, t.teacher_id, '2026-09-05'::date, '2027-05-31'::date
 FROM (VALUES
-  ('10A1', 'TOAN', 'GV001'),
-  ('10A1', 'VAN', 'GV002'),
-  ('10A1', 'ANH', 'GV003'),
-  ('10A1', 'SU', 'GV002'),
-  ('10A1', 'GDTC', 'GV003'),
-  ('10A1', 'QPAN', 'GV003'),
-  ('10A1', 'HDTN', 'GV001'),
-  ('10A1', 'LY', 'GV001'),
-  ('10A1', 'HOA', 'GV001'),
-  ('10A1', 'SINH', 'GV001'),
-  ('10A1', 'TIN', 'GV001'),
-  ('11D1', 'TOAN', 'GV001'),
-  ('11D1', 'VAN', 'GV002'),
-  ('11D1', 'ANH', 'GV003'),
-  ('11D1', 'SU', 'GV002'),
-  ('11D1', 'GDTC', 'GV003'),
-  ('11D1', 'QPAN', 'GV003'),
-  ('11D1', 'HDTN', 'GV002'),
-  ('11D1', 'LY', 'GV001'),
-  ('11D1', 'DIA', 'GV002'),
-  ('11D1', 'KTPL', 'GV002'),
-  ('11D1', 'TIN', 'GV001')
+  ('10A1', 'TOAN', 'GV0001'),
+  ('10A1', 'VAN', 'GV0002'),
+  ('10A1', 'ANH', 'GV0003'),
+  ('10A1', 'SU', 'GV0002'),
+  ('10A1', 'GDTC', 'GV0003'),
+  ('10A1', 'QPAN', 'GV0003'),
+  ('10A1', 'HDTN', 'GV0001'),
+  ('10A1', 'LY', 'GV0001'),
+  ('10A1', 'HOA', 'GV0001'),
+  ('10A1', 'SINH', 'GV0001'),
+  ('10A1', 'TIN', 'GV0001'),
+  ('11D1', 'TOAN', 'GV0001'),
+  ('11D1', 'VAN', 'GV0002'),
+  ('11D1', 'ANH', 'GV0003'),
+  ('11D1', 'SU', 'GV0002'),
+  ('11D1', 'GDTC', 'GV0003'),
+  ('11D1', 'QPAN', 'GV0003'),
+  ('11D1', 'HDTN', 'GV0002'),
+  ('11D1', 'LY', 'GV0001'),
+  ('11D1', 'DIA', 'GV0002'),
+  ('11D1', 'KTPL', 'GV0002'),
+  ('11D1', 'TIN', 'GV0001')
 ) AS v(class_name, subject_code, teacher_code)
 JOIN classes c ON c.class_name = v.class_name AND c.school_year_id = (SELECT school_year_id FROM school_years WHERE year_name = '2026-2027')
 JOIN subjects s ON s.subject_code = v.subject_code

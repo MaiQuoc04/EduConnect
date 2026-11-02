@@ -1,6 +1,7 @@
 import { withTransaction } from '../config/db.js';
 import { ERROR_CODES } from '../constants/errorCodes.js';
 import * as teacherModel from '../models/teacher.model.js';
+import * as departmentRepo from '../repositories/department.repository.js';
 import * as schoolYearRepo from '../repositories/schoolYear.repository.js';
 import * as subjectRepo from '../repositories/subject.repository.js';
 import * as teacherRepo from '../repositories/teacher.repository.js';
@@ -44,8 +45,14 @@ export async function listSubjectOptions() {
   return teacherModel.toSubjectOptions(await subjectRepo.findActiveSubjects());
 }
 
+// SCR-15 department picker: the departments list (tổ chuyên môn).
+export async function listDepartmentOptions() {
+  return teacherModel.toDepartmentOptions(await departmentRepo.findActiveDepartments());
+}
+
 // SCR-15 / UC-17 – update full name, department and subjects (input already validated).
-export async function updateTeacher({ id, fullName, department, subjectIds }) {
+// departmentId: undefined = keep the current department, null = none, id = that department of the list.
+export async function updateTeacher({ id, fullName, departmentId, subjectIds }) {
   return withTransaction(async (conn) => {
     const teacher = await teacherRepo.lockTeacherForUpdate(id, conn);
     if (!teacher) throw notFound(ERROR_CODES.TEACHER_NOT_FOUND, 'Teacher not found.');
@@ -65,7 +72,15 @@ export async function updateTeacher({ id, fullName, department, subjectIds }) {
     }
 
     await teacherRepo.updateUserFullName(teacher.userId, fullName, conn);
-    await teacherRepo.updateDepartment(id, department, conn);
+    if (departmentId !== undefined) {
+      let name = null;
+      if (departmentId !== null) {
+        const dept = await departmentRepo.findActiveDepartmentById(departmentId, conn);
+        if (!dept) throw badRequest(ERROR_CODES.DEPARTMENT_INVALID, 'Unknown department.', { field: 'departmentId' });
+        name = dept.name; // teachers.department keeps the name, spelled exactly as in the list
+      }
+      await teacherRepo.updateDepartment(id, name, conn);
+    }
     await teacherRepo.replaceTeacherSubjects(id, subjectIds, conn);
     return { teacherId: Number(id) };
   });
