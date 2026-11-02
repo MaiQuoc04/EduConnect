@@ -25,18 +25,15 @@ FE-10 is split: timetable in It2, class calendar in It3.
 
 ## Current status (read first; update after every merge, schema patch or new decision)
 
-Last updated: 01/11/2026.
+Last updated: 02/11/2026.
 
 - **Shared DB (Supabase):** schema v0.3 + `patch_v0.3_password_reset_requests.sql` (27/10) +
   `patch_v0.3_users_address.sql` (28/10: `users.address` added, `parents.address` dropped) +
   `patch_v0.3_reset_request_password.sql` (31/10: `password_reset_requests.temp_password_enc`) +
   `patch_v0.3_reset_cooldown_codes.sql` (01/11: reset cooldown setting, GV / HS codes padded to 4 digits) +
-  `patch_v0.3_reset_request_delivery.sql` (01/11: `password_reset_requests.delivery`). 47 tables.
-- **Pending patch (FE-03, 02/11):** `patch_v0.3_departments.sql` – new table `departments` (list of tổ chuyên môn;
-  SM picks one on Update Teacher, UC-17). Not yet run on the shared DB; after running it: 48 tables. Until then the
-  department picker shows "list not created" and keeps the current value (the rest of FE-03 works).
-  Follow-up for FE-13: account create / import still accept free-text `teachers.department`; switch them to the list,
-  then a foreign key `teachers.department -> departments(department_name)` can be added.
+  `patch_v0.3_reset_request_delivery.sql` (01/11: `password_reset_requests.delivery`) +
+  `patch_v0.3_departments.sql` (FE-03, already run before review; kept by the lead 02/11: table `departments`,
+  the file arrives in `database/` with the FE-03 merge). 48 tables.
 - **develop:**
   - FE-01 complete for It1 (merged 01/11): UC-01..UC-06, UC-107 Update Address, UC-108 Update Occupation,
     UC-109 View Child Profile, password reset request with sign-in name + full name check; forced password change
@@ -48,6 +45,10 @@ Last updated: 01/11/2026.
     removed (log kept in the DB only).
 - **Pushed, not merged yet:** `feature/fe-02-student-management` (Anh), `feature/fe-03-teacher-management` (Dung),
   `feature/fe-04-class-group-management` (Khanh). Each should merge `develop` into its branch before its PR.
+- **FE-03 review (02/11):** endpoints work and the client builds. Lead decisions: keep the `departments` table;
+  Dung's assumptions became business rules §4 "Teachers" (homeroom max 1 class per year, no new assignment for a
+  locked teacher, assignments never back-dated, at least one subject per teacher, no empty pair while lessons
+  remain); screen numbers are fixed by the lead after all It1 branches are merged.
 - **Numbering changes (01/11):** UC-104 View Activity Log and SCR-64 Activity Log removed; UC-105..UC-110 became
   UC-104..UC-109 and SCR-65..SCR-71 became SCR-64..SCR-70; then SCR-71 Password Reset Requests (FE-13) was added.
   109 use cases, 71 screens.
@@ -60,6 +61,23 @@ Last updated: 01/11/2026.
     `0` + 9 digits); UC references to FE-14 shift by one (UC-105 → UC-104).
   - FE-04 (Khanh): screen references shift by one (SCR-66 → SCR-65, SCR-70 → SCR-69, SCR-71 → SCR-70); FE-14 (It2)
     uses UC-104..UC-106, a parent's address is `users.address`, occupation stays `parents.occupation`.
+  - FE-03 (Dung), before the merge:
+    - Folder layout as in CLAUDE.md: move the code from `routes/`, `validators/`, `controllers/`, `services/`,
+      `repositories/`, `models/`, `constants/` into `server/src/modules/teacher/` (routes → controller → service,
+      SQL in the service or a file inside the module) and delete the old unused files already there
+      (`modules/teacher/*.routes.js` / `.controller.js` / `.service.js`, about 980 lines nobody imports).
+    - Delete stray files: root `package-lock.json` (empty), `server/scripts/check-cols.js`,
+      `server/scripts/check-tables.js`; fix the comment in `teacher.constants.js` that still points to schema v0.2.
+    - Reuse the existing utils instead of copies: accent removal from `utils/username.js` (`removeAccents`), phone
+      handling from `utils/phone.js`; keep only what is really new in a file inside the module. Do not add shared
+      files (`constants/errorCodes.js`, `middlewares/validate.js`, `utils/text.js`, `utils/validation.js`) without
+      asking the lead first.
+    - Do not run SQL patches on the shared DB before the lead approves them (`patch_v0.3_departments.sql` was run
+      early).
+  - FE-03 screen numbers (lead, after all It1 merges): code uses SCR-13..17, `screens.md` has SCR-14 Teacher List,
+    SCR-15 Teacher Detail, SCR-17 Update Teacher, SCR-18 Homeroom Assignment, SCR-19 Teaching Assignment.
+  - FE-13 (Linh): account create / import still take free-text `teachers.department`; switch to the `departments`
+    list (`GET /teachers/department-options`), then a foreign key can be added.
 
 ## Iteration 1 (19/10 – 30/10/2026)
 
