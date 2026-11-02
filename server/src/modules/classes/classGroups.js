@@ -76,3 +76,65 @@ export async function addClassGroupMembers(client, classId) {
   );
   return rows;
 }
+
+const CLASS_GROUP_TYPES = ['GENERAL', 'STUDENT', 'PARENT'];
+
+// UC-19 Assign Homeroom Teacher (FE-03) calls this for each changed class, inside its transaction and after
+// classes.homeroom_teacher_id is updated (agreed 02/11, business-rules §4):
+//   * the moderator of the class groups is always the current homeroom teacher, read from classes – nothing to move;
+//   * the new homeroom teacher becomes an active member of the three class groups (added, or brought back when they
+//     left before) and so sees the whole feed and chat history and the posts waiting for approval;
+//   * the previous homeroom teacher leaves the three class groups (left_at, rows kept), even if they still teach a
+//     subject in the class – the homeroom teacher or the School Manager can add them back (UC-32); they also leave the
+//     class's teams unless they still teach the class.
+// Classes of an ended school year are read only and are skipped. previousTeacherId / the current homeroom are
+// teachers.teacher_id values (null = none). Returns { added, left } as [{ groupId, userId }].
+export async function syncHomeroomChange(client, { classId, previousTeacherId }) {
+  const { rows } = await client.query(
+    `SELECT CURRENT_DATE > sy.end_date AS "ended",
+            (SELECT user_id FROM teachers WHERE teacher_id = c.homeroom_teacher_id) AS "currentUserId",
+            (SELECT user_id FROM teachers WHERE teacher_id = $2) AS "previousUserId"
+     FROM classes c JOIN school_years sy ON sy.school_year_id = c.school_year_id
+     WHERE c.class_id = $1 AND c.deleted_at IS NULL`,
+    [classId, previousTeacherId ?? null],
+  );
+  const cls = rows[0];
+  if (!cls || cls.ended || cls.currentUserId === cls.previousUserId) return { added: [], left: [] };
+
+  let left = [];
+  if (cls.previousUserId) {
+    ({ rows: left } = await client.query(
+      `UPDATE group_members m SET left_at = NOW()
+       FROM groups g
+       WHERE m.group_id = g.group_id AND g.class_id = $1 AND g.deleted_at IS NULL
+         AND m.user_id = $2 AND m.left_at IS NULL
+         AND (g.group_type = ANY($3::text[])
+              OR (g.group_type = 'TEAM_CHAT' AND NOT EXISTS (
+                    SELECT 1 FROM (${classPeopleSql('$1')}) p WHERE p.user_id = $2)))
+       RETURNING m.group_id AS "groupId", m.user_id AS "userId"`,
+      [classId, cls.previousUserId, CLASS_GROUP_TYPES],
+    ));
+  }
+
+  let added = [];
+  if (cls.currentUserId) {
+    const { rows: back } = await client.query(
+      `UPDATE group_members m SET left_at = NULL
+       FROM groups g
+       WHERE m.group_id = g.group_id AND g.class_id = $1 AND g.deleted_at IS NULL AND g.group_type = ANY($3::text[])
+         AND m.user_id = $2 AND m.left_at IS NOT NULL
+       RETURNING m.group_id AS "groupId", m.user_id AS "userId"`,
+      [classId, cls.currentUserId, CLASS_GROUP_TYPES],
+    );
+    const { rows: fresh } = await client.query(
+      `INSERT INTO group_members (group_id, user_id)
+       SELECT g.group_id, $2 FROM groups g
+       WHERE g.class_id = $1 AND g.deleted_at IS NULL AND g.group_type = ANY($3::text[])
+         AND NOT EXISTS (SELECT 1 FROM group_members m WHERE m.group_id = g.group_id AND m.user_id = $2)
+       RETURNING group_id AS "groupId", user_id AS "userId"`,
+      [classId, cls.currentUserId, CLASS_GROUP_TYPES],
+    );
+    added = [...back, ...fresh];
+  }
+  return { added, left };
+}

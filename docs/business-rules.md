@@ -96,6 +96,13 @@ Boundaries that are easy to get wrong:
 - **Every subject weight is 1** (agreed 01/11, in line with Circular 22/2021): `track_subjects.weight` is always
   1.00 and is not shown.
 - Homeroom teacher may be empty → show a warning so SM assigns one.
+- **Changing the homeroom teacher** (UC-19, agreed 02/11/2026): the moderator of the three class groups is always the
+  current homeroom teacher (read from `classes.homeroom_teacher_id`, nothing stored per group), so the rights move at
+  once, pending posts included. The new homeroom teacher joins the three class groups (or comes back if they left
+  before) and sees their whole history. The previous homeroom teacher **leaves all three class groups** (`left_at`),
+  even if they still teach a subject in the class (the homeroom teacher or SM can add them back, UC-32), and leaves
+  the class's teams unless they still teach the class. Without a homeroom teacher nobody moderates (see §3). Done in
+  the same transaction by `syncHomeroomChange` (FE-04 `classGroups.js`); not for ended school years.
 - A class has at most **45 studying students** (agreed 29/10, FE-04): checked when creating a class, adding
   students to it and importing a class list.
 - `teacher_subjects`: which subjects a teacher can teach (one teacher may teach several). Teaching assignments only
