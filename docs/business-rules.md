@@ -89,8 +89,10 @@ Boundaries that are easy to get wrong:
   previous year by default; editable, but subjects can no longer be added or removed **once the year has grades**
   (periods per week stay editable).
 - A class type belongs to **one grade** (10, 11 or 12) or to every grade, so subjects and periods can differ per
-  grade (agreed 01/11). No schema change: the grade is a prefix of `track_name` ("10 · Khối A"); a name without
-  the prefix is a type for every grade. A class can only use a type of its grade or one for every grade.
+  grade (agreed 01/11). The grade is `class_tracks.grade_level_id` (NULL = every grade; patch
+  `patch_v0.3_class_track_grade.sql`, 02/11). A class can only use a type of its grade or one for every grade. A
+  name is unique per grade (without case, among types not deleted) and is used either for every grade or per grade,
+  not both. A type's grade cannot change while classes of another grade use it.
 - **Every subject weight is 1** (agreed 01/11, in line with Circular 22/2021): `track_subjects.weight` is always
   1.00 and is not shown.
 - Homeroom teacher may be empty → show a warning so SM assigns one.

@@ -7,7 +7,7 @@ const SECTIONS = [
   { grade: null, label: 'Mọi khối' },
 ];
 
-// SCR-71 left column: every class type (UC-26), grouped by the grade it belongs to. Counts are for the selected
+// SCR-70 left column: every class type (UC-26), grouped by the grade it belongs to. Counts are for the selected
 // school year.
 export default function TrackList({ tracks, selectedId, onSelect, onCreate }) {
   return (
@@ -44,7 +44,7 @@ export default function TrackList({ tracks, selectedId, onSelect, onCreate }) {
                       onClick={() => onSelect(t.trackId)}
                     >
                       <span className="year-item-top">
-                        <span className="year-item-name">{t.name}</span>
+                        <span className="year-item-name">{t.trackName}</span>
                         {t.subjectCount === 0 && <span className="pill amber">Chưa có môn</span>}
                       </span>
                       {t.description && <span className="track-item-desc">{t.description}</span>}

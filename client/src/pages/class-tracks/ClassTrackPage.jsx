@@ -5,13 +5,14 @@ import Icon from '../../components/Icon.jsx';
 import { useToast } from '../../context/ToastContext.jsx';
 import { errorText } from '../../messages.js';
 import { yearLabel } from '../school-years/schoolYearLabels.js';
+import { trackLabel } from './trackLabel.js';
 import TrackForm from './TrackForm.jsx';
 import TrackList from './TrackList.jsx';
 import TrackSubjects from './TrackSubjects.jsx';
 
 const LEAVE_TEXT = 'Các thay đổi chưa lưu sẽ bị bỏ. Bạn có muốn tiếp tục?';
 
-// SCR-71 "Loại lớp & số tiết" – UC-26 Manage Class Types (School Manager). A class type belongs to one grade (or to
+// SCR-70 "Loại lớp & số tiết" – UC-26 Manage Class Types (School Manager). A class type belongs to one grade (or to
 // every grade) and is shared by every year; its subjects and periods per week are set per school year. Every
 // subject weight is 1 and is not shown (agreed 01/11).
 // ?schoolYearId= and ?trackId= keep the selection on reload.
@@ -98,14 +99,14 @@ export default function ClassTrackPage() {
 
   // saved = the edited type, or the types just created (one per chosen grade).
   function handleTrackSaved(saved, edited) {
-    toast(edited ? 'Đã lưu thay đổi loại lớp.' : `Đã thêm loại lớp ${saved.map((t) => t.trackName).join(', ')}.`);
+    toast(edited ? 'Đã lưu thay đổi loại lớp.' : `Đã thêm loại lớp ${saved.map(trackLabel).join(', ')}.`);
     setMode('view');
     select({ trackId: saved[0].trackId });
     reload();
   }
 
   function handleDeleted(track) {
-    toast(`Đã xoá loại lớp ${track.trackName}.`);
+    toast(`Đã xoá loại lớp ${trackLabel(track)}.`);
     setDirty(false);
     select({ trackId: null });
     reload();

@@ -1,6 +1,5 @@
 import { pool, withTransaction } from '../../config/db.js';
 import { AppError, badRequest, notFound } from '../../utils/AppError.js';
-import { trackFitsGrade } from '../class-tracks/trackName.js';
 import { addClassGroupMembers, ensureClassGroups } from './classGroups.js';
 
 // FE-04 Class & Group Management – classes and their groups (owner: Khanh). Screen SCR-22 Group List
@@ -293,13 +292,12 @@ export async function createClass(input, userId) {
     if (problem === 'GRADE') throw badRequest('MSG_CLASS_NAME_GRADE', 'The class name must start with its grade.');
 
     const { rows: track } = await client.query(
-      'SELECT track_name AS "trackName" FROM class_tracks WHERE track_id = $1 AND deleted_at IS NULL',
-      [trackId],
+      `SELECT grade_level_id IS NULL OR grade_level_id = $2 AS "fits"
+       FROM class_tracks WHERE track_id = $1 AND deleted_at IS NULL`,
+      [trackId, gradeLevelId],
     );
     if (!track.length) throw notFound('NOT_FOUND', 'Class type not found.');
-    if (!trackFitsGrade(track[0].trackName, grade[0].name)) {
-      throw badRequest('MSG_TRACK_GRADE', 'This class type is for another grade.');
-    }
+    if (!track[0].fits) throw badRequest('MSG_TRACK_GRADE', 'This class type is for another grade.');
 
     const { rows: taken } = await client.query(
       'SELECT 1 FROM classes WHERE class_name = $1 AND school_year_id = $2',

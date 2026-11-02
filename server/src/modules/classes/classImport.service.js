@@ -2,7 +2,6 @@ import ExcelJS from 'exceljs';
 import { pool, withTransaction } from '../../config/db.js';
 import { badRequest } from '../../utils/AppError.js';
 import { assertXlsx, readSheet } from '../../utils/excel.js';
-import { parseTrackName } from '../class-tracks/trackName.js';
 import {
   classNameProblem,
   conflict,
@@ -40,15 +39,17 @@ async function analyze(db, year, rows) {
 
   const [{ rows: grades }, { rows: tracks }] = await Promise.all([
     db.query('SELECT grade_level_id AS "id", grade_level_name AS "name" FROM grade_levels'),
-    db.query('SELECT track_id AS "id", track_name AS "name" FROM class_tracks WHERE deleted_at IS NULL'),
+    db.query(
+      `SELECT ct.track_id AS "id", ct.track_name AS "name", gl.grade_level_name AS "gradeLevel"
+       FROM class_tracks ct LEFT JOIN grade_levels gl ON gl.grade_level_id = ct.grade_level_id
+       WHERE ct.deleted_at IS NULL`,
+    ),
   ]);
   const gradeByName = new Map(grades.map((g) => [g.name, g]));
-  // "Khối A" on a grade-11 row = the type "11 · Khối A", else the type "Khối A" for every grade (trackName.js); the
-  // full name "11 · Khối A" works too. otherGrade = the name exists, but only for other grades.
-  const trackList = tracks.map((t) => ({ id: t.id, full: t.name, ...parseTrackName(t.name) }));
+  // "Khối A" on a grade-11 row = the grade-11 type "Khối A", else the type "Khối A" for every grade (a name is never
+  // both). otherGrade = the name exists, but only for other grades.
   const findTrack = (text, gradeName) => {
-    const key = fold(text);
-    const same = trackList.filter((t) => fold(t.name) === key || fold(t.full) === key);
+    const same = tracks.filter((t) => fold(t.name) === fold(text));
     const track = same.find((t) => t.gradeLevel === gradeName) ?? same.find((t) => !t.gradeLevel);
     return { track, otherGrade: !track && same.length > 0 };
   };
@@ -126,7 +127,7 @@ async function analyze(db, year, rows) {
           gradeLevelId: grade.id,
           gradeLevel: grade.name,
           trackId: track.id,
-          trackName: track.full,
+          trackName: track.name,
           classId: old?.classId ?? null,
           exists: Boolean(old),
           hasHomeroom: Boolean(old?.hasHomeroom),
@@ -259,7 +260,10 @@ export async function runImport({ schoolYearId, file }, userId) {
 // UC-27 template: the data sheet first (the only one read back), then instructions and the current class types.
 export async function buildTemplate() {
   const { rows: tracks } = await pool.query(
-    'SELECT track_name AS "name", description FROM class_tracks WHERE deleted_at IS NULL ORDER BY track_name',
+    `SELECT ct.track_name AS "name", ct.description, gl.grade_level_name AS "gradeLevel"
+     FROM class_tracks ct LEFT JOIN grade_levels gl ON gl.grade_level_id = ct.grade_level_id
+     WHERE ct.deleted_at IS NULL
+     ORDER BY gl.grade_level_name NULLS LAST, ct.track_name`,
   );
   const workbook = new ExcelJS.Workbook();
   const data = workbook.addWorksheet('Danh sách lớp');
@@ -284,10 +288,7 @@ export async function buildTemplate() {
     { header: 'Loại lớp', width: 18 },
     { header: 'Mô tả', width: 60 },
   ];
-  tracks
-    .map((t) => ({ ...t, ...parseTrackName(t.name) }))
-    .sort((a, b) => (a.gradeLevel ?? '99').localeCompare(b.gradeLevel ?? '99') || a.name.localeCompare(b.name, 'vi'))
-    .forEach((t) => types.addRow([t.gradeLevel ?? 'Mọi khối', t.name, t.description ?? '']));
+  tracks.forEach((t) => types.addRow([t.gradeLevel ?? 'Mọi khối', t.name, t.description ?? '']));
   types.getRow(1).font = { bold: true };
   return workbook;
 }

@@ -1,31 +1,28 @@
 import { useEffect, useState } from 'react';
 import { api } from '../../api/client.js';
 import { errorText } from '../../messages.js';
+import { trackLabel } from './trackLabel.js';
 
-const NAME_CODES = ['MSG_TRACK_NAME_TAKEN', 'MSG_TRACK_NAME_LENGTH', 'MSG_TRACK_NAME_PREFIX'];
+const NAME_CODES = ['MSG_TRACK_NAME_TAKEN', 'MSG_TRACK_NAME_LENGTH', 'MSG_TRACK_NAME_SCOPE'];
 
-// SCR-71 create / edit a class type (UC-26). `track` = the type being edited, or null to create one.
-// A class type belongs to one grade or to every grade; creating it for several grades makes one type per grade
-// ("Khối A" for 10 and 11 -> "10 · Khối A", "11 · Khối A"), each with its own subjects. The server composes the name.
+// SCR-70 create / edit a class type (UC-26). `track` = the type being edited, or null to create one.
+// A class type belongs to one grade or to every grade (class_tracks.grade_level_id); creating it for several grades
+// makes one type per grade ("Khối A" of grade 10 and of grade 11), each with its own subjects.
 export default function TrackForm({ track, onSaved, onCancel }) {
   const editing = Boolean(track);
   const [grades, setGrades] = useState([]);
-  const [form, setForm] = useState({ trackName: track?.name ?? '', description: track?.description ?? '' });
+  const [form, setForm] = useState({ trackName: track?.trackName ?? '', description: track?.description ?? '' });
   const [picked, setPicked] = useState([]); // create: gradeLevelIds ([] = every grade)
-  const [gradeLevelId, setGradeLevelId] = useState(''); // edit: '' = every grade
+  const [gradeLevelId, setGradeLevelId] = useState(track?.gradeLevelId ? String(track.gradeLevelId) : ''); // edit: '' = every grade
   const [error, setError] = useState(null); // { field: 'name' | null, text }
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
     api
       .get('/classes/grade-levels')
-      .then(({ data }) => {
-        setGrades(data);
-        const own = data.find((g) => g.gradeLevelName === track?.gradeLevel);
-        if (own) setGradeLevelId(String(own.gradeLevelId));
-      })
+      .then(({ data }) => setGrades(data))
       .catch(() => setGrades([]));
-  }, [track?.gradeLevel]);
+  }, []);
 
   const set = (key) => (e) => setForm((f) => ({ ...f, [key]: e.target.value }));
   const toggleGrade = (id) => setPicked((list) => (list.includes(id) ? list.filter((x) => x !== id) : [...list, id]));
@@ -58,7 +55,7 @@ export default function TrackForm({ track, onSaved, onCancel }) {
   const sortedPicked = grades.filter((g) => picked.includes(g.gradeLevelId));
   const preview = form.trackName.trim()
     ? sortedPicked.length
-      ? sortedPicked.map((g) => `${g.gradeLevelName} · ${form.trackName.trim()}`).join(', ')
+      ? sortedPicked.map((g) => `${form.trackName.trim()} · khối ${g.gradeLevelName}`).join(', ')
       : `${form.trackName.trim()} (mọi khối)`
     : '';
 
@@ -66,7 +63,7 @@ export default function TrackForm({ track, onSaved, onCancel }) {
     <form className="card card-outline form-card year-form" onSubmit={handleSubmit} noValidate>
       <div>
         <p className="label-upper muted">{editing ? 'Chỉnh sửa loại lớp' : 'Thêm loại lớp'}</p>
-        <h2 className="title-md">{editing ? track.trackName : 'Loại lớp mới'}</h2>
+        <h2 className="title-md">{editing ? trackLabel(track) : 'Loại lớp mới'}</h2>
       </div>
 
       <div className={`field${error?.field === 'name' ? ' invalid' : ''}`}>
@@ -80,14 +77,14 @@ export default function TrackForm({ track, onSaved, onCancel }) {
             value={form.trackName}
             onChange={set('trackName')}
             placeholder="Khối A"
-            maxLength={95}
+            maxLength={100}
             autoFocus
           />
         </div>
         {error?.field === 'name' ? (
           <span className="field-error">{error.text}</span>
         ) : (
-          <span className="field-help">Không ghi khối vào tên, chọn khối ở ô bên dưới. Ví dụ Khối A.</span>
+          <span className="field-help">Tên dùng khi tạo hoặc nhập danh sách lớp, ví dụ Khối A. Khối chọn ở ô bên dưới.</span>
         )}
       </div>
 

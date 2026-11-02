@@ -48,10 +48,12 @@ export async function listSubjects({ schoolYearId }) {
      FROM subjects s
      LEFT JOIN LATERAL (
        SELECT json_agg(json_build_object('trackId', ct.track_id, 'trackName', ct.track_name,
-                                         'periodsPerWeek', ts.periods_per_week) ORDER BY ct.track_name) AS tracks,
+                                         'gradeLevel', gl.grade_level_name, 'periodsPerWeek', ts.periods_per_week)
+                       ORDER BY gl.grade_level_name NULLS LAST, ct.track_name) AS tracks,
               MIN(ts.periods_per_week) AS periods_min, MAX(ts.periods_per_week) AS periods_max
        FROM track_subjects ts
        JOIN class_tracks ct ON ct.track_id = ts.track_id AND ct.deleted_at IS NULL
+       LEFT JOIN grade_levels gl ON gl.grade_level_id = ct.grade_level_id
        WHERE ts.subject_id = s.subject_id AND ts.school_year_id = $1
      ) tr ON TRUE
      WHERE s.deleted_at IS NULL
@@ -97,11 +99,13 @@ export async function getSubject(idParam, { schoolYearId } = {}) {
   const yearId = schoolYear?.schoolYearId ?? null;
 
   const { rows: tracks } = await pool.query(
-    `SELECT ct.track_id AS "trackId", ct.track_name AS "trackName", ts.periods_per_week AS "periodsPerWeek"
+    `SELECT ct.track_id AS "trackId", ct.track_name AS "trackName", gl.grade_level_name AS "gradeLevel",
+            ts.periods_per_week AS "periodsPerWeek"
      FROM track_subjects ts
      JOIN class_tracks ct ON ct.track_id = ts.track_id AND ct.deleted_at IS NULL
+     LEFT JOIN grade_levels gl ON gl.grade_level_id = ct.grade_level_id
      WHERE ts.subject_id = $1 AND ts.school_year_id = $2
-     ORDER BY ct.track_name`,
+     ORDER BY gl.grade_level_name NULLS LAST, ct.track_name`,
     [id, yearId],
   );
 

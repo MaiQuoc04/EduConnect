@@ -592,7 +592,7 @@ img { display: block; }
 .tabs button { border: 0; background: transparent; font: inherit; font-size: 13px; padding: 4px 10px; border-radius: 4px; color: var(--graphite-700); cursor: pointer; }
 .tabs button[aria-selected='true'] { background: var(--white); color: var(--graphite-900); font-weight: 500; box-shadow: var(--shadow-menu); }
 
-/* ---------- class types & subject weights (SCR-71, FE-04) ---------- */
+/* ---------- class types & periods (SCR-70, FE-04) ---------- */
 .track-note { margin-bottom: 16px; }
 .track-item-desc { font-size: 13px; line-height: 18px; color: var(--graphite-600); }
 .track-panel { display: grid; gap: 16px; }

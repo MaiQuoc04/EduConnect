@@ -115,7 +115,7 @@ export default function ClassCreateForm({ schoolYear, takenNames = [], onCancel,
           <p className="label-upper muted">Tạo nhóm lớp · Năm học {yearLabel(schoolYear.yearName)}</p>
           <h2 id="class-create-title" className="title-md">
             {step === 0 || !className ? 'Lớp mới' : `Lớp ${className}`}
-            {step > 0 && track && <span className="caption muted"> · Khối {grade?.gradeLevelName} · {track.name}</span>}
+            {step > 0 && track && <span className="caption muted"> · Khối {grade?.gradeLevelName} · {track.trackName}</span>}
           </h2>
         </div>
         <ol className="wizard-steps" aria-label="Các bước">
@@ -179,7 +179,7 @@ export default function ClassCreateForm({ schoolYear, takenNames = [], onCancel,
               <option value="">{form.gradeLevelId ? 'Chọn loại lớp' : 'Chọn khối trước'}</option>
               {tracks.map((t) => (
                 <option key={t.trackId} value={t.trackId}>
-                  {t.gradeLevel ? t.name : `${t.name} (mọi khối)`}
+                  {t.gradeLevel ? t.trackName : `${t.trackName} (mọi khối)`}
                 </option>
               ))}
             </select>

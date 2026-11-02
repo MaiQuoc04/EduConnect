@@ -5,6 +5,7 @@ import Icon from '../../components/Icon.jsx';
 import { errorText } from '../../messages.js';
 import { yearLabel } from '../school-years/schoolYearLabels.js';
 import { fold, periodsText } from './subjectText.js';
+import { trackLabel } from '../class-tracks/trackLabel.js';
 
 // SCR-19 Subject List – UC-22 View Subject List (School Manager). Figures (class types, periods, classes) are for
 // the chosen school year; search and filters run here because a school has only ~15 subjects, so no paging.
@@ -40,7 +41,7 @@ export default function SubjectListPage() {
   const subjects = useMemo(() => state.data?.subjects ?? [], [state.data]);
   const tracks = useMemo(() => {
     const byId = new Map();
-    subjects.forEach((s) => s.tracks.forEach((t) => byId.set(t.trackId, t.trackName)));
+    subjects.forEach((s) => s.tracks.forEach((t) => byId.set(t.trackId, trackLabel(t))));
     return [...byId].map(([id, name]) => ({ id, name })).sort((a, b) => a.name.localeCompare(b.name, 'vi'));
   }, [subjects]);
   const unsetCount = useMemo(() => subjects.filter((s) => !s.tracks.length).length, [subjects]);
@@ -173,7 +174,7 @@ export default function SubjectListPage() {
                         <span className="chips">
                           {s.tracks.map((t) => (
                             <span key={t.trackId} className="chip subject-track">
-                              {t.trackName}
+                              {trackLabel(t)}
                               <span className="subject-track-periods">{t.periodsPerWeek} tiết</span>
                             </span>
                           ))}

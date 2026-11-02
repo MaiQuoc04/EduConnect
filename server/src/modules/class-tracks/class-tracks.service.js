@@ -1,9 +1,8 @@
 import { pool, withTransaction } from '../../config/db.js';
 import { AppError, badRequest, notFound } from '../../utils/AppError.js';
-import { composeTrackName, hasGradePrefix, withTrackGrade } from './trackName.js';
 
-// UC-26 Manage Class Types (SCR-71 "Loại lớp & số tiết"). A class type (class_tracks) belongs to one grade or to
-// every grade (trackName.js) and is shared by every school year; its subjects and periods per week
+// UC-26 Manage Class Types (SCR-70 "Loại lớp & số tiết"). A class type (class_tracks) belongs to one grade or to
+// every grade (grade_level_id NULL) and is shared by every school year; its subjects and periods per week
 // (track_subjects) are set per school year (business-rules §4).
 // Agreed 01/11: every subject weight is 1 – track_subjects.weight is always written as 1.00 and no longer shown,
 // so the year average of business-rules §11 is a plain average.
@@ -86,57 +85,61 @@ async function findCopySource(year) {
   return rows[0] ?? null;
 }
 
-// UC-26: every class type with, for the chosen year, its number of classes and configured subjects.
-// inUse = some class (any year) has this type, so it cannot be deleted.
+// A class type with its grade; gradeLevelId / gradeLevel are null for a type used by every grade.
+const TRACK_COLUMNS = `ct.track_id AS "trackId", ct.track_name AS "trackName", ct.description,
+            ct.grade_level_id AS "gradeLevelId", gl.grade_level_name AS "gradeLevel"`;
+const TRACK_FROM = 'class_tracks ct LEFT JOIN grade_levels gl ON gl.grade_level_id = ct.grade_level_id';
+
+// UC-26: every class type with, for the chosen year, its number of classes and configured subjects, grade by
+// grade (types for every grade last). inUse = some class (any year) has this type, so it cannot be deleted.
 // gradeLevelId = only the types usable for that grade (its own and the ones for every grade), for the class forms.
 export async function listTracks({ schoolYearId, gradeLevelId }) {
   const schoolYear = await resolveYear(schoolYearId);
-  const grade = gradeLevelId ? await gradeName(pool, gradeLevelId) : null;
+  const grade = gradeLevelId ? await assertGrade(pool, gradeLevelId) : null;
   const { rows: tracks } = await pool.query(
-    `SELECT ct.track_id AS "trackId", ct.track_name AS "trackName", ct.description,
+    `SELECT ${TRACK_COLUMNS},
             (SELECT COUNT(*) FROM classes c
              WHERE c.track_id = ct.track_id AND c.school_year_id = $1 AND c.deleted_at IS NULL) AS "classCount",
             (SELECT COUNT(*) FROM track_subjects ts
              JOIN subjects s ON s.subject_id = ts.subject_id AND s.deleted_at IS NULL
              WHERE ts.track_id = ct.track_id AND ts.school_year_id = $1) AS "subjectCount",
             EXISTS (SELECT 1 FROM classes c WHERE c.track_id = ct.track_id AND c.deleted_at IS NULL) AS "inUse"
-     FROM class_tracks ct
+     FROM ${TRACK_FROM}
      WHERE ct.deleted_at IS NULL
-     ORDER BY ct.track_name`,
-    [schoolYear?.schoolYearId ?? null],
+       AND ($2::bigint IS NULL OR ct.grade_level_id IS NULL OR ct.grade_level_id = $2)
+     ORDER BY gl.grade_level_name NULLS LAST, ct.track_name`,
+    [schoolYear?.schoolYearId ?? null, grade],
   );
-  const list = tracks.map(withTrackGrade).filter((t) => !grade || !t.gradeLevel || t.gradeLevel === grade);
-  return { schoolYear, copySource: await findCopySource(schoolYear), tracks: list };
+  return { schoolYear, copySource: await findCopySource(schoolYear), tracks };
 }
 
-async function gradeName(db, gradeLevelId) {
+// The grade id when it exists (404 otherwise).
+async function assertGrade(db, gradeLevelId) {
   const id = parseId(gradeLevelId, 'Grade not found.');
-  const { rows } = await db.query('SELECT grade_level_name AS "name" FROM grade_levels WHERE grade_level_id = $1', [id]);
+  const { rows } = await db.query('SELECT 1 FROM grade_levels WHERE grade_level_id = $1', [id]);
   if (!rows.length) throw notFound('NOT_FOUND', 'Grade not found.');
-  return rows[0].name;
+  return id;
 }
 
-// Grades of the classes (any year) that use a class type.
-async function usedGrades(db, trackId) {
+// Grades (ids) of the classes (any year) that use a class type.
+async function usedGradeIds(db, trackId) {
   const { rows } = await db.query(
-    `SELECT DISTINCT gl.grade_level_name AS "name"
-     FROM classes c JOIN grade_levels gl ON gl.grade_level_id = c.grade_level_id
-     WHERE c.track_id = $1 AND c.deleted_at IS NULL`,
+    'SELECT DISTINCT grade_level_id AS "id" FROM classes WHERE track_id = $1 AND deleted_at IS NULL',
     [trackId],
   );
-  return rows.map((r) => r.name);
+  return rows.map((r) => r.id);
 }
 
 async function loadTrack(db, id) {
   const { rows } = await db.query(
-    `SELECT ct.track_id AS "trackId", ct.track_name AS "trackName", ct.description,
+    `SELECT ${TRACK_COLUMNS},
             EXISTS (SELECT 1 FROM classes c WHERE c.track_id = ct.track_id AND c.deleted_at IS NULL) AS "inUse"
-     FROM class_tracks ct
+     FROM ${TRACK_FROM}
      WHERE ct.track_id = $1 AND ct.deleted_at IS NULL`,
     [id],
   );
   if (!rows.length) throw notFound('NOT_FOUND', 'Class type not found.');
-  return withTrackGrade(rows[0]);
+  return rows[0];
 }
 
 // name = 1–100 characters (class_tracks.track_name), description optional, at most 255.
@@ -144,52 +147,59 @@ function validateTrack({ trackName, description }) {
   const name = typeof trackName === 'string' ? trackName.trim().replace(/\s+/g, ' ') : '';
   const desc = typeof description === 'string' ? description.trim().replace(/\s+/g, ' ') : '';
   if (!name) throw badRequest('MSG_REQUIRED', 'Please enter the class type name.');
-  if (hasGradePrefix(name)) throw badRequest('MSG_TRACK_NAME_PREFIX', 'Choose the grade in its own field, not in the name.');
-  if (name.length > 95) throw badRequest('MSG_TRACK_NAME_LENGTH', 'The class type name has at most 95 characters.');
+  if (name.length > 100) throw badRequest('MSG_TRACK_NAME_LENGTH', 'The class type name has at most 100 characters.');
   if (desc.length > 255) throw badRequest('MSG_TRACK_DESCRIPTION_LENGTH', 'The description has at most 255 characters.');
   return { name, desc: desc || null };
 }
 
-// track_name is UNIQUE over every row, deleted ones included; compare without case so "khối a" = "Khối A".
-async function assertNameFree(client, name, excludeId = null) {
+// Among class types that are not deleted, compared without case (patch_v0.3_class_track_grade.sql):
+//   * a name is unique within one grade (NULL = every grade) – also enforced by uq_class_tracks_grade_name;
+//   * a name is used either for every grade or per grade, never both, so "Khối A" is never two choices for one class.
+// ASSUMPTION (proposed 02/11, to confirm with Quoc): the second rule.
+async function assertNameFree(client, name, gradeLevelId, excludeId = null) {
   const { rows } = await client.query(
-    `SELECT EXISTS (SELECT 1 FROM class_tracks WHERE lower(track_name) = lower($1)
-                    AND ($2::bigint IS NULL OR track_id <> $2)) AS "taken"`,
-    [name, excludeId],
+    `SELECT
+       EXISTS (SELECT 1 FROM class_tracks WHERE deleted_at IS NULL AND lower(track_name) = lower($1)
+               AND grade_level_id IS NOT DISTINCT FROM $2 AND ($3::bigint IS NULL OR track_id <> $3)) AS "taken",
+       EXISTS (SELECT 1 FROM class_tracks WHERE deleted_at IS NULL AND lower(track_name) = lower($1)
+               AND ($2::bigint IS NULL) <> (grade_level_id IS NULL) AND ($3::bigint IS NULL OR track_id <> $3)) AS "mixed"`,
+    [name, gradeLevelId, excludeId],
   );
-  if (rows[0].taken) throw conflict('MSG_TRACK_NAME_TAKEN', 'This class type name is already used.');
+  if (rows[0].taken) throw conflict('MSG_TRACK_NAME_TAKEN', 'This grade already has a class type with this name.');
+  if (rows[0].mixed) {
+    throw conflict('MSG_TRACK_NAME_SCOPE', 'This name is already used for every grade or for a single grade.');
+  }
 }
 
 function mapDuplicate(err) {
-  if (err.code === '23505') return conflict('MSG_TRACK_NAME_TAKEN', 'This class type name is already used.');
+  if (err.code === '23505') return conflict('MSG_TRACK_NAME_TAKEN', 'This grade already has a class type with this name.');
   return err;
 }
 
 // The grades a new class type is created for: [] or missing = one type for every grade.
-async function gradeNames(db, gradeLevelIds) {
+async function gradeIds(db, gradeLevelIds) {
   if (gradeLevelIds === undefined || gradeLevelIds === null) return [null];
   if (!Array.isArray(gradeLevelIds)) throw badRequest('MSG_REQUIRED', 'Please send the list of grades.');
   if (!gradeLevelIds.length) return [null];
-  const names = [];
-  for (const id of gradeLevelIds) names.push(await gradeName(db, id));
-  if (new Set(names).size !== names.length) throw badRequest('MSG_TRACK_GRADE_DUPLICATE', 'A grade is listed twice.');
-  return names.sort();
+  const ids = [];
+  for (const id of gradeLevelIds) ids.push(await assertGrade(db, id));
+  if (new Set(ids).size !== ids.length) throw badRequest('MSG_TRACK_GRADE_DUPLICATE', 'A grade is listed twice.');
+  return ids.sort((a, b) => a - b);
 }
 
-// UC-26 create a class type – one per chosen grade ("Khối A" for 10 and 11 -> "10 · Khối A", "11 · Khối A") or one
-// for every grade. Their subjects are set per school year afterwards. Returns { tracks } of the new types.
+// UC-26 create a class type – one per chosen grade ("Khối A" for grades 10 and 11 = two types, each with its own
+// subjects) or one for every grade. Their subjects are set per school year afterwards. Returns { tracks }.
 export async function createTrack(input) {
   const { name, desc } = validateTrack(input);
   const ids = await withTransaction(async (client) => {
     await client.query('LOCK TABLE class_tracks IN SHARE ROW EXCLUSIVE MODE'); // written rarely
-    const grades = await gradeNames(client, input.gradeLevelIds);
     const created = [];
-    for (const grade of grades) {
-      const full = composeTrackName(grade, name);
-      await assertNameFree(client, full);
+    for (const grade of await gradeIds(client, input.gradeLevelIds)) {
+      await assertNameFree(client, name, grade);
       const { rows } = await client.query(
-        'INSERT INTO class_tracks (track_name, description) VALUES ($1, $2) RETURNING track_id AS "trackId"',
-        [full, desc],
+        `INSERT INTO class_tracks (track_name, description, grade_level_id) VALUES ($1, $2, $3)
+         RETURNING track_id AS "trackId"`,
+        [name, desc, grade],
       );
       created.push(rows[0].trackId);
     }
@@ -210,14 +220,16 @@ export async function updateTrack(idParam, input) {
   await withTransaction(async (client) => {
     await client.query('LOCK TABLE class_tracks IN SHARE ROW EXCLUSIVE MODE');
     const track = await loadTrack(client, id);
-    let grade = track.gradeLevel;
-    if (input.gradeLevelId !== undefined) grade = input.gradeLevelId ? await gradeName(client, input.gradeLevelId) : null;
-    if (grade && grade !== track.gradeLevel && (await usedGrades(client, id)).some((g) => g !== grade)) {
+    let grade = track.gradeLevelId;
+    if (input.gradeLevelId !== undefined) grade = input.gradeLevelId ? await assertGrade(client, input.gradeLevelId) : null;
+    if (grade && grade !== track.gradeLevelId && (await usedGradeIds(client, id)).some((g) => g !== grade)) {
       throw conflict('MSG_TRACK_GRADE_IN_USE', 'Classes of another grade use this class type.');
     }
-    const full = composeTrackName(grade, name);
-    await assertNameFree(client, full, id);
-    await client.query('UPDATE class_tracks SET track_name = $2, description = $3 WHERE track_id = $1', [id, full, desc]);
+    await assertNameFree(client, name, grade, id);
+    await client.query(
+      'UPDATE class_tracks SET track_name = $2, description = $3, grade_level_id = $4 WHERE track_id = $1',
+      [id, name, desc, grade],
+    );
   }).catch((err) => {
     throw mapDuplicate(err);
   });

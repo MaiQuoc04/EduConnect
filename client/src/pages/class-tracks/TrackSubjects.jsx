@@ -4,6 +4,7 @@ import Icon from '../../components/Icon.jsx';
 import { useToast } from '../../context/ToastContext.jsx';
 import { errorText } from '../../messages.js';
 import { yearLabel } from '../school-years/schoolYearLabels.js';
+import { trackLabel } from './trackLabel.js';
 
 // Same limit as the server (UC-26): periods per week 1–10. Every subject weight is 1 and is not shown (agreed 01/11).
 const periodsValid = (text) => /^\d+$/.test(text.trim()) && Number(text) >= 1 && Number(text) <= 10;
@@ -16,7 +17,7 @@ function initialRows(subjects) {
 
 const sameRow = (a, b) => a.on === b.on && (!a.on || a.periods.trim() === b.periods.trim());
 
-// SCR-71 right column: the subjects one class type studies in the selected year, with periods per week (UC-26).
+// SCR-70 right column: the subjects one class type studies in the selected year, with periods per week (UC-26).
 // The subjects of another type (e.g. the same type of the grade below) can be copied in, then adjusted before
 // saving. Saving sends the whole list; the server removes unticked subjects.
 export default function TrackSubjects({ data, tracks, onSaved, onEdit, onDeleted, onDirtyChange }) {
@@ -61,7 +62,7 @@ export default function TrackSubjects({ data, tracks, onSaved, onEdit, onDeleted
         params: { schoolYearId: schoolYear.schoolYearId },
       });
       setRows(initialRows(src.subjects));
-      toast(`Đã lấy môn học của ${source.trackName}. Kiểm tra lại rồi bấm “Lưu thay đổi”.`);
+      toast(`Đã lấy môn học của ${trackLabel(source)}. Kiểm tra lại rồi bấm “Lưu thay đổi”.`);
     } catch (err) {
       setError(errorText(err));
     } finally {
@@ -84,7 +85,7 @@ export default function TrackSubjects({ data, tracks, onSaved, onEdit, onDeleted
       const next = initialRows(saved.subjects);
       setInitial(next);
       setRows(next);
-      toast(`Đã lưu môn học của ${track.trackName} cho năm học ${yearLabel(schoolYear.yearName)}.`);
+      toast(`Đã lưu môn học của ${trackLabel(track)} cho năm học ${yearLabel(schoolYear.yearName)}.`);
       onSaved();
     } catch (err) {
       setError(errorText(err));
@@ -113,7 +114,7 @@ export default function TrackSubjects({ data, tracks, onSaved, onEdit, onDeleted
         </div>
         <div className="track-panel-title">
           <h2 className="title-md">
-            {track.name}
+            {track.trackName}
             <span className="chip ink track-grade-chip">{track.gradeLevel ? `Khối ${track.gradeLevel}` : 'Mọi khối'}</span>
           </h2>
           {track.description && <p className="muted">{track.description}</p>}
@@ -139,7 +140,7 @@ export default function TrackSubjects({ data, tracks, onSaved, onEdit, onDeleted
           <div className="confirm-head">
             <Icon name="warning" />
             <p>
-              Xoá loại lớp <strong>{track.trackName}</strong>? Loại lớp này sẽ không còn được chọn khi tạo hoặc nhập
+              Xoá loại lớp <strong>{trackLabel(track)}</strong>? Loại lớp này sẽ không còn được chọn khi tạo hoặc nhập
               lớp mới.
             </p>
           </div>
@@ -171,7 +172,7 @@ export default function TrackSubjects({ data, tracks, onSaved, onEdit, onDeleted
                 <option value="">{copying ? 'Đang lấy môn…' : 'Sao chép môn từ…'}</option>
                 {others.map((t) => (
                   <option key={t.trackId} value={t.trackId}>
-                    {t.trackName} ({t.subjectCount} môn)
+                    {trackLabel(t)} ({t.subjectCount} môn)
                   </option>
                 ))}
               </select>

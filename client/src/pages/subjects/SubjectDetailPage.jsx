@@ -4,6 +4,7 @@ import { api } from '../../api/client.js';
 import Icon from '../../components/Icon.jsx';
 import { errorText } from '../../messages.js';
 import { yearLabel } from '../school-years/schoolYearLabels.js';
+import { trackLabel } from '../class-tracks/trackLabel.js';
 
 const TEACHERS_SHOWN = 5; // longer lists open with "+n giáo viên khác"
 const MISSING = 'MISSING'; // table filter: classes without an active teacher
@@ -174,7 +175,7 @@ export default function SubjectDetailPage() {
                 <tbody>
                   {tracks.map((t) => (
                     <tr key={t.trackId}>
-                      <td>{t.trackName}</td>
+                      <td>{trackLabel(t)}</td>
                       <td className="num">{t.periodsPerWeek}</td>
                     </tr>
                   ))}
