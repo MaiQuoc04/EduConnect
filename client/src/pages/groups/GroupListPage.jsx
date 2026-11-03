@@ -22,7 +22,7 @@ function roleText(activeRole, cls) {
   return ROLE_LABELS[activeRole] ?? 'Thành viên';
 }
 
-// SCR-22 Group List – UC-29 View Group List for teachers, students and parents ("Nhóm của tôi") and UC-35 Create
+// SCR-20 Group List – UC-29 View Group List for teachers, students and parents ("Nhóm của tôi") and UC-35 Create
 // Team Chat. One card per class holding all its groups and the user's teams there (homeroom classes first), plus
 // the school-wide teacher group. A subject teacher only gets the general group of their classes (groupAccess.js).
 // The School Manager uses the class view at /classes.

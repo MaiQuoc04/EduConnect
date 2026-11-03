@@ -101,6 +101,8 @@ const ERROR_MESSAGES = {
     `Một lớp có tối đa ${max ?? 45} học sinh${current ? `; lớp đang có ${current} học sinh` : ''}.`,
   MSG_PASTE_TOO_MANY: ({ max } = {}) => `Mỗi lần dán tối đa ${max ?? 200} mã học sinh.`,
   MSG_STUDENT_LEFT_CLASS: 'Có học sinh đã chuyển đi hoặc thôi học ở lớp này nên không thêm lại được.',
+  MSG_STUDENT_PREVIOUS_YEAR: ({ students } = {}) =>
+    `${students?.length ? `${students.join(', ')}: ` : 'Có học sinh '}đã học ở năm học trước. Hãy xếp lớp bằng chức năng Lên lớp.`,
   MSG_STUDENT_ALREADY_ENROLLED: ({ classes } = {}) =>
     `Có học sinh đang học lớp khác trong năm học${classes?.length ? ` (${classes.join(', ')})` : ''}.`,
   // FE-03 Teacher Management
@@ -205,6 +207,7 @@ const IMPORT_ROW_MESSAGES = {
   ROW_STUDENT_DUPLICATE: (v) => `Mã học sinh ${v} xuất hiện nhiều lần trong tệp.`,
   ROW_STUDENT_IN_OTHER_CLASS: (v) => `Học sinh đang học lớp ${v} trong năm học này.`,
   ROW_CLASS_FULL: (v) => `Lớp ${v} đã đủ 45 học sinh, dòng này vượt sĩ số.`,
+  ROW_STUDENT_PREVIOUS_YEAR: (v) => `Học sinh đã học lớp ${v} năm học trước. Hãy xếp lớp bằng chức năng Lên lớp.`,
   ROW_STUDENT_LEFT_CLASS: (v) => `Học sinh đã chuyển đi hoặc thôi học ở lớp ${v}.`,
   WARN_ALREADY_IN_CLASS: (v) => `Học sinh ${v} đã có trong lớp, dòng này được bỏ qua.`,
   WARN_STUDENT_LOCKED: (v) => `Tài khoản học sinh ${v} đang bị khoá.`,

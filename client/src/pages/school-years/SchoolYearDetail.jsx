@@ -3,7 +3,7 @@ import { formatDate } from '../../utils/format.js';
 import SemesterSection from './SemesterSection.jsx';
 import { YEAR_STATUS, yearLabel } from './schoolYearLabels.js';
 
-// SCR-18 right column: the selected school year (UC-20) and its semesters (UC-21).
+// SCR-65 right column: the selected school year (UC-20) and its semesters (UC-21).
 export default function SchoolYearDetail({ year, onEdit, onChanged }) {
   const status = YEAR_STATUS[year.status] ?? YEAR_STATUS.ENDED;
   const ended = year.status === 'ENDED';

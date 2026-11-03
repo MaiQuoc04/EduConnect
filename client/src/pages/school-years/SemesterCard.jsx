@@ -6,7 +6,7 @@ import { errorText } from '../../messages.js';
 import { formatDate } from '../../utils/format.js';
 import { semesterStatus } from './schoolYearLabels.js';
 
-// One semester on SCR-18 (UC-21): dates, status, and the School Manager's actions – edit the dates,
+// One semester on SCR-65 (UC-21): dates, status, and the School Manager's actions – edit the dates,
 // close the semester (ends homeroom attendance corrections), reopen it.
 export default function SemesterCard({ yearId, semester, onChanged }) {
   const toast = useToast();

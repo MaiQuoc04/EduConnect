@@ -13,7 +13,7 @@ const DATE_CODES = [
   'MSG_SCHOOL_YEAR_SEMESTER_OUT_OF_RANGE',
 ];
 
-// SCR-18 create / update a school year (UC-20). `year` = the year being edited, or null to create one.
+// SCR-65 create / update a school year (UC-20). `year` = the year being edited, or null to create one.
 export default function SchoolYearForm({ year, onSaved, onCancel }) {
   const editing = Boolean(year);
   const [form, setForm] = useState({

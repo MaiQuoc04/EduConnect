@@ -14,7 +14,7 @@ import {
 } from './groupLabels.js';
 import TeamCreatePanel from './TeamCreatePanel.jsx';
 
-// SCR-23 – UC-30 View Group Detail, overview tab: what the group is for, the class's other groups and "Team của lớp"
+// SCR-21 – UC-30 View Group Detail, overview tab: what the group is for, the class's other groups and "Team của lớp"
 // with UC-35 Create Team Chat (teachers, students and parents; never the School Manager) on the left; class
 // information and who the members are on the right.
 export default function GroupOverview() {

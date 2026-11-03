@@ -494,7 +494,7 @@ a.link-row .icon:last-child { color: var(--graphite-400); }
 .rules .count { color: var(--graphite-600); font-weight: 400; }
 .rules .count.all { color: var(--green); }
 
-/* ---------- school year & semester (SCR-18, FE-04) ---------- */
+/* ---------- school year & semester (SCR-65, FE-04) ---------- */
 .pill.blue { background: var(--blue-bg); color: var(--blue); }
 .push { margin-left: auto; }
 .year-grid { display: grid; grid-template-columns: minmax(0, 360px) minmax(0, 1fr); gap: 24px; align-items: start; }
@@ -542,7 +542,7 @@ a.link-row .icon:last-child { color: var(--graphite-400); }
 .year-form-dates { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
 .year-form-date-error { margin-top: -12px; }
 
-/* ---------- subject list (SCR-19, FE-04) ---------- */
+/* ---------- subject list (SCR-23, FE-04) ---------- */
 .subject-toolbar { display: grid; grid-template-columns: minmax(0, 1fr) 200px 200px; gap: 12px; padding: 16px; margin-bottom: 16px; }
 .subject-search .input { padding-left: 36px; }
 .subject-search-icon { position: absolute; left: 10px; top: 50%; transform: translateY(-50%); color: var(--graphite-500); pointer-events: none; }
@@ -623,7 +623,7 @@ a.link-row .icon:last-child { color: var(--graphite-400); }
 .track-help { margin-top: -8px; }
 .track-footer { padding-top: 16px; border-top: 1px solid var(--graphite-200); }
 
-/* ---------- classes & class groups (SCR-22, FE-04 UC-27/UC-28) ---------- */
+/* ---------- classes & class groups (SCR-20, FE-04 UC-27/UC-28) ---------- */
 .class-actions { display: flex; flex-wrap: wrap; gap: 8px; }
 .class-toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; padding: 12px 16px; margin-bottom: 16px; }
 .class-search { width: 240px; margin-left: auto; }
@@ -821,7 +821,7 @@ a.link-row .icon:last-child { color: var(--graphite-400); }
   .toast-stack { left: 16px; bottom: 16px; }
 }
 
-/* ---------- groups (SCR-22..24, FE-04 UC-29..31) ---------- */
+/* ---------- groups (SCR-20..22, FE-04 UC-29..31) ---------- */
 .chip-link { text-decoration: none; }
 .chip-link:hover { background: var(--ink-50); color: var(--ink-700); }
 .group-tabs { display: flex; gap: 4px; margin-bottom: 16px; border-bottom: 1px solid var(--graphite-200); }
@@ -875,7 +875,7 @@ a.link-row .icon:last-child { color: var(--graphite-400); }
   .team-form-grid, .team-filter { grid-template-columns: minmax(0, 1fr); }
 }
 
-/* ---------- my groups (SCR-22 for teachers, students, parents – FE-04 UC-29/UC-35) ---------- */
+/* ---------- my groups (SCR-20 for teachers, students, parents – FE-04 UC-29/UC-35) ---------- */
 .my-groups { display: grid; gap: 20px; }
 .my-groups.is-loading { opacity: 0.6; }
 .my-groups-header { align-items: flex-end; }
@@ -926,7 +926,7 @@ a.link-row .icon:last-child { color: var(--graphite-400); }
   .pill-tabs button { white-space: nowrap; }
 }
 
-/* ---------- group detail (SCR-23, FE-04 UC-30) ---------- */
+/* ---------- group detail (SCR-21, FE-04 UC-30) ---------- */
 .gd-header { display: flex; flex-wrap: wrap; align-items: flex-end; justify-content: space-between; gap: 16px; margin: 8px 0 16px; }
 .gd-header-main { flex: 1; min-width: 0; display: grid; gap: 8px; }
 .gd-eyebrow { display: flex; flex-wrap: wrap; gap: 6px; }
@@ -992,7 +992,7 @@ a.link-row .icon:last-child { color: var(--graphite-400); }
 .gd-pending-icon .icon { font-size: 28px; }
 .stamp-soft { display: inline-flex; align-items: center; gap: 6px; margin: 4px 0 8px; padding: 4px 12px; border-radius: 999px; background: var(--amber-bg); color: var(--amber); font-size: 13px; }
 
-/* My groups: one card per class (SCR-22). */
+/* My groups: one card per class (SCR-20). */
 .mc-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(420px, 100%), 1fr)); gap: 16px; align-items: start; }
 .mc-card { display: grid; gap: 14px; padding: 20px; }
 .mc-card.is-homeroom { box-shadow: inset 3px 0 0 var(--ink-600); }

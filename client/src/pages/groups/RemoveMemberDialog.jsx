@@ -2,7 +2,7 @@ import { api } from '../../api/client.js';
 import { useToast } from '../../context/ToastContext.jsx';
 import ConfirmDialog from './ConfirmDialog.jsx';
 
-// SCR-24 – UC-33 Remove Group Member: confirmation before setting left_at.
+// SCR-22 – UC-33 Remove Group Member: confirmation before setting left_at.
 export default function RemoveMemberDialog({ group, member, onCancel, onDone }) {
   const toast = useToast();
 

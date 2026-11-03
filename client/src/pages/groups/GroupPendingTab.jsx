@@ -10,7 +10,7 @@ const TEXT = {
   },
 };
 
-// SCR-23 placeholder tab until FE-05 Group Feed (owner: Anh) plugs its page into the "feed" route in App.jsx.
+// SCR-21 placeholder tab until FE-05 Group Feed (owner: Anh) plugs its page into the "feed" route in App.jsx.
 // Access follows the group: no content for the School Manager in class groups (canSeeContent) and no feed for
 // chat-only groups. Chat lives in the split view at /chat/:groupId (pages/chat/ChatPage.jsx).
 export default function GroupPendingTab({ kind }) {

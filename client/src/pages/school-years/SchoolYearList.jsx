@@ -2,7 +2,7 @@ import Icon from '../../components/Icon.jsx';
 import { formatDate } from '../../utils/format.js';
 import { YEAR_STATUS, yearLabel } from './schoolYearLabels.js';
 
-// SCR-18 left column: every school year, newest first (UC-20).
+// SCR-65 left column: every school year, newest first (UC-20).
 export default function SchoolYearList({ years, selectedId, onSelect, onCreate }) {
   return (
     <section className="card card-outline year-list">

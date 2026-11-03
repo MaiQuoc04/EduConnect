@@ -1,8 +1,9 @@
 import { pool, withTransaction } from '../../config/db.js';
 import { AppError, badRequest, notFound } from '../../utils/AppError.js';
+import { containsPattern, VI_TRANSLATE } from '../../utils/search.js';
 import { addClassGroupMembers, ensureClassGroups } from './classGroups.js';
 
-// FE-04 Class & Group Management – classes and their groups (owner: Khanh). Screen SCR-22 Group List
+// FE-04 Class & Group Management – classes and their groups (owner: Khanh). Screen SCR-20 Group List
 // ("Lớp & nhóm lớp"). UC-27 import lives in classImport.service.js and shares the helpers below.
 
 export const conflict = (code, message, details) => new AppError(409, code, message, details);
@@ -84,7 +85,7 @@ export async function enrollAndSyncGroups(client, { classId, className, studentI
   return added.length;
 }
 
-// One class of SCR-22 with its homeroom teacher, number of studying students and its groups.
+// One class of SCR-20 with its homeroom teacher, number of studying students and its groups.
 const CLASS_SQL = `
   SELECT c.class_id AS "classId", c.class_name AS "className", gl.grade_level_name AS "gradeLevel",
          c.grade_level_id AS "gradeLevelId", ct.track_id AS "trackId", ct.track_name AS "trackName",
@@ -105,7 +106,7 @@ const CLASS_SQL = `
   LEFT JOIN teachers t ON t.teacher_id = c.homeroom_teacher_id
   LEFT JOIN users u ON u.user_id = t.user_id`;
 
-// SCR-22, School Manager view of UC-29 View Group List: the classes of a school year with their three groups.
+// SCR-20, School Manager view of UC-29 View Group List: the classes of a school year with their three groups.
 // The School Manager sees member counts only, never feeds or chats (business-rules §2).
 export async function listClasses({ schoolYearId }) {
   const schoolYear = await resolveYear(schoolYearId);
@@ -132,25 +133,32 @@ const classFull = (current) =>
 const PICK_PAGE = 30;
 const MAX_PASTED_CODES = 200;
 
-// One student as the UC-28 pickers show it, seen from school year `$1`: their class this year (if any) and their
-// last class of an earlier year, which tells the grade they come from (promotion or repeat, business-rules §4).
+// The school year just before school year `yearParam` (the latest that starts earlier); NULL when there is none.
+export const previousYearSql = (yearParam) => `(
+  SELECT p.school_year_id FROM school_years p, school_years cur
+  WHERE cur.school_year_id = ${yearParam} AND p.start_date < cur.start_date
+  ORDER BY p.start_date DESC LIMIT 1)`;
+
+// Business-rules §4 "Who puts a student in a class": UC-27 / UC-28 only take students with no studying class this
+// school year and none in the previous school year (those go to the new year by promotion, UC-11, FE-02).
+// ASSUMPTION (proposed 03/11, to confirm with Quoc): only a STUDYING enrollment of the previous year counts, the same
+// students promotion takes; a student who was TRANSFERRED / DROPPED there can still be added here, or nobody could.
+
+// One student as the UC-28 pickers show it, seen from school year `$1`: their class this year and their class of
+// the previous school year, if any.
 const PICK_SQL = `
   SELECT s.student_id AS "studentId", s.student_code AS "studentCode", u.full_name AS "fullName", u.status,
          s.dob, s.gender,
          (SELECT COUNT(*) FROM student_parents sp WHERE sp.student_id = s.student_id) AS "parentCount",
-         prev.class_name AS "previousClassName", prev.grade AS "previousGrade",
+         prev.class_name AS "previousYearClassName",
          cur.class_name AS "currentClassName"
   FROM students s
   JOIN users u ON u.user_id = s.user_id
   LEFT JOIN LATERAL (
-    SELECT c.class_name, gl.grade_level_name AS grade
+    SELECT c.class_name
     FROM class_enrollments e
     JOIN classes c ON c.class_id = e.class_id AND c.deleted_at IS NULL
-    JOIN school_years sy ON sy.school_year_id = c.school_year_id
-    JOIN grade_levels gl ON gl.grade_level_id = c.grade_level_id
-    WHERE e.student_id = s.student_id
-      AND sy.start_date < (SELECT start_date FROM school_years WHERE school_year_id = $1)
-    ORDER BY sy.start_date DESC, e.enrolled_at DESC
+    WHERE e.student_id = s.student_id AND e.status = 'STUDYING' AND c.school_year_id = ${previousYearSql('$1')}
     LIMIT 1) prev ON TRUE
   LEFT JOIN LATERAL (
     SELECT c.class_name
@@ -159,36 +167,27 @@ const PICK_SQL = `
     WHERE e.student_id = s.student_id AND e.status = 'STUDYING' AND c.school_year_id = $1
     LIMIT 1) cur ON TRUE`;
 
-async function gradeName(db, gradeLevelId) {
-  const id = parseId(gradeLevelId, 'Grade not found.');
-  const { rows } = await db.query('SELECT grade_level_name AS "name" FROM grade_levels WHERE grade_level_id = $1', [id]);
-  if (!rows.length) throw notFound('NOT_FOUND', 'Grade not found.');
-  return rows[0].name;
-}
-
-// UC-28 helper ("Tìm từng học sinh"): students without a class in this school year, by name or code, a page at a
-// time. With a grade, only students who fit it: last class one grade below (promotion) or the same grade
-// (repeating a year), or no class yet (new to the school); `allGrades` lifts that filter.
-export async function eligibleStudents({ schoolYearId, q, gradeLevelId, allGrades, offset }) {
+// UC-28 helper ("Tìm từng học sinh"): the students a class of this year may take, by name or student code (case and
+// accent insensitive, utils/search.js), a page at a time.
+export async function eligibleStudents({ schoolYearId, q, offset }) {
   const schoolYear = await resolveYear(schoolYearId);
   if (!schoolYear) return { schoolYear: null, students: [], hasMore: false };
-  const search = typeof q === 'string' ? q.trim() : '';
-  const grade = gradeLevelId && allGrades !== 'true' ? Number(await gradeName(pool, gradeLevelId)) : null;
   const skip = Math.max(0, Number.parseInt(offset, 10) || 0);
+  const fold = (column) => `lower(translate(${column}, $3, $4))`;
   const { rows } = await pool.query(
     `SELECT * FROM (${PICK_SQL}) x
-     WHERE x."currentClassName" IS NULL
-       AND ($2 = '' OR x."fullName" ILIKE '%' || $2 || '%' OR x."studentCode" ILIKE '%' || $2 || '%')
-       AND ($3::int IS NULL OR x."previousGrade" IS NULL OR x."previousGrade"::int BETWEEN $3::int - 1 AND $3::int)
+     WHERE x."currentClassName" IS NULL AND x."previousYearClassName" IS NULL
+       AND ($2::text IS NULL OR ${fold('x."fullName"')} LIKE $2 OR ${fold('x."studentCode"')} LIKE $2)
      ORDER BY x."fullName", x."studentCode"
-     LIMIT ${PICK_PAGE + 1} OFFSET $4`,
-    [schoolYear.schoolYearId, search, grade, skip],
+     LIMIT ${PICK_PAGE + 1} OFFSET $5`,
+    [schoolYear.schoolYearId, containsPattern(q), VI_TRANSLATE.from, VI_TRANSLATE.to, skip],
   );
   return { schoolYear, students: rows.slice(0, PICK_PAGE), hasMore: rows.length > PICK_PAGE };
 }
 
 // UC-28 helper ("Dán danh sách mã"): matches pasted student codes, in the pasted order, without changing anything.
-// result: OK | ENROLLED (studies in a class this year: `student.currentClassName`) | NOT_FOUND | DUPLICATE.
+// result: OK | ENROLLED (studies in a class this year: `student.currentClassName`) | PREVIOUS_YEAR (studied in a
+// class the previous school year – promotion, `student.previousYearClassName`) | NOT_FOUND | DUPLICATE.
 export async function resolveStudents({ schoolYearId, codes }) {
   const year = await resolveYear(schoolYearId);
   if (!year) throw notFound('NOT_FOUND', 'School year not found.');
@@ -209,34 +208,10 @@ export async function resolveStudents({ schoolYearId, codes }) {
     seen.add(code);
     const student = byCode.get(code);
     if (!student) return { code, result: 'NOT_FOUND' };
-    return { code, result: student.currentClassName ? 'ENROLLED' : 'OK', student };
+    if (student.currentClassName) return { code, result: 'ENROLLED', student };
+    return { code, result: student.previousYearClassName ? 'PREVIOUS_YEAR' : 'OK', student };
   });
   return { items };
-}
-
-// UC-28 helper ("Từ lớp năm trước"): the studying students of a class (usually last year's), seen from the school
-// year being filled, so the ones already placed this year show their new class.
-export async function classStudents(classIdParam, { forSchoolYearId }) {
-  const classId = parseId(classIdParam, 'Class not found.');
-  const year = await resolveYear(forSchoolYearId);
-  if (!year) throw notFound('NOT_FOUND', 'School year not found.');
-  const { rows: cls } = await pool.query(
-    `SELECT c.class_id AS "classId", c.class_name AS "className", gl.grade_level_name AS "gradeLevel",
-            sy.year_name AS "yearName"
-     FROM classes c
-     JOIN grade_levels gl ON gl.grade_level_id = c.grade_level_id
-     JOIN school_years sy ON sy.school_year_id = c.school_year_id
-     WHERE c.class_id = $1 AND c.deleted_at IS NULL`,
-    [classId],
-  );
-  if (!cls.length) throw notFound('NOT_FOUND', 'Class not found.');
-  const { rows } = await pool.query(
-    `SELECT * FROM (${PICK_SQL}) x
-     WHERE x."studentId" IN (SELECT e.student_id FROM class_enrollments e WHERE e.class_id = $2 AND e.status = 'STUDYING')
-     ORDER BY x."fullName", x."studentCode"`,
-    [year.schoolYearId, classId],
-  );
-  return { class: cls[0], students: rows };
 }
 
 function parseStudentIds(raw) {
@@ -249,7 +224,8 @@ function parseStudentIds(raw) {
   return studentIds;
 }
 
-// Every student exists and none studies in a class of this school year yet.
+// Every student exists, none studies in a class of this school year yet and none studied in a class of the
+// previous school year (business-rules §4, see PICK_SQL).
 async function checkFreeStudents(client, schoolYearId, studentIds) {
   if (!studentIds.length) return;
   const { rows: found } = await client.query(
@@ -261,6 +237,21 @@ async function checkFreeStudents(client, schoolYearId, studentIds) {
   if (busy.size) {
     throw conflict('MSG_STUDENT_ALREADY_ENROLLED', 'Some students already study in another class this year.', {
       classes: [...new Set([...busy.values()].map((b) => b.className))],
+    });
+  }
+  const { rows: previous } = await client.query(
+    `SELECT u.full_name AS "fullName", c.class_name AS "className"
+     FROM class_enrollments e
+     JOIN classes c ON c.class_id = e.class_id AND c.deleted_at IS NULL
+     JOIN students s ON s.student_id = e.student_id
+     JOIN users u ON u.user_id = s.user_id
+     WHERE e.student_id = ANY($2::bigint[]) AND e.status = 'STUDYING' AND c.school_year_id = ${previousYearSql('$1')}
+     ORDER BY u.full_name`,
+    [schoolYearId, studentIds],
+  );
+  if (previous.length) {
+    throw conflict('MSG_STUDENT_PREVIOUS_YEAR', 'Some students studied in a class the previous school year; use promotion.', {
+      students: previous.map((p) => `${p.fullName} (${p.className})`),
     });
   }
 }

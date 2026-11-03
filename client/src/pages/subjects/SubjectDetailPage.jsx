@@ -18,7 +18,7 @@ function classStatus(teacher) {
   return { label: 'Đang dạy', pill: 'green' };
 }
 
-// SCR-20 Subject Detail – UC-23 View Subject Detail (School Manager): the subject, its class types and periods
+// SCR-24 Subject Detail – UC-23 View Subject Detail (School Manager): the subject, its class types and periods
 // per week for the chosen school year, the classes that study it with their teacher, and who can teach it.
 // The year lives in ?schoolYearId= so the list and this page stay on the same year.
 export default function SubjectDetailPage() {

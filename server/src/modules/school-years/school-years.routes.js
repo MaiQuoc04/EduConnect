@@ -3,7 +3,7 @@ import { requireAuth, requireRole } from '../../middlewares/auth.js';
 import * as ctrl from './school-years.controller.js';
 import * as semesterCtrl from './semesters.controller.js';
 
-// FE-04 Class & Group Management – school years and semesters (owner: Khanh). Screen SCR-18 School Year & Semester.
+// FE-04 Class & Group Management – school years and semesters (owner: Khanh). Screen SCR-65 School Year & Semester.
 // Only the School Manager manages them (permissions.md).
 const router = Router();
 

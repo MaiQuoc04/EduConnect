@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { api } from '../../api/client.js';
 import { errorText } from '../../messages.js';
 
-// GET /school-years (UC-20) for the list on SCR-18. reload() returns the fresh list.
+// GET /school-years (UC-20) for the list on SCR-65. reload() returns the fresh list.
 export function useSchoolYears() {
   const [state, setState] = useState({ loading: true, years: [], error: '' });
   const reload = useCallback(async () => {

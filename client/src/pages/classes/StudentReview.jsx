@@ -6,11 +6,11 @@ const names = (list) => list.map((s) => s.fullName).join(', ');
 
 // UC-28 last step: who will join the class, with what to double-check. Warnings never block the save; the class
 // size (agreed 29/10: at most 45) is also checked by the server.
-export default function StudentReview({ students, grade, currentCount = 0, onRemove }) {
+export default function StudentReview({ students, currentCount = 0, onRemove }) {
   const total = currentCount + students.length;
   const male = students.filter((s) => s.gender === 'MALE').length;
   const female = students.filter((s) => s.gender === 'FEMALE').length;
-  const w = reviewWarnings(students, grade);
+  const w = reviewWarnings(students);
   const sorted = [...students].sort((a, b) => a.fullName.localeCompare(b.fullName, 'vi'));
 
   return (
@@ -37,21 +37,13 @@ export default function StudentReview({ students, grade, currentCount = 0, onRem
         </div>
       </dl>
 
-      {(w.otherGrade.length > 0 || w.sameName.length > 0 || w.locked.length > 0 || w.noParent.length > 0) && (
+      {(w.sameName.length > 0 || w.locked.length > 0 || w.noParent.length > 0) && (
         <div className="import-rows warn">
           <p className="notice-title">
             <Icon name="warning" size="sm" />
             Cần xem lại trước khi lưu
           </p>
           <ul>
-            {w.otherGrade.length > 0 && (
-              <li>
-                <span>
-                  <strong>{w.otherGrade.length} học sinh có lớp cũ không liền kề khối {grade}:</strong>{' '}
-                  {w.otherGrade.map((s) => `${s.fullName} (lớp cũ ${s.previousClassName})`).join(', ')}
-                </span>
-              </li>
-            )}
             {w.sameName.map((group) => (
               <li key={group[0].studentId}>
                 <span>
@@ -102,7 +94,7 @@ export default function StudentReview({ students, grade, currentCount = 0, onRem
                 <tr key={s.studentId}>
                   <td className="num mono">{i + 1}</td>
                   <td>
-                    <StudentInfo student={s} grade={grade} />
+                    <StudentInfo student={s} />
                   </td>
                   <td>{GENDER_LABELS[s.gender] ?? '—'}</td>
                   <td className="mono">{formatDob(s.dob) || '—'}</td>

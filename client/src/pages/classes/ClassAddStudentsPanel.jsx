@@ -8,7 +8,7 @@ import { MAX_CLASS_SIZE } from './studentPick.js';
 import StudentPicker from './StudentPicker.jsx';
 import StudentReview from './StudentReview.jsx';
 
-// SCR-22 – UC-28, adding students to a class that already exists (e.g. joining mid-year): the same picker and check
+// SCR-20 – UC-28, adding students to a class that already exists (e.g. joining mid-year): the same picker and check
 // as creating a class. The new students and their linked parents join the class groups.
 // ASSUMPTION (agreed 29/10 with Khanh, to confirm with Quoc): part of UC-28 rather than a new UC.
 export default function ClassAddStudentsPanel({ schoolYear, cls, onCancel, onDone }) {
@@ -55,8 +55,6 @@ export default function ClassAddStudentsPanel({ schoolYear, cls, onCancel, onDon
       ) : step === 0 ? (
         <StudentPicker
           schoolYear={schoolYear}
-          grade={cls.gradeLevel}
-          gradeLevelId={cls.gradeLevelId}
           capacity={capacity}
           picked={picked}
           setPicked={setPicked}
@@ -64,7 +62,6 @@ export default function ClassAddStudentsPanel({ schoolYear, cls, onCancel, onDon
       ) : (
         <StudentReview
           students={picked}
-          grade={cls.gradeLevel}
           currentCount={cls.studentCount}
           onRemove={(s) => setPicked((list) => list.filter((x) => x.studentId !== s.studentId))}
         />

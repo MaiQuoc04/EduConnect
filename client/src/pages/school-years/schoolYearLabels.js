@@ -1,4 +1,4 @@
-// Labels shared by the SCR-18 pieces. The server sends the derived status of a year (MOM-05: found by date).
+// Labels shared by the SCR-65 pieces. The server sends the derived status of a year (MOM-05: found by date).
 export const YEAR_STATUS = {
   UPCOMING: { label: 'Sắp tới', pill: 'blue' },
   CURRENT: { label: 'Hiện tại', pill: 'green' },

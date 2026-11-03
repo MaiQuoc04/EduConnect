@@ -2,8 +2,8 @@ import { pool } from '../../config/db.js';
 import { notFound } from '../../utils/AppError.js';
 import { findGroupForUser, groupScopeSql } from './groupAccess.js';
 
-// FE-04 Class & Group Management – groups (owner: Khanh). UC-29 View Group List (SCR-22 / "Nhóm của tôi"),
-// UC-30 View Group Detail (SCR-23 header), UC-31 View Group Members (SCR-24). Read only.
+// FE-04 Class & Group Management – groups (owner: Khanh). UC-29 View Group List (SCR-20 / "Nhóm của tôi"),
+// UC-30 View Group Detail (SCR-21 header), UC-31 View Group Members (SCR-22). Read only.
 
 const GROUP_ORDER = `CASE g.group_type WHEN 'GENERAL' THEN 1 WHEN 'STUDENT' THEN 2 WHEN 'PARENT' THEN 3 ELSE 4 END`;
 const MEMBER_COUNT = `(SELECT COUNT(*) FROM group_members m WHERE m.group_id = g.group_id AND m.left_at IS NULL)`;
@@ -105,7 +105,8 @@ export async function memberRows(db, groupId) {
                     WHERE ur.user_id = u.user_id AND r.role_code = 'SCHOOL_MANAGER') AS "isManager",
             COALESCE((SELECT array_agg(DISTINCT s.subject_name ORDER BY s.subject_name)
                       FROM teaching_assignments ta JOIN subjects s ON s.subject_id = ta.subject_id
-                      WHERE ta.class_id = g.class_id AND ta.teacher_id = t.teacher_id AND ta.deleted_at IS NULL),
+                      WHERE ta.class_id = g.class_id AND ta.teacher_id = t.teacher_id AND ta.deleted_at IS NULL
+                        AND ta.end_date >= CURRENT_DATE),
                      '{}') AS "subjects",
             COALESCE((SELECT json_agg(json_build_object('fullName', cu.full_name,
                                                         'relationship', sp.relationship_type)

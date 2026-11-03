@@ -2,8 +2,8 @@ import { Router } from 'express';
 import { requireAuth, requireRole } from '../../middlewares/auth.js';
 import * as ctrl from './subjects.controller.js';
 
-// FE-04 Class & Group Management – subjects (owner: Khanh). Screens SCR-19 Subject List, SCR-20 Subject Detail,
-// SCR-21 Create / Update Subject.
+// FE-04 Class & Group Management – subjects (owner: Khanh). Screens SCR-23 Subject List, SCR-24 Subject Detail,
+// SCR-26 Create / Update Subject.
 // Only the School Manager manages subjects (permissions.md).
 const router = Router();
 

@@ -9,7 +9,7 @@ import { toSubjectCode } from './subjectText.js';
 const CODE_ERRORS = ['MSG_SUBJECT_CODE_FORMAT', 'MSG_SUBJECT_CODE_TAKEN', 'MSG_SUBJECT_CODE_LOCKED'];
 const NAME_ERRORS = ['MSG_SUBJECT_NAME_LENGTH', 'MSG_SUBJECT_NAME_TAKEN'];
 
-// SCR-21 Create / Update Subject – UC-24 Create Subject (/subjects/new) and UC-25 Update Subject
+// SCR-26 Create / Update Subject – UC-24 Create Subject (/subjects/new) and UC-25 Update Subject
 // (/subjects/:id/edit). A subject has only a code and a name; its class types and periods are set in
 // "Loại lớp & số tiết" (UC-26). Once the subject is used, the server locks the code (codeLocked).
 export default function SubjectFormPage() {

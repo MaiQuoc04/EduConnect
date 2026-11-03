@@ -2,8 +2,8 @@ import { Router } from 'express';
 import { requireAuth, requireRole } from '../../middlewares/auth.js';
 import * as ctrl from './groups.controller.js';
 
-// FE-04 Class & Group Management – groups and teams (owner: Khanh). Screens SCR-22 Group List, SCR-23 Group Detail,
-// SCR-24 Group Member List (UC-32..34 writes: School Manager or homeroom teacher, checked in the service).
+// FE-04 Class & Group Management – groups and teams (owner: Khanh). Screens SCR-20 Group List, SCR-21 Group Detail,
+// SCR-22 Group Member List (UC-32..34 writes: School Manager or homeroom teacher, checked in the service).
 // The System Admin is in no group (business-rules §2); the data scope of the other roles
 // is checked in groupAccess.js.
 const router = Router();

@@ -11,17 +11,13 @@ export async function gradeLevels(_req, res) {
 }
 
 export async function eligibleStudents(req, res) {
-  const { schoolYearId, q, gradeLevelId, allGrades, offset } = req.query;
-  res.json(await classService.eligibleStudents({ schoolYearId, q, gradeLevelId, allGrades, offset }));
+  const { schoolYearId, q, offset } = req.query;
+  res.json(await classService.eligibleStudents({ schoolYearId, q, offset }));
 }
 
 export async function resolveStudents(req, res) {
   const { schoolYearId, codes } = req.body ?? {};
   res.json(await classService.resolveStudents({ schoolYearId, codes }));
-}
-
-export async function classStudents(req, res) {
-  res.json(await classService.classStudents(req.params.id, { forSchoolYearId: req.query.forSchoolYearId }));
 }
 
 export async function addStudents(req, res) {

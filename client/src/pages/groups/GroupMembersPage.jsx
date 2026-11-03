@@ -28,7 +28,7 @@ const plain = (text) =>
     .replace(/đ/gi, 'd')
     .toLowerCase();
 
-// SCR-24 Group Member List – UC-31 View Group Members, with UC-32 Add Group Member, UC-33 Remove Group Member and
+// SCR-22 Group Member List – UC-31 View Group Members, with UC-32 Add Group Member, UC-33 Remove Group Member and
 // UC-34 Set Student Nickname for those allowed (the server checks again). Contacts and student codes only reach
 // teachers and the School Manager.
 export default function GroupMembersPage() {
@@ -108,7 +108,7 @@ export default function GroupMembersPage() {
     (manager || !m.kinds.some((k) => k === 'SUBJECT_TEACHER' || k === 'TEACHER'));
   const canName = (m) => canSetNickname && m.kinds.includes('STUDENT');
   const showActions = canManageMembers || canSetNickname;
-  // SCR-24 stat tiles: one bordered card per figure, the label coloured by role.
+  // SCR-22 stat tiles: one bordered card per figure, the label coloured by role.
   const stats = isClass
     ? [
         ['Tổng số thành viên', counts.total, ''],

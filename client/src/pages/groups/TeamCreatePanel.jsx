@@ -21,7 +21,7 @@ const plain = (text) =>
     .replace(/đ/gi, 'd')
     .toLowerCase();
 
-// SCR-23 "Tạo team" – UC-35 Create Team Chat: a chat-only team with people of one class. The creator is always a
+// SCR-21 "Tạo team" – UC-35 Create Team Chat: a chat-only team with people of one class. The creator is always a
 // member; at least two others; locked accounts cannot be picked. The server checks everything again.
 export default function TeamCreatePanel({ classId, onCancel, onCreated }) {
   const toast = useToast();

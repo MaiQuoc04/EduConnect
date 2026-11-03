@@ -2,27 +2,26 @@ import { useEffect, useRef, useState } from 'react';
 import { api } from '../../api/client.js';
 import Icon from '../../components/Icon.jsx';
 import { errorText } from '../../messages.js';
-import { yearLabel } from '../school-years/schoolYearLabels.js';
-import { cohortOf, fitsGrade, formatDob, GENDER_LABELS } from './studentPick.js';
+import { formatDob, GENDER_LABELS } from './studentPick.js';
 
 const TABS = [
-  { value: 'previous', icon: 'history_edu', label: 'Từ lớp năm trước' },
   { value: 'paste', icon: 'content_paste', label: 'Dán mã học sinh' },
   { value: 'search', icon: 'person_search', label: 'Tìm từng học sinh' },
 ];
 
 const PASTE_RESULTS = {
   ENROLLED: (item) => `Đang học lớp ${item.student.currentClassName}`,
+  PREVIOUS_YEAR: (item) => `Đã học lớp ${item.student.previousYearClassName} năm trước – xếp lớp bằng chức năng Lên lớp`,
   NOT_FOUND: () => 'Không có học sinh mã này. Cần tạo tài khoản trước.',
   DUPLICATE: () => 'Mã bị lặp trong danh sách, đã bỏ qua.',
 };
 
-// UC-28 student picker: three ways to fill a class from data the school already has – last year's class (grades 11
-// and 12), a pasted column of student codes (grade 10 lists), or one by one – into one basket. Only students
-// without a class this school year can be picked; `capacity` is how many more the class can take.
-// picked / setPicked: the basket ([student]), owned by the caller.
-export default function StudentPicker({ schoolYear, grade, gradeLevelId, capacity, picked, setPicked }) {
-  const [tab, setTab] = useState(grade === '10' ? 'paste' : 'previous');
+// UC-28 student picker: a pasted column of student codes or a search, into one basket. Only students the class may
+// take are offered (business-rules §4 "Who puts a student in a class"): no studying class this school year and none
+// in the previous school year – those go to the new year by promotion (UC-11, FE-02). `capacity` is how many more
+// the class can take. picked / setPicked: the basket ([student]), owned by the caller.
+export default function StudentPicker({ schoolYear, capacity, picked, setPicked }) {
+  const [tab, setTab] = useState('paste');
   const [note, setNote] = useState('');
   const pickedIds = new Set(picked.map((s) => s.studentId));
   const free = capacity - picked.length;
@@ -33,7 +32,7 @@ export default function StudentPicker({ schoolYear, grade, gradeLevelId, capacit
   function addMany(list) {
     const now = latest.current;
     const ids = new Set(now.map((s) => s.studentId));
-    const fresh = list.filter((s) => !s.currentClassName && !ids.has(s.studentId));
+    const fresh = list.filter((s) => !s.currentClassName && !s.previousYearClassName && !ids.has(s.studentId));
     const taken = fresh.slice(0, Math.max(0, capacity - now.length));
     if (taken.length) {
       latest.current = [...now, ...taken];
@@ -49,7 +48,7 @@ export default function StudentPicker({ schoolYear, grade, gradeLevelId, capacit
     else if (free > 0) setPicked((cur) => [...cur, s]);
   }
 
-  const rowProps = { pickedIds, toggle, full: free <= 0, grade };
+  const rowProps = { pickedIds, toggle, full: free <= 0 };
 
   return (
     <div className="pick-layout">
@@ -71,119 +70,20 @@ export default function StudentPicker({ schoolYear, grade, gradeLevelId, capacit
             </button>
           ))}
         </div>
+        <p className="caption muted">
+          Chỉ thêm học sinh mới, chuyển đến hoặc quay lại sau một năm. Học sinh đã học ở năm học trước được xếp lớp
+          bằng chức năng Lên lớp.
+        </p>
         {note && (
           <p className="pick-note caption" role="status">
             <Icon name="check_circle" size="sm" />
             {note}
           </p>
         )}
-        {tab === 'previous' && (
-          <PreviousTab schoolYear={schoolYear} grade={grade} onLoaded={(list) => setNote(addMany(list))} {...rowProps} />
-        )}
         {tab === 'paste' && <PasteTab schoolYear={schoolYear} onResolved={(list) => setNote(addMany(list))} {...rowProps} />}
-        {tab === 'search' && <SearchTab schoolYear={schoolYear} gradeLevelId={gradeLevelId} {...rowProps} />}
+        {tab === 'search' && <SearchTab schoolYear={schoolYear} {...rowProps} />}
       </div>
       <Basket picked={picked} capacity={capacity} onRemove={toggle} onClear={() => setPicked([])} />
-    </div>
-  );
-}
-
-// Last year's classes one grade below; choosing one selects all its students who have no class yet.
-function PreviousTab({ schoolYear, grade, onLoaded, ...rowProps }) {
-  const [source, setSource] = useState({ loading: true, year: null, classes: [] });
-  const [chosen, setChosen] = useState(null); // { class, students } | { error }
-  const [loadingClass, setLoadingClass] = useState(null);
-  const fromGrade = String(Number(grade) - 1);
-
-  useEffect(() => {
-    if (grade === '10') return undefined;
-    let alive = true;
-    (async () => {
-      try {
-        const { data: years } = await api.get('/school-years');
-        const current = years.find((y) => y.schoolYearId === schoolYear.schoolYearId);
-        const prev = years.find((y) => current && y.startDate < current.startDate); // the list is newest first
-        if (!prev) return alive && setSource({ loading: false, year: null, classes: [] });
-        const { data } = await api.get('/classes', { params: { schoolYearId: prev.schoolYearId } });
-        if (alive) setSource({ loading: false, year: prev, classes: data.classes.filter((c) => c.gradeLevel === fromGrade) });
-      } catch {
-        if (alive) setSource({ loading: false, year: null, classes: [] });
-      }
-    })();
-    return () => {
-      alive = false;
-    };
-  }, [grade, fromGrade, schoolYear.schoolYearId]);
-
-  async function choose(c) {
-    setLoadingClass(c.classId);
-    try {
-      const { data } = await api.get(`/classes/${c.classId}/students`, { params: { forSchoolYearId: schoolYear.schoolYearId } });
-      setChosen(data);
-      onLoaded(data.students);
-    } catch (err) {
-      setChosen({ error: errorText(err) });
-    } finally {
-      setLoadingClass(null);
-    }
-  }
-
-  if (grade === '10') {
-    return (
-      <div className="notice">
-        <Icon name="info" />
-        <p>
-          Khối 10 không có lớp năm trước để lên lớp. Hãy dùng “Dán mã học sinh” với danh sách trúng tuyển; học sinh lưu
-          ban khối 10 tìm ở “Tìm từng học sinh”.
-        </p>
-      </div>
-    );
-  }
-  if (source.loading) return <p className="loading">Đang tải lớp năm trước…</p>;
-  if (!source.year || !source.classes.length) {
-    return (
-      <div className="notice">
-        <Icon name="info" />
-        <p>
-          {source.year
-            ? `Năm học ${yearLabel(source.year.yearName)} không có lớp khối ${fromGrade}.`
-            : 'Chưa có dữ liệu năm học trước.'}{' '}
-          Hãy dùng “Dán mã học sinh” hoặc “Tìm từng học sinh”.
-        </p>
-      </div>
-    );
-  }
-
-  return (
-    <div className="pick-pane">
-      <p className="caption muted">
-        Chọn lớp khối {fromGrade} của năm học {yearLabel(source.year.yearName)}. Học sinh chưa có lớp năm nay được chọn
-        sẵn; bỏ chọn các em lưu ban hoặc chuyển đi.
-      </p>
-      <div className="pick-sources">
-        {source.classes.map((c) => (
-          <button
-            key={c.classId}
-            type="button"
-            className={`pick-source${chosen?.class?.classId === c.classId ? ' is-on' : ''}`}
-            onClick={() => choose(c)}
-            disabled={loadingClass !== null}
-            aria-pressed={chosen?.class?.classId === c.classId}
-          >
-            <strong>{c.className}</strong>
-            <span className="caption muted">{loadingClass === c.classId ? 'Đang tải…' : `${c.studentCount} học sinh`}</span>
-          </button>
-        ))}
-      </div>
-      {chosen?.error && <p className="form-error">{chosen.error}</p>}
-      {chosen?.students && (
-        <StudentList
-          title={`Lớp ${chosen.class.className} · ${yearLabel(chosen.class.yearName)}`}
-          students={chosen.students}
-          empty="Lớp này không có học sinh đang học."
-          {...rowProps}
-        />
-      )}
     </div>
   );
 }
@@ -222,7 +122,7 @@ function PasteTab({ schoolYear, onResolved, ...rowProps }) {
           rows={5}
           value={text}
           onChange={(e) => setText(e.target.value)}
-          placeholder={'Dán cột “Mã học sinh” từ Excel, mỗi dòng một mã\nHS260001\nHS260002'}
+          placeholder={'Dán cột “Mã học sinh” từ Excel, mỗi dòng một mã\nHS0001\nHS0002'}
         />
         <span className="field-help">Có thể ngăn cách bằng xuống dòng, dấu phẩy hoặc khoảng trắng. Tối đa 200 mã mỗi lần.</span>
       </div>
@@ -262,19 +162,18 @@ async function searchStudents(filters, offset) {
   return data;
 }
 
-// One by one: students without a class this year, by default only those who fit the class's grade.
-function SearchTab({ schoolYear, gradeLevelId, ...rowProps }) {
+// One by one: students the class may take (see StudentPicker), by name or code.
+function SearchTab({ schoolYear, ...rowProps }) {
   const [query, setQuery] = useState('');
-  const [allGrades, setAllGrades] = useState(false);
   const [found, setFound] = useState({ loading: true, students: [], hasMore: false });
 
-  const filters = { schoolYearId: schoolYear.schoolYearId, q: query.trim(), gradeLevelId, allGrades };
+  const filters = { schoolYearId: schoolYear.schoolYearId, q: query.trim() };
 
   useEffect(() => {
     let alive = true;
     const timer = setTimeout(() => {
       setFound((f) => ({ ...f, loading: true }));
-      searchStudents({ schoolYearId: schoolYear.schoolYearId, q: query.trim(), gradeLevelId, allGrades }, 0)
+      searchStudents({ schoolYearId: schoolYear.schoolYearId, q: query.trim() }, 0)
         .then((data) => alive && setFound({ loading: false, students: data.students, hasMore: data.hasMore }))
         .catch(() => alive && setFound({ loading: false, students: [], hasMore: false }));
     }, 300);
@@ -282,7 +181,7 @@ function SearchTab({ schoolYear, gradeLevelId, ...rowProps }) {
       alive = false;
       clearTimeout(timer);
     };
-  }, [query, allGrades, gradeLevelId, schoolYear.schoolYearId]);
+  }, [query, schoolYear.schoolYearId]);
 
   function more() {
     setFound((f) => ({ ...f, loading: true }));
@@ -293,27 +192,21 @@ function SearchTab({ schoolYear, gradeLevelId, ...rowProps }) {
 
   return (
     <div className="pick-pane">
-      <div className="pick-search">
-        <div className="input-wrap subject-search">
-          <Icon name="search" size="sm" className="subject-search-icon" />
-          <input
-            className="input"
-            type="search"
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            placeholder="Tìm theo họ tên hoặc mã học sinh…"
-            aria-label="Tìm học sinh"
-          />
-        </div>
-        <label className="pick-toggle caption">
-          <input type="checkbox" checked={allGrades} onChange={(e) => setAllGrades(e.target.checked)} />
-          Hiện cả học sinh khối khác
-        </label>
+      <div className="input-wrap subject-search">
+        <Icon name="search" size="sm" className="subject-search-icon" />
+        <input
+          className="input"
+          type="search"
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+          placeholder="Tìm theo họ tên hoặc mã học sinh…"
+          aria-label="Tìm học sinh"
+        />
       </div>
       <StudentList
         students={found.students}
         loading={found.loading}
-        empty={found.loading ? 'Đang tìm…' : 'Không có học sinh chưa có lớp phù hợp.'}
+        empty={found.loading ? 'Đang tìm…' : 'Không có học sinh phù hợp để thêm vào lớp.'}
         {...rowProps}
       />
       {found.hasMore && (
@@ -325,8 +218,8 @@ function SearchTab({ schoolYear, gradeLevelId, ...rowProps }) {
   );
 }
 
-// Checkbox rows with what tells two students apart: code, cohort, date of birth, gender and last class.
-function StudentList({ title, students, empty, loading, pickedIds, toggle, full, grade }) {
+// Checkbox rows with what tells two students apart: code, date of birth and gender.
+function StudentList({ title, students, empty, loading, pickedIds, toggle, full }) {
   if (!students.length) return <p className="muted caption">{empty}</p>;
   return (
     <div className={`class-pick pick-list${loading ? ' is-loading' : ''}`}>
@@ -340,7 +233,7 @@ function StudentList({ title, students, empty, loading, pickedIds, toggle, full,
             <li key={s.studentId}>
               <label className={disabled ? 'is-disabled' : undefined}>
                 <input type="checkbox" checked={checked} disabled={disabled} onChange={() => toggle(s)} />
-                <StudentInfo student={s} grade={grade} />
+                <StudentInfo student={s} />
                 {placed && <span className="pill">Đã ở lớp {s.currentClassName}</span>}
               </label>
             </li>
@@ -351,21 +244,17 @@ function StudentList({ title, students, empty, loading, pickedIds, toggle, full,
   );
 }
 
-export function StudentInfo({ student: s, grade }) {
-  const cohort = cohortOf(s.studentCode);
+export function StudentInfo({ student: s }) {
   return (
     <span className="pick-info">
       <span className="pick-name">
         {s.fullName}
         {s.status === 'LOCKED' && <span className="pill red">Đã khoá</span>}
-        {grade && !fitsGrade(s, grade) && <span className="pill amber">Khác khối</span>}
       </span>
       <span className="caption muted">
         <span className="mono">{s.studentCode}</span>
-        {cohort && ` · Khóa ${cohort}`}
         {s.dob && ` · ${formatDob(s.dob)}`}
         {GENDER_LABELS[s.gender] && ` · ${GENDER_LABELS[s.gender]}`}
-        {s.previousClassName ? ` · Lớp cũ ${s.previousClassName}` : ' · Chưa có lớp cũ'}
       </span>
     </span>
   );

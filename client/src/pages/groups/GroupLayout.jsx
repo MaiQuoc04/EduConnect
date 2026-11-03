@@ -9,7 +9,7 @@ import { yearLabel } from '../school-years/schoolYearLabels.js';
 import ConfirmDialog from './ConfirmDialog.jsx';
 import { chatBackFromGroup, GROUP_TYPE_ICONS, GROUP_TYPE_LABELS, groupHasFeed } from './groupLabels.js';
 
-// SCR-23 Group Detail – UC-30 View Group Detail: the group (or team, UC-35) header and its tabs. The overview and members tabs are
+// SCR-21 Group Detail – UC-30 View Group Detail: the group (or team, UC-35) header and its tabs. The overview and members tabs are
 // FE-04; FE-05 (Group Feed) and FE-06 (Messaging) add their tabs here as nested routes, shown only when the group's
 // `canSeeContent` is true (never for the School Manager in class groups). Teams can be left from here; the three
 // class groups cannot.

@@ -7,7 +7,7 @@ import { yearLabel } from '../school-years/schoolYearLabels.js';
 import { fold, periodsText } from './subjectText.js';
 import { trackLabel } from '../class-tracks/trackLabel.js';
 
-// SCR-19 Subject List – UC-22 View Subject List (School Manager). Figures (class types, periods, classes) are for
+// SCR-23 Subject List – UC-22 View Subject List (School Manager). Figures (class types, periods, classes) are for
 // the chosen school year; search and filters run here because a school has only ~15 subjects, so no paging.
 export default function SubjectListPage() {
   const navigate = useNavigate();

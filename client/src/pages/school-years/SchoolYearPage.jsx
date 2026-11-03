@@ -8,7 +8,7 @@ import SchoolYearList from './SchoolYearList.jsx';
 import { yearLabel } from './schoolYearLabels.js';
 import { useSchoolYear, useSchoolYears } from './useSchoolYears.js';
 
-// SCR-18 School Year & Semester – UC-20 Manage School Years (School Manager).
+// SCR-65 School Year & Semester – UC-20 Manage School Years (School Manager).
 // The selected year lives in ?id= so a reload keeps it; without it the current year (or the newest) is shown.
 export default function SchoolYearPage() {
   const toast = useToast();

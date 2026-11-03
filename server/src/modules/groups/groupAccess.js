@@ -30,7 +30,8 @@ export function groupScopeSql(user, role) {
                         WHERE sc.class_id = g.class_id AND st.user_id = ${user})
              OR (g.group_type IN ('GENERAL', 'TEAM_CHAT') AND EXISTS (
                    SELECT 1 FROM teaching_assignments sa JOIN teachers st ON st.teacher_id = sa.teacher_id
-                   WHERE sa.class_id = g.class_id AND sa.deleted_at IS NULL AND st.user_id = ${user}))))
+                   WHERE sa.class_id = g.class_id AND sa.deleted_at IS NULL AND sa.end_date >= CURRENT_DATE
+                     AND st.user_id = ${user}))))
           OR (${role} = 'STUDENT' AND g.group_type IN ('GENERAL', 'STUDENT', 'TEAM_CHAT') AND EXISTS (
                 SELECT 1 FROM class_enrollments se JOIN students ss ON ss.student_id = se.student_id
                 WHERE se.class_id = g.class_id AND ss.user_id = ${user}))

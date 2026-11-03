@@ -4,7 +4,7 @@ import { classPeopleSql, GROUP_RULE_SQL } from '../classes/classGroups.js';
 import { findGroupForUser } from './groupAccess.js';
 import { byRankThenName, memberRows } from './groups.service.js';
 
-// FE-04 Class & Group Management – managing class group members (owner: Khanh). Screen SCR-24 Group Member List.
+// FE-04 Class & Group Management – managing class group members (owner: Khanh). Screen SCR-22 Group Member List.
 // UC-32 Add Group Member, UC-33 Remove Group Member (School Manager or the class's homeroom teacher, permissions
 // note 5) and UC-34 Set Student Nickname (homeroom teacher only). Class groups of an open school year only.
 

@@ -1,4 +1,4 @@
-// Text helpers shared by the subject screens (SCR-19, SCR-20, SCR-21).
+// Text helpers shared by the subject screens (SCR-23, SCR-24, SCR-26).
 
 // Lower case without Vietnamese accents, so "hoa" finds "Hoá học" and "dia" finds "Địa lí".
 export const fold = (text) =>

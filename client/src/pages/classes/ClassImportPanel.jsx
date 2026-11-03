@@ -5,7 +5,7 @@ import { useToast } from '../../context/ToastContext.jsx';
 import { errorText, importRowText } from '../../messages.js';
 import { yearLabel } from '../school-years/schoolYearLabels.js';
 
-// SCR-22 – UC-27 Import Class List. Choose a file → the server checks it without writing (preview) → "Nhập" sends
+// SCR-20 – UC-27 Import Class List. Choose a file → the server checks it without writing (preview) → "Nhập" sends
 // the same file again; the server checks again and writes every row or none.
 export default function ClassImportPanel({ schoolYear, onCancel, onDone }) {
   const toast = useToast();

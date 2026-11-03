@@ -1,7 +1,7 @@
 import { Link } from 'react-router-dom';
 import { GROUP_TYPE_LABELS } from '../groups/groupLabels.js';
 
-// SCR-22 table view (UC-29): every shown class on one row, for scanning many classes at once.
+// SCR-20 table view (UC-29): every shown class on one row, for scanning many classes at once.
 export default function ClassTable({ classes, loading }) {
   return (
     <div className={`card card-outline class-table${loading ? ' is-loading' : ''}`}>

@@ -5,7 +5,7 @@ import { GROUP_TYPE_ICONS, GROUP_TYPE_LABELS } from '../groups/groupLabels.js';
 
 const GROUP_ORDER = ['GENERAL', 'STUDENT', 'PARENT'];
 
-// One class on SCR-22 (UC-29): homeroom teacher, head count and its three groups. Each group row opens the group's
+// One class on SCR-20 (UC-29): homeroom teacher, head count and its three groups. Each group row opens the group's
 // members – the School Manager never opens a class feed or chat from here. `onAddStudents` (UC-28) is set while the
 // school year is open.
 export default function ClassCard({ cls, onAddStudents }) {

@@ -8,7 +8,7 @@ import { formatDate } from '../../utils/format.js';
 import { MEMBER_KIND_LABELS } from './groupLabels.js';
 import { memberSubline } from './memberText.js';
 
-// SCR-24 – UC-32 Add Group Member: people of the same class who belong in this group but are not in it now (never
+// SCR-22 – UC-32 Add Group Member: people of the same class who belong in this group but are not in it now (never
 // added, or removed earlier). Nobody from outside the class can be added here.
 export default function AddMembersPanel({ group, onCancel, onDone }) {
   const toast = useToast();

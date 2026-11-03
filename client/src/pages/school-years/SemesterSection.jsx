@@ -16,7 +16,7 @@ function suggest(year) {
   ];
 }
 
-// SCR-18 "Các học kỳ trong năm" (UC-21): create the two semesters, then one card per semester.
+// SCR-65 "Các học kỳ trong năm" (UC-21): create the two semesters, then one card per semester.
 export default function SemesterSection({ year, onChanged }) {
   const toast = useToast();
   const [creating, setCreating] = useState(false);

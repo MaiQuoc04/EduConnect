@@ -9,10 +9,11 @@ import {
   lockOpenYear,
   MAX_CLASS_SIZE,
   normalizeClassName,
+  previousYearSql,
   resolveYear,
 } from './classes.service.js';
 
-// UC-27 Import Class List (SCR-22). One row per student: class name, grade, class type, student code. Accounts
+// UC-27 Import Class List (SCR-20). One row per student: class name, grade, class type, student code. Accounts
 // must already exist (business-rules §3). Two steps: preview (no write) and import (the same file again, checked
 // again, all rows or nothing). New classes get their three groups (business-rules §4); a class that already exists
 // in the year only gets the new students (agreed 27/10).
@@ -86,6 +87,16 @@ async function analyze(db, year, rows) {
      WHERE c.school_year_id = $1 AND e.student_id = ANY($2::bigint[])`,
     [year.schoolYearId, studentIds],
   );
+  // Students who studied in a class of the previous school year go by promotion (UC-11): studentId -> class name.
+  const { rows: previous } = await db.query(
+    `SELECT e.student_id AS "studentId", c.class_name AS "className"
+     FROM class_enrollments e
+     JOIN classes c ON c.class_id = e.class_id AND c.deleted_at IS NULL
+     WHERE e.student_id = ANY($2::bigint[]) AND e.status = 'STUDYING' AND c.school_year_id = ${previousYearSql('$1')}`,
+    [year.schoolYearId, studentIds],
+  );
+  const previousYear = new Map(previous.map((p) => [p.studentId, p.className]));
+
   const enrollments = new Map();
   enrolled.forEach((e) => enrollments.set(e.studentId, [...(enrollments.get(e.studentId) ?? []), e]));
 
@@ -160,6 +171,10 @@ async function analyze(db, year, rows) {
     );
     if (elsewhere) {
       add(errors, row, 'ROW_STUDENT_IN_OTHER_CLASS', elsewhere.className);
+      continue;
+    }
+    if (!here && previousYear.has(student.studentId)) {
+      add(errors, row, 'ROW_STUDENT_PREVIOUS_YEAR', previousYear.get(student.studentId));
       continue;
     }
     if (here && here.status !== 'STUDYING') {

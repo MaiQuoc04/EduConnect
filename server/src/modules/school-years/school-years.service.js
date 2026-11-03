@@ -65,7 +65,7 @@ async function assertDates(client, { name, firstYear, startDate, endDate }, excl
   if (check.overlaps) throw conflict('MSG_SCHOOL_YEAR_OVERLAP', 'The dates overlap another school year.');
 }
 
-// UC-20: every school year, newest first, for the list on SCR-18.
+// UC-20: every school year, newest first, for the list on SCR-65.
 export async function listSchoolYears() {
   const { rows } = await pool.query(
     `SELECT sy.school_year_id AS "schoolYearId", sy.year_name AS "yearName",

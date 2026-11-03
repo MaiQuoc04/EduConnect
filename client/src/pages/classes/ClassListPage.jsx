@@ -15,7 +15,7 @@ const GRADES = ['10', '11', '12'];
 // Search ignores spaces and case: "10 a1" finds "10A1", "thu hà" finds "Phạm Thu Hà".
 const compact = (text) => String(text ?? '').replace(/\s+/g, '').toLowerCase();
 
-// SCR-22 Group List ("Lớp & nhóm lớp"), School Manager view – UC-29 View Group List (every class group of a year
+// SCR-20 Group List ("Lớp & nhóm lớp"), School Manager view – UC-29 View Group List (every class group of a year
 // and the school-wide teacher group), UC-27 Import Class List and UC-28 Create Class Group. The School Manager opens
 // a group's information and members only, never class feeds or chats.
 // Classes are shown as cards grouped by grade (default) or as one table (?view=table) for a quick scan.

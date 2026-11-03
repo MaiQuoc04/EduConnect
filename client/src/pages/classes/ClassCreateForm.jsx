@@ -20,9 +20,9 @@ function nameCode(name, gradeName, takenNames) {
   return null;
 }
 
-// SCR-22 – UC-28 Create Class Group, as three steps: the class, its students, a check before saving. Students come
-// from last year's class, a pasted list of codes or a search limited to the class's grade, instead of one list of
-// the whole school. Creates the class with its three groups; at most 45 students (agreed 29/10).
+// SCR-20 – UC-28 Create Class Group, as three steps: the class, its students, a check before saving. Students come
+// from a pasted list of codes or a search, and only those the class may take (business-rules §4 "Who puts a student
+// in a class"; previous-year students go by promotion, UC-11). Creates the class with its three groups; at most 45 students (agreed 29/10).
 export default function ClassCreateForm({ schoolYear, takenNames = [], onCancel, onDone }) {
   const toast = useToast();
   const [step, setStep] = useState(0);
@@ -193,8 +193,6 @@ export default function ClassCreateForm({ schoolYear, takenNames = [], onCancel,
       {step === 1 && (
         <StudentPicker
           schoolYear={schoolYear}
-          grade={grade?.gradeLevelName}
-          gradeLevelId={form.gradeLevelId}
           capacity={MAX_CLASS_SIZE}
           picked={picked}
           setPicked={setPicked}
@@ -205,7 +203,6 @@ export default function ClassCreateForm({ schoolYear, takenNames = [], onCancel,
         <>
           <StudentReview
             students={picked}
-            grade={grade?.gradeLevelName}
             onRemove={(s) => setPicked((list) => list.filter((x) => x.studentId !== s.studentId))}
           />
           <div className="notice ink">
