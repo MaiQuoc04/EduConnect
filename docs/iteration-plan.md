@@ -71,7 +71,7 @@ Last updated: 03/11/2026.
 - **Follow-ups owed:**
   - FE-13 (Linh): pull `develop` and continue from it; do not run SQL patches on the shared DB before the lead
     approves them.
-  - FE-02 (Anh), before the merge (doc "FE-02 – Việc cần làm trước khi merge"):
+  - FE-02 (Anh), before the merge:
     - Merge `develop` into the branch (conflicts only in `App.jsx`, `navigation.js`, `routes.js`: keep both sides).
     - Build UC-14 Import Parent–Student Links (It1).
     - UC-09: SM edits the student's address (`users.address`).
@@ -83,7 +83,7 @@ Last updated: 03/11/2026.
       Transfer & Promotion" → SCR-11. Delete the empty root `package-lock.json`; keep `server/scripts/dev-local-db.js`.
     - After FE-04 is merged: switch the promotion screen to FE-04's school year / class endpoints and remove the
       temporary ones.
-  - FE-04 (Khanh), before the merge (doc "FE-04 – Việc cần làm trước khi merge"):
+  - FE-04 (Khanh), before the merge:
     - Merge `develop` into the branch; for `docs/` and `database/` keep develop's version (the decisions are
       written there); keep both sides in `App.jsx`, `navigation.js`, `messages.js`, `routes.js`; regenerate the seed.
     - Screen numbers per `screens.md`: SCR-18 → SCR-65, SCR-19 → SCR-23, SCR-20 → SCR-24, SCR-21 → SCR-26,
@@ -97,6 +97,23 @@ Last updated: 03/11/2026.
       students with no enrollment in the previous school year and none this year (§4 "Who puts a student in a
       class"); an import row with a previous-year student is refused with a message to use promotion (UC-11).
     - Search: use `utils/search.js`.
+    - Test on a local DB (`dev-local-db.js`) or inside a transaction that is rolled back – never leave test data in
+      the shared DB – and send the results with the hand-over:
+      - Group sync: (1) new homeroom teacher who does not teach the class → joins the 3 groups; previous homeroom
+        teacher who does not teach it → leaves the 3 groups and the class's teams. (2) New homeroom teacher who
+        already teaches a subject there → only joins STUDENT and PARENT, no duplicate row. (3) Previous homeroom
+        teacher who still teaches a subject → leaves STUDENT and PARENT, keeps GENERAL. (4) Teacher without an
+        assignment who is a parent of a student of the class → keeps GENERAL and PARENT. (5) Subject assignment
+        removed (not homeroom) → leaves GENERAL and the class's teams. (6) Teacher assigned again → old row back
+        (`left_at` cleared). (7) Second call → nothing changes. (8) Student removed with UC-33 → not added back.
+        (9) Class of an ended school year → nothing changes.
+      - Who may join a class: new student (never in a class) → can be added when creating a class, to an existing
+        class and by import; student of 10A1 last year not promoted yet → not offered, import row refused with
+        "use promotion"; student studying in a class this year → refused; student away all of last year → can be
+        added.
+    - Hand-over checklist: no conflict markers; seed regenerated; screen numbers right; server starts; `npm run build`
+      in `client/` passes; test results sent; any new `// ASSUMPTION:` listed in the message to the lead; pushed to
+      `feature/fe-04-class-group-management`.
     - FE-14 (It2) uses UC-104..UC-106; a parent's address is `users.address`, occupation stays `parents.occupation`.
   - Group sync for FE-03 saves (after FE-04 is merged): business rules §4 "Class group membership follows the
     class" – `server/src/modules/teacher/homeroom.service.js` (UC-19) and `teaching.service.js` (UC-18) must call
