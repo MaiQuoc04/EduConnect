@@ -12,7 +12,7 @@ const CURRENT_YEAR_SQL = `(SELECT school_year_id FROM school_years
                           WHERE start_date <= CURRENT_DATE
                           ORDER BY start_date DESC LIMIT 1)`;
 
-// ── SCR-13 list ─────────────────────────────────────────────────────────────
+// ── SCR-14 list ─────────────────────────────────────────────────────────────
 
 // Builds the WHERE clause of the list. Every user value goes in `params`; `add(v)` returns its "$n" placeholder.
 function listFilters({ search, subject, homeroom, status }) {
@@ -138,7 +138,7 @@ export async function findCurrentLoadByTeacherIds(teacherIds, db = pool) {
   return rows;
 }
 
-// ── SCR-14 detail ───────────────────────────────────────────────────────────
+// ── SCR-15 detail ───────────────────────────────────────────────────────────
 
 export async function findTeacherProfileById(teacherId, db = pool) {
   const { rows } = await db.query(
@@ -247,7 +247,7 @@ export async function findWeekSchedule(teacherId, week, db = pool) {
   return rows;
 }
 
-// ── SCR-15 update (inside a transaction: pass `conn`) ───────────────────────
+// ── SCR-17 update (inside a transaction: pass `conn`) ───────────────────────
 
 export async function lockTeacherForUpdate(teacherId, db) {
   const { rows } = await db.query(
@@ -296,7 +296,7 @@ export async function replaceTeacherSubjects(teacherId, subjectIds, db) {
   );
 }
 
-// ── SCR-16 / SCR-17 option lists ────────────────────────────────────────────
+// ── SCR-18 / SCR-19 option lists ────────────────────────────────────────────
 
 // All teachers with their subjects as one text ("Toán học, Vật lý") – homeroom picker.
 export async function findAllTeachersWithSubjectNames(db = pool) {

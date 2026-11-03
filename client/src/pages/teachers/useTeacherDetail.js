@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { getTeacher } from '../../api/teachers.js';
 import { errorText } from '../../messages.js';
 
-// SCR-14: loads one teacher; `week` (YYYY-MM-DD, any day of the week) selects the schedule week.
+// SCR-15: loads one teacher; `week` (YYYY-MM-DD, any day of the week) selects the schedule week.
 export function useTeacherDetail(teacherId) {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);

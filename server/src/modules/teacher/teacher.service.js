@@ -1,11 +1,11 @@
-// FE-03 (Dung) – teachers: SCR-13 list (UC-15), SCR-14 detail (UC-16), SCR-15 update (UC-17).
+// FE-03 (Dung) – teachers: SCR-14 list (UC-15), SCR-15 detail (UC-16), SCR-17 update (UC-17).
 import { withTransaction } from '../../config/db.js';
 import { AppError, badRequest, notFound } from '../../utils/AppError.js';
 import { ERROR_CODES } from './teacher.constants.js';
 import * as format from './teacher.format.js';
 import * as queries from './teacher.queries.js';
 
-// SCR-13 / UC-15 – paginated teacher list with subjects, current homeroom class, class count and periods.
+// SCR-14 / UC-15 – paginated teacher list with subjects, current homeroom class, class count and periods.
 export async function listTeachers({ page, limit, search, subject, homeroom, status }) {
   const filters = { search, subject, homeroom, status };
   const total = await queries.countTeachers(filters);
@@ -22,7 +22,7 @@ export async function listTeachers({ page, limit, search, subject, homeroom, sta
   return format.toTeacherPage({ teachers, total, page, limit });
 }
 
-// SCR-14 / UC-16 – profile, subjects, homeroom class, assignments of the current year and one week of schedule.
+// SCR-15 / UC-16 – profile, subjects, homeroom class, assignments of the current year and one week of schedule.
 export async function getTeacherDetail({ id, week }) {
   const profile = await queries.findTeacherProfileById(id);
   if (!profile) throw notFound(ERROR_CODES.TEACHER_NOT_FOUND, 'Teacher not found.');
@@ -38,17 +38,17 @@ export async function getTeacherDetail({ id, week }) {
   return format.toTeacherDetail({ profile, subjects, homeroomClasses, assignmentRows, scheduleRows, schoolYear });
 }
 
-// SCR-15 subject picker. ASSUMPTION: served from FE-03 until FE-04 publishes GET /subjects.
+// SCR-17 subject picker. ASSUMPTION: served from FE-03 until FE-04 publishes GET /subjects.
 export async function listSubjectOptions() {
   return format.toSubjectOptions(await queries.findActiveSubjects());
 }
 
-// SCR-15 department picker: the departments list (tổ chuyên môn).
+// SCR-17 department picker: the departments list (tổ chuyên môn).
 export async function listDepartmentOptions() {
   return format.toDepartmentOptions(await queries.findActiveDepartments());
 }
 
-// SCR-15 / UC-17 – update full name, department and subjects (input already validated).
+// SCR-17 / UC-17 – update full name, department and subjects (input already validated).
 // departmentId: undefined = keep the current department, null = none, id = that department of the list.
 export async function updateTeacher({ id, fullName, departmentId, subjectIds }) {
   return withTransaction(async (conn) => {

@@ -22,7 +22,7 @@ export function toSchoolYearList(years, currentId) {
 
 // ══ teacher ══════════════════════════════════════════════════════════════
 
-// Shapes of the FE-03 teacher API responses (SCR-13 list, SCR-14 detail, SCR-15 subject options).
+// Shapes of the FE-03 teacher API responses (SCR-14 list, SCR-15 detail, SCR-17 subject options).
 
 function groupBy(rows, key, pick) {
   const map = {};
@@ -30,7 +30,7 @@ function groupBy(rows, key, pick) {
   return map;
 }
 
-// SCR-13 row: teacher + subjects + current homeroom class + current load.
+// SCR-14 row: teacher + subjects + current homeroom class + current load.
 export function toTeacherListItems(rows, { subjectRows, homeroomRows, loadRows }) {
   const subjects = groupBy(subjectRows, 'teacherId', (r) => r.name);
   const homeroom = {};
@@ -78,7 +78,7 @@ function toSchedule(rows) {
   };
 }
 
-// SCR-14 detail
+// SCR-15 detail
 export function toTeacherDetail({ profile, subjects, homeroomClasses, assignmentRows, scheduleRows, schoolYear }) {
   const assignments = assignmentRows.map(toAssignment);
   return {
@@ -90,19 +90,19 @@ export function toTeacherDetail({ profile, subjects, homeroomClasses, assignment
   };
 }
 
-// SCR-15 subject picker
+// SCR-17 subject picker
 export function toSubjectOptions(rows) {
   return { subjects: rows };
 }
 
-// SCR-15 department picker
+// SCR-17 department picker
 export function toDepartmentOptions(rows) {
   return { departments: rows };
 }
 
 // ══ homeroom ══════════════════════════════════════════════════════════════
 
-// Rules the client shows in the SCR-16 banner and uses to disable options.
+// Rules the client shows in the SCR-18 banner and uses to disable options.
 export function homeroomRules() {
   return {
     maxClassesPerTeacher: HOMEROOM_RULES.MAX_CLASSES_PER_TEACHER,
@@ -110,7 +110,7 @@ export function homeroomRules() {
   };
 }
 
-// SCR-16 board: { schoolYears, schoolYear, classes, teachers, rules }
+// SCR-18 board: { schoolYears, schoolYear, classes, teachers, rules }
 export function toHomeroomBoard({ schoolYears, schoolYear, classes = [], teachers = [] }) {
   return {
     schoolYears,
@@ -123,7 +123,7 @@ export function toHomeroomBoard({ schoolYears, schoolYear, classes = [], teacher
 
 // ══ teachingAssignment ══════════════════════════════════════════════════════════════
 
-// SCR-17 matrix: { schoolYears, schoolYear, date, today, subjects, classes, assignments, teachers, rules }
+// SCR-19 matrix: { schoolYears, schoolYear, date, today, subjects, classes, assignments, teachers, rules }
 export function toTeachingBoard({ schoolYears, schoolYear, date, today, classRows = [], cellRows = [], assignments = [], teacherRows = [], teacherSubjectRows = [] }) {
   // Columns = every subject studied by at least one class of the year.
   const subjectMap = new Map();

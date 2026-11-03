@@ -42,7 +42,7 @@ export const isPlainObject = (v) => v != null && typeof v === 'object' && !Array
 // Query values must be single strings: "?a=1&a=2" (array) or "?a[b]=1" (object) are not accepted.
 export const isQueryValue = (v) => v === undefined || typeof v === 'string';
 
-// ── School year (SCR-16, SCR-17) ───────────────────────────────────────────
+// ── School year (SCR-18, SCR-19) ───────────────────────────────────────────
 
 // Optional ?schoolYearId= ; a malformed id is treated as "not found".
 export function optionalSchoolYearId(value) {
@@ -52,7 +52,7 @@ export function optionalSchoolYearId(value) {
   return String(value);
 }
 
-// ── Teachers (SCR-13, SCR-14, SCR-15) ──────────────────────────────────────
+// ── Teachers (SCR-14, SCR-15, SCR-17) ──────────────────────────────────────
 
 function teacherId(req) {
   const id = req.params?.id;
@@ -71,7 +71,7 @@ function searchText(query, field) {
   return value;
 }
 
-// GET /teachers?page=&limit=&search=&subject=&homeroom=has|none&status=ACTIVE|LOCKED  (SCR-13, UC-15)
+// GET /teachers?page=&limit=&search=&subject=&homeroom=has|none&status=ACTIVE|LOCKED  (SCR-14, UC-15)
 // page / limit / homeroom / status fall back to their default when the value is not usable.
 export function listTeachersQuery(req) {
   const q = req.query ?? {};
@@ -90,7 +90,7 @@ export function listTeachersQuery(req) {
   };
 }
 
-// GET /teachers/:id?week=YYYY-MM-DD  (SCR-14, UC-16)
+// GET /teachers/:id?week=YYYY-MM-DD  (SCR-15, UC-16)
 export function teacherDetailRequest(req) {
   const id = teacherId(req);
   const week = req.query?.week;
@@ -99,7 +99,7 @@ export function teacherDetailRequest(req) {
   return { id, week: week || null };
 }
 
-// PATCH /teachers/:id  body { fullName, departmentId?, subjectIds }  (SCR-15, UC-17)
+// PATCH /teachers/:id  body { fullName, departmentId?, subjectIds }  (SCR-17, UC-17)
 export function updateTeacherRequest(req) {
   const id = teacherId(req);
   const body = req.body;
@@ -150,9 +150,9 @@ export function updateTeacherRequest(req) {
   return { id, fullName: name.value, departmentId, subjectIds };
 }
 
-// ── Homeroom (SCR-16, UC-19) ───────────────────────────────────────────────
+// ── Homeroom (SCR-18, UC-19) ───────────────────────────────────────────────
 
-// GET /homeroom-assignments?schoolYearId=  (SCR-16, UC-19)
+// GET /homeroom-assignments?schoolYearId=  (SCR-18, UC-19)
 export function homeroomBoardQuery(req) {
   return { schoolYearId: optionalSchoolYearId(req.query?.schoolYearId) };
 }
@@ -182,9 +182,9 @@ export function saveHomeroomRequest(req) {
   return { schoolYearId: String(schoolYearId), changes: items };
 }
 
-// ── Teaching assignment (SCR-17, UC-18) ────────────────────────────────────
+// ── Teaching assignment (SCR-19, UC-18) ────────────────────────────────────
 
-// GET /teaching-assignments?schoolYearId=&date=YYYY-MM-DD  (SCR-17, UC-18)
+// GET /teaching-assignments?schoolYearId=&date=YYYY-MM-DD  (SCR-19, UC-18)
 export function teachingBoardQuery(req) {
   const date = req.query?.date;
   if (!isQueryValue(date) || (date && !isIsoDate(date))) throw badRequest(ERROR_CODES.INVALID_DATE, 'date must be a real date YYYY-MM-DD.');

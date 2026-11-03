@@ -1,6 +1,6 @@
 import { api } from './client.js';
 
-// GET /api/v1/teaching-assignments?schoolYearId=&date=  (SCR-17, UC-18)
+// GET /api/v1/teaching-assignments?schoolYearId=&date=  (SCR-19, UC-18)
 export async function getTeachingBoard({ schoolYearId, date } = {}) {
   const params = {};
   if (schoolYearId) params.schoolYearId = schoolYearId;

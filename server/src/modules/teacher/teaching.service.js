@@ -1,9 +1,10 @@
-// FE-03 (Dung) – SCR-17 Teaching Assignment (UC-18).
+// FE-03 (Dung) – SCR-19 Teaching Assignment (UC-18).
 import { withTransaction } from '../../config/db.js';
 import { AppError, badRequest, notFound } from '../../utils/AppError.js';
 import { ERROR_CODES, TEACHING_RULES, USER_STATUS } from './teacher.constants.js';
 import { cellLabel, currentYearId, toSchoolYear, toSchoolYearList, toTeachingBoard } from './teacher.format.js';
 import * as queries from './teacher.queries.js';
+import { syncClassTeachers } from '../classes/classGroups.js';
 
 /**
  * Picks the school year and the matrix "view date". Assignments are date ranges, so the matrix shows the
@@ -29,7 +30,7 @@ async function resolveYearAndDate({ schoolYearId, date }) {
   return { years, year, date: viewDate, today, currentId };
 }
 
-// SCR-17 / UC-18 – matrix of classes × subjects with the teacher assigned on `date`.
+// SCR-19 / UC-18 – matrix of classes × subjects with the teacher assigned on `date`.
 export async function getTeachingBoard({ schoolYearId, date } = {}) {
   const { years, year, date: viewDate, today, currentId } = await resolveYearAndDate({ schoolYearId, date });
   const schoolYears = toSchoolYearList(years, currentId);
@@ -56,7 +57,7 @@ export async function getTeachingBoard({ schoolYearId, date } = {}) {
 }
 
 /**
- * SCR-17 / UC-18 – save (class, subject) → teacher changes, effective from `date` to the end of the year.
+ * SCR-19 / UC-18 – save (class, subject) → teacher changes, effective from `date` to the end of the year.
  * Per pair: the running assignment ends the day before, rows planned later are soft-deleted, a new row
  * [date, year end] is inserted, and timetable periods from `date` without attendance move to the new teacher
  * (business-rules §10: no substitute teaching; rows with attendance are kept). All or nothing.
@@ -142,6 +143,13 @@ export async function saveTeachingAssignments({ schoolYearId, date, changes }) {
     if (clashes.length) {
       throw new AppError(409, ERROR_CODES.TIMETABLE_CLASH, 'The new teacher already teaches at those periods.', { items: clashes });
     }
+
+    // Business-rules §4 "Class group membership follows the class": the class groups follow the new assignments,
+    // in this transaction (FE-04 syncClassTeachers; nothing happens for an ended school year).
+    // ASSUMPTION: an assignment counts from the day it is saved even when it starts later (classPeopleSql takes
+    // current and future assignments), and a teacher whose assignment ends later stays until the next sync of
+    // the class – there is no daily job yet.
+    for (const classId of new Set(changes.map((ch) => ch.classId))) await syncClassTeachers(conn, Number(classId));
   });
 
   return getTeachingBoard({ schoolYearId, date });

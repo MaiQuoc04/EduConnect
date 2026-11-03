@@ -429,7 +429,7 @@ function Skeleton() {
 }
 
 // ── Page ────────────────────────────────────────────────────────────────────
-// SCR-14 Teacher Detail (UC-16): profile, teaching assignments and weekly schedule. School Manager only.
+// SCR-15 Teacher Detail (UC-16): profile, teaching assignments and weekly schedule. School Manager only.
 export default function TeacherDetailPage() {
   const { teacherId } = useParams();
   const { data, loading, scheduleLoading, error, changeWeek } = useTeacherDetail(teacherId);
@@ -447,7 +447,7 @@ export default function TeacherDetailPage() {
           <span className="td-sep">/</span>
           <strong>{teacher?.fullName ?? '…'}</strong>
         </nav>
-        <span className="stamp-badge">SCR-14</span>
+        <span className="stamp-badge">SCR-15</span>
       </div>
 
       {loading && !data && <Skeleton />}
