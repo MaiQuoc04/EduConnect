@@ -144,7 +144,7 @@ export default function App() {
           }
         >
           <Route index element={<GroupOverview />} />
-          {/* FE-05 (Anh): replace GroupPendingTab with the group feed page. */}
+          {/* FE-05 (Khanh): replace GroupPendingTab with the group feed page. */}
           <Route path="feed" element={<GroupPendingTab kind="feed" />} />
           <Route path="members" element={<GroupMembersPage />} />
         </Route>

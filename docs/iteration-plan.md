@@ -18,14 +18,16 @@ Code due dates: It1 30/10, It2 13/11, It3 27/11.
 | Iteration | Dates | Quoc | Anh | Dung | Khanh | Linh |
 |---|---|---|---|---|---|---|
 | Iteration 1 | 19/10 – 30/10/2026 | FE-01 | FE-02 | FE-03 | FE-04 | FE-13 |
-| Iteration 2 | 02/11 – 13/11/2026 | review | FE-05 | FE-10 timetable | FE-08, FE-14 | testing, integration |
-| Iteration 3 | 16/11 – 27/11/2026 | FE-09, FE-12 | FE-06 | FE-10 calendar, FE-07 | – | FE-11 |
+| Iteration 2 | 02/11 – 13/11/2026 | review | FE-14, FE-06 | FE-10 timetable | FE-05, FE-08 | testing, integration |
+| Iteration 3 | 16/11 – 27/11/2026 | FE-09, FE-12 | – | FE-10 calendar, FE-07 | – | FE-11 |
 
-FE-10 is split: timetable in It2, class calendar in It3.
+FE-10 is split: timetable in It2, class calendar in It3. It2 changed by the lead on 03/11/2026: Khanh takes both
+feeds (FE-05, FE-08), Anh takes FE-14 and FE-06 (moved back from It3). If Khanh is behind on 09/11, the moderation
+UCs of FE-05 (UC-44..UC-46) go to Anh.
 
 ## Current status (read first; update after every merge, schema patch or new decision)
 
-Last updated: 03/11/2026 (FE-04 merged).
+Last updated: 03/11/2026 (FE-04 merged; It2 reassigned: Khanh FE-05 + FE-08, Anh FE-14 + FE-06).
 
 - **Shared DB (Supabase):** schema v0.3 + `patch_v0.3_password_reset_requests.sql` (27/10) +
   `patch_v0.3_users_address.sql` (28/10: `users.address` added, `parents.address` dropped) +
@@ -101,8 +103,8 @@ Last updated: 03/11/2026 (FE-04 merged).
       - Transfer back to an old class → the old group rows come back (`left_at` cleared), no new row.
     - Hand-over checklist: no conflict markers; server starts; `npm run build` in `client/` passes; test results
       sent; any new `// ASSUMPTION:` listed in the message to the lead; pushed to `feature/fe-02-student-management`.
-  - FE-04 / FE-14 (Khanh):
-    - FE-14 (It2) uses UC-104..UC-106; a parent's address is `users.address`, occupation stays `parents.occupation`.
+  - FE-14 (Anh, It2 since 03/11): uses UC-104..UC-106; a parent's address is `users.address`, occupation stays
+    `parents.occupation`.
   - Group sync for FE-03 saves: business rules §4 "Class group membership follows the class" –
     `server/src/modules/teacher/homeroom.service.js` (UC-19) and `teaching.service.js` (UC-18) must call
     `await syncClassTeachers(client, classId)` (FE-04 `classGroups.js`) for every class they change, in the same
@@ -190,7 +192,29 @@ Also: seed data for the shared DB (school year, semesters, subjects, classes, sa
 
 ## Iteration 2 (02/11 – 13/11/2026)
 
-### Anh: FE-05 Group Feed (11 UC)
+### Anh: FE-14 Parent Management (3 UC)
+
+Reuses FE-02 parent–student linking (UC-12..14), do not duplicate it. Start after FE-02 is merged.
+
+| ID | Use case | Actor |
+|---|---|---|
+| UC-104 | View Parent List | School Manager |
+| UC-105 | View Parent Detail | School Manager |
+| UC-106 | Update Parent Information | School Manager |
+
+### Anh: FE-06 Messaging (3 UC)
+
+Moved from It2 to It3 on 20/10, back to It2 on 03/11 (FE-04 groups are merged).
+
+| ID | Use case | Actor |
+|---|---|---|
+| UC-47 | Chat in Group | Teacher, Student, Parent, School Manager (teacher group) |
+| UC-48 | View Conversation List | Teacher, Student, Parent, School Manager |
+| UC-49 | Send Private Message | Teacher, Student, Parent, School Manager (teacher group) |
+
+### Khanh: FE-05 Group Feed (11 UC)
+
+Build FE-05 and FE-08 on one shared model for posts, comments, reactions and attachments.
 
 | ID | Use case | Actor |
 |---|---|---|
@@ -233,31 +257,11 @@ Timetable part only (UC-70..75).
 | UC-65 | Comment on School Post | Teacher, Student, Parent, School Manager |
 | UC-66 | Delete School Post Comment | School Manager |
 
-### Khanh: FE-14 Parent Management (3 UC)
-
-Reuses FE-02 parent–student linking (UC-12..14), do not duplicate it.
-
-| ID | Use case | Actor |
-|---|---|---|
-| UC-104 | View Parent List | School Manager |
-| UC-105 | View Parent Detail | School Manager |
-| UC-106 | Update Parent Information | School Manager |
-
 ### Linh: Testing and integration of It1 + It2 features.
 
 ### Quoc: Review.
 
 ## Iteration 3 (16/11 – 27/11/2026)
-
-### Anh: FE-06 Messaging (3 UC)
-
-Moved from It2 on 20/10.
-
-| ID | Use case | Actor |
-|---|---|---|
-| UC-47 | Chat in Group | Teacher, Student, Parent, School Manager (teacher group) |
-| UC-48 | View Conversation List | Teacher, Student, Parent, School Manager |
-| UC-49 | Send Private Message | Teacher, Student, Parent, School Manager (teacher group) |
 
 ### Dung: FE-10 Schedule Management (5 UC)
 

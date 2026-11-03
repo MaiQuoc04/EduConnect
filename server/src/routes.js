@@ -18,7 +18,7 @@ import teachingRoutes from './modules/teacher/teaching.routes.js';
 //   FE-02 students  -> /students      (Anh)
 //   FE-03 teachers  -> /teachers, /homeroom-assignments, /teaching-assignments (Dung)
 //   FE-04 classes   -> /school-years, /classes, /groups, /subjects, /class-tracks (Khanh)
-//   FE-05 feed      -> /posts         (Anh)
+//   FE-05 feed      -> /posts         (Khanh)
 //   FE-06 chat      -> /conversations (Anh, + src/sockets)
 //   FE-07 events    -> /extracurricular-events (Dung)
 //   FE-08 school    -> /school-posts  (Khanh)
@@ -27,7 +27,7 @@ import teachingRoutes from './modules/teacher/teaching.routes.js';
 //   FE-11 grades    -> /grades        (Linh)
 //   FE-12 attendance-> /attendances   (Quoc)
 //   FE-13 admin     -> /admin         (Linh)
-//   FE-14 parents   -> /parents       (Khanh)
+//   FE-14 parents   -> /parents       (Anh)
 const router = Router();
 
 router.use('/health', healthRoutes);
