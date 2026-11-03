@@ -180,7 +180,7 @@ function LockedField({ label, value, help }) {
 }
 
 // ── Page ────────────────────────────────────────────────────────────────────
-// SCR-15 Update Teacher (UC-17): School Manager edits full name, department and subjects.
+// SCR-17 Update Teacher (UC-17): School Manager edits full name, department and subjects.
 // Username, email and phone are login identifiers – System Admin only (UC-99).
 export default function TeacherEditPage() {
   const { teacherId } = useParams();
@@ -303,7 +303,7 @@ export default function TeacherEditPage() {
         <Link to={backTo} className="te-back">
           <Icon name="arrow_back" size="sm" /> Hồ sơ giáo viên
         </Link>
-        <span className="stamp-badge">SCR-15</span>
+        <span className="stamp-badge">SCR-17</span>
       </div>
       <nav className="te-breadcrumb" aria-label="Breadcrumb">
         <span>EduConnect</span>

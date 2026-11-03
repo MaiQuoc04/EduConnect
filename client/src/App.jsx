@@ -237,7 +237,7 @@ export default function App() {
             }
           />
         ))}
-        {/* SCR-13 Teacher List */}
+        {/* SCR-14 Teacher List */}
         <Route
           path="teachers"
           element={
@@ -246,7 +246,7 @@ export default function App() {
             </ProtectedRoute>
           }
         />
-        {/* SCR-14 Teacher Detail */}
+        {/* SCR-15 Teacher Detail */}
         <Route
           path="teachers/:teacherId"
           element={
@@ -255,7 +255,7 @@ export default function App() {
             </ProtectedRoute>
           }
         />
-        {/* SCR-15 Update Teacher */}
+        {/* SCR-17 Update Teacher */}
         <Route
           path="teachers/:teacherId/edit"
           element={
@@ -264,7 +264,7 @@ export default function App() {
             </ProtectedRoute>
           }
         />
-        {/* SCR-16 Homeroom Assignment (UC-19) */}
+        {/* SCR-18 Homeroom Assignment (UC-19) */}
         <Route
           path="homeroom-assignments"
           element={
@@ -273,7 +273,7 @@ export default function App() {
             </ProtectedRoute>
           }
         />
-        {/* SCR-17 Teaching Assignment (UC-18) */}
+        {/* SCR-19 Teaching Assignment (UC-18) */}
         <Route
           path="teaching-assignments"
           element={

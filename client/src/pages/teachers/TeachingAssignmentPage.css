@@ -1,4 +1,4 @@
-/* ── TeachingAssignmentPage.css ── SCR-17 Teaching Assignment (shares hr-* pieces with SCR-16) ── */
+/* ── TeachingAssignmentPage.css ── SCR-19 Teaching Assignment (shares hr-* pieces with SCR-18) ── */
 
 .ta-page { display: flex; flex-direction: column; gap: 1rem; }
 .ta-head { display: flex; justify-content: space-between; align-items: flex-end; gap: 1rem; flex-wrap: wrap; }

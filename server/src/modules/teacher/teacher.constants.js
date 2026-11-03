@@ -13,17 +13,17 @@ export const TEACHER_LIMITS = Object.freeze({
   LIST_PAGE_SIZE_DEFAULT: 10,
   LIST_PAGE_SIZE_MAX: 100,
   LIST_PAGE_MAX: 100000,
-  SEARCH_MAX: 100, // SCR-13 search box and subject filter
+  SEARCH_MAX: 100, // SCR-14 search box and subject filter
   SUBJECTS_PER_TEACHER_MAX: 30,
 });
 
-// PATCH /teachers/:id accepts only these fields (SCR-15).
+// PATCH /teachers/:id accepts only these fields (SCR-17).
 // departmentId: an id from the departments list (or null = no department); omitted = keep the current department.
 export const TEACHER_EDITABLE_FIELDS = Object.freeze(['fullName', 'departmentId', 'subjectIds']);
 // Login identifiers – System Admin only (UC-99); a School Manager request that contains them is refused.
 export const LOGIN_IDENTIFIER_FIELDS = Object.freeze(['username', 'email', 'phone']);
 
-// SCR-13 list filters
+// SCR-14 list filters
 export const HOMEROOM_FILTER = Object.freeze({ HAS: 'has', NONE: 'none' });
 
 // business-rules §4 "Teachers" (agreed 02/11/2026).
@@ -57,11 +57,11 @@ export const ERROR_CODES = Object.freeze({
   SUBJECT_IN_USE: 'MSG_SUBJECT_IN_USE',
   // school year
   SCHOOL_YEAR_NOT_FOUND: 'SCHOOL_YEAR_NOT_FOUND',
-  // homeroom (SCR-16)
+  // homeroom (SCR-18)
   HOMEROOM_STALE: 'MSG_HOMEROOM_STALE',
   HOMEROOM_LIMIT: 'MSG_HOMEROOM_LIMIT',
   TEACHER_LOCKED: 'MSG_TEACHER_LOCKED',
-  // teaching assignment (SCR-17)
+  // teaching assignment (SCR-19)
   EFFECTIVE_DATE: 'MSG_EFFECTIVE_DATE',
   SUBJECT_NOT_IN_CLASS: 'MSG_SUBJECT_NOT_IN_CLASS',
   ASSIGNMENT_STALE: 'MSG_ASSIGNMENT_STALE',

@@ -28,8 +28,8 @@ reactions, attachments) is merged into one place after both are on `develop`.
 
 ## Current status (read first; update after every merge, schema patch or new decision)
 
-Last updated: 03/11/2026 (FE-02 merged – every It1 feature is on `develop`; It2 reassigned: Anh FE-08 + FE-14,
-Khanh FE-05 + FE-06).
+Last updated: 04/11/2026 (FE-03 group sync wired and FE-03 screen numbers fixed on `fix/it1-follow-ups`; FE-02
+merged 03/11 – every It1 feature is on `develop`; It2: Anh FE-08 + FE-14, Khanh FE-05 + FE-06).
 
 - **Shared DB (Supabase):** schema v0.3 + `patch_v0.3_password_reset_requests.sql` (27/10) +
   `patch_v0.3_users_address.sql` (28/10: `users.address` added, `parents.address` dropped) +
@@ -84,6 +84,19 @@ Khanh FE-05 + FE-06).
   109 use cases, 71 screens.
 - **Use cases added after the plan:** UC-107 Update Address (User, 28/10), UC-108 Update Occupation (Parent, 29/10),
   UC-109 View Child Profile (Parent, 01/11), all FE-01 (Quoc, It1).
+- **Closing It1 (lead, 04/11/2026).** Every It1 use case is on `develop` (FE-01, FE-02, FE-03, FE-04, FE-13) once
+  `fix/it1-follow-ups` is merged. It1 is closed when the items below are done; they run alongside It2.
+
+  | # | Work left from It1 | Owner | When |
+  |---|---|---|---|
+  | 1 | Merge `fix/it1-follow-ups` (FE-03 group sync, FE-03 screen numbers – details below) | Quoc | 04/11 |
+  | 2 | FE-13 departments: create / import pick from the `departments` list (details below) | Linh | by 13/11 (It2) |
+  | 3 | Replace the temporary `GET /students/parents/lookup` with FE-14 UC-104 | Anh | with FE-14 (It2) |
+  | 4 | Shared Excel reading `utils/excel.js` for UC-96 / UC-14 / UC-27 (It2 clean-up, after the features merge) | Linh | It2 clean-up |
+  | 5 | Decide: who adds a new department (SQL only today, or a screen for SM / SA) | Quoc | before Linh starts #2 |
+  | 6 | Decide: the empty test school years on the shared DB (2025-2026, 2028-2029, 2030-2031; no classes; `school_years` has no `deleted_at`) – keep or remove | Quoc | 07/11 |
+  | 7 | Decide: daily job to sync class groups when an assignment ends later (see "Open" below; proposal: FE-09, It3) | Quoc | before It3 |
+
 - **Follow-ups owed:**
   - FE-13 (Linh): pull `develop` and continue from it; do not run SQL patches on the shared DB before the lead
     approves them.
@@ -135,14 +148,33 @@ Khanh FE-05 + FE-06).
       `utils/excel.js` clean-up with FE-13 in It2.
   - FE-14 (Anh, It2 since 03/11): uses UC-104..UC-106; a parent's address is `users.address`, occupation stays
     `parents.occupation`.
-  - Group sync for FE-03 saves: business rules §4 "Class group membership follows the class" –
-    `server/src/modules/teacher/homeroom.service.js` (UC-19) and `teaching.service.js` (UC-18) must call
-    `await syncClassTeachers(client, classId)` (FE-04 `classGroups.js`) for every class they change, in the same
-    transaction, after saving; they do not yet. Owner to be decided by the lead.
-  - FE-03 screen numbers (lead, after all It1 merges): code uses SCR-13..17, `screens.md` has SCR-14 Teacher List,
-    SCR-15 Teacher Detail, SCR-17 Update Teacher, SCR-18 Homeroom Assignment, SCR-19 Teaching Assignment.
-  - FE-13 (Linh): account create / import still take free-text `teachers.department`; switch to the `departments`
-    list (`GET /teachers/department-options`), then a foreign key can be added.
+  - Done by the lead 04/11 (branch `fix/it1-follow-ups`):
+    - Group sync for FE-03 saves: `homeroom.service.js` (UC-19) and `teaching.service.js` (UC-18) call
+      `syncClassTeachers(conn, classId)` for every class they change, in the same transaction, after saving.
+      Tested through the API on the shared DB inside a rolled-back transaction: new homeroom joins the 3 groups
+      (one row each, also when already a subject teacher there); previous homeroom leaves STUDENT + PARENT and keeps
+      GENERAL while still teaching; new subject teacher joins GENERAL only; a refused save (409) changes no group.
+    - FE-03 screen numbers follow `screens.md`: SCR-14 Teacher List, SCR-15 Teacher Detail, SCR-17 Update Teacher,
+      SCR-18 Homeroom Assignment, SCR-19 Teaching Assignment (comments and screen badges only).
+  - Open (lead to decide): a teacher whose assignment ends on a later date stays in GENERAL after that date until
+    the class is synced again (no daily job); an assignment starting later counts from the day it is saved (rule:
+    "current or future assignment"). Option: a daily job in FE-09 (It3) that calls `syncClassTeachers` for classes
+    whose assignments ended yesterday.
+  - FE-13 (Linh) – departments (closing item #2). Today UC-17 (FE-03) picks the department from the `departments`
+    list, but account create (UC-96 single) and import (UC-96 / UC-97 file) still take free text into
+    `teachers.department` (only max 100 is checked), so one department can be spelled several ways and is then missing
+    from the UC-17 list. On the shared DB 04/11: one teacher has "Toán - Tin", which is not in the list.
+    - Server: account create accepts only a department of the list or none (by id, or by name compared ignoring case
+      and accents); the import marks a row whose department is not in the list as an error (new row code, Vietnamese
+      text in `messages.js`). Store the list's spelling.
+    - A read endpoint for System Admin in the admin module (`GET /teachers/department-options` is School Manager only);
+      reuse FE-03's `findActiveDepartments` (`teacher.queries.js`), do not copy the SQL.
+    - Client: the "Tổ chuyên môn" field of Create Account becomes a select; the import template help lists the
+      departments.
+    - Tests: create with a listed department / none / an unknown one; import with "to toan – khoa hoc tu nhien"
+      (matched), "Toán - Tin" (row refused); SA can read the list, SM / teacher cannot use the admin endpoint.
+    - Then a patch (lead approves before it runs): fix the names not in the list (e.g. "Toán - Tin") and add the
+      foreign key / `department_id`. Do not run SQL on the shared DB before the lead approves.
 
 ## Iteration 1 (19/10 – 30/10/2026)
 

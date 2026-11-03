@@ -95,7 +95,7 @@ function CellPicker({ anchor, cell, teachers, loads, onPick, onUndo, onClose }) 
 }
 
 // ── Page ────────────────────────────────────────────────────────────────────
-// SCR-17 Teaching Assignment (UC-18): one teacher per (class, subject); a teacher only teaches subjects registered
+// SCR-19 Teaching Assignment (UC-18): one teacher per (class, subject); a teacher only teaches subjects registered
 // in teacher_subjects; changes apply from the chosen date and move the not-yet-attended timetable periods.
 export default function TeachingAssignmentPage() {
   const toast = useToast();
@@ -280,7 +280,7 @@ export default function TeachingAssignmentPage() {
           <nav className="hr-breadcrumb" aria-label="Breadcrumb">
             <span>EduConnect</span><span>/</span><span>Hồ sơ</span><span>/</span><span>Phân công</span><span>/</span>
             <strong>Giảng dạy</strong>
-            <span className="stamp-badge">SCR-17</span>
+            <span className="stamp-badge">SCR-19</span>
           </nav>
           <h1 className="headline-lg ta-title">Phân công giảng dạy{yearLabel ? ` – ${yearLabel}` : ''}</h1>
           <p className="ta-subtitle">Ma trận giáo viên bộ môn theo từng lớp. Mỗi ô là một môn của lớp theo cơ cấu của ban.</p>

@@ -129,7 +129,7 @@ function ClassRow({ cls, original, value, teacherById, holders, rules, onChange 
 }
 
 // ── Page ────────────────────────────────────────────────────────────────────
-// SCR-16 Homeroom Assignment (UC-19): School Manager sets one homeroom teacher per class per school year.
+// SCR-18 Homeroom Assignment (UC-19): School Manager sets one homeroom teacher per class per school year.
 export default function HomeroomAssignmentPage() {
   const toast = useToast();
   const [searchParams, setSearchParams] = useSearchParams();
@@ -269,7 +269,7 @@ export default function HomeroomAssignmentPage() {
           <nav className="hr-breadcrumb" aria-label="Breadcrumb">
             <span>EduConnect</span><span>/</span><span>Hồ sơ</span><span>/</span><span>Phân công</span><span>/</span>
             <strong>Giáo viên chủ nhiệm</strong>
-            <span className="stamp-badge">SCR-16</span>
+            <span className="stamp-badge">SCR-18</span>
           </nav>
           <h1 className="headline-lg hr-title">Phân công giáo viên chủ nhiệm{yearLabel ? ` – ${yearLabel}` : ''}</h1>
           <p className="hr-subtitle">Chọn giáo viên chủ nhiệm cho từng lớp trong năm học.</p>

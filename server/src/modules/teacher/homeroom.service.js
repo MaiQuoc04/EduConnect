@@ -1,13 +1,14 @@
-// FE-03 (Dung) – SCR-16 Homeroom Assignment (UC-19).
+// FE-03 (Dung) – SCR-18 Homeroom Assignment (UC-19).
 import { withTransaction } from '../../config/db.js';
 import { AppError, badRequest, notFound } from '../../utils/AppError.js';
 import { ERROR_CODES, HOMEROOM_RULES, USER_STATUS } from './teacher.constants.js';
 import * as format from './teacher.format.js';
 import { currentYearId, toSchoolYear, toSchoolYearList } from './teacher.format.js';
 import * as queries from './teacher.queries.js';
+import { syncClassTeachers } from '../classes/classGroups.js';
 
 /**
- * SCR-16 / UC-19 – classes of one school year with their homeroom teacher, plus the teachers to choose from.
+ * SCR-18 / UC-19 – classes of one school year with their homeroom teacher, plus the teachers to choose from.
  * Default year: the current one (or the newest if none has started).
  */
 export async function getHomeroomBoard({ schoolYearId } = {}) {
@@ -31,7 +32,7 @@ export async function getHomeroomBoard({ schoolYearId } = {}) {
 }
 
 /**
- * SCR-16 / UC-19 – save several homeroom changes of one year at once (input already validated).
+ * SCR-18 / UC-19 – save several homeroom changes of one year at once (input already validated).
  * previousTeacherId is what the client saw; if someone else changed the class meanwhile → 409.
  */
 export async function saveHomeroomAssignments({ schoolYearId, changes }) {
@@ -87,6 +88,9 @@ export async function saveHomeroomAssignments({ schoolYearId, changes }) {
     }
 
     for (const ch of changes) await queries.updateHomeroomTeacher(ch.classId, ch.teacherId, conn);
+    // Business-rules §4 "Class group membership follows the class": the new homeroom teacher joins the class
+    // groups and the previous one leaves what no longer applies, in this transaction (FE-04 syncClassTeachers).
+    for (const ch of changes) await syncClassTeachers(conn, Number(ch.classId));
   });
 
   return getHomeroomBoard({ schoolYearId });

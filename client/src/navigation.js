@@ -41,9 +41,9 @@ export const NAV_SECTIONS = [
     label: 'Hồ sơ',
     items: [
       { to: '/students', label: 'Học sinh', icon: 'school', roles: ['SCHOOL_MANAGER'] }, // FE-02 UC-07
-      { to: '/teachers', label: 'Giáo viên', icon: 'badge', roles: ['SCHOOL_MANAGER'] }, // SCR-13
-      { to: '/homeroom-assignments', label: 'Phân công chủ nhiệm', icon: 'assignment_ind', roles: ['SCHOOL_MANAGER'] }, // SCR-16
-      { to: '/teaching-assignments', label: 'Phân công giảng dạy', icon: 'co_present', roles: ['SCHOOL_MANAGER'] }, // SCR-17
+      { to: '/teachers', label: 'Giáo viên', icon: 'badge', roles: ['SCHOOL_MANAGER'] }, // SCR-14
+      { to: '/homeroom-assignments', label: 'Phân công chủ nhiệm', icon: 'assignment_ind', roles: ['SCHOOL_MANAGER'] }, // SCR-18
+      { to: '/teaching-assignments', label: 'Phân công giảng dạy', icon: 'co_present', roles: ['SCHOOL_MANAGER'] }, // SCR-19
     ],
   },
 ];

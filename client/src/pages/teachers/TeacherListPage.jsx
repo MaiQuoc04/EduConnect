@@ -231,7 +231,7 @@ export default function TeacherListPage() {
           <strong>Giáo viên</strong>
         </div>
         <div className="tc-header-meta">
-          <span className="stamp-badge">SCR-13</span>
+          <span className="stamp-badge">SCR-14</span>
           <span className="tc-sep">·</span>
           <span className="tc-meta-label">Niên khoá 2026–2027</span>
         </div>
