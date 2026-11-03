@@ -5,19 +5,23 @@ import Avatar from '../../components/Avatar.jsx';
 import Icon from '../../components/Icon.jsx';
 import { useAuth } from '../../context/AuthContext.jsx';
 import { useSocket } from '../../context/SocketContext.jsx';
+import { useToast } from '../../context/ToastContext.jsx';
 import { errorText } from '../../messages.js';
 import { fold } from '../subjects/subjectText.js';
 import { GROUP_TYPE_ICONS, GROUP_TYPE_LABELS } from '../groups/groupLabels.js';
 import ChatThread from './ChatThread.jsx';
 import { contactLabel, previewText, shortTime, unreadLabel } from './chatText.js';
-import NewChatDialog from './NewChatDialog.jsx';
+
+const NOT_FOUND_PERSON = 'Không phải thành viên trong nhóm mà bạn đã tham gia hoặc không tồn tại.';
 
 // "Trò chuyện" – split view: my groups on the left (~3/10), the chosen group's chat on the right (~7/10).
 // Shell built in FE-04 from the UC-29 group list; FE-06 Messaging (Khanh) fills the right pane with UC-47 Chat in
 // Group (ChatThread.jsx, SCR-43 / SCR-50). UC-48 View Conversation List (SCR-49): under each chat's name its latest
 // message (bold while unread, cut with "…") and the number of unread messages, from GET /conversations, kept up to
-// date by the socket; opening a chat clears its count. UC-49 Send Private Message: "Tin nhắn mới" (NewChatDialog)
-// opens a 1-1 chat; 1-1 chats are listed first ("Tin nhắn riêng") and use DirectRoom. The server checks who may chat.
+// date by the socket; opening a chat clears its count. UC-49 Send Private Message: the search box also finds people
+// (GET /conversations/contacts – who the active role may write to); choosing one opens or creates the 1-1 chat.
+// Nobody found: "not a member of a group you are in, or does not exist". 1-1 chats are listed first ("Tin nhắn
+// riêng") and use DirectRoom. The server checks who may chat.
 // The School Manager sees no class chat (business-rules §2): the list keeps only the school-wide teacher group.
 // Opened from a group or from "Nhóm của tôi", the router state { backTo, backLabel } (groupLabels.js) adds a
 // "Quay lại" button at the top left; it is passed on while the user switches chats so the way back stays.
@@ -35,7 +39,10 @@ export default function ChatPage() {
   // UC-48 summaries by groupId: { groupType, unreadCount, lastMessage, peer (1-1 chats) }.
   const [summaries, setSummaries] = useState({});
   const [summariesLoaded, setSummariesLoaded] = useState(false);
-  const [newChat, setNewChat] = useState(false); // UC-49 "Tin nhắn mới" dialog
+  // UC-49 people matching the search box: { q, loading, contacts, error }
+  const [people, setPeople] = useState({ q: '', loading: false, contacts: [], error: '' });
+  const [opening, setOpening] = useState(null); // userId whose 1-1 chat is being opened
+  const toast = useToast();
   const openId = groupId ? Number(groupId) : null;
   const openRef = useRef(openId);
   openRef.current = openId;
@@ -56,11 +63,41 @@ export default function ChatPage() {
     [],
   );
 
-  // UC-49: the 1-1 chat was opened (or created) – refresh the list so it is there, then show it.
-  async function directOpened(id) {
-    await loadSummaries();
-    setNewChat(false);
-    navigate(`/chat/${id}`, { state: backState });
+  // UC-49: people for the text in the search box (after a short pause).
+  useEffect(() => {
+    const q = query.trim();
+    if (!q) {
+      setPeople({ q: '', loading: false, contacts: [], error: '' });
+      return undefined;
+    }
+    let live = true;
+    setPeople((p) => ({ ...p, loading: true, error: '' }));
+    const timer = setTimeout(() => {
+      api
+        .get('/conversations/contacts', { params: { q } })
+        .then(({ data }) => live && setPeople({ q, loading: false, contacts: data.contacts, error: '' }))
+        .catch((err) => live && setPeople({ q, loading: false, contacts: [], error: errorText(err) }));
+    }, 300);
+    return () => {
+      live = false;
+      clearTimeout(timer);
+    };
+  }, [query]);
+
+  // UC-49: open the 1-1 chat with someone found (create it the first time), refresh the list, then show it.
+  async function openPerson(contact) {
+    setOpening(contact.userId);
+    try {
+      let id = contact.directGroupId;
+      if (!id) ({ groupId: id } = (await api.post('/conversations/direct', { userId: contact.userId })).data);
+      await loadSummaries();
+      setQuery('');
+      navigate(`/chat/${id}`, { state: backState });
+    } catch (err) {
+      toast(errorText(err));
+    } finally {
+      setOpening(null);
+    }
   }
 
   useEffect(() => {
@@ -142,6 +179,11 @@ export default function ChatPage() {
   }, [list.data, query, manager, summaries]);
 
   const openSummary = openId !== null ? summaries[openId] : null;
+  const searching = Boolean(query.trim());
+  // People already shown as a matching 1-1 chat above are not repeated.
+  const shownDirect = new Set(sections.find((s) => s.key === 'direct')?.items.map((i) => i.peer.userId) ?? []);
+  const foundPeople = people.contacts.filter((c) => !shownDirect.has(c.userId));
+  const peopleDone = !people.loading && people.q === query.trim();
 
   return (
     <>
@@ -156,18 +198,7 @@ export default function ChatPage() {
       <div className={`chat-shell${groupId ? ' has-chat' : ''}${backState ? ' has-topbar' : ''}`}>
         <aside className="chat-list" aria-label="Danh sách nhóm trò chuyện">
           <div className="chat-list-head">
-            <div className="chat-list-title">
-              <h1 className="title-md">Trò chuyện</h1>
-              <button
-                type="button"
-                className="btn btn-icon chat-new"
-                onClick={() => setNewChat(true)}
-                aria-label="Tin nhắn mới"
-                title="Tin nhắn mới"
-              >
-                <Icon name="edit_square" />
-              </button>
-            </div>
+            <h1 className="title-md">Trò chuyện</h1>
             <div className="input-wrap subject-search">
               <Icon name="search" size="sm" className="subject-search-icon" />
               <input
@@ -185,8 +216,8 @@ export default function ChatPage() {
               <p className="form-error chat-list-note">{list.error}</p>
             ) : list.loading ? (
               <p className="loading chat-list-note">Đang tải nhóm…</p>
-            ) : !sections.length ? (
-              <p className="muted chat-list-note">{query ? 'Không tìm thấy nhóm phù hợp.' : 'Bạn chưa thuộc nhóm nào.'}</p>
+            ) : !sections.length && !searching ? (
+              <p className="muted chat-list-note">Bạn chưa thuộc nhóm nào.</p>
             ) : (
               sections.map((s) => (
                 <section key={s.key} className="chat-section">
@@ -235,6 +266,44 @@ export default function ChatPage() {
                 </section>
               ))
             )}
+            {searching && !list.loading && !list.error && (
+              <section className="chat-section" aria-live="polite">
+                <h2 className="label-upper chat-section-title">Mọi người</h2>
+                {people.error ? (
+                  <p className="form-error chat-list-note">{people.error}</p>
+                ) : !peopleDone ? (
+                  <p className="loading chat-list-note">Đang tìm…</p>
+                ) : !foundPeople.length ? (
+                  <p className="muted chat-list-note">
+                    {people.contacts.length ? 'Đã có trong tin nhắn riêng ở trên.' : NOT_FOUND_PERSON}
+                  </p>
+                ) : (
+                  <ul>
+                    {foundPeople.map((c) => (
+                      <li key={c.userId}>
+                        <button
+                          type="button"
+                          className="chat-item chat-person"
+                          onClick={() => openPerson(c)}
+                          disabled={opening !== null}
+                        >
+                          <Avatar src={c.avatarUrl} name={c.fullName} size={32} />
+                          <span className="chat-item-text">
+                            <span className="chat-item-row">
+                              <span className="chat-item-name">{c.fullName}</span>
+                              <span className="caption chat-item-time">
+                                {opening === c.userId ? 'Đang mở…' : c.directGroupId ? '' : 'Nhắn tin'}
+                              </span>
+                            </span>
+                            <span className="caption chat-item-last">{contactLabel(c)}</span>
+                          </span>
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </section>
+            )}
           </div>
         </aside>
 
@@ -246,10 +315,7 @@ export default function ChatPage() {
               </span>
               <h2 className="title-md">Chọn một cuộc trò chuyện</h2>
               <p className="muted">Các nhóm lớp, team và tin nhắn riêng của bạn nằm ở cột bên trái.</p>
-              <button type="button" className="btn btn-secondary" onClick={() => setNewChat(true)}>
-                <Icon name="edit_square" size="sm" />
-                Tin nhắn mới
-              </button>
+              <p className="caption muted">Muốn nhắn riêng, hãy gõ tên người đó vào ô tìm kiếm.</p>
             </div>
           ) : !summariesLoaded ? (
             <p className="loading chat-list-note">Đang tải…</p>
@@ -260,7 +326,6 @@ export default function ChatPage() {
           )}
         </section>
       </div>
-      {newChat && <NewChatDialog onOpened={directOpened} onClose={() => setNewChat(false)} />}
     </>
   );
 }
