@@ -148,7 +148,7 @@ export default function App() {
           <Route path="feed" element={<GroupPendingTab kind="feed" />} />
           <Route path="members" element={<GroupMembersPage />} />
         </Route>
-        {/* Split chat view: shell from FE-04, messages by FE-06 (Anh). */}
+        {/* Split chat view: shell from FE-04, messages by FE-06 (Khanh). */}
         {['chat', 'chat/:groupId'].map((path) => (
           <Route
             key={path}

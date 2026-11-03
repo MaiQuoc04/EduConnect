@@ -30,9 +30,9 @@ The app serves **one high school** (grades 10–12). Users never self-register.
 | FE-04 | Class & Group Management | Khanh | It1 |
 | FE-13 | System Administration | Linh | It1 |
 | FE-05 | Group Feed | Khanh | It2 |
-| FE-08 | School Feed | Khanh | It2 |
+| FE-08 | School Feed | Anh | It2 |
 | FE-14 | Parent Management | Anh | It2 |
-| FE-06 | Messaging | Anh | It2 |
+| FE-06 | Messaging | Khanh | It2 |
 | FE-10 | Schedule Management – timetable | Dung | It2 |
 | FE-10 | Schedule Management – class calendar (UC-76..80) | Dung | It3 |
 | FE-07 | Extracurricular Event Management | Dung | It3 |
@@ -40,7 +40,7 @@ The app serves **one high school** (grades 10–12). Users never self-register.
 | FE-11 | Grade Management | Linh | It3 |
 | FE-12 | Attendance Management | Quoc | It3 |
 
-Iterations: It1 code due 30/10, It2 13/11, It3 27/11 (2026). Owners of FE-05, FE-06 and FE-14 changed on 03/11. Full use case list: `docs/use-cases.md`.
+Iterations: It1 code due 30/10, It2 13/11, It3 27/11 (2026). Owners of FE-05, FE-06, FE-08 and FE-14 changed on 03/11. Full use case list: `docs/use-cases.md`.
 
 Boundaries that are easy to get wrong:
 - FE-01 = what users do with **their own** account (sign in, password, profile, automatic temporary sign-in lock).

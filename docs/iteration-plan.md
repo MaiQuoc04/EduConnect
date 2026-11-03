@@ -18,16 +18,17 @@ Code due dates: It1 30/10, It2 13/11, It3 27/11.
 | Iteration | Dates | Quoc | Anh | Dung | Khanh | Linh |
 |---|---|---|---|---|---|---|
 | Iteration 1 | 19/10 – 30/10/2026 | FE-01 | FE-02 | FE-03 | FE-04 | FE-13 |
-| Iteration 2 | 02/11 – 13/11/2026 | review | FE-14, FE-06 | FE-10 timetable | FE-05, FE-08 | testing, integration |
+| Iteration 2 | 02/11 – 13/11/2026 | review | FE-08, FE-14 | FE-10 timetable | FE-05, FE-06 | testing, integration |
 | Iteration 3 | 16/11 – 27/11/2026 | FE-09, FE-12 | – | FE-10 calendar, FE-07 | – | FE-11 |
 
-FE-10 is split: timetable in It2, class calendar in It3. It2 changed by the lead on 03/11/2026: Khanh takes both
-feeds (FE-05, FE-08), Anh takes FE-14 and FE-06 (moved back from It3). If Khanh is behind on 09/11, the moderation
-UCs of FE-05 (UC-44..UC-46) go to Anh.
+FE-10 is split: timetable in It2, class calendar in It3. It2 changed by the lead on 03/11/2026: Anh takes FE-08 School
+Feed and FE-14 Parent Management (follows FE-02), Khanh takes FE-05 Group Feed and FE-06 Messaging (follow FE-04
+groups; FE-06 moved back from It3). FE-05 and FE-08 are built separately; code they share (posts, comments,
+reactions, attachments) is merged into one place after both are on `develop`.
 
 ## Current status (read first; update after every merge, schema patch or new decision)
 
-Last updated: 03/11/2026 (FE-04 merged; It2 reassigned: Khanh FE-05 + FE-08, Anh FE-14 + FE-06).
+Last updated: 03/11/2026 (FE-04 merged; It2 reassigned: Anh FE-08 + FE-14, Khanh FE-05 + FE-06).
 
 - **Shared DB (Supabase):** schema v0.3 + `patch_v0.3_password_reset_requests.sql` (27/10) +
   `patch_v0.3_users_address.sql` (28/10: `users.address` added, `parents.address` dropped) +
@@ -192,6 +193,22 @@ Also: seed data for the shared DB (school year, semesters, subjects, classes, sa
 
 ## Iteration 2 (02/11 – 13/11/2026)
 
+### Anh: FE-08 School Feed (9 UC)
+
+Built separately from FE-05; shared feed code is merged after both are on `develop`.
+
+| ID | Use case | Actor |
+|---|---|---|
+| UC-58 | View School Feed & News | Teacher, Student, Parent, School Manager |
+| UC-59 | View School Post Detail | Teacher, Student, Parent, School Manager |
+| UC-60 | Create School Post | School Manager |
+| UC-61 | Update School Post | School Manager |
+| UC-62 | Delete School Post | School Manager |
+| UC-63 | Pin / Unpin School Post | School Manager |
+| UC-64 | React to School Post | Teacher, Student, Parent, School Manager |
+| UC-65 | Comment on School Post | Teacher, Student, Parent, School Manager |
+| UC-66 | Delete School Post Comment | School Manager |
+
 ### Anh: FE-14 Parent Management (3 UC)
 
 Reuses FE-02 parent–student linking (UC-12..14), do not duplicate it. Start after FE-02 is merged.
@@ -202,19 +219,9 @@ Reuses FE-02 parent–student linking (UC-12..14), do not duplicate it. Start af
 | UC-105 | View Parent Detail | School Manager |
 | UC-106 | Update Parent Information | School Manager |
 
-### Anh: FE-06 Messaging (3 UC)
-
-Moved from It2 to It3 on 20/10, back to It2 on 03/11 (FE-04 groups are merged).
-
-| ID | Use case | Actor |
-|---|---|---|
-| UC-47 | Chat in Group | Teacher, Student, Parent, School Manager (teacher group) |
-| UC-48 | View Conversation List | Teacher, Student, Parent, School Manager |
-| UC-49 | Send Private Message | Teacher, Student, Parent, School Manager (teacher group) |
-
 ### Khanh: FE-05 Group Feed (11 UC)
 
-Build FE-05 and FE-08 on one shared model for posts, comments, reactions and attachments.
+Built separately from FE-08; shared feed code is merged after both are on `develop`.
 
 | ID | Use case | Actor |
 |---|---|---|
@@ -230,6 +237,16 @@ Build FE-05 and FE-08 on one shared model for posts, comments, reactions and att
 | UC-45 | Hide Post / Delete Comment | Homeroom Teacher (class), School Manager (teacher group) |
 | UC-46 | Approve / Reject Post | Homeroom Teacher (class), School Manager (teacher group) |
 
+### Khanh: FE-06 Messaging (3 UC)
+
+Moved from It2 to It3 on 20/10, back to It2 for Khanh on 03/11 (builds on the FE-04 groups, teams and chat shell).
+
+| ID | Use case | Actor |
+|---|---|---|
+| UC-47 | Chat in Group | Teacher, Student, Parent, School Manager (teacher group) |
+| UC-48 | View Conversation List | Teacher, Student, Parent, School Manager |
+| UC-49 | Send Private Message | Teacher, Student, Parent, School Manager (teacher group) |
+
 ### Dung: FE-10 Schedule Management (6 UC)
 
 Timetable part only (UC-70..75).
@@ -242,20 +259,6 @@ Timetable part only (UC-70..75).
 | UC-73 | Update Class Timetable | School Manager |
 | UC-74 | View Class Timetable | Teacher, Student, Parent |
 | UC-75 | View Teaching Schedule | Teacher |
-
-### Khanh: FE-08 School Feed (9 UC)
-
-| ID | Use case | Actor |
-|---|---|---|
-| UC-58 | View School Feed & News | Teacher, Student, Parent, School Manager |
-| UC-59 | View School Post Detail | Teacher, Student, Parent, School Manager |
-| UC-60 | Create School Post | School Manager |
-| UC-61 | Update School Post | School Manager |
-| UC-62 | Delete School Post | School Manager |
-| UC-63 | Pin / Unpin School Post | School Manager |
-| UC-64 | React to School Post | Teacher, Student, Parent, School Manager |
-| UC-65 | Comment on School Post | Teacher, Student, Parent, School Manager |
-| UC-66 | Delete School Post Comment | School Manager |
 
 ### Linh: Testing and integration of It1 + It2 features.
 
