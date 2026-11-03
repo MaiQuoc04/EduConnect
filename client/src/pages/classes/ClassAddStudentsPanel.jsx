@@ -10,7 +10,7 @@ import StudentReview from './StudentReview.jsx';
 
 // SCR-20 – UC-28, adding students to a class that already exists (e.g. joining mid-year): the same picker and check
 // as creating a class. The new students and their linked parents join the class groups.
-// ASSUMPTION (agreed 29/10 with Khanh, to confirm with Quoc): part of UC-28 rather than a new UC.
+// Business-rules §4 (agreed 03/11/2026): part of UC-28 rather than a new UC.
 export default function ClassAddStudentsPanel({ schoolYear, cls, onCancel, onDone }) {
   const toast = useToast();
   const [step, setStep] = useState(0);

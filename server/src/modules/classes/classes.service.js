@@ -141,7 +141,7 @@ export const previousYearSql = (yearParam) => `(
 
 // Business-rules §4 "Who puts a student in a class": UC-27 / UC-28 only take students with no studying class this
 // school year and none in the previous school year (those go to the new year by promotion, UC-11, FE-02).
-// ASSUMPTION (proposed 03/11, to confirm with Quoc): only a STUDYING enrollment of the previous year counts, the same
+// Business-rules §4 (agreed 03/11/2026): only a STUDYING enrollment of the previous year counts, the same
 // students promotion takes; a student who was TRANSFERRED / DROPPED there can still be added here, or nobody could.
 
 // One student as the UC-28 pickers show it, seen from school year `$1`: their class this year and their class of
@@ -315,7 +315,7 @@ export async function createClass(input, userId) {
 
 // UC-28, adding students to a class that already exists (e.g. a student who joins the school mid-year). Same
 // checks as creating it; the new students and their linked parents join the class groups.
-// ASSUMPTION (agreed 29/10 with Khanh, to confirm with Quoc): part of UC-28 rather than a new UC.
+// Business-rules §4 (agreed 03/11/2026): part of UC-28 rather than a new UC.
 export async function addStudents(classIdParam, input, userId) {
   const classId = parseId(classIdParam, 'Class not found.');
   const studentIds = parseStudentIds(input.studentIds);

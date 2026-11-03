@@ -123,8 +123,8 @@ export async function closeSemester(yearIdParam, semesterIdParam) {
   return getSchoolYear(yearId);
 }
 
-// ASSUMPTION: the School Manager may reopen a closed semester (e.g. closed by mistake); not in business-rules –
-// requested by Khanh 27/10, to confirm with the team lead. Reopening gives the homeroom teacher back the
+// UC-21: the School Manager may reopen a closed semester, e.g. closed by mistake (business-rules §4, agreed
+// 03/11/2026). Reopening gives the homeroom teacher back the
 // excused ↔ unexcused correction for that semester's dates.
 export async function reopenSemester(yearIdParam, semesterIdParam) {
   const yearId = parseId(yearIdParam);

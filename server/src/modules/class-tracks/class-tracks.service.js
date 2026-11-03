@@ -155,7 +155,7 @@ function validateTrack({ trackName, description }) {
 // Among class types that are not deleted, compared without case (patch_v0.3_class_track_grade.sql):
 //   * a name is unique within one grade (NULL = every grade) – also enforced by uq_class_tracks_grade_name;
 //   * a name is used either for every grade or per grade, never both, so "Khối A" is never two choices for one class.
-// ASSUMPTION (proposed 02/11, to confirm with Quoc): the second rule.
+// Both rules: business-rules §4 (agreed 03/11/2026).
 async function assertNameFree(client, name, gradeLevelId, excludeId = null) {
   const { rows } = await client.query(
     `SELECT
@@ -282,8 +282,8 @@ function validateItem(item) {
 // UC-26 save the subjects of a class type for one school year. `items` is the full list the type studies that
 // year: rows missing from it are removed. Once the year has grades only periods per week may change – adding or
 // removing a subject would change the grade books and year averages (business-rules §11).
-// ASSUMPTION (needs team lead approval): removing a subject hard-deletes its track_subjects row, which is not on
-// the hard-delete list in CLAUDE.md; allowed only while the year has no grades and has not ended (agreed 27/10).
+// Removing a subject hard-deletes its track_subjects row (business-rules §4 and §14, agreed 03/11/2026); allowed only
+// while the year has no grades and has not ended.
 export async function saveTrackSubjects(idParam, { schoolYearId, items }) {
   const id = parseId(idParam, 'Class type not found.');
   if (schoolYearId === undefined || schoolYearId === null || schoolYearId === '') {

@@ -179,7 +179,7 @@ export async function createTeam(user, input) {
   });
 }
 
-// Leave a team. ASSUMPTION (Khanh 27/10, not in the use-case list yet – needs lead OK): only teams can be left; the
+// Leave a team (UC-35, business-rules §4 "Teams in detail", agreed 03/11/2026): only teams can be left; the
 // three class groups cannot (membership follows the class, UC-33 removes people). Anyone may leave, the creator too
 // (the team stays, still "created by" them); when the last member leaves, the team is soft-deleted. Sets left_at like
 // UC-33, so the row stays for chat history. Not possible once the school year has ended (read only).

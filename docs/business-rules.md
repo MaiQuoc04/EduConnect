@@ -146,15 +146,24 @@ Boundaries that are easy to get wrong:
     year count (a student transferred inside that year moves from the class they study in now); at most 200
     students per call.
   - **Transfer (UC-10, FE-02)**: to another class of the **same school year and the same grade**.
-  - **Create class / import class list (UC-28, UC-27, FE-04)** only take students with **no enrollment in the
-    previous school year** and no studying enrollment this year (new to the school, coming from another school, or
-    coming back after a year away); a row with a student of the previous year is refused with a message to use
-    promotion.
+  - **Create class / import class list (UC-28, UC-27, FE-04)** only take students who were **not studying in a
+    class of the previous school year** (no `STUDYING` enrollment there – the same students promotion would take)
+    and are not studying in a class this year: new to the school, coming from another school, coming back after a
+    year away, or left without a class there after a transfer; a row with a student of the previous year is refused
+    with a message to use promotion.
   - **Leaving the school:** no separate use case. The account is **locked** (UC-101; accounts are never deleted,
     §3). Coming back during the same year: unlock; coming back in a later year: added as above.
 - **Students** (FE-02, agreed 03/11/2026): date of birth gives an age of 10–30 today; SM updates name, date of
   birth, gender and **address** (`users.address`) in UC-09; username / email / phone stay System Admin only. A
   locked parent account can be linked; two parents with the same relationship are allowed (max 2 parents, §3).
+- **Import parent–student links (UC-14)** works like the account import (UC-96, FE-13): a template (`.xlsx` or
+  `.csv`) with columns *Mã học sinh*, *Số điện thoại phụ huynh*, *Quan hệ* (Bố / Mẹ / Người giám hộ); headers are
+  matched ignoring accents, case and notes; at most 500 rows. **Preview** (no write) lists each row's errors;
+  **import** checks the same file again and saves **every valid row in one transaction** – invalid rows are skipped
+  and listed; no valid row → refused. Row errors: missing value, student code not found, no parent account with
+  that phone (`utils/phone.js`), relationship not in the list, link already exists, the student would have more
+  than 2 parents (existing links + rows of the file), the same student–parent pair twice in the file. A new link
+  adds the parent to GENERAL + PARENT of the child's current class, as UC-13 does. Not logged (like UC-13).
 - Every class has a **class type** (`class_tracks`, NOT NULL), e.g. type A = Maths/Physics/Chemistry focus.
   `track_subjects` holds, per school year, the subjects and **periods per week** (whole number 1–10) of that type;
   copied from the previous year by default; editable, but subjects can no longer be added or removed **once the year
@@ -205,7 +214,8 @@ Boundaries that are easy to get wrong:
 - **Group moderator = the current homeroom teacher**, read from `classes.homeroom_teacher_id` (nothing stored per
   group), so the rights move at once when the homeroom teacher changes, posts waiting for approval included.
 - **Removing members** (UC-33): the homeroom teacher removes students and parents only; teachers are removed by the
-  School Manager (who also makes the teaching assignments).
+  School Manager (who also makes the teaching assignments). A teacher removed while still assigned to the class
+  comes back at the next membership sync (membership follows the class); to take a teacher out, end the assignment.
 - **Class group membership follows the class** (agreed 03/11/2026), in the same transaction as the change that
   causes it:
   - Transfer (UC-10) / promotion (UC-11): the student leaves every group and team of the old class and joins GENERAL

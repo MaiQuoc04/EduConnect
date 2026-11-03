@@ -27,7 +27,7 @@ Source: Report 3 section 4.2 (draft v1.3). Actor "User" = any signed-in account.
 | UC-11 | Promote Students | School Manager | Enrollment Changes | Enroll students of the previous school year into classes of the new one (next grade or the same grade when repeating); the only way a previous-year student enters a new year's class; old class groups become read-only. |
 | UC-12 | View Student's Parents | School Manager | Parent Linking | View the parents linked to a student. |
 | UC-13 | Link / Unlink Parent–Student | School Manager | Parent Linking | Link or unlink a parent and a student (at most 2 parents per student), from the student or the parent side. |
-| UC-14 | Import Parent–Student Links | School Manager | Parent Linking | Link parents and students in bulk from a file, with a preview before saving. |
+| UC-14 | Import Parent–Student Links | School Manager | Parent Linking | Link parents and students in bulk from a file (student code, parent phone, relationship), with a preview; valid rows are saved, invalid ones listed (same pattern as UC-96). |
 
 ## FE-03 Teacher Management
 
@@ -50,8 +50,8 @@ Source: Report 3 section 4.2 (draft v1.3). Actor "User" = any signed-in account.
 | UC-24 | Create Subject | School Manager | Academic Year & Subject Setup | Add a subject. |
 | UC-25 | Update Subject | School Manager | Academic Year & Subject Setup | Update a subject. |
 | UC-26 | Manage Class Types | School Manager | Academic Year & Subject Setup | Define class types (each for one grade or every grade) and, for each school year, their subjects and periods per week; subjects lock once grades exist. Every subject weight is 1 (not shown). |
-| UC-27 | Import Class List | School Manager | Class Groups | Import classes and their students (accounts must exist; only students with no enrollment in the previous school year); automatically creates the general, student and parent groups of each class. |
-| UC-28 | Create Class Group | School Manager | Class Groups | Create a class manually (its three groups are created too) and add students with no enrollment in the previous school year and none this year, also to an existing class (max 45 studying students). |
+| UC-27 | Import Class List | School Manager | Class Groups | Import classes and their students (accounts must exist; only students not studying in a class of the previous school year); automatically creates the general, student and parent groups of each class. |
+| UC-28 | Create Class Group | School Manager | Class Groups | Create a class manually (its three groups are created too) and add students not studying in a class of the previous school year nor this year, also to an existing class (max 45 studying students). |
 | UC-29 | View Group List | Teacher, Student, Parent, School Manager | Class Groups | View the groups the user belongs to (School Manager: all class groups, without their feeds or chats). |
 | UC-30 | View Group Detail | Teacher, Student, Parent, School Manager | Class Groups | View a group's information. |
 | UC-31 | View Group Members | Teacher, Student, Parent, School Manager | Class Groups | View the members of a group. |

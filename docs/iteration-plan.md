@@ -25,7 +25,7 @@ FE-10 is split: timetable in It2, class calendar in It3.
 
 ## Current status (read first; update after every merge, schema patch or new decision)
 
-Last updated: 03/11/2026.
+Last updated: 03/11/2026 (FE-04 merged).
 
 - **Shared DB (Supabase):** schema v0.3 + `patch_v0.3_password_reset_requests.sql` (27/10) +
   `patch_v0.3_users_address.sql` (28/10: `users.address` added, `parents.address` dropped) +
@@ -47,8 +47,12 @@ Last updated: 03/11/2026.
   - FE-03 (Dung) merged 03/11: UC-15..UC-19 (teacher list / detail / update with the departments list, homeroom
     assignment, teaching assignment), all server code in `server/src/modules/teacher/`
     (`/teachers`, `/homeroom-assignments`, `/teaching-assignments`). Stray files removed at merge time.
-- **Pushed, not merged yet:** `feature/fe-02-student-management` (Anh), `feature/fe-04-class-group-management`
-  (Khanh). Each should merge `develop` into its branch before its PR.
+  - FE-04 (Khanh) merged 03/11: UC-20..UC-35 (school years and semesters with reopen, subjects, class types per
+    grade, create / import classes for students not in a class the previous year, groups, members, nickname, teams
+    with leave), `syncClassTeachers` in `server/src/modules/classes/classGroups.js` (tested by the lead in a
+    rolled-back transaction), all FE-04 screen numbers per `screens.md`.
+- **Pushed, not merged yet:** `feature/fe-02-student-management` (Anh). Merge `develop` into the branch before the
+  PR.
 - **FE-03 review (02/11):** endpoints work and the client builds. Lead decisions: keep the `departments` table;
   Dung's assumptions became business rules §4 "Teachers" (homeroom max 1 class per year, no new assignment for a
   locked teacher, assignments never back-dated, at least one subject per teacher, no empty pair while lessons
@@ -73,7 +77,10 @@ Last updated: 03/11/2026.
     approves them.
   - FE-02 (Anh), before the merge:
     - Merge `develop` into the branch (conflicts only in `App.jsx`, `navigation.js`, `routes.js`: keep both sides).
-    - Build UC-14 Import Parent–Student Links (It1).
+    - Build UC-14 Import Parent–Student Links (It1) as business rules §4 "Import parent–student links": template,
+      preview, import of the valid rows in one transaction; reuse the reading / header matching of
+      `server/src/modules/admin/accountImport.service.js` (FE-13) and `exceljs`, and the linking + group code of
+      UC-13 (one link path for both).
     - UC-09: SM edits the student's address (`users.address`).
     - Phone: use `utils/phone.js` (only `0` + 9 digits, `+84` → `0`) in the parent lookup instead of its own
       normaliser; search: use `utils/search.js`; drop the unaccent fallback and delete
@@ -83,42 +90,23 @@ Last updated: 03/11/2026.
       Transfer & Promotion" → SCR-11. Delete the empty root `package-lock.json`; keep `server/scripts/dev-local-db.js`.
     - After FE-04 is merged: switch the promotion screen to FE-04's school year / class endpoints and remove the
       temporary ones.
-  - FE-04 (Khanh), before the merge:
-    - Merge `develop` into the branch; for `docs/` and `database/` keep develop's version (the decisions are
-      written there); keep both sides in `App.jsx`, `navigation.js`, `messages.js`, `routes.js`; regenerate the seed.
-    - Screen numbers per `screens.md`: SCR-18 → SCR-65, SCR-19 → SCR-23, SCR-20 → SCR-24, SCR-21 → SCR-26,
-      SCR-22 → SCR-20, SCR-23 → SCR-21, SCR-24 → SCR-22 (SCR-70 already right).
-    - Group sync (§4 "Class group membership follows the class"): the previous homeroom teacher keeps GENERAL while
-      still teaching a subject; a teacher who is also a parent of the class keeps the parent groups; add the same
-      sync for teaching assignment changes (UC-18); run the test cases and report them.
-    - Soft-delete the test class types left in the shared DB (`Kh?i A`, `10 � Th?`, `QA Thử`, `QA Thử 2`, extra
-      `Khối E`).
-    - Create class / import (UC-28, UC-27): remove "students of last year's class" from the wizard; take only
-      students with no enrollment in the previous school year and none this year (§4 "Who puts a student in a
-      class"); an import row with a previous-year student is refused with a message to use promotion (UC-11).
-    - Search: use `utils/search.js`.
-    - Test on a local DB (`dev-local-db.js`) or inside a transaction that is rolled back – never leave test data in
-      the shared DB – and send the results with the hand-over:
-      - Group sync: (1) new homeroom teacher who does not teach the class → joins the 3 groups; previous homeroom
-        teacher who does not teach it → leaves the 3 groups and the class's teams. (2) New homeroom teacher who
-        already teaches a subject there → only joins STUDENT and PARENT, no duplicate row. (3) Previous homeroom
-        teacher who still teaches a subject → leaves STUDENT and PARENT, keeps GENERAL. (4) Teacher without an
-        assignment who is a parent of a student of the class → keeps GENERAL and PARENT. (5) Subject assignment
-        removed (not homeroom) → leaves GENERAL and the class's teams. (6) Teacher assigned again → old row back
-        (`left_at` cleared). (7) Second call → nothing changes. (8) Student removed with UC-33 → not added back.
-        (9) Class of an ended school year → nothing changes.
-      - Who may join a class: new student (never in a class) → can be added when creating a class, to an existing
-        class and by import; student of 10A1 last year not promoted yet → not offered, import row refused with
-        "use promotion"; student studying in a class this year → refused; student away all of last year → can be
-        added.
-    - Hand-over checklist: no conflict markers; seed regenerated; screen numbers right; server starts; `npm run build`
-      in `client/` passes; test results sent; any new `// ASSUMPTION:` listed in the message to the lead; pushed to
-      `feature/fe-04-class-group-management`.
+    - Test on the local DB (`dev-local-db.js`) or inside a rolled-back transaction, never leaving test data in the
+      shared DB, and send the results with the hand-over:
+      - UC-14: valid file → all links saved, parents in GENERAL + PARENT of the child's class; mixed file → valid rows
+        saved, the others listed with their error; unknown student code / unknown phone / wrong relationship /
+        link already there / third parent / same pair twice → row refused; phone typed `+84 905 000 041` → found;
+        no valid row → refused; more than 500 rows or a file not from the template → refused.
+      - UC-09: SM changes and clears a student's address. Parent lookup: `+84…`, `0905.000.041` → found; 11 digits →
+        invalid. Student list search: "bao" finds "Bảo"; "%" matches only a literal %.
+      - Transfer back to an old class → the old group rows come back (`left_at` cleared), no new row.
+    - Hand-over checklist: no conflict markers; server starts; `npm run build` in `client/` passes; test results
+      sent; any new `// ASSUMPTION:` listed in the message to the lead; pushed to `feature/fe-02-student-management`.
+  - FE-04 / FE-14 (Khanh):
     - FE-14 (It2) uses UC-104..UC-106; a parent's address is `users.address`, occupation stays `parents.occupation`.
-  - Group sync for FE-03 saves (after FE-04 is merged): business rules §4 "Class group membership follows the
-    class" – `server/src/modules/teacher/homeroom.service.js` (UC-19) and `teaching.service.js` (UC-18) must call
-    the FE-04 `classGroups.js` sync in the same transaction; they do not yet (the function is only on the FE-04
-    branch). Owner to be decided by the lead.
+  - Group sync for FE-03 saves: business rules §4 "Class group membership follows the class" –
+    `server/src/modules/teacher/homeroom.service.js` (UC-19) and `teaching.service.js` (UC-18) must call
+    `await syncClassTeachers(client, classId)` (FE-04 `classGroups.js`) for every class they change, in the same
+    transaction, after saving; they do not yet. Owner to be decided by the lead.
   - FE-03 screen numbers (lead, after all It1 merges): code uses SCR-13..17, `screens.md` has SCR-14 Teacher List,
     SCR-15 Teacher Detail, SCR-17 Update Teacher, SCR-18 Homeroom Assignment, SCR-19 Teaching Assignment.
   - FE-13 (Linh): account create / import still take free-text `teachers.department`; switch to the `departments`

@@ -222,7 +222,7 @@ export async function getGroup(user, groupId) {
 
 // UC-31 View Group Members. Everyone who can open the group sees names, roles and account status; email, phone
 // and student code only for teachers and the School Manager (permissions note 2).
-// ASSUMPTION (chosen by Khanh 27/10, still needs lead OK): a student's nickname (UC-34) is shown to whoever can open
+// Business-rules §4 (agreed 03/11/2026): a student's nickname (UC-34) is shown to whoever can open
 // the class's groups – the class's own members and the School Manager – since business-rules §4 only says "shown
 // only inside that class". Never shown in the teacher group or outside the class.
 export async function listMembers(user, groupId) {

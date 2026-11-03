@@ -92,7 +92,7 @@ const CLASS_GROUP_TYPES = ['GENERAL', 'STUDENT', 'PARENT'];
 //   * only teachers are touched: students and parents follow transfer / promotion (FE-02), so someone removed with
 //     UC-33 is not brought back; nothing happens for a class of an ended school year; calling it again changes nothing.
 // The moderator needs no update: it is always read from classes.homeroom_teacher_id.
-// ASSUMPTION (proposed 03/11, to confirm with Quoc): a teacher removed with UC-33 while still assigned comes back at
+// Business-rules §4 (agreed 03/11/2026): a teacher removed with UC-33 while still assigned comes back at
 // the next sync – membership follows the class; to take a teacher out, end their assignment.
 // Returns { added, left } as [{ groupId, userId }].
 export async function syncClassTeachers(client, classId) {
@@ -118,6 +118,8 @@ export async function syncClassTeachers(client, classId) {
      UPDATE group_members m SET left_at = NULL
      FROM wanted w
      WHERE m.group_id = w.group_id AND m.user_id = w.user_id AND m.left_at IS NOT NULL
+       -- only their latest row, and only when no row is active (older data may hold several rows per person)
+       AND m.member_id = (SELECT MAX(x.member_id) FROM group_members x WHERE x.group_id = m.group_id AND x.user_id = m.user_id)
      RETURNING m.group_id AS "groupId", m.user_id AS "userId"`,
     params,
   );
@@ -149,5 +151,14 @@ export async function syncClassTeachers(client, classId) {
      RETURNING m.group_id AS "groupId", m.user_id AS "userId"`,
     [classId],
   );
+  // A team nobody is left in is closed, as when its last member leaves (business-rules §4 "Teams in detail").
+  if (leftTeams.length) {
+    await client.query(
+      `UPDATE groups SET deleted_at = NOW()
+       WHERE group_id = ANY($1::bigint[]) AND deleted_at IS NULL
+         AND NOT EXISTS (SELECT 1 FROM group_members WHERE group_id = groups.group_id AND left_at IS NULL)`,
+      [leftTeams.map((t) => t.groupId)],
+    );
+  }
   return { added: [...back, ...fresh], left: [...leftGroups, ...leftTeams] };
 }
