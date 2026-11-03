@@ -131,12 +131,32 @@ Boundaries that are easy to get wrong:
 
 ## 4. School structure (FE-04)
 - `school_years` → two `semesters` (1, 2) with status `OPEN` / `CLOSED`. SM closes a semester; closing **only ends
-  attendance corrections** (it does not lock grades).
+  attendance corrections** (it does not lock grades). SM may **reopen** a closed semester (e.g. closed by mistake),
+  which gives the homeroom teacher the excused ↔ unexcused correction back (03/11/2026).
+- **School years** (FE-04, agreed 03/11/2026): name `YYYY-YYYY` with consecutive years; the year starts in the first
+  year of its name and ends in the second; two school years never overlap (the current year is found by date); a
+  school year that has ended is **read only** (classes, class types, groups).
+- **Subjects:** the subject code is unique and is what Excel imports refer to; no two subjects share a name
+  (case-insensitive).
 - Classes are created **per school year** (10A1 of 2026–2027 is a different row from 10A1 of 2027–2028).
   Promotion = new enrollment in the new class; transfer = old enrollment `TRANSFERRED` + new enrollment.
 - Every class has a **class type** (`class_tracks`, NOT NULL), e.g. type A = Maths/Physics/Chemistry focus.
-  `track_subjects` holds, per school year, each subject's **weight** and **periods per week** for that type; copied
-  from the previous year by default; editable, but weights **lock once the year has grades**.
+  `track_subjects` holds, per school year, the subjects and **periods per week** (whole number 1–10) of that type;
+  copied from the previous year by default; editable, but subjects can no longer be added or removed **once the year
+  has grades** (periods per week stay editable). Removing a subject from a type hard-deletes its `track_subjects`
+  row (allowed only while the year has no grades and has not ended, §14).
+- A class type belongs to **one grade** (10, 11 or 12) or to **every grade** (`class_tracks.grade_level_id`, NULL =
+  every grade; patch `patch_v0.3_class_track_grade.sql`, 02/11/2026), so subjects and periods can differ per grade.
+  A class only uses a type of its grade or one for every grade. A name is unique per grade (case-insensitive, among
+  types not deleted) and is used either for every grade or per grade, not both. A type's grade cannot change while
+  classes of another grade use it.
+- **Every subject weight is 1** (agreed 01/11/2026, in line with Circular 22/2021): `track_subjects.weight` is
+  always 1.00 and is not shown.
+- **Classes** (FE-04, agreed 03/11/2026): a class name is the grade followed by 1–8 letters or digits, no spaces or
+  accents (`10A1`, `12CT`; typed names are upper-cased). A class has at most **45 studying students**, checked when
+  creating a class, adding students and importing a class list. UC-28 creates a class and also **adds students
+  who have no class in that school year** to an existing class. A class list import has at most 2000 rows; a locked
+  account is still imported, with a warning.
 - Homeroom teacher may be empty → show a warning so SM assigns one.
 - `teacher_subjects`: which subjects a teacher can teach (one teacher may teach several). Teaching assignments only
   for subjects the teacher can teach.
@@ -160,7 +180,29 @@ Boundaries that are easy to get wrong:
   SMs, managed by SM, reused across years). After promotion, last year's groups are read only.
 - **Teams** (`TEAM_CHAT`): chat only, members from one class; Teachers, Students and Parents can create them
   (`groups.created_by`); SA and SM cannot.
-- Student **nickname** is set by the homeroom teacher and shown only inside that class.
+- Student **nickname** (max 50 characters) is set by the homeroom teacher only and shown only inside that class:
+  to the members of the class's groups and to the School Manager (never in the teacher group or outside the class).
+- **Teams in detail** (agreed 03/11/2026): the creator picks the members when creating it – the creator plus 2–49
+  others from the same class (3–50 people), no locked accounts; name 2–100 characters, not unique. After that
+  **nobody adds or removes members** and a team has **no admin**. **Anyone can leave a team**, the creator too;
+  when the last member leaves, the team is closed (soft-deleted). The three class groups cannot be left (membership
+  follows the class). Not possible once the school year has ended.
+- **Group moderator = the current homeroom teacher**, read from `classes.homeroom_teacher_id` (nothing stored per
+  group), so the rights move at once when the homeroom teacher changes, posts waiting for approval included.
+- **Removing members** (UC-33): the homeroom teacher removes students and parents only; teachers are removed by the
+  School Manager (who also makes the teaching assignments).
+- **Class group membership follows the class** (agreed 03/11/2026), in the same transaction as the change that
+  causes it:
+  - Transfer (UC-10) / promotion (UC-11): the student leaves every group and team of the old class and joins GENERAL
+    + STUDENT of the new class; each linked parent leaves GENERAL + PARENT of the old class (unless another of their
+    children still studies there) and joins GENERAL + PARENT of the new class.
+  - Homeroom change (UC-19) and teaching assignment change (UC-18): teachers are kept in line with §4 – the
+    homeroom teacher is in all three groups, a subject teacher (current or future assignment) in GENERAL. A teacher
+    who no longer has a reason to be in a group leaves it (`left_at`): the previous homeroom teacher leaves STUDENT
+    and PARENT, and also GENERAL and the class's teams unless they still teach a subject there. A teacher who is
+    also the parent of a student of the class keeps the groups a parent belongs to. Someone who comes back gets
+    their old membership row back (`left_at` cleared) and sees the group's whole history. Shared function in FE-04
+    `classGroups.js`; nothing changes for classes of an ended school year.
 
 ## 5. Group feed (FE-05)
 - All members of a GENERAL group (or the teacher group) can post. **Post approval is on by default** and can be
@@ -233,7 +275,7 @@ Boundaries that are easy to get wrong:
   once the semester has grades.**
 - Each individual score is its own `grades` row (`attempt_no`); averages are **not stored**, they are computed:
   subject semester average = weighted average of the scores present; subject year average = (S1 + 2 × S2) / 3;
-  student year average = average of subjects (weighted by `track_subjects.weight`).
+  student year average = average of subjects (every `track_subjects.weight` is 1, so a plain average).
 - Teachers enter / import grades only for their assigned class + subject.
 - **Finalize** (UC-85) locks the grade book (class × subject × semester, `grade_locks`). It is **blocked if any
   currently studying student is missing a score**. To change a finalized grade the teacher asks SM outside the
@@ -266,7 +308,8 @@ Boundaries that are easy to get wrong:
 - **Every delete in the system is a soft delete** (`deleted_at`, often `deleted_by`): never `DELETE` business rows,
   always filter `deleted_at IS NULL`.
 - Hard delete is allowed only for technical / configuration rows: `post_likes` (unlike), `class_event_viewers`,
-  `teacher_subjects`, `user_roles`, `student_parents` (unlink), expired OTPs.
+  `teacher_subjects`, `user_roles`, `student_parents` (unlink), expired OTPs, `track_subjects` (a subject removed
+  from a class type while the year has no grades, §4).
 - Status changes instead of deletes: accounts (`LOCKED`), enrollments (`TRANSFERRED` / `DROPPED`), group members
   (`left_at`), activity registrations (`CANCELLED`), activities (`CANCELLED`).
 

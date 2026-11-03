@@ -25,7 +25,7 @@ FE-10 is split: timetable in It2, class calendar in It3.
 
 ## Current status (read first; update after every merge, schema patch or new decision)
 
-Last updated: 02/11/2026.
+Last updated: 03/11/2026.
 
 - **Shared DB (Supabase):** schema v0.3 + `patch_v0.3_password_reset_requests.sql` (27/10) +
   `patch_v0.3_users_address.sql` (28/10: `users.address` added, `parents.address` dropped) +
@@ -33,7 +33,9 @@ Last updated: 02/11/2026.
   `patch_v0.3_reset_cooldown_codes.sql` (01/11: reset cooldown setting, GV / HS codes padded to 4 digits) +
   `patch_v0.3_reset_request_delivery.sql` (01/11: `password_reset_requests.delivery`) +
   `patch_v0.3_departments.sql` (FE-03, already run before review; kept by the lead 02/11: table `departments`,
-  the file arrives in `database/` with the FE-03 merge). 48 tables.
+  the file arrives in `database/` with the FE-03 merge) +
+  `patch_v0.3_class_track_grade.sql` (FE-04, run by Khanh 02/11 before approval; accepted 03/11:
+  `class_tracks.grade_level_id`). 48 tables.
 - **develop:**
   - FE-01 complete for It1 (merged 01/11): UC-01..UC-06, UC-107 Update Address, UC-108 Update Occupation,
     UC-109 View Child Profile, password reset request with sign-in name + full name check; forced password change
@@ -49,6 +51,10 @@ Last updated: 02/11/2026.
   Dung's assumptions became business rules §4 "Teachers" (homeroom max 1 class per year, no new assignment for a
   locked teacher, assignments never back-dated, at least one subject per teacher, no empty pair while lessons
   remain); screen numbers are fixed by the lead after all It1 branches are merged.
+- **FE-04 review (03/11):** lead decisions written into business rules §4 (school years, subjects, class types per
+  grade with `grade_level_id`, every weight 1, classes max 45 students, UC-28 adds students without a class,
+  nickname, teams: members picked at creation, anyone can leave, no admin; semester reopen; homeroom removes
+  students / parents only; class group membership follows the class) and in UC-21 / UC-26 / UC-28 / UC-35.
 - **Numbering changes (01/11):** UC-104 View Activity Log and SCR-64 Activity Log removed; UC-105..UC-110 became
   UC-104..UC-109 and SCR-65..SCR-71 became SCR-64..SCR-70; then SCR-71 Password Reset Requests (FE-13) was added.
   109 use cases, 71 screens.
@@ -59,8 +65,17 @@ Last updated: 02/11/2026.
     approves them.
   - FE-02 (Anh): `parents.address` → `users.address`; phone input = business rules §3 (use `utils/phone.js`, only
     `0` + 9 digits); UC references to FE-14 shift by one (UC-105 → UC-104).
-  - FE-04 (Khanh): screen references shift by one (SCR-66 → SCR-65, SCR-70 → SCR-69, SCR-71 → SCR-70); FE-14 (It2)
-    uses UC-104..UC-106, a parent's address is `users.address`, occupation stays `parents.occupation`.
+  - FE-04 (Khanh), before the merge (doc "FE-04 – Việc cần làm trước khi merge"):
+    - Merge `develop` into the branch; for `docs/` and `database/` keep develop's version (the decisions are
+      written there); keep both sides in `App.jsx`, `navigation.js`, `messages.js`, `routes.js`; regenerate the seed.
+    - Screen numbers per `screens.md`: SCR-18 → SCR-65, SCR-19 → SCR-23, SCR-20 → SCR-24, SCR-21 → SCR-26,
+      SCR-22 → SCR-20, SCR-23 → SCR-21, SCR-24 → SCR-22 (SCR-70 already right).
+    - Group sync (§4 "Class group membership follows the class"): the previous homeroom teacher keeps GENERAL while
+      still teaching a subject; a teacher who is also a parent of the class keeps the parent groups; add the same
+      sync for teaching assignment changes (UC-18); run the test cases and report them.
+    - Soft-delete the test class types left in the shared DB (`Kh?i A`, `10 � Th?`, `QA Thử`, `QA Thử 2`, extra
+      `Khối E`).
+    - FE-14 (It2) uses UC-104..UC-106; a parent's address is `users.address`, occupation stays `parents.occupation`.
   - FE-03 (Dung), before the merge:
     - Folder layout as in CLAUDE.md: move the code from `routes/`, `validators/`, `controllers/`, `services/`,
       `repositories/`, `models/`, `constants/` into `server/src/modules/teacher/` (routes → controller → service,
