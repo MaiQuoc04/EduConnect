@@ -2,14 +2,17 @@ import { useEffect, useMemo, useState } from 'react';
 import { Link, NavLink, useLocation, useParams } from 'react-router-dom';
 import { api } from '../../api/client.js';
 import Icon from '../../components/Icon.jsx';
+import { useAuth } from '../../context/AuthContext.jsx';
 import { errorText } from '../../messages.js';
 import { fold } from '../subjects/subjectText.js';
 import { GROUP_TYPE_HELP, GROUP_TYPE_ICONS, GROUP_TYPE_LABELS } from '../groups/groupLabels.js';
+import ChatThread from './ChatThread.jsx';
 
 // "Trò chuyện" – split view: my groups on the left (~3/10), the chosen group's chat on the right (~7/10).
-// ASSUMPTION: shell built in FE-04 (Khanh) from the UC-29 group list so "Trò chuyện" links have a home; FE-06
-// Messaging (owner: Anh, SCR-43 Group Chat / SCR-50 Chat Room) replaces <ChatPending> with the real message list
-// and composer, and adds 1-1 chats to the left list. Who may chat where is still checked by GET /groups/:id.
+// Shell built in FE-04 from the UC-29 group list; FE-06 Messaging (Khanh) fills the right pane with UC-47 Chat in
+// Group (ChatThread.jsx, SCR-43 / SCR-50). UC-48 replaces the left list with the conversation list (last message,
+// unread count, 1-1 chats from UC-49). Who may chat where is checked by the server.
+// The School Manager sees no class chat (business-rules §2): the list keeps only the school-wide teacher group.
 // Opened from a group or from "Nhóm của tôi", the router state { backTo, backLabel } (groupLabels.js) adds a
 // "Quay lại" button at the top left; it is passed on while the user switches chats so the way back stays.
 export default function ChatPage() {
@@ -18,6 +21,8 @@ export default function ChatPage() {
   const backState = back?.backTo ? back : undefined;
   const [list, setList] = useState({ loading: true, data: null, error: '' });
   const [query, setQuery] = useState('');
+  const { activeRole } = useAuth();
+  const manager = activeRole === 'SCHOOL_MANAGER';
 
   useEffect(() => {
     api
@@ -32,7 +37,7 @@ export default function ChatPage() {
     if (!data) return [];
     const q = fold(query.trim());
     const keep = (title) => !q || fold(title).includes(q);
-    const result = data.classes.map((c) => ({
+    const result = (manager ? [] : data.classes).map((c) => ({
       key: `c${c.classId}`,
       title: `Lớp ${c.className}`,
       items: [
@@ -49,7 +54,7 @@ export default function ChatPage() {
       });
     }
     return result.filter((s) => s.items.length);
-  }, [list.data, query]);
+  }, [list.data, query, manager]);
 
   return (
     <>
@@ -168,7 +173,7 @@ function ChatRoom({ groupId, backState }) {
         </Link>
       </header>
       {g.canSeeContent ? (
-        <ChatPending readOnly={g.readOnly} />
+        <ChatThread groupId={g.groupId} />
       ) : (
         <div className="chat-empty">
           <span className="gd-pending-icon" aria-hidden="true">
@@ -177,38 +182,6 @@ function ChatRoom({ groupId, backState }) {
           <p className="muted">Quản lý trường không xem tin nhắn của nhóm lớp.</p>
         </div>
       )}
-    </>
-  );
-}
-
-// FE-06 (Khanh): replace with the message list and composer.
-function ChatPending({ readOnly }) {
-  return (
-    <>
-      <div className="chat-messages">
-        <div className="chat-empty">
-          <span className="gd-pending-icon" aria-hidden="true">
-            <Icon name="forum" />
-          </span>
-          <p className="muted">Tin nhắn của nhóm sẽ hiện ở đây.</p>
-          <p className="stamp-soft">
-            <Icon name="construction" size="sm" />
-            Chức năng đang được phát triển
-          </p>
-        </div>
-      </div>
-      <div className="chat-composer">
-        <input
-          className="input"
-          placeholder={readOnly ? 'Nhóm chỉ còn để xem lại' : 'Nhập tin nhắn…'}
-          disabled
-          aria-label="Nhập tin nhắn"
-        />
-        <button type="button" className="btn btn-primary" disabled>
-          <Icon name="send" size="sm" />
-          Gửi
-        </button>
-      </div>
     </>
   );
 }

@@ -96,6 +96,12 @@ const ERROR_MESSAGES = {
   MSG_TEAM_TOO_MANY: ({ max } = {}) => `Một team có tối đa ${max ?? 50} thành viên.`,
   MSG_TEAM_CLASS_NOT_ALLOWED: 'Bạn chỉ tạo được team trong lớp của mình.',
   MSG_TEAM_MEMBER_NOT_ELIGIBLE: 'Có người không thuộc lớp hoặc tài khoản đang bị khoá.',
+  // FE-06 Messaging
+  MSG_CHAT_NO_ACCESS: 'Quản lý trường không xem tin nhắn của nhóm lớp.',
+  MSG_CHAT_NOT_MEMBER: 'Bạn không còn là thành viên của cuộc trò chuyện này.',
+  MSG_MESSAGE_EMPTY: 'Vui lòng nhập nội dung tin nhắn.',
+  MSG_MESSAGE_TOO_LONG: ({ max } = {}) => `Tin nhắn có tối đa ${max ?? 2000} ký tự.`,
+  MSG_INVALID_INPUT: 'Dữ liệu gửi lên không hợp lệ.',
   MSG_CLASS_STUDENT_DUPLICATE: 'Một học sinh bị chọn hai lần.',
   MSG_CLASS_FULL: ({ max, current } = {}) =>
     `Một lớp có tối đa ${max ?? 45} học sinh${current ? `; lớp đang có ${current} học sinh` : ''}.`,
