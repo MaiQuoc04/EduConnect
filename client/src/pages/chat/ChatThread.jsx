@@ -16,6 +16,8 @@ import { memberSubline } from '../groups/memberText.js';
 const MESSAGE_MAX = 2000; // same limit as the server (ASSUMPTION there, plan question Q5)
 const SEEN_NAMES = 3;
 const NEAR_BOTTOM_PX = 120;
+const INPUT_MIN_PX = 36; // = .btn height
+const INPUT_MAX_PX = 136; // about six lines of 20px
 
 const VN_DAY = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Ho_Chi_Minh' });
 function dayLabel(day) {
@@ -171,12 +173,14 @@ export default function ChatThread({ groupId }) {
     }
   }
 
-  // Grow the box with its text, up to about six lines.
+  // One line tall like the "Gửi" button; grows with the text up to about six lines, then scrolls.
   useLayoutEffect(() => {
     const box = inputRef.current;
     if (!box) return;
-    box.style.height = 'auto';
-    box.style.height = `${Math.min(box.scrollHeight, 160)}px`;
+    box.style.height = '0px';
+    const needed = box.scrollHeight + 2; // + top and bottom border (border-box)
+    box.style.height = `${Math.min(Math.max(needed, INPUT_MIN_PX), INPUT_MAX_PX)}px`;
+    box.style.overflowY = needed > INPUT_MAX_PX ? 'auto' : 'hidden';
   }, [text]);
 
   const memberById = useMemo(() => new Map(members.map((m) => [m.userId, m])), [members]);

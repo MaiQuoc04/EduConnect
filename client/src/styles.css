@@ -1066,7 +1066,8 @@ a.mc-head:hover { text-decoration: none; }
 .chat-composer .input { flex: 1; }
 /* FE-06 UC-47 message list (ChatThread.jsx) */
 .chat-messages { flex-direction: column; }
-.chat-input { resize: none; min-height: 40px; max-height: 160px; line-height: 1.45; padding-top: 9px; padding-bottom: 9px; font: inherit; }
+/* One line = the height of the "Gửi" button (36px); grows to about 6 lines, then scrolls (ChatThread.jsx). */
+textarea.input.chat-input { display: block; height: 36px; min-height: 36px; max-height: 136px; padding: 7px 14px; line-height: 20px; resize: none; overflow-y: hidden; }
 .chat-count { align-self: center; color: var(--graphite-500); white-space: nowrap; }
 .chat-count.over { color: var(--red-pen); }
 .msg-list { list-style: none; margin: auto 0 0; padding: 12px 16px 8px; display: flex; flex-direction: column; gap: 2px; }
