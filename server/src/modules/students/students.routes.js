@@ -1,0 +1,36 @@
+import { Router } from 'express';
+import { requireAuth, requireRole } from '../../middlewares/auth.js';
+import { uploadSingle } from '../../middlewares/upload.js';
+import * as ctrl from './students.controller.js';
+
+// FE-02 Student Management (owner: Anh). School Manager only, checked against the active role
+// (permissions.md "Student / Parent / Teacher profile – View / update"). Teachers see students through
+// FE-04 group members, not here.
+const router = Router();
+
+router.get('/', requireAuth, requireRole('SCHOOL_MANAGER'), ctrl.list); // UC-07
+// UC-11 is a batch action on many students, so it is not under /:studentId. Declared before the /:studentId routes.
+// permissions.md "Enrollment – Transfer / promote": School Manager only.
+router.post('/promote', requireAuth, requireRole('SCHOOL_MANAGER'), ctrl.promote); // UC-11
+// UC-14 Import Parent–Student Links (SCR-07 button). permissions.md "Parent–student link – Link / unlink / import":
+// School Manager only. Declared before /:studentId so "parent-links" is not taken for a student id.
+router.get('/parent-links/template', requireAuth, requireRole('SCHOOL_MANAGER'), ctrl.parentLinkTemplate); // UC-14
+router.post('/parent-links/preview', requireAuth, requireRole('SCHOOL_MANAGER'), uploadSingle('file'),
+  ctrl.previewParentLinks); // UC-14
+router.post('/parent-links/import', requireAuth, requireRole('SCHOOL_MANAGER'), uploadSingle('file'),
+  ctrl.importParentLinks); // UC-14
+// TEMPORARY read-only parent lookup by phone for SCR-13 until FE-14 has UC-104 View Parent List. Declared before
+// /:studentId so "parents" is not taken for a student id. permissions.md "Parent–student link": School Manager only.
+router.get('/parents/lookup', requireAuth, requireRole('SCHOOL_MANAGER'), ctrl.lookupParent); // UC-13
+router.get('/:studentId', requireAuth, requireRole('SCHOOL_MANAGER'), ctrl.detail); // UC-08
+router.patch('/:studentId', requireAuth, requireRole('SCHOOL_MANAGER'), ctrl.update); // UC-09
+// A business action (old enrollment TRANSFERRED + new enrollment), not a field update, so POST on a sub-resource.
+// permissions.md "Enrollment – Transfer / promote": School Manager only.
+router.post('/:studentId/transfer', requireAuth, requireRole('SCHOOL_MANAGER'), ctrl.transfer); // UC-10
+// permissions.md "Parent–student link": School Manager only.
+router.get('/:studentId/parents', requireAuth, requireRole('SCHOOL_MANAGER'), ctrl.parents); // UC-12
+// Link = new student_parents row; unlink = hard delete of that row (business-rules §14). School Manager only.
+router.post('/:studentId/parents', requireAuth, requireRole('SCHOOL_MANAGER'), ctrl.linkParent); // UC-13
+router.delete('/:studentId/parents/:parentId', requireAuth, requireRole('SCHOOL_MANAGER'), ctrl.unlinkParent); // UC-13
+
+export default router;

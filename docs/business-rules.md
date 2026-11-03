@@ -139,13 +139,18 @@ Boundaries that are easy to get wrong:
 - **Subjects:** the subject code is unique and is what Excel imports refer to; no two subjects share a name
   (case-insensitive).
 - Classes are created **per school year** (10A1 of 2026–2027 is a different row from 10A1 of 2027–2028).
-  Promotion = new enrollment in the new class; transfer = old enrollment `TRANSFERRED` + new enrollment.
+  Promotion = new enrollment in the new class; transfer = old enrollment `TRANSFERRED` + new enrollment (back to a
+  class already studied in that year: its old enrollment is reopened, see Transfer below).
 - **Who puts a student in a class** (agreed 03/11/2026) – one path per case, so the rules live in one place:
   - Students who studied in a class **the previous school year** go to the new year only by **promotion (UC-11,
-    FE-02)**: to a higher grade or the same grade (repeating a year); only students still `STUDYING` in the source
-    year count (a student transferred inside that year moves from the class they study in now); at most 200
-    students per call.
-  - **Transfer (UC-10, FE-02)**: to another class of the **same school year and the same grade**.
+    FE-02)**: from the school year **right before** the destination year, into a destination year that has not
+    ended; to the **next grade or the same grade** (repeating a year; grade 12 can only repeat); only students still
+    `STUDYING` in the source year count (a student transferred inside that year moves from the class they study in
+    now); at most 200 students per call; a target class never goes over 45 studying students (the call is refused).
+  - **Transfer (UC-10, FE-02)**: to another class of the **same school year and the same grade**, not once the year
+    has ended, not into a full class (45). Back to a class the student already studied in that year (11D1 → 11A1 →
+    11D1): the old enrollment is **reopened** (`STUDYING`, `left_at` cleared) with its grades and attendance –
+    `UNIQUE (student_id, class_id)` stays (lead, 03/11/2026).
   - **Create class / import class list (UC-28, UC-27, FE-04)** only take students who were **not studying in a
     class of the previous school year** (no `STUDYING` enrollment there – the same students promotion would take)
     and are not studying in a class this year: new to the school, coming from another school, coming back after a
@@ -178,7 +183,7 @@ Boundaries that are easy to get wrong:
   always 1.00 and is not shown.
 - **Classes** (FE-04, agreed 03/11/2026): a class name is the grade followed by 1–8 letters or digits, no spaces or
   accents (`10A1`, `12CT`; typed names are upper-cased). A class has at most **45 studying students**, checked when
-  creating a class, adding students and importing a class list. UC-28 creates a class and also adds students to
+  creating a class, adding students, importing a class list, transferring (UC-10) and promoting (UC-11). UC-28 creates a class and also adds students to
   an existing class, only the students it may take (see "Who puts a student in a class"). A class list import has at most 2000 rows; a locked
   account is still imported, with a warning.
 - Homeroom teacher may be empty → show a warning so SM assigns one.

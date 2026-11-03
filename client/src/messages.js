@@ -105,6 +105,41 @@ const ERROR_MESSAGES = {
     `${students?.length ? `${students.join(', ')}: ` : 'Có học sinh '}đã học ở năm học trước. Hãy xếp lớp bằng chức năng Lên lớp.`,
   MSG_STUDENT_ALREADY_ENROLLED: ({ classes } = {}) =>
     `Có học sinh đang học lớp khác trong năm học${classes?.length ? ` (${classes.join(', ')})` : ''}.`,
+  // FE-02 Student Management (UC-07..UC-14)
+  MSG_STUDENT_NOT_FOUND: 'Không tìm thấy học sinh.',
+  MSG_CLASS_NOT_FOUND: 'Không tìm thấy lớp học.',
+  MSG_SCHOOL_YEAR_NOT_FOUND: 'Không tìm thấy năm học.',
+  MSG_TRANSFER_SAME_CLASS: 'Học sinh đang học ở lớp này. Vui lòng chọn lớp khác.',
+  MSG_TRANSFER_DIFFERENT_YEAR: 'Lớp đích thuộc năm học khác. Vui lòng dùng chức năng lên lớp.',
+  MSG_TRANSFER_DIFFERENT_GRADE_LEVEL: ({ currentGradeLevel, targetGradeLevel } = {}) =>
+    currentGradeLevel && targetGradeLevel
+      ? `Chỉ chuyển lớp trong cùng khối. Lớp đích thuộc khối ${targetGradeLevel}, học sinh đang học khối ${currentGradeLevel}; vui lòng dùng chức năng lên lớp.`
+      : 'Chỉ chuyển lớp trong cùng khối. Lớp đích thuộc khối khác, vui lòng dùng chức năng lên lớp.',
+  MSG_NO_ACTIVE_ENROLLMENT: 'Học sinh hiện không học ở lớp nào trong năm học này.',
+  MSG_SAME_SCHOOL_YEAR: 'Năm học đích phải khác năm học nguồn. Chuyển lớp trong cùng năm thì dùng chức năng chuyển lớp.',
+  MSG_INVALID_YEAR_ORDER: 'Năm học đích phải bắt đầu sau năm học nguồn.',
+  MSG_NOT_NEXT_SCHOOL_YEAR: 'Chỉ lên lớp từ năm học liền trước sang năm học đích.',
+  MSG_DUPLICATE_STUDENT_IN_REQUEST: 'Có học sinh được chọn nhiều lần. Mỗi học sinh chỉ thuộc một lớp đích.',
+  MSG_TOO_MANY_STUDENTS: ({ max } = {}) => `Mỗi lần chỉ xử lý tối đa ${max ?? 200} học sinh.`,
+  SKIP_NO_ACTIVE_ENROLLMENT: 'Học sinh không còn theo học lớp nào trong năm học nguồn.',
+  SKIP_ALREADY_ENROLLED: 'Học sinh đã được xếp lớp trong năm học đích.',
+  SKIP_STUDENT_NOT_FOUND: 'Không tìm thấy học sinh.',
+  SKIP_CLASS_ENROLLMENT_EXISTS: 'Học sinh đã từng học ở lớp này.',
+  SKIP_GRADE_NOT_ALLOWED: ({ fromGradeLevel, toGradeLevel } = {}) =>
+    fromGradeLevel && toGradeLevel
+      ? `Học sinh đang học khối ${fromGradeLevel}, chỉ lên khối kế tiếp hoặc ở lại khối ${fromGradeLevel}, không vào khối ${toGradeLevel}.`
+      : 'Lớp đích không phải khối kế tiếp hay cùng khối của học sinh.',
+  MSG_PARENT_NOT_FOUND: 'Không tìm thấy phụ huynh.',
+  MSG_USER_NOT_PARENT: 'Tài khoản này không phải tài khoản phụ huynh.',
+  MSG_LINK_ALREADY_EXISTS: 'Phụ huynh này đã được liên kết với học sinh.',
+  MSG_MAX_PARENTS_REACHED: ({ max } = {}) => `Học sinh đã có đủ ${max ?? 2} phụ huynh. Vui lòng gỡ liên kết trước khi thêm.`,
+  MSG_LINK_NOT_FOUND: 'Liên kết này không tồn tại.',
+  MSG_INVALID_RELATIONSHIP_TYPE: 'Quan hệ phải là Bố, Mẹ hoặc Người giám hộ.',
+  MSG_PARENT_PHONE_NOT_FOUND: 'Không có tài khoản phụ huynh nào với số điện thoại này.',
+  MSG_DUPLICATE_LINK_IN_FILE: ({ duplicateOf } = {}) =>
+    duplicateOf
+      ? `Học sinh và phụ huynh này đã có ở dòng ${duplicateOf} trong file.`
+      : 'Học sinh và phụ huynh này đã có ở một dòng phía trên trong file.',
   // FE-03 Teacher Management
   TEACHER_NOT_FOUND: 'Không tìm thấy giáo viên này.',
   INVALID_DATE: 'Ngày không hợp lệ.',

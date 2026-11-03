@@ -1,0 +1,89 @@
+/* SCR-07 "Nhập liên kết phụ huynh" – UC-14 Import Parent–Student Links (FE-02). Everything is scoped under
+   .import-parent-links (the dialog is rendered inside it). The wizard, summary, dropzone and preview table come from
+   FE-13's Import Accounts (pages/admin/admin.css) and styles.css, so both import screens look the same; this file
+   only adds what UC-14 needs: amber "Có lỗi" (not red – refused rows are normal in an import), the saved status,
+   the two name columns, a scroll box with a sticky header, and the confirmation dialog. */
+
+.import-parent-links .strong { font-weight: 600; color: var(--graphite-900); }
+.import-parent-links-hint { margin-top: 10px; }
+.import-parent-links-file { font-weight: 500; overflow-wrap: anywhere; }
+.import-parent-links-link { text-decoration: underline; }
+.import-parent-links-link.ink { color: var(--ink-700); }
+.import-parent-links .dropzone.is-busy { cursor: progress; opacity: 0.8; }
+.import-parent-links-error { margin-top: 20px; }
+.import-parent-links-spin { animation: import-parent-links-spin 0.9s linear infinite; }
+@keyframes import-parent-links-spin { to { transform: rotate(360deg); } }
+
+/* Preview / result card: same padding as UC-96's wide card. */
+.import-parent-links-card { padding: 28px 32px; }
+.import-parent-links-notice { margin: 20px 0 0; }
+.import-parent-links-card > .import-parent-links-notice:first-child { margin: 0 0 20px; }
+.import-parent-links-warnings { margin: 4px 0 0; padding-left: 18px; }
+.import-parent-links-tools { margin: 20px 0 12px; }
+.import-parent-links-toggle { min-height: 32px; }
+.import-parent-links-toggle input:disabled { cursor: not-allowed; }
+
+/* Summary: refused rows in amber instead of UC-96's red. */
+.import-parent-links .stat.import-parent-links-stat-warn { background: var(--amber-bg); }
+.import-parent-links .stat.import-parent-links-stat-warn strong { color: var(--amber); }
+
+/* Status pills: VALID = light green (.pill.green), INVALID = amber, IMPORTED = solid green. */
+.import-parent-links .pill.import-parent-links-pill-warn { background: var(--amber-bg); color: var(--amber); }
+.import-parent-links .pill.import-parent-links-pill-saved { background: var(--green); color: var(--white); }
+.import-parent-links-reason { margin-top: 6px; color: var(--amber); font-size: 13px; line-height: 18px; white-space: normal; }
+
+/* Table: scrolls inside its box (500 rows), header stays on top (as SCR-19 Teaching Assignment). */
+.import-parent-links-scroll { max-height: min(62vh, 640px); overflow: auto; }
+.import-parent-links-scroll:focus-visible { outline: 2px solid var(--ink-600); outline-offset: 2px; }
+.import-parent-links-table { min-width: 960px; }
+.import-parent-links-table thead th { position: sticky; top: 0; z-index: 1; background: var(--graphite-50); }
+.import-parent-links-table .num { text-align: right; }
+/* The row number stays visible while the table scrolls sideways (narrow screens), as the name column of Student
+   List does, so each row can still be found in the file. */
+.import-parent-links-table td.num { position: sticky; left: 0; z-index: 1; background: var(--white); box-shadow: inset -1px 0 var(--graphite-200); }
+.import-parent-links-table thead th.num { left: 0; z-index: 2; }
+.import-parent-links-table tr.is-invalid td { background: #fffcf5; }
+/* The names are what the School Manager checks before confirming: they stand out. */
+.import-parent-links-table th.is-name { color: var(--ink-700); }
+.import-parent-links-table td.is-name { font-weight: 600; color: var(--graphite-900); }
+.import-parent-links-table td:last-child { min-width: 260px; white-space: normal; }
+
+/* Confirmation dialog (same look as the FE-02 transfer dialog). */
+.import-parent-links-dialog {
+  width: min(480px, calc(100vw - 32px));
+  padding: 24px;
+  border: 0;
+  border-radius: var(--radius-dialog);
+  box-shadow: var(--shadow-dialog);
+}
+.import-parent-links-dialog::backdrop { background: rgba(28, 27, 25, 0.32); }
+.import-parent-links-dialog-head { display: flex; align-items: center; gap: 8px; margin-bottom: 12px; }
+.import-parent-links-dialog-head > .icon { color: var(--ink-700); }
+.import-parent-links-dialog p { overflow-wrap: anywhere; }
+.import-parent-links-dialog p + p { margin-top: 8px; }
+.import-parent-links-dialog .notice { margin-top: 16px; padding: 12px; }
+.import-parent-links-dialog-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 12px; margin-top: 20px; }
+
+/* ---------- responsive (same breakpoints as the other FE-02 screens) ---------- */
+@media (max-width: 1080px) {
+  .import-parent-links-card { padding: 24px; }
+}
+@media (max-width: 900px) {
+  .import-parent-links .import-summary { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .import-parent-links .import-summary > div:first-child { grid-column: 1 / -1; }
+}
+@media (max-width: 640px) {
+  .import-parent-links-card,
+  .import-parent-links .admin-form { padding: 20px 16px; }
+  .import-parent-links .stat { padding: 10px 12px; }
+  .import-parent-links .stat strong { font-size: 20px; line-height: 26px; }
+  .import-parent-links .actions-row .btn,
+  .import-parent-links .card-footer .btn { flex: 1 1 100%; height: 44px; }
+  .import-parent-links .card-footer .left { flex: 1 1 100%; }
+  .import-parent-links-toggle { min-height: 44px; }
+  .import-parent-links-toggle input { width: 20px; height: 20px; }
+  .import-parent-links .dropzone { min-height: 44px; }
+  .import-parent-links-scroll { max-height: 70vh; }
+  .import-parent-links-dialog { padding: 20px 16px; }
+  .import-parent-links-dialog-actions .btn { flex: 1 1 100%; height: 44px; }
+}

@@ -17,6 +17,13 @@ import GroupMembersPage from './pages/groups/GroupMembersPage.jsx';
 import GroupOverview from './pages/groups/GroupOverview.jsx';
 import GroupPendingTab from './pages/groups/GroupPendingTab.jsx';
 import SchoolYearPage from './pages/school-years/SchoolYearPage.jsx';
+import ImportParentLinksPage from './pages/students/ImportParentLinksPage.jsx';
+import StudentDetailPage from './pages/students/StudentDetailPage.jsx';
+import StudentListPage from './pages/students/StudentListPage.jsx';
+import StudentParentsPage from './pages/students/StudentParentsPage.jsx';
+import TransferStudentPage from './pages/students/TransferStudentPage.jsx';
+import UpdateStudentPage from './pages/students/UpdateStudentPage.jsx';
+import UpdateStudentRelationshipPage from './pages/students/UpdateStudentRelationshipPage.jsx';
 import SubjectDetailPage from './pages/subjects/SubjectDetailPage.jsx';
 import SubjectFormPage from './pages/subjects/SubjectFormPage.jsx';
 import SubjectListPage from './pages/subjects/SubjectListPage.jsx';
@@ -70,6 +77,76 @@ export default function App() {
           }
         />
         <Route path="change-password" element={<ChangePasswordPage />} />
+        {/* FE-02 Student Management */}
+        <Route
+          path="students"
+          element={
+            <ProtectedRoute roles={['SCHOOL_MANAGER']}>
+              <StudentListPage />
+            </ProtectedRoute>
+          }
+        />
+        {/* UC-11 Promote Students (SCR-11, promotion tab): a batch action, not one student. Declared before
+            students/:studentId so the reading order matches the server's routes. */}
+        <Route
+          path="students/promote"
+          element={
+            <ProtectedRoute roles={['SCHOOL_MANAGER']}>
+              <TransferStudentPage />
+            </ProtectedRoute>
+          }
+        />
+        {/* UC-14 Import Parent–Student Links (SCR-07 "Nhập liên kết phụ huynh"). Declared before students/:studentId. */}
+        <Route
+          path="students/parent-links/import"
+          element={
+            <ProtectedRoute roles={['SCHOOL_MANAGER']}>
+              <ImportParentLinksPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="students/:studentId"
+          element={
+            <ProtectedRoute roles={['SCHOOL_MANAGER']}>
+              <StudentDetailPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="students/:studentId/edit"
+          element={
+            <ProtectedRoute roles={['SCHOOL_MANAGER']}>
+              <UpdateStudentPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="students/:studentId/transfer"
+          element={
+            <ProtectedRoute roles={['SCHOOL_MANAGER']}>
+              <TransferStudentPage />
+            </ProtectedRoute>
+          }
+        />
+        {/* UC-12 View Student's Parents (SCR-12), opened from Student Detail; no menu entry. */}
+        <Route
+          path="students/:studentId/parents"
+          element={
+            <ProtectedRoute roles={['SCHOOL_MANAGER']}>
+              <StudentParentsPage />
+            </ProtectedRoute>
+          }
+        />
+        {/* UC-13 Link / Unlink Parent–Student (SCR-13), opened from SCR-12; no menu entry. */}
+        <Route
+          path="students/:studentId/parents/edit"
+          element={
+            <ProtectedRoute roles={['SCHOOL_MANAGER']}>
+              <UpdateStudentRelationshipPage />
+            </ProtectedRoute>
+          }
+        />
         {/* FE-04 Class & Group Management */}
         <Route
           path="school-years"
