@@ -23,9 +23,98 @@ Code due dates: It1 30/10, It2 13/11, It3 27/11.
 
 FE-10 is split: timetable in It2, class calendar in It3.
 
+## Current status (read first; update after every merge, schema patch or new decision)
+
+Last updated: 03/11/2026 (FE-04 merged).
+
+- **Shared DB (Supabase):** schema v0.3 + `patch_v0.3_password_reset_requests.sql` (27/10) +
+  `patch_v0.3_users_address.sql` (28/10: `users.address` added, `parents.address` dropped) +
+  `patch_v0.3_reset_request_password.sql` (31/10: `password_reset_requests.temp_password_enc`) +
+  `patch_v0.3_reset_cooldown_codes.sql` (01/11: reset cooldown setting, GV / HS codes padded to 4 digits) +
+  `patch_v0.3_reset_request_delivery.sql` (01/11: `password_reset_requests.delivery`) +
+  `patch_v0.3_departments.sql` (FE-03, already run before review; kept by the lead 02/11: table `departments`) +
+  `patch_v0.3_class_track_grade.sql` (FE-04, run by Khanh 02/11 before approval; accepted 03/11:
+  `class_tracks.grade_level_id`). 48 tables.
+- **develop:**
+  - FE-01 complete for It1 (merged 01/11): UC-01..UC-06, UC-107 Update Address, UC-108 Update Occupation,
+    UC-109 View Child Profile, password reset request with sign-in name + full name check; forced password change
+    after a temporary password asks only for the new password (01/11); the requests page lists emailed resets too
+    ("sent by email" / "to hand over", 01/11).
+  - FE-13 (Linh) merged 01/11 with the team lead's decisions applied: automatic reset from a request (email or
+    SA / SM read the password), cooldown setting, role-based usernames, HS / GV + 4-digit codes, phone format,
+    no SA creation from screens, settings ranges, UC numbers fixed. UC-95..UC-103 built; "View Activity Log"
+    removed (log kept in the DB only).
+  - FE-03 (Dung) merged 03/11: UC-15..UC-19 (teacher list / detail / update with the departments list, homeroom
+    assignment, teaching assignment), all server code in `server/src/modules/teacher/`
+    (`/teachers`, `/homeroom-assignments`, `/teaching-assignments`). Stray files removed at merge time.
+  - FE-04 (Khanh) merged 03/11: UC-20..UC-35 (school years and semesters with reopen, subjects, class types per
+    grade, create / import classes for students not in a class the previous year, groups, members, nickname, teams
+    with leave), `syncClassTeachers` in `server/src/modules/classes/classGroups.js` (tested by the lead in a
+    rolled-back transaction), all FE-04 screen numbers per `screens.md`.
+- **Pushed, not merged yet:** `feature/fe-02-student-management` (Anh). Merge `develop` into the branch before the
+  PR.
+- **FE-03 review (02/11):** endpoints work and the client builds. Lead decisions: keep the `departments` table;
+  Dung's assumptions became business rules §4 "Teachers" (homeroom max 1 class per year, no new assignment for a
+  locked teacher, assignments never back-dated, at least one subject per teacher, no empty pair while lessons
+  remain); screen numbers are fixed by the lead after all It1 branches are merged.
+- **FE-04 review (03/11):** lead decisions written into business rules §4 (school years, subjects, class types per
+  grade with `grade_level_id`, every weight 1, classes max 45 students, UC-28 adds students without a class,
+  nickname, teams: members picked at creation, anyone can leave, no admin; semester reopen; homeroom removes
+  students / parents only; class group membership follows the class) and in UC-21 / UC-26 / UC-28 / UC-35.
+- **FE-02 review (03/11):** UC-07..UC-13 built, UC-14 missing. Lead decisions in business rules §4 ("Who puts a
+  student in a class", "Students") and §16 (search, name order): promotion is the only way for previous-year
+  students, transfer same year and grade, create class / import only for students with no enrollment the previous
+  year, no "drop out" use case (lock the account), SM edits a student's address, Anh's assumptions accepted, anyone
+  coming back to a group gets the old row back. Shared accent-insensitive search `server/src/utils/search.js` (from
+  Dung's helpers; FE-13 account list and FE-03 teacher list use it, 03/11).
+- **Numbering changes (01/11):** UC-104 View Activity Log and SCR-64 Activity Log removed; UC-105..UC-110 became
+  UC-104..UC-109 and SCR-65..SCR-71 became SCR-64..SCR-70; then SCR-71 Password Reset Requests (FE-13) was added.
+  109 use cases, 71 screens.
+- **Use cases added after the plan:** UC-107 Update Address (User, 28/10), UC-108 Update Occupation (Parent, 29/10),
+  UC-109 View Child Profile (Parent, 01/11), all FE-01 (Quoc, It1).
+- **Follow-ups owed:**
+  - FE-13 (Linh): pull `develop` and continue from it; do not run SQL patches on the shared DB before the lead
+    approves them.
+  - FE-02 (Anh), before the merge:
+    - Merge `develop` into the branch (conflicts only in `App.jsx`, `navigation.js`, `routes.js`: keep both sides).
+    - Build UC-14 Import Parent–Student Links (It1) as business rules §4 "Import parent–student links": template,
+      preview, import of the valid rows in one transaction; reuse the reading / header matching of
+      `server/src/modules/admin/accountImport.service.js` (FE-13) and `exceljs`, and the linking + group code of
+      UC-13 (one link path for both).
+    - UC-09: SM edits the student's address (`users.address`).
+    - Phone: use `utils/phone.js` (only `0` + 9 digits, `+84` → `0`) in the parent lookup instead of its own
+      normaliser; search: use `utils/search.js`; drop the unaccent fallback and delete
+      `database/2026-10-26_enable_unaccent.sql`.
+    - Groups: someone coming back to a group gets the old row back (`left_at = NULL`), not a new row.
+    - UC references: UC-105 → UC-104 (View Parent List), UC-106 → UC-105 (View Parent Detail); "SCR-10 Student
+      Transfer & Promotion" → SCR-11. Delete the empty root `package-lock.json`; keep `server/scripts/dev-local-db.js`.
+    - After FE-04 is merged: switch the promotion screen to FE-04's school year / class endpoints and remove the
+      temporary ones.
+    - Test on the local DB (`dev-local-db.js`) or inside a rolled-back transaction, never leaving test data in the
+      shared DB, and send the results with the hand-over:
+      - UC-14: valid file → all links saved, parents in GENERAL + PARENT of the child's class; mixed file → valid rows
+        saved, the others listed with their error; unknown student code / unknown phone / wrong relationship /
+        link already there / third parent / same pair twice → row refused; phone typed `+84 905 000 041` → found;
+        no valid row → refused; more than 500 rows or a file not from the template → refused.
+      - UC-09: SM changes and clears a student's address. Parent lookup: `+84…`, `0905.000.041` → found; 11 digits →
+        invalid. Student list search: "bao" finds "Bảo"; "%" matches only a literal %.
+      - Transfer back to an old class → the old group rows come back (`left_at` cleared), no new row.
+    - Hand-over checklist: no conflict markers; server starts; `npm run build` in `client/` passes; test results
+      sent; any new `// ASSUMPTION:` listed in the message to the lead; pushed to `feature/fe-02-student-management`.
+  - FE-04 / FE-14 (Khanh):
+    - FE-14 (It2) uses UC-104..UC-106; a parent's address is `users.address`, occupation stays `parents.occupation`.
+  - Group sync for FE-03 saves: business rules §4 "Class group membership follows the class" –
+    `server/src/modules/teacher/homeroom.service.js` (UC-19) and `teaching.service.js` (UC-18) must call
+    `await syncClassTeachers(client, classId)` (FE-04 `classGroups.js`) for every class they change, in the same
+    transaction, after saving; they do not yet. Owner to be decided by the lead.
+  - FE-03 screen numbers (lead, after all It1 merges): code uses SCR-13..17, `screens.md` has SCR-14 Teacher List,
+    SCR-15 Teacher Detail, SCR-17 Update Teacher, SCR-18 Homeroom Assignment, SCR-19 Teaching Assignment.
+  - FE-13 (Linh): account create / import still take free-text `teachers.department`; switch to the `departments`
+    list (`GET /teachers/department-options`), then a foreign key can be added.
+
 ## Iteration 1 (19/10 – 30/10/2026)
 
-### Quoc: FE-01 Personal Account (6 UC)
+### Quoc: FE-01 Personal Account (9 UC)
 
 Also: seed data for the shared DB (school year, semesters, subjects, classes, sample accounts).
 
@@ -37,6 +126,9 @@ Also: seed data for the shared DB (school year, semesters, subjects, classes, sa
 | UC-04 | View Profile | User |
 | UC-05 | Change Password | User |
 | UC-06 | Change Avatar | User |
+| UC-107 | Update Address | User |
+| UC-108 | Update Occupation | Parent |
+| UC-109 | View Child Profile | Parent |
 
 ### Anh: FE-02 Student Management (8 UC)
 
@@ -82,7 +174,7 @@ Also: seed data for the shared DB (school year, semesters, subjects, classes, sa
 | UC-34 | Set Student Nickname | Homeroom Teacher |
 | UC-35 | Create Team Chat | Teacher, Student, Parent |
 
-### Linh: FE-13 System Administration (10 UC)
+### Linh: FE-13 System Administration (9 UC)
 
 | ID | Use case | Actor |
 |---|---|---|
@@ -95,7 +187,6 @@ Also: seed data for the shared DB (school year, semesters, subjects, classes, sa
 | UC-101 | Lock / Unlock Account | System Admin, School Manager |
 | UC-102 | Configure System Settings | System Admin |
 | UC-103 | Post Maintenance Announcement | System Admin |
-| UC-104 | View Activity Log | System Admin |
 
 ## Iteration 2 (02/11 – 13/11/2026)
 
@@ -148,9 +239,9 @@ Reuses FE-02 parent–student linking (UC-12..14), do not duplicate it.
 
 | ID | Use case | Actor |
 |---|---|---|
-| UC-105 | View Parent List | School Manager |
-| UC-106 | View Parent Detail | School Manager |
-| UC-107 | Update Parent Information | School Manager |
+| UC-104 | View Parent List | School Manager |
+| UC-105 | View Parent Detail | School Manager |
+| UC-106 | Update Parent Information | School Manager |
 
 ### Linh: Testing and integration of It1 + It2 features.
 
@@ -225,4 +316,4 @@ Class calendar (UC-76..80) + job: class event reminder 1 day before. Moved from 
 | UC-88 | View Grades | Teacher, Student, Parent, School Manager |
 | UC-89 | View Class Ranking | Teacher, Student, Parent, School Manager |
 
-Total: 107 use cases.
+Total: 109 use cases.

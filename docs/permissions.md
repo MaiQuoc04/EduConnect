@@ -7,18 +7,23 @@ Source: Report 3 section 4.4 (draft v1.3). Full = all records; Restricted (n) = 
 | User account | Create / import / export | Full | No | No | No | No | No |
 | User account | Change login identifiers | Full | No | No | No | No | No |
 | User account | Reset password, lock / unlock | Full | Restricted (1) | No | No | No | No |
-| Own account | Sign in, change password, change avatar | Full | Full | Full | Full | Full | Full |
-| System settings, maintenance banner, activity log | View / change | Full | No | No | No | No | No |
+| Password reset request | Send (Forgot Password screen, not signed in) | Full | Full | Full | Full | Full | Full |
+| Password reset request | View (incl. the one-time password of accounts without email) | Full | Restricted (1) | No | No | No | No |
+| Own account | Sign in, change password, change avatar, update address | Full | Full | Full | Full | Full | Full |
+| Own parent profile | Update occupation | No | No | No | No | No | Full |
+| Linked child's profile | View (read only) | No | No | No | No | No | Restricted (7) |
+| System settings, maintenance banner | View / change | Full | No | No | No | No | No |
 | Student / Parent / Teacher profile | View / update | No | Full | Restricted (2) | Restricted (2) | No | No |
 | Parent–student link | Link / unlink / import | No | Full | No | No | No | No |
 | Enrollment | Transfer / promote | No | Full | No | No | No | No |
 | Teaching / homeroom assignment | Assign | No | Full | No | No | No | No |
-| School year, semester, subject, class type | Create / update / close | No | Full | No | No | No | No |
+| School year, semester, subject, class type | Create / update / close (reopen a semester) | No | Full | No | No | No | No |
 | Class group | Create / import | No | Full | No | No | No | No |
 | Class group | View list, detail, members | No | Full (3) | Restricted (4) | Restricted (4) | Restricted (4) | Restricted (4) |
 | Class group | Add / remove member | No | Full | Restricted (5) | No | No | No |
 | Student nickname | Set | No | No | Restricted (5) | No | No | No |
 | Team | Create | No | No | Restricted (4) | Restricted (4) | Restricted (4) | Restricted (4) |
+| Team | Leave (own membership) | No | No | Restricted (4) | Restricted (4) | Restricted (4) | Restricted (4) |
 | Group feed post | View / create / comment / react | No | Restricted (6) | Restricted (4) | Restricted (4) | Restricted (4) | Restricted (4) |
 | Group feed post | Edit / delete own | No | Restricted (6) | Restricted (4) | Restricted (4) | Restricted (4) | Restricted (4) |
 | Group feed post | Pin / hide / approve | No | Restricted (6) | Restricted (5) | No | No | No |
@@ -54,7 +59,7 @@ Notes:
 2. Name and class only, inside groups they belong to; phone number and email visible to teachers and School Manager only.
 3. Lists and members only; School Manager does not see class feeds or chats.
 4. Only the classes, groups and teams the user belongs to.
-5. Only the class they are homeroom teacher of.
+5. Only the class they are homeroom teacher of. Removing a member: the homeroom teacher removes students and parents only; teachers are removed by the School Manager.
 6. School-wide teacher group only.
 7. Own data, or the selected child's data.
 8. Within the audience chosen by the author.

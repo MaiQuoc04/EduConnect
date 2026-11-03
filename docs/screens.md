@@ -6,7 +6,7 @@ Source: Report 3 section 5.1 (draft v1.3). Screen numbers here are Report 3's; t
 |---|---|---|---|
 | 1 | Login Page | FE-01 | Allows User to authenticate using the school-issued account |
 | 2 | School Feed | FE-08 | Displays school-wide posts and provides access to school feed management. |
-| 3 | User Profile | FE-01 | Displays the User's profile information. |
+| 3 | User Profile | FE-01 | Displays the User's profile information; a Parent also opens each linked child's profile from it (UC-109). |
 | 4 | Notifications | FE-09 | Displays notifications and reminders relevant to User. |
 | 5 | School Post Detail | FE-08 | Displays details of a school announcement or news post. |
 | 6 | Update School Post | FE-08 | Allows School Manager to update an existing school announcement or news post. |
@@ -35,8 +35,8 @@ Source: Report 3 section 5.1 (draft v1.3). Screen numbers here are Report 3's; t
 | 29 | Time Table View | FE-10 | Displays timetable information managed by School Manager . |
 | 30 | Update Time Table | FE-10 | Allows School Manager to update existing timetable information. |
 | 31 | Create School Post | FE-08 | Allows School Manager to create a new school announcement or news post. |
-| 32 | Forgot Password | FE-01 | Allows User to start the password recovery process. |
-| 33 | Edit Profile | FE-01 | Allows User to update permitted personal profile information. |
+| 32 | Forgot Password | FE-01 | Allows User to start the password recovery process by email OTP, or to send a password reset request (sign-in name + full name, checked against the account); the system then resets the password and emails it, or shows it to System Admin / School Manager when the account has no email. |
+| 33 | Edit Profile | FE-01 | Allows User to update permitted personal profile information (avatar, address and, for a parent, occupation). |
 | 34 | Change Password | FE-01 | Allows authenticated User to change the current password. |
 | 35 | Group Feed | FE-05 | Displays posts and community content within a selected class group. |
 | 36 | Create Group Post | FE-05 | Allows an authorized User to create a new post in a class group. |
@@ -67,11 +67,11 @@ Source: Report 3 section 5.1 (draft v1.3). Screen numbers here are Report 3's; t
 | 61 | Create Account | FE-13 | Allows System Admin to create a new user account and assign the appropriate role. |
 | 62 | Update Account | FE-13 | Allows System Admin to update information and administrative attributes of an existing user account. |
 | 63 | System Settings | FE-13 | Allows System Admin to view and manage system-level configuration settings. |
-| 64 | Activity Log | FE-13 | Displays recorded system and account activities for administrative monitoring and auditing. |
-| 65 | Maintenance Announcement | FE-13 | Allows System Admin to manage maintenance announcements shown to system users. |
-| 66 | School Year & Semester | FE-04 | Allows School Manager to create and update school years, create the two semesters of a school year, and close a semester. |
-| 67 | Create / Update Event | FE-07 | Allows Homeroom Teacher to post an extracurricular event in the class feed with a registration deadline, or to update an existing event. |
-| 68 | Registration List | FE-07 | Allows Homeroom Teacher to view the students registered for an event and to export the list to Excel. |
-| 69 | Grade Control | FE-11 | Allows School Manager to unlock finalized grades of a class, subject and semester and to view who changed which grade and when. |
-| 70 | Parent List | FE-14 | Allows School Manager to search and filter parents. |
-| 71 | Class Types & Subject Weights | FE-04 | Allows School Manager to define class types and set each subject's weight and periods per week for a school year. |
+| 64 | Maintenance Announcement | FE-13 | Allows System Admin to manage maintenance announcements shown to system users. |
+| 65 | School Year & Semester | FE-04 | Allows School Manager to create and update school years, create the two semesters of a school year, and close a semester. |
+| 66 | Create / Update Event | FE-07 | Allows Homeroom Teacher to post an extracurricular event in the class feed with a registration deadline, or to update an existing event. |
+| 67 | Registration List | FE-07 | Allows Homeroom Teacher to view the students registered for an event and to export the list to Excel. |
+| 68 | Grade Control | FE-11 | Allows School Manager to unlock finalized grades of a class, subject and semester and to view who changed which grade and when. |
+| 69 | Parent List | FE-14 | Allows School Manager to search and filter parents. |
+| 70 | Class Types & Subject Weights | FE-04 | Allows School Manager to define class types (each for one grade or every grade) and set their subjects and periods per week for a school year (shown as "Loại lớp & số tiết"; every weight is 1). |
+| 71 | Password Reset Requests | FE-13 | Lists the automatic resets from password reset requests (tab waiting for sign-in / used): "sent by email" or "to hand over" with the temporary password; System Admin sees all, School Manager student, parent and teacher accounts (added 01/11/2026). |

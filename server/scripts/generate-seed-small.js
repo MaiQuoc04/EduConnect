@@ -40,7 +40,7 @@ const SUBJECTS = [
 ];
 const COMPULSORY = { TOAN: 3, VAN: 3, ANH: 3, SU: 2, GDTC: 2, QPAN: 1, HDTN: 3 };
 
-// ASSUMPTION: focus subjects of a class type get weight 2.00 and one extra period (learning topics); others 1.00.
+// ASSUMPTION: focus subjects of a class type get one extra period (learning topics). Every weight is 1.00 (agreed 01/11).
 const TRACKS = [
   { name: 'Khối A', description: 'Tự nhiên – trọng tâm Toán, Vật lí, Hoá học', electives: ['LY', 'HOA', 'SINH', 'TIN'], focus: ['TOAN', 'LY', 'HOA'] },
   { name: 'Khối B', description: 'Tự nhiên – trọng tâm Toán, Hoá học, Sinh học', electives: ['HOA', 'SINH', 'LY', 'DIA'], focus: ['TOAN', 'HOA', 'SINH'] },
@@ -51,7 +51,7 @@ function trackSubjects(track) {
   const periods = { ...COMPULSORY };
   for (const s of track.electives) periods[s] = 2;
   for (const s of track.focus) periods[s] += 1;
-  return Object.entries(periods).map(([code, p]) => ({ code, periods: p, weight: track.focus.includes(code) ? '2.00' : '1.00' }));
+  return Object.entries(periods).map(([code, p]) => ({ code, periods: p, weight: '1.00' }));
 }
 
 // 45-minute periods: 5 in the morning, 5 in the afternoon.
@@ -61,9 +61,10 @@ const TIME_SLOTS = [
 ];
 
 // ---------- people: 3 per role ----------
-// Usernames follow business rules §3 (first name + initials of family and middle names, no accents).
-const user = (username, fullName, phone, { email = true, status = 'ACTIVE', mustChange = false } = {}) => ({
-  username, fullName, email: email ? `${username}@${EMAIL_DOMAIN}` : null, phone, status, mustChange,
+// Usernames: the old short form (first name + initials of family and middle names, no accents), kept on purpose –
+// the shared database already uses them. New accounts get the role formats of business rules §3 (FE-13).
+const user = (username, fullName, phone, { email = true, status = 'ACTIVE', mustChange = false, address = null } = {}) => ({
+  username, fullName, email: email ? `${username}@${EMAIL_DOMAIN}` : null, phone, status, mustChange, address,
 });
 
 const admins = [
@@ -80,11 +81,11 @@ const managers = [
 
 // ASSUMPTION: with only 3 teachers, each one teaches several subjects so every subject of both classes has a teacher.
 const teachers = [
-  { user: user('lannt', 'Nguyễn Thị Lan', '0905000021'), code: 'GV001', department: 'Tổ Toán – Khoa học tự nhiên',
+  { user: user('lannt', 'Nguyễn Thị Lan', '0905000021'), code: 'GV0001', department: 'Tổ Toán – Khoa học tự nhiên',
     subjects: ['TOAN', 'LY', 'HOA', 'SINH', 'TIN', 'CN', 'HDTN'] },
-  { user: user('longhv', 'Hoàng Văn Long', '0905000022'), code: 'GV002', department: 'Tổ Ngữ văn – Khoa học xã hội',
+  { user: user('longhv', 'Hoàng Văn Long', '0905000022'), code: 'GV0002', department: 'Tổ Ngữ văn – Khoa học xã hội',
     subjects: ['VAN', 'SU', 'DIA', 'KTPL', 'HDTN'] },
-  { user: user('maitt', 'Trần Thị Mai', '0905000023'), code: 'GV003', department: 'Tổ Ngoại ngữ – Thể chất',
+  { user: user('maitt', 'Trần Thị Mai', '0905000023'), code: 'GV0003', department: 'Tổ Ngoại ngữ – Thể chất',
     subjects: ['ANH', 'GDTC', 'QPAN'] },
 ];
 const teacher = (username) => teachers.find((t) => t.user.username === username);
@@ -96,20 +97,20 @@ const CLASSES = [
 ];
 
 const students = [
-  { user: user('baopg', 'Phạm Gia Bảo', null), code: 'HS260001', dob: '2011-03-14', gender: 'MALE', cls: CLASSES[0], nickname: 'Bin' },
-  { user: user('khanglm', 'Lê Minh Khang', null, { email: false }), code: 'HS260002', dob: '2011-07-02', gender: 'MALE', cls: CLASSES[0], nickname: null },
-  { user: user('tramlnb', 'Lê Ngọc Bảo Trâm', '0905000033', { mustChange: true }), code: 'HS250001', dob: '2010-11-25', gender: 'FEMALE', cls: CLASSES[1], nickname: null },
+  { user: user('baopg', 'Phạm Gia Bảo', null), code: 'HS2601', dob: '2011-03-14', gender: 'MALE', cls: CLASSES[0], nickname: 'Bin' },
+  { user: user('khanglm', 'Lê Minh Khang', null, { email: false }), code: 'HS2602', dob: '2011-07-02', gender: 'MALE', cls: CLASSES[0], nickname: null },
+  { user: user('tramlnb', 'Lê Ngọc Bảo Trâm', '0905000033', { mustChange: true }), code: 'HS2501', dob: '2010-11-25', gender: 'FEMALE', cls: CLASSES[1], nickname: null },
 ];
 const student = (username) => students.find((s) => s.user.username === username);
 
 const ADDRESS = 'phường Hải Châu, TP. Đà Nẵng';
 const parents = [
-  { user: user('toanpv', 'Phạm Văn Toàn', '0905000041'), occupation: 'Kỹ sư', address: `12 Lê Lợi, ${ADDRESS}`,
+  { user: user('toanpv', 'Phạm Văn Toàn', '0905000041', { address: `12 Lê Lợi, ${ADDRESS}` }), occupation: 'Kỹ sư',
     children: [['baopg', 'FATHER']] },
-  { user: user('hanttn', 'Trần Thị Ngọc Hân', '0905000042'), occupation: 'Kế toán', address: `45 Hùng Vương, ${ADDRESS}`,
+  { user: user('hanttn', 'Trần Thị Ngọc Hân', '0905000042', { address: `45 Hùng Vương, ${ADDRESS}` }), occupation: 'Kế toán',
     children: [['khanglm', 'MOTHER'], ['tramlnb', 'MOTHER']] }, // two children in two classes
-  { user: user('oanhntk', 'Nguyễn Thị Kim Oanh', '0905000043', { email: false, status: 'LOCKED' }), occupation: 'Nội trợ',
-    address: `12 Lê Lợi, ${ADDRESS}`, children: [['baopg', 'MOTHER']] },
+  { user: user('oanhntk', 'Nguyễn Thị Kim Oanh', '0905000043', { email: false, status: 'LOCKED', address: `12 Lê Lợi, ${ADDRESS}` }),
+    occupation: 'Nội trợ', children: [['baopg', 'MOTHER']] },
 ];
 
 const users = [...admins, ...managers, ...teachers.map((t) => t.user), ...students.map((s) => s.user), ...parents.map((p) => p.user)];
@@ -161,8 +162,9 @@ L.push(`-- EduConnect SMALL seed data v0.3 (PostgreSQL) – generated by server/
 -- ASSUMPTIONS (confirm with the team):
 --   * Each account has exactly one role (no SM + Teacher or Teacher + Parent combinations here).
 --   * Each teacher teaches several subjects so that every subject of both classes has a teacher.
---   * student_code = HS + entry year (2 digits) + 4-digit number; teacher_code = GV + 3 digits.
---   * Class type weights: focus subjects 2.00, others 1.00; focus subjects get one extra period per week.
+--   * student_code = HS + 4 digits, teacher_code = GV + 4 digits (business rules §3). The sample usernames are
+--     the old short ones (huynq, lannt…), kept as if System Admin had changed them; new accounts get the role formats.
+--   * Every subject weight is 1.00 (no longer shown); focus subjects get one extra period per week.
 --   * The homeroom teacher teaches HDTN of their class.
 --   * Group members: GENERAL = homeroom + subject teachers + students + parents; STUDENT = homeroom + students;
 --     PARENT = homeroom + parents; TEACHER_SCHOOL = all teachers + all School Managers.
@@ -200,8 +202,8 @@ SELECT u.user_id, r.role_id FROM users u JOIN roles r ON r.role_code = '${role}'
 WHERE u.username IN (${usernamesOf(list)});`;
 
 L.push(`-- Accounts (password: ${PASSWORD})
-INSERT INTO users (username, email, phone, password_hash, full_name, status, must_change_password) VALUES
-${users.map((u) => `  (${[u.username, u.email, u.phone, hash].map(q).join(', ')}, ${q(u.fullName)}, ${q(u.status)}, ${u.mustChange ? 'TRUE' : 'FALSE'})`).join(',\n')};
+INSERT INTO users (username, email, phone, password_hash, full_name, address, status, must_change_password) VALUES
+${users.map((u) => `  (${[u.username, u.email, u.phone, hash].map(q).join(', ')}, ${q(u.fullName)}, ${q(u.address)}, ${q(u.status)}, ${u.mustChange ? 'TRUE' : 'FALSE'})`).join(',\n')};
 
 ${roleInsert('SYSTEM_ADMIN', admins)}
 ${roleInsert('SCHOOL_MANAGER', managers)}
@@ -216,6 +218,10 @@ ${values(teachers.map((t) => [t.user.username, t.code, t.department]))}
 ) AS v(username, code, department)
 JOIN users u ON u.username = v.username;
 
+-- Departments list (FE-03): the departments used by the sample teachers
+INSERT INTO departments (department_name)
+SELECT DISTINCT department FROM teachers WHERE department IS NOT NULL ORDER BY department;
+
 INSERT INTO students (user_id, student_code, dob, gender)
 SELECT u.user_id, v.code, v.dob::date, v.gender
 FROM (VALUES
@@ -223,11 +229,11 @@ ${values(students.map((s) => [s.user.username, s.code, s.dob, s.gender]))}
 ) AS v(username, code, dob, gender)
 JOIN users u ON u.username = v.username;
 
-INSERT INTO parents (user_id, occupation, address)
-SELECT u.user_id, v.occupation, v.address
+INSERT INTO parents (user_id, occupation)
+SELECT u.user_id, v.occupation
 FROM (VALUES
-${values(parents.map((p) => [p.user.username, p.occupation, p.address]))}
-) AS v(username, occupation, address)
+${values(parents.map((p) => [p.user.username, p.occupation]))}
+) AS v(username, occupation)
 JOIN users u ON u.username = v.username;
 
 INSERT INTO student_parents (student_id, parent_id, relationship_type)
