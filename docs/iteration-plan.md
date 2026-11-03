@@ -73,7 +73,10 @@ Last updated: 03/11/2026.
     approves them.
   - FE-02 (Anh), before the merge:
     - Merge `develop` into the branch (conflicts only in `App.jsx`, `navigation.js`, `routes.js`: keep both sides).
-    - Build UC-14 Import Parent–Student Links (It1).
+    - Build UC-14 Import Parent–Student Links (It1) as business rules §4 "Import parent–student links": template,
+      preview, import of the valid rows in one transaction; reuse the reading / header matching of
+      `server/src/modules/admin/accountImport.service.js` (FE-13) and `exceljs`, and the linking + group code of
+      UC-13 (one link path for both).
     - UC-09: SM edits the student's address (`users.address`).
     - Phone: use `utils/phone.js` (only `0` + 9 digits, `+84` → `0`) in the parent lookup instead of its own
       normaliser; search: use `utils/search.js`; drop the unaccent fallback and delete
@@ -83,6 +86,17 @@ Last updated: 03/11/2026.
       Transfer & Promotion" → SCR-11. Delete the empty root `package-lock.json`; keep `server/scripts/dev-local-db.js`.
     - After FE-04 is merged: switch the promotion screen to FE-04's school year / class endpoints and remove the
       temporary ones.
+    - Test on the local DB (`dev-local-db.js`) or inside a rolled-back transaction, never leaving test data in the
+      shared DB, and send the results with the hand-over:
+      - UC-14: valid file → all links saved, parents in GENERAL + PARENT of the child's class; mixed file → valid rows
+        saved, the others listed with their error; unknown student code / unknown phone / wrong relationship /
+        link already there / third parent / same pair twice → row refused; phone typed `+84 905 000 041` → found;
+        no valid row → refused; more than 500 rows or a file not from the template → refused.
+      - UC-09: SM changes and clears a student's address. Parent lookup: `+84…`, `0905.000.041` → found; 11 digits →
+        invalid. Student list search: "bao" finds "Bảo"; "%" matches only a literal %.
+      - Transfer back to an old class → the old group rows come back (`left_at` cleared), no new row.
+    - Hand-over checklist: no conflict markers; server starts; `npm run build` in `client/` passes; test results
+      sent; any new `// ASSUMPTION:` listed in the message to the lead; pushed to `feature/fe-02-student-management`.
   - FE-04 (Khanh), before the merge:
     - Merge `develop` into the branch; for `docs/` and `database/` keep develop's version (the decisions are
       written there); keep both sides in `App.jsx`, `navigation.js`, `messages.js`, `routes.js`; regenerate the seed.

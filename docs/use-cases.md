@@ -27,7 +27,7 @@ Source: Report 3 section 4.2 (draft v1.3). Actor "User" = any signed-in account.
 | UC-11 | Promote Students | School Manager | Enrollment Changes | Enroll students of the previous school year into classes of the new one (next grade or the same grade when repeating); the only way a previous-year student enters a new year's class; old class groups become read-only. |
 | UC-12 | View Student's Parents | School Manager | Parent Linking | View the parents linked to a student. |
 | UC-13 | Link / Unlink Parent–Student | School Manager | Parent Linking | Link or unlink a parent and a student (at most 2 parents per student), from the student or the parent side. |
-| UC-14 | Import Parent–Student Links | School Manager | Parent Linking | Link parents and students in bulk from a file, with a preview before saving. |
+| UC-14 | Import Parent–Student Links | School Manager | Parent Linking | Link parents and students in bulk from a file (student code, parent phone, relationship), with a preview; valid rows are saved, invalid ones listed (same pattern as UC-96). |
 
 ## FE-03 Teacher Management
 

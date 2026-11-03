@@ -155,6 +155,14 @@ Boundaries that are easy to get wrong:
 - **Students** (FE-02, agreed 03/11/2026): date of birth gives an age of 10–30 today; SM updates name, date of
   birth, gender and **address** (`users.address`) in UC-09; username / email / phone stay System Admin only. A
   locked parent account can be linked; two parents with the same relationship are allowed (max 2 parents, §3).
+- **Import parent–student links (UC-14)** works like the account import (UC-96, FE-13): a template (`.xlsx` or
+  `.csv`) with columns *Mã học sinh*, *Số điện thoại phụ huynh*, *Quan hệ* (Bố / Mẹ / Người giám hộ); headers are
+  matched ignoring accents, case and notes; at most 500 rows. **Preview** (no write) lists each row's errors;
+  **import** checks the same file again and saves **every valid row in one transaction** – invalid rows are skipped
+  and listed; no valid row → refused. Row errors: missing value, student code not found, no parent account with
+  that phone (`utils/phone.js`), relationship not in the list, link already exists, the student would have more
+  than 2 parents (existing links + rows of the file), the same student–parent pair twice in the file. A new link
+  adds the parent to GENERAL + PARENT of the child's current class, as UC-13 does. Not logged (like UC-13).
 - Every class has a **class type** (`class_tracks`, NOT NULL), e.g. type A = Maths/Physics/Chemistry focus.
   `track_subjects` holds, per school year, the subjects and **periods per week** (whole number 1–10) of that type;
   copied from the previous year by default; editable, but subjects can no longer be added or removed **once the year
