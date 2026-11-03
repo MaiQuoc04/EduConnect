@@ -232,8 +232,9 @@ Boundaries that are easy to get wrong:
     and PARENT, and also GENERAL and the class's teams unless they still teach a subject there. A teacher who is
     also the parent of a student of the class keeps the groups a parent belongs to.
   - Anyone who comes back to a group (teacher, student or parent) gets their old membership row back (`left_at`
-    cleared) and sees the group's whole history. Shared function in FE-04
-    `classGroups.js`; nothing changes for classes of an ended school year.
+    cleared, `joined_at` reset to the time they come back, `last_read_at` cleared). They see the group's whole
+    **feed** history, but in the **chat** only messages sent since that new `joined_at` (§6, agreed 04/11/2026).
+    Shared function in FE-04 `classGroups.js`; nothing changes for classes of an ended school year.
 
 ## 5. Group feed (FE-05)
 - All members of a GENERAL group (or the teacher group) can post. **Post approval is on by default** and can be
@@ -253,7 +254,13 @@ Boundaries that are easy to get wrong:
   same pair). Every message has a `group_id`.
 - Private messages only with people in one's own classes (SM: within the teacher group). Phone and email are visible
   only to teachers and SM.
-- Read receipts: `group_members.last_read_at`; "seen by" = members whose `last_read_at ≥ message.sent_at`.
+- **Chat history starts at joining** (agreed 04/11/2026): in every chat (group, team, teacher group, 1-1) a member
+  sees only the messages sent since their latest `joined_at`. This holds for a first-time member (e.g. a student
+  who transfers in) and for someone coming back (their `joined_at` is reset, §4); messages from an earlier
+  membership period are not shown again, not even their own. The last message and the unread count of the
+  conversation list follow the same rule. **Chat only:** the group feed (FE-05) still shows its whole history.
+- Read receipts: `group_members.last_read_at`; "seen by" = members whose `last_read_at ≥ message.sent_at` (and
+  who had joined by then, `joined_at ≤ message.sent_at`).
 - Removing a member / transferring a student sets `group_members.left_at` (row is kept).
 
 ## 7. Extracurricular activities (FE-07)
