@@ -32,8 +32,7 @@ Last updated: 03/11/2026.
   `patch_v0.3_reset_request_password.sql` (31/10: `password_reset_requests.temp_password_enc`) +
   `patch_v0.3_reset_cooldown_codes.sql` (01/11: reset cooldown setting, GV / HS codes padded to 4 digits) +
   `patch_v0.3_reset_request_delivery.sql` (01/11: `password_reset_requests.delivery`) +
-  `patch_v0.3_departments.sql` (FE-03, already run before review; kept by the lead 02/11: table `departments`,
-  the file arrives in `database/` with the FE-03 merge) +
+  `patch_v0.3_departments.sql` (FE-03, already run before review; kept by the lead 02/11: table `departments`) +
   `patch_v0.3_class_track_grade.sql` (FE-04, run by Khanh 02/11 before approval; accepted 03/11:
   `class_tracks.grade_level_id`). 48 tables.
 - **develop:**
@@ -45,8 +44,11 @@ Last updated: 03/11/2026.
     SA / SM read the password), cooldown setting, role-based usernames, HS / GV + 4-digit codes, phone format,
     no SA creation from screens, settings ranges, UC numbers fixed. UC-95..UC-103 built; "View Activity Log"
     removed (log kept in the DB only).
-- **Pushed, not merged yet:** `feature/fe-02-student-management` (Anh), `feature/fe-03-teacher-management` (Dung),
-  `feature/fe-04-class-group-management` (Khanh). Each should merge `develop` into its branch before its PR.
+  - FE-03 (Dung) merged 03/11: UC-15..UC-19 (teacher list / detail / update with the departments list, homeroom
+    assignment, teaching assignment), all server code in `server/src/modules/teacher/`
+    (`/teachers`, `/homeroom-assignments`, `/teaching-assignments`). Stray files removed at merge time.
+- **Pushed, not merged yet:** `feature/fe-02-student-management` (Anh), `feature/fe-04-class-group-management`
+  (Khanh). Each should merge `develop` into its branch before its PR.
 - **FE-03 review (02/11):** endpoints work and the client builds. Lead decisions: keep the `departments` table;
   Dung's assumptions became business rules §4 "Teachers" (homeroom max 1 class per year, no new assignment for a
   locked teacher, assignments never back-dated, at least one subject per teacher, no empty pair while lessons
@@ -76,19 +78,10 @@ Last updated: 03/11/2026.
     - Soft-delete the test class types left in the shared DB (`Kh?i A`, `10 � Th?`, `QA Thử`, `QA Thử 2`, extra
       `Khối E`).
     - FE-14 (It2) uses UC-104..UC-106; a parent's address is `users.address`, occupation stays `parents.occupation`.
-  - FE-03 (Dung), before the merge:
-    - Folder layout as in CLAUDE.md: move the code from `routes/`, `validators/`, `controllers/`, `services/`,
-      `repositories/`, `models/`, `constants/` into `server/src/modules/teacher/` (routes → controller → service,
-      SQL in the service or a file inside the module) and delete the old unused files already there
-      (`modules/teacher/*.routes.js` / `.controller.js` / `.service.js`, about 980 lines nobody imports).
-    - Delete stray files: root `package-lock.json` (empty), `server/scripts/check-cols.js`,
-      `server/scripts/check-tables.js`; fix the comment in `teacher.constants.js` that still points to schema v0.2.
-    - Reuse the existing utils instead of copies: accent removal from `utils/username.js` (`removeAccents`), phone
-      handling from `utils/phone.js`; keep only what is really new in a file inside the module. Do not add shared
-      files (`constants/errorCodes.js`, `middlewares/validate.js`, `utils/text.js`, `utils/validation.js`) without
-      asking the lead first.
-    - Do not run SQL patches on the shared DB before the lead approves them (`patch_v0.3_departments.sql` was run
-      early).
+  - Group sync for FE-03 saves (after FE-04 is merged): business rules §4 "Class group membership follows the
+    class" – `server/src/modules/teacher/homeroom.service.js` (UC-19) and `teaching.service.js` (UC-18) must call
+    the FE-04 `classGroups.js` sync in the same transaction; they do not yet (the function is only on the FE-04
+    branch). Owner to be decided by the lead.
   - FE-03 screen numbers (lead, after all It1 merges): code uses SCR-13..17, `screens.md` has SCR-14 Teacher List,
     SCR-15 Teacher Detail, SCR-17 Update Teacher, SCR-18 Homeroom Assignment, SCR-19 Teaching Assignment.
   - FE-13 (Linh): account create / import still take free-text `teachers.department`; switch to the `departments`

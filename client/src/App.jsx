@@ -8,6 +8,11 @@ import EditAvatarPage from './pages/account/EditAvatarPage.jsx';
 import ForgotPasswordPage from './pages/account/ForgotPasswordPage.jsx';
 import LoginPage from './pages/account/LoginPage.jsx';
 import ProfilePage from './pages/account/ProfilePage.jsx';
+import HomeroomAssignmentPage from './pages/teachers/HomeroomAssignmentPage.jsx';
+import TeacherDetailPage from './pages/teachers/TeacherDetailPage.jsx';
+import TeacherEditPage from './pages/teachers/TeacherEditPage.jsx';
+import TeacherListPage from './pages/teachers/TeacherListPage.jsx';
+import TeachingAssignmentPage from './pages/teachers/TeachingAssignmentPage.jsx';
 import CreateAccountPage from './pages/admin/CreateAccountPage.jsx';
 import ImportAccountsPage from './pages/admin/ImportAccountsPage.jsx';
 import AccountDetailPage from './pages/admin/AccountDetailPage.jsx';
@@ -53,6 +58,51 @@ export default function App() {
           }
         />
         <Route path="change-password" element={<ChangePasswordPage />} />
+        {/* SCR-13 Teacher List */}
+        <Route
+          path="teachers"
+          element={
+            <ProtectedRoute roles={['SCHOOL_MANAGER']}>
+              <TeacherListPage />
+            </ProtectedRoute>
+          }
+        />
+        {/* SCR-14 Teacher Detail */}
+        <Route
+          path="teachers/:teacherId"
+          element={
+            <ProtectedRoute roles={['SCHOOL_MANAGER']}>
+              <TeacherDetailPage />
+            </ProtectedRoute>
+          }
+        />
+        {/* SCR-15 Update Teacher */}
+        <Route
+          path="teachers/:teacherId/edit"
+          element={
+            <ProtectedRoute roles={['SCHOOL_MANAGER']}>
+              <TeacherEditPage />
+            </ProtectedRoute>
+          }
+        />
+        {/* SCR-16 Homeroom Assignment (UC-19) */}
+        <Route
+          path="homeroom-assignments"
+          element={
+            <ProtectedRoute roles={['SCHOOL_MANAGER']}>
+              <HomeroomAssignmentPage />
+            </ProtectedRoute>
+          }
+        />
+        {/* SCR-17 Teaching Assignment (UC-18) */}
+        <Route
+          path="teaching-assignments"
+          element={
+            <ProtectedRoute roles={['SCHOOL_MANAGER']}>
+              <TeachingAssignmentPage />
+            </ProtectedRoute>
+          }
+        />
         {/* FE-13 System Administration (System Admin only) */}
         {[
           ['admin/accounts', <AccountListPage />], // UC-97, UC-98

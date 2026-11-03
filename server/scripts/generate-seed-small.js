@@ -218,6 +218,10 @@ ${values(teachers.map((t) => [t.user.username, t.code, t.department]))}
 ) AS v(username, code, department)
 JOIN users u ON u.username = v.username;
 
+-- Departments list (FE-03): the departments used by the sample teachers
+INSERT INTO departments (department_name)
+SELECT DISTINCT department FROM teachers WHERE department IS NOT NULL ORDER BY department;
+
 INSERT INTO students (user_id, student_code, dob, gender)
 SELECT u.user_id, v.code, v.dob::date, v.gender
 FROM (VALUES
