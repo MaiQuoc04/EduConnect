@@ -136,3 +136,46 @@ export function fetchClassOptions(schoolYearId) {
   }
   return classOptionsCache.get(key);
 }
+
+// --- UC-14 Import Parent–Student Links (SCR-07 "Nhập liên kết phụ huynh") ------------------------------------
+// Same calls as FE-13's account import (UC-96, api/admin.js): a blob download for the template, then the SAME File
+// object sent to preview and to import (multipart, field "file"). The server keeps nothing between the two calls.
+
+// Saves a downloaded Blob under `name` (the browser's download).
+function saveFile(blob, name) {
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = name;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
+// GET /students/parent-links/template -> .xlsx with the three columns and one example row.
+export async function downloadParentLinkTemplate() {
+  const res = await api.get('/students/parent-links/template', { responseType: 'blob' });
+  const name = /filename="([^"]+)"/.exec(res.headers['content-disposition'] ?? '')?.[1] ?? 'mau-nhap-lien-ket-phu-huynh.xlsx';
+  saveFile(res.data, name);
+}
+
+function fileForm(file) {
+  const form = new FormData();
+  form.append('file', file);
+  return form;
+}
+
+// POST /students/parent-links/preview (nothing is saved) and POST /students/parent-links/import (every valid row is
+// saved in one transaction). Both answer { summary: { total, valid, invalid, imported }, rows, warnings }:
+// rows: [{ rowNumber, studentCode, phone, relationshipType, relationshipText, status: VALID | INVALID | IMPORTED,
+//          studentName, parentName, errorCode, errorMessage, details }].
+export async function previewParentLinks(file) {
+  const { data } = await api.post('/students/parent-links/preview', fileForm(file));
+  return data;
+}
+
+export async function importParentLinks(file) {
+  const { data } = await api.post('/students/parent-links/import', fileForm(file));
+  return data;
+}

@@ -195,11 +195,11 @@ export default function StudentListPage() {
           <p>Quản lý hồ sơ học sinh toàn trường.</p>
         </div>
         <div className="actions-row">
-          {/* TODO UC-14 Import Parent–Student Links (SCR-07 import dialog) */}
-          <button type="button" className="btn btn-secondary" disabled title="Chức năng đang được xây dựng">
+          {/* UC-14 Import Parent–Student Links: a page of its own, like FE-13's Import Accounts (UC-96). */}
+          <Link to="/students/parent-links/import" className="btn btn-secondary">
             <Icon name="upload_file" size="sm" />
             Nhập liên kết phụ huynh
-          </button>
+          </Link>
           {/* SCR-11: opens the promotion tab (UC-11, a whole class). A transfer (UC-10) is for one student, so it
               starts from Student Detail ("Chuyển lớp"). */}
           <Link to="/students/promote" state={{ listSearch: query ? `?${query}` : '' }} className="btn btn-secondary">

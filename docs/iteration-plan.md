@@ -25,7 +25,7 @@ FE-10 is split: timetable in It2, class calendar in It3.
 
 ## Current status (read first; update after every merge, schema patch or new decision)
 
-Last updated: 03/11/2026 (FE-04 merged).
+Last updated: 03/11/2026 (FE-04 merged; FE-02 lead's follow-ups and UC-14 done on the branch, waiting for review).
 
 - **Shared DB (Supabase):** schema v0.3 + `patch_v0.3_password_reset_requests.sql` (27/10) +
   `patch_v0.3_users_address.sql` (28/10: `users.address` added, `parents.address` dropped) +
@@ -51,8 +51,9 @@ Last updated: 03/11/2026 (FE-04 merged).
     grade, create / import classes for students not in a class the previous year, groups, members, nickname, teams
     with leave), `syncClassTeachers` in `server/src/modules/classes/classGroups.js` (tested by the lead in a
     rolled-back transaction), all FE-04 screen numbers per `screens.md`.
-- **Pushed, not merged yet:** `feature/fe-02-student-management` (Anh). Merge `develop` into the branch before the
-  PR.
+- **Not merged yet:** `feature/fe-02-student-management` (Anh), `develop` already merged into it. UC-07..UC-14
+  built (all 8 FE-02 use cases) and the lead's FE-02 follow-ups done (03/11, see "Follow-ups owed"); waiting for
+  Anh's push / PR and the lead's review. No schema change, no SQL run on the shared DB.
 - **FE-03 review (02/11):** endpoints work and the client builds. Lead decisions: keep the `departments` table;
   Dung's assumptions became business rules §4 "Teachers" (homeroom max 1 class per year, no new assignment for a
   locked teacher, assignments never back-dated, at least one subject per teacher, no empty pair while lessons
@@ -61,7 +62,7 @@ Last updated: 03/11/2026 (FE-04 merged).
   grade with `grade_level_id`, every weight 1, classes max 45 students, UC-28 adds students without a class,
   nickname, teams: members picked at creation, anyone can leave, no admin; semester reopen; homeroom removes
   students / parents only; class group membership follows the class) and in UC-21 / UC-26 / UC-28 / UC-35.
-- **FE-02 review (03/11):** UC-07..UC-13 built, UC-14 missing. Lead decisions in business rules §4 ("Who puts a
+- **FE-02 review (03/11):** UC-07..UC-13 built, UC-14 missing (built afterwards, see "Follow-ups owed"). Lead decisions in business rules §4 ("Who puts a
   student in a class", "Students") and §16 (search, name order): promotion is the only way for previous-year
   students, transfer same year and grade, create class / import only for students with no enrollment the previous
   year, no "drop out" use case (lock the account), SM edits a student's address, Anh's assumptions accepted, anyone
@@ -75,32 +76,49 @@ Last updated: 03/11/2026 (FE-04 merged).
 - **Follow-ups owed:**
   - FE-13 (Linh): pull `develop` and continue from it; do not run SQL patches on the shared DB before the lead
     approves them.
-  - FE-02 (Anh), before the merge:
-    - Merge `develop` into the branch (conflicts only in `App.jsx`, `navigation.js`, `routes.js`: keep both sides).
-    - Build UC-14 Import Parent–Student Links (It1) as business rules §4 "Import parent–student links": template,
-      preview, import of the valid rows in one transaction; reuse the reading / header matching of
-      `server/src/modules/admin/accountImport.service.js` (FE-13) and `exceljs`, and the linking + group code of
-      UC-13 (one link path for both).
-    - UC-09: SM edits the student's address (`users.address`).
-    - Phone: use `utils/phone.js` (only `0` + 9 digits, `+84` → `0`) in the parent lookup instead of its own
-      normaliser; search: use `utils/search.js`; drop the unaccent fallback and delete
-      `database/2026-10-26_enable_unaccent.sql`.
-    - Groups: someone coming back to a group gets the old row back (`left_at = NULL`), not a new row.
-    - UC references: UC-105 → UC-104 (View Parent List), UC-106 → UC-105 (View Parent Detail); "SCR-10 Student
-      Transfer & Promotion" → SCR-11. Delete the empty root `package-lock.json`; keep `server/scripts/dev-local-db.js`.
-    - After FE-04 is merged: switch the promotion screen to FE-04's school year / class endpoints and remove the
-      temporary ones.
-    - Test on the local DB (`dev-local-db.js`) or inside a rolled-back transaction, never leaving test data in the
-      shared DB, and send the results with the hand-over:
-      - UC-14: valid file → all links saved, parents in GENERAL + PARENT of the child's class; mixed file → valid rows
-        saved, the others listed with their error; unknown student code / unknown phone / wrong relationship /
-        link already there / third parent / same pair twice → row refused; phone typed `+84 905 000 041` → found;
-        no valid row → refused; more than 500 rows or a file not from the template → refused.
-      - UC-09: SM changes and clears a student's address. Parent lookup: `+84…`, `0905.000.041` → found; 11 digits →
-        invalid. Student list search: "bao" finds "Bảo"; "%" matches only a literal %.
-      - Transfer back to an old class → the old group rows come back (`left_at` cleared), no new row.
-    - Hand-over checklist: no conflict markers; server starts; `npm run build` in `client/` passes; test results
-      sent; any new `// ASSUMPTION:` listed in the message to the lead; pushed to `feature/fe-02-student-management`.
+  - FE-02 (Anh) – the lead's list is done on the branch (03/11), all tested on the throw-away local DB
+    (`dev-local-db.js`), nothing written to the shared DB:
+    - Done: `develop` merged in. UC-09 edits the address (`users.address`, max 500, cleared when empty, as UC-107).
+      Parent lookup uses `utils/phone.js`; the student list search uses `utils/search.js`; unaccent fallback and
+      `database/2026-10-26_enable_unaccent.sql` deleted, root `package-lock.json` deleted. Class groups: coming back
+      reopens the latest old row (`joinClassGroups`, used by UC-10 / UC-11 / UC-13 / UC-14). UC / SCR references
+      fixed (UC-104 / UC-105, SCR-11). Promotion screen and Student List class filter use FE-04's `GET /school-years`
+      and `GET /classes`; the temporary `GET /students/promote/options` is removed (the temporary parent lookup
+      `GET /students/parents/lookup` stays until FE-14 UC-104 exists). Test students of `dev-local-db.js` now use
+      `HS` + 4 digits (`HS9003..HS9017`).
+    - Done: UC-14 Import Parent–Student Links. Server `students/parentLinkImport.service.js`:
+      `GET /students/parent-links/template`, `POST /students/parent-links/preview`, `POST /students/parent-links/import`
+      (School Manager only); preview and import check the same file with the same function, import locks the
+      students and saves every valid row in one transaction. One link path with UC-13: `saveParentLinks` in
+      `students.service.js` (it does not check the limits; UC-13 checks one link, UC-14 the whole file in row order).
+      Client: page `/students/parent-links/import` (SCR-07 button), same wizard as FE-13's Import Accounts, plus a
+      confirmation dialog and the student / parent names on every row.
+    - Tests passed: every UC-14 case of the lead's list (valid file, mixed file, unknown code / phone, phone of a
+      non-parent account, wrong relationship, link exists, third parent, same pair twice, `+84 905 000 041`, no
+      valid row, 501 rows, file not from the template), plus preview = import row by row, cumulative 2-parent count,
+      preview writes nothing, rollback on a forced error, old group rows reopened, UC-13 unchanged, 403 for teacher /
+      student / parent / SA and 401 without a token. UC-09 address set / cleared; parent lookup `+84…`, `0905.000.041`
+      found, 11 digits invalid; "bao" finds "Bảo", "%" matches only a literal %. Client: `npm run build` passes; UI
+      checked at 1440 / 768 / 390 px.
+    - For the lead to decide:
+      - "Transfer back to an old class → old group rows come back" cannot run: `class_enrollments` has
+        `UNIQUE (student_id, class_id)`, so a transfer back is refused (`MSG_CLASS_ALREADY_ENROLLED`). Reopening old
+        rows is tested through UC-13 / UC-14 (parent unlinked, then linked again). Keep the constraint and drop the
+        case, or change the schema?
+      - Still in business rules §4 "Who puts a student in a class" but not enforced by FE-02 yet: UC-11 only from the
+        school year just before (code allows any earlier year) and only to the next or the same grade; the 45-student
+        class limit in UC-10 / UC-11; refusing a school year that has ended in UC-10 / UC-11.
+      - Error codes waiting for `messages.js` (texts proposed in the page / hand-over): `MSG_PARENT_PHONE_NOT_FOUND`,
+        `MSG_DUPLICATE_LINK_IN_FILE` (new for UC-14) and the earlier FE-02 codes (`MSG_STUDENT_NOT_FOUND`,
+        `MSG_INVALID_RELATIONSHIP_TYPE`, `MSG_LINK_ALREADY_EXISTS`, `MSG_MAX_PARENTS_REACHED`, `WARN_*`…); the FE-02
+        pages map them locally for now.
+      - UC-14 `// ASSUMPTION:`s: relationship words compared without accents / case; the 2-parent count only counts
+        earlier VALID rows; "same pair twice" counts any earlier row with that pair; the preview opens on all rows
+        (not only errors) so the names are read before confirming.
+      - Proposal: move UC-96's file reading (`loadWorksheet`, `headerKey`, not exported) into `utils/excel.js` and the
+        import screen classes of `pages/admin/admin.css` into `styles.css`; UC-14 mirrors the first and imports the
+        second.
+    - Left for Anh: push `feature/fe-02-student-management` and open the PR into `develop`.
   - FE-04 / FE-14 (Khanh):
     - FE-14 (It2) uses UC-104..UC-106; a parent's address is `users.address`, occupation stays `parents.occupation`.
   - Group sync for FE-03 saves: business rules §4 "Class group membership follows the class" –

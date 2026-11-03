@@ -338,18 +338,22 @@ export async function findParentByPhone(phone) {
 // year ends. ASSUMPTION: a year that has ended is left out because its groups are read only (business-rules §4),
 // and a later year the student was already promoted into is included, so a parent linked in the summer still
 // reaches the new class. Soft-deleted classes are ignored as everywhere in FE-02.
-async function activeClassesOfStudent(client, studentId) {
+// Same rule for many students at once (UC-14): rows { student_id, class_id, class_name }.
+async function activeClassesOfStudents(client, studentIds) {
   const { rows } = await client.query(
-    `SELECT c.class_id, c.class_name
+    `SELECT ce.student_id, c.class_id, c.class_name
      FROM class_enrollments ce
      JOIN classes c ON c.class_id = ce.class_id
      JOIN school_years sy ON sy.school_year_id = c.school_year_id
-     WHERE ce.student_id = $1 AND ce.status = 'STUDYING' AND c.deleted_at IS NULL AND sy.end_date >= CURRENT_DATE
-     ORDER BY sy.start_date, c.class_id`,
-    [studentId],
+     WHERE ce.student_id = ANY($1::bigint[]) AND ce.status = 'STUDYING' AND c.deleted_at IS NULL
+       AND sy.end_date >= CURRENT_DATE
+     ORDER BY sy.start_date, c.class_id, ce.student_id`,
+    [studentIds],
   );
   return rows;
 }
+
+const activeClassesOfStudent = (client, studentId) => activeClassesOfStudents(client, [studentId]);
 
 // Same "no class" warning for link and unlink: the link itself is saved, only the groups are not touched.
 // ASSUMPTION: new warning code WARN_STUDENT_HAS_NO_CLASS (waiting for the team lead to add it to messages.js).
@@ -358,6 +362,47 @@ const NO_CLASS_WARNING = {
   message: 'The student is not studying in any class; no class group was changed.',
   details: {},
 };
+
+// The one link path shared by UC-13 (one link) and UC-14 (a whole file), inside the caller's transaction
+// (business-rules §4: "A new link adds the parent to GENERAL + PARENT of the child's current class, as UC-13 does").
+// links: [{ studentId, parentId, parentUserId, relationshipType }]. One INSERT for every link (unnest), then each
+// parent joins the GENERAL and PARENT groups of the classes their child studies in (joinClassGroups: an old row is
+// reopened, a new row only for someone never in the group; a group they are already active in is skipped).
+// It does NOT check the limits (link already there, at most 2 parents): the caller checks them, because only the
+// caller sees the whole request – UC-13 one link, UC-14 every row of the file (existing links + earlier rows).
+// Callers lock the students first (FOR UPDATE), so the checks and this write see the same links.
+// Returns the warnings: a student with no class, a class with missing groups (details hold the student / class).
+export async function saveParentLinks(client, links) {
+  if (!links.length) return [];
+  await client.query(
+    `INSERT INTO student_parents (student_id, parent_id, relationship_type, linked_at)
+     SELECT l.student_id, l.parent_id, l.relationship_type, NOW()
+     FROM unnest($1::bigint[], $2::bigint[], $3::text[]) AS l(student_id, parent_id, relationship_type)`,
+    [links.map((l) => l.studentId), links.map((l) => l.parentId), links.map((l) => l.relationshipType)],
+  );
+
+  const studentIds = [...new Set(links.map((l) => l.studentId))];
+  const classRows = await activeClassesOfStudents(client, studentIds);
+  const warnings = [];
+  for (const studentId of studentIds) {
+    if (!classRows.some((row) => row.student_id === studentId)) {
+      warnings.push({ ...NO_CLASS_WARNING, details: { ...NO_CLASS_WARNING.details, studentId } });
+    }
+  }
+  // One joinClassGroups call per class, with every parent linked to a child of that class.
+  const classes = new Map();
+  for (const row of classRows) {
+    if (!classes.has(row.class_id)) classes.set(row.class_id, { className: row.class_name, parents: new Map() });
+    for (const link of links) {
+      if (link.studentId === row.student_id) classes.get(row.class_id).parents.set(link.parentUserId, 'PARENT');
+    }
+  }
+  for (const [classId, { className, parents }] of classes) {
+    const { warnings: classWarnings } = await joinClassGroups(client, classId, parents);
+    for (const warning of classWarnings) warnings.push({ ...warning, details: { ...warning.details, classId, className } });
+  }
+  return warnings;
+}
 
 // Locks the student row (404 when missing). Every UC-13 call and UC-10 / UC-11 lock it first, so links of the same
 // student, and a link racing a transfer, run one after the other.
@@ -401,19 +446,10 @@ export async function linkParent(studentId, parentId, relationshipType) {
         { max: MAX_PARENTS_PER_STUDENT });
     }
 
-    await client.query(
-      `INSERT INTO student_parents (student_id, parent_id, relationship_type, linked_at)
-       VALUES ($1, $2, $3, NOW())`,
-      [studentId, parentId, relationshipType],
-    );
-
-    // joinClassGroups skips a group the parent is already an active member of (another child in the same class).
-    const classes = await activeClassesOfStudent(client, studentId);
-    const warnings = classes.length ? [] : [NO_CLASS_WARNING];
-    for (const { class_id: classId, class_name: className } of classes) {
-      const { warnings: classWarnings } = await joinClassGroups(client, classId, new Map([[parent.user_id, 'PARENT']]));
-      for (const warning of classWarnings) warnings.push({ ...warning, details: { ...warning.details, classId, className } });
-    }
+    // Shared with UC-14: the link and the class groups (the limits were checked just above).
+    const warnings = await saveParentLinks(client, [
+      { studentId, parentId, parentUserId: parent.user_id, relationshipType },
+    ]);
 
     return { ...(await getStudentParents(studentId, client)), warnings };
   });

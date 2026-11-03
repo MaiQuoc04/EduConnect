@@ -17,6 +17,7 @@ import GroupMembersPage from './pages/groups/GroupMembersPage.jsx';
 import GroupOverview from './pages/groups/GroupOverview.jsx';
 import GroupPendingTab from './pages/groups/GroupPendingTab.jsx';
 import SchoolYearPage from './pages/school-years/SchoolYearPage.jsx';
+import ImportParentLinksPage from './pages/students/ImportParentLinksPage.jsx';
 import StudentDetailPage from './pages/students/StudentDetailPage.jsx';
 import StudentListPage from './pages/students/StudentListPage.jsx';
 import StudentParentsPage from './pages/students/StudentParentsPage.jsx';
@@ -92,6 +93,15 @@ export default function App() {
           element={
             <ProtectedRoute roles={['SCHOOL_MANAGER']}>
               <TransferStudentPage />
+            </ProtectedRoute>
+          }
+        />
+        {/* UC-14 Import Parent–Student Links (SCR-07 "Nhập liên kết phụ huynh"). Declared before students/:studentId. */}
+        <Route
+          path="students/parent-links/import"
+          element={
+            <ProtectedRoute roles={['SCHOOL_MANAGER']}>
+              <ImportParentLinksPage />
             </ProtectedRoute>
           }
         />

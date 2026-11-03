@@ -99,8 +99,8 @@ FROM (VALUES ('11D1', '11D1', 'GENERAL'), ('11D1', '11D1 – Học sinh', 'STUDE
 JOIN classes c ON c.class_name = v.class_name
 JOIN school_years sy ON sy.school_year_id = c.school_year_id AND sy.year_name = '2027-2028';
 
--- UC-11: more students of 2026-2027 (password Educonnect@2026, same hash as the seed). HS260003..HS260012 study in
--- 10A1; HS260013 DROPPED out of 10A1; HS260014 transferred 10A1 -> 10A2 (TRANSFERRED + STUDYING); HS260015 has
+-- UC-11: more students of 2026-2027 (password Educonnect@2026, same hash as the seed). HS9003..HS9012 study in
+-- 10A1; HS9013 DROPPED out of 10A1; HS9014 transferred 10A1 -> 10A2 (TRANSFERRED + STUDYING); HS9015 has
 -- only a TRANSFERRED row (left 10A1, no new class).
 INSERT INTO users (username, password_hash, full_name, status, must_change_password)
 SELECT 'hs' || n, (SELECT password_hash FROM users WHERE username = 'baopg'), 'Học Sinh Thử ' || n, 'ACTIVE', FALSE
@@ -108,22 +108,22 @@ FROM generate_series(3, 15) AS n;
 INSERT INTO user_roles (user_id, role_id)
 SELECT u.user_id, r.role_id FROM users u JOIN roles r ON r.role_code = 'STUDENT' WHERE u.username LIKE 'hs%';
 INSERT INTO students (user_id, student_code, dob, gender)
-SELECT u.user_id, 'HS2600' || lpad(substr(u.username, 3), 2, '0'), '2011-05-01', 'FEMALE'
+SELECT u.user_id, 'HS90' || lpad(substr(u.username, 3), 2, '0'), '2011-05-01', 'FEMALE'
 FROM users u WHERE u.username LIKE 'hs%';
 INSERT INTO class_enrollments (student_id, class_id, status, enrolled_at, left_at)
 SELECT s.student_id, c.class_id, v.status, v.enrolled_at::timestamptz, v.left_at::timestamptz
-FROM (SELECT 'HS2600' || lpad(n::text, 2, '0'), '10A1', 'STUDYING', '2026-09-05 07:00', NULL
+FROM (SELECT 'HS90' || lpad(n::text, 2, '0'), '10A1', 'STUDYING', '2026-09-05 07:00', NULL
       FROM generate_series(3, 12) AS n
-      UNION ALL VALUES ('HS260013', '10A1', 'DROPPED', '2026-09-05 07:00', '2026-10-10 08:00'),
-                       ('HS260014', '10A1', 'TRANSFERRED', '2026-09-05 07:00', '2026-10-12 08:00'),
-                       ('HS260014', '10A2', 'STUDYING', '2026-10-12 08:00', NULL),
-                       ('HS260015', '10A1', 'TRANSFERRED', '2026-09-05 07:00', '2026-10-12 08:00'))
+      UNION ALL VALUES ('HS9013', '10A1', 'DROPPED', '2026-09-05 07:00', '2026-10-10 08:00'),
+                       ('HS9014', '10A1', 'TRANSFERRED', '2026-09-05 07:00', '2026-10-12 08:00'),
+                       ('HS9014', '10A2', 'STUDYING', '2026-10-12 08:00', NULL),
+                       ('HS9015', '10A1', 'TRANSFERRED', '2026-09-05 07:00', '2026-10-12 08:00'))
      AS v(student_code, class_name, status, enrolled_at, left_at)
 JOIN students s ON s.student_code = v.student_code
 JOIN classes c ON c.class_name = v.class_name
 JOIN school_years sy ON sy.school_year_id = c.school_year_id AND sy.year_name = '2026-2027';
 
--- UC-13: parents phthu1..phthu3 (PARENT role, no child yet); HS260016 studies in 10A3 (no groups) and HS260017 in
+-- UC-13: parents phthu1..phthu3 (PARENT role, no child yet); HS9016 studies in 10A3 (no groups) and HS9017 in
 -- 11A1 2026-2027 (only a GENERAL group). maitt (teacher) and baopg (student) get a parents row WITHOUT the PARENT
 -- role, to test MSG_USER_NOT_PARENT (broken data: the parents row exists but the role does not).
 INSERT INTO users (username, phone, password_hash, full_name, status, must_change_password)
@@ -139,23 +139,23 @@ FROM generate_series(16, 17) AS n;
 INSERT INTO user_roles (user_id, role_id)
 SELECT u.user_id, r.role_id FROM users u JOIN roles r ON r.role_code = 'STUDENT' WHERE u.username IN ('hs16', 'hs17');
 INSERT INTO students (user_id, student_code, dob, gender)
-SELECT u.user_id, 'HS2600' || substr(u.username, 3), '2011-05-01', 'MALE' FROM users u WHERE u.username IN ('hs16', 'hs17');
+SELECT u.user_id, 'HS90' || substr(u.username, 3), '2011-05-01', 'MALE' FROM users u WHERE u.username IN ('hs16', 'hs17');
 INSERT INTO class_enrollments (student_id, class_id, status, enrolled_at)
 SELECT s.student_id, c.class_id, 'STUDYING', '2026-09-05 07:00'
-FROM (VALUES ('HS260016', '10A3'), ('HS260017', '11A1')) AS v(student_code, class_name)
+FROM (VALUES ('HS9016', '10A3'), ('HS9017', '11A1')) AS v(student_code, class_name)
 JOIN students s ON s.student_code = v.student_code
 JOIN classes c ON c.class_name = v.class_name
 JOIN school_years sy ON sy.school_year_id = c.school_year_id AND sy.year_name = '2026-2027';
 
 -- Teacher + Parent accounts (business-rules §1), each with a child in a 2026-2027 class and already in that class's
 -- GENERAL and PARENT groups (one active GENERAL row even when they are also its teacher). phtt is a plain parent.
---   gvph1  subject teacher of 10A1 (TOAN),      child HS260003 (10A1)  -> unlink: stays in GENERAL
---   gvph2  homeroom teacher of 10A2,            child HS260014 (10A2)  -> unlink: stays in GENERAL
---   gvph3  subject teacher of 11D1 only,        child HS260005 (10A1)  -> unlink: leaves both 10A1 groups
---   gvph4  no assignment, two children in 10A1: HS260006, HS260007     -> unlink one: stays in both
---   gvph5  subject teacher of 10A1 (VAN),       child HS260008 (10A1)  -> transfer to 10A2 (UC-10)
---   gvph6  10A1 assignment that ENDED 2026-10-01, child HS260009       -> unlink: leaves both
---   phtt   plain parent,                        child HS260004 (10A1)  -> unlink: leaves both
+--   gvph1  subject teacher of 10A1 (TOAN),      child HS9003 (10A1)  -> unlink: stays in GENERAL
+--   gvph2  homeroom teacher of 10A2,            child HS9014 (10A2)  -> unlink: stays in GENERAL
+--   gvph3  subject teacher of 11D1 only,        child HS9005 (10A1)  -> unlink: leaves both 10A1 groups
+--   gvph4  no assignment, two children in 10A1: HS9006, HS9007     -> unlink one: stays in both
+--   gvph5  subject teacher of 10A1 (VAN),       child HS9008 (10A1)  -> transfer to 10A2 (UC-10)
+--   gvph6  10A1 assignment that ENDED 2026-10-01, child HS9009       -> unlink: leaves both
+--   phtt   plain parent,                        child HS9004 (10A1)  -> unlink: leaves both
 INSERT INTO users (username, phone, password_hash, full_name, status, must_change_password)
 SELECT v.username, v.phone, (SELECT password_hash FROM users WHERE username = 'baopg'), v.full_name, 'ACTIVE', FALSE
 FROM (VALUES ('gvph1', '0907000001', 'Giáo Viên Phụ Huynh 1'), ('gvph2', '0907000002', 'Giáo Viên Phụ Huynh 2'),
@@ -183,8 +183,8 @@ JOIN classes c ON c.class_name = v.class_name
 JOIN school_years sy ON sy.school_year_id = c.school_year_id AND sy.year_name = '2026-2027';
 INSERT INTO student_parents (student_id, parent_id, relationship_type)
 SELECT s.student_id, p.parent_id, 'FATHER'
-FROM (VALUES ('HS260003', 'gvph1'), ('HS260014', 'gvph2'), ('HS260005', 'gvph3'), ('HS260006', 'gvph4'),
-             ('HS260007', 'gvph4'), ('HS260008', 'gvph5'), ('HS260009', 'gvph6'), ('HS260004', 'phtt'))
+FROM (VALUES ('HS9003', 'gvph1'), ('HS9014', 'gvph2'), ('HS9005', 'gvph3'), ('HS9006', 'gvph4'),
+             ('HS9007', 'gvph4'), ('HS9008', 'gvph5'), ('HS9009', 'gvph6'), ('HS9004', 'phtt'))
      AS v(student_code, username)
 JOIN students s ON s.student_code = v.student_code
 JOIN users u ON u.username = v.username

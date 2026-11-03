@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import { requireAuth, requireRole } from '../../middlewares/auth.js';
+import { uploadSingle } from '../../middlewares/upload.js';
 import * as ctrl from './students.controller.js';
 
 // FE-02 Student Management (owner: Anh). School Manager only, checked against the active role
@@ -11,6 +12,13 @@ router.get('/', requireAuth, requireRole('SCHOOL_MANAGER'), ctrl.list); // UC-07
 // UC-11 is a batch action on many students, so it is not under /:studentId. Declared before the /:studentId routes.
 // permissions.md "Enrollment – Transfer / promote": School Manager only.
 router.post('/promote', requireAuth, requireRole('SCHOOL_MANAGER'), ctrl.promote); // UC-11
+// UC-14 Import Parent–Student Links (SCR-07 button). permissions.md "Parent–student link – Link / unlink / import":
+// School Manager only. Declared before /:studentId so "parent-links" is not taken for a student id.
+router.get('/parent-links/template', requireAuth, requireRole('SCHOOL_MANAGER'), ctrl.parentLinkTemplate); // UC-14
+router.post('/parent-links/preview', requireAuth, requireRole('SCHOOL_MANAGER'), uploadSingle('file'),
+  ctrl.previewParentLinks); // UC-14
+router.post('/parent-links/import', requireAuth, requireRole('SCHOOL_MANAGER'), uploadSingle('file'),
+  ctrl.importParentLinks); // UC-14
 // TEMPORARY read-only parent lookup by phone for SCR-13 until FE-14 has UC-104 View Parent List. Declared before
 // /:studentId so "parents" is not taken for a student id. permissions.md "Parent–student link": School Manager only.
 router.get('/parents/lookup', requireAuth, requireRole('SCHOOL_MANAGER'), ctrl.lookupParent); // UC-13

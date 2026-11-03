@@ -1,5 +1,6 @@
 import { badRequest } from '../../utils/AppError.js';
 import { normalizePhone, PHONE_RE } from '../../utils/phone.js';
+import * as parentLinkImport from './parentLinkImport.service.js';
 import * as studentsService from './students.service.js';
 
 const ENROLLMENT_STATUSES = ['STUDYING', 'TRANSFERRED', 'DROPPED'];
@@ -296,4 +297,32 @@ export async function promote(req, res) {
     toSchoolYearId,
     groups: groups.map(({ toClassId, studentIds }) => ({ toClassId, studentIds })),
   }));
+}
+
+// --- UC-14 ---------------------------------------------------------------------------------------------------
+
+// Multer reads file names as latin1; turn them back into UTF-8 (same as UC-96, admin.controller.js), so a
+// Vietnamese file name keeps its .xlsx / .csv ending readable.
+function uploadedFile(req) {
+  if (!req.file) return null;
+  return { ...req.file, originalname: Buffer.from(req.file.originalname, 'latin1').toString('utf8') };
+}
+
+// UC-14 Import Parent–Student Links – template download (.xlsx, three columns and one example row).
+export async function parentLinkTemplate(_req, res) {
+  const { fileName, contentType, buffer } = await parentLinkImport.buildTemplate();
+  res
+    .set('Content-Type', contentType)
+    .set('Content-Disposition', `attachment; filename="${fileName}"`)
+    .send(buffer);
+}
+
+// UC-14 – check the file, nothing is saved. multipart/form-data, field "file".
+export async function previewParentLinks(req, res) {
+  res.json(await parentLinkImport.previewImport({ file: uploadedFile(req) }));
+}
+
+// UC-14 – check the same file again and save every valid row. Same answer shape as the preview.
+export async function importParentLinks(req, res) {
+  res.json(await parentLinkImport.importLinks({ file: uploadedFile(req) }));
 }
