@@ -123,6 +123,14 @@ export async function directAllowed(db, user, otherId) {
   return { allowed: !locked, locked, contact };
 }
 
+// Of these users, the ones the user (active role) may write to now (active accounts in reach), with their existing
+// 1-1 chat: Map userId -> directGroupId | null. Used by the "Nhắn tin" button of the group member list (UC-31).
+export async function messageableUsers(db, user, userIds) {
+  if (!userIds.length) return new Map();
+  const rows = await findContacts(db, user, { userIds });
+  return new Map(rows.map((r) => [r.userId, r.directGroupId ?? null]));
+}
+
 // The other member of a 1-1 chat, with labels when still in reach (else the plain account).
 export async function directPeer(db, user, groupId) {
   const { rows } = await db.query(

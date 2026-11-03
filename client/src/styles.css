@@ -858,6 +858,8 @@ a.link-row .icon:last-child { color: var(--graphite-400); }
 .group-pick-head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px; }
 .group-row-actions { display: inline-flex; gap: 2px; }
 .group-row-actions .btn { height: 32px; padding: 0 6px; }
+.group-row-actions .group-message { gap: 4px; padding: 0 8px; }
+@media (max-width: 640px) { .group-row-actions .group-message span { display: none; } }
 .group-nickname { display: grid; gap: 2px; }
 .group-nickname-row { display: flex; align-items: center; gap: 2px; }
 .group-nickname .input { width: 160px; height: 32px; }
