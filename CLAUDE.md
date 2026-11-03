@@ -51,7 +51,7 @@ server/src/
 ## Rules that are easy to get wrong
 - **Soft delete everywhere**: no `DELETE` on business tables; `UPDATE ... SET deleted_at = NOW()`; every `SELECT`
   adds `deleted_at IS NULL`. Hard delete only: `post_likes`, `class_event_viewers`, `teacher_subjects`, `user_roles`,
-  `student_parents`, expired OTPs.
+  `student_parents`, expired OTPs, `track_subjects` (subject removed from a class type before grades exist).
 - **Permissions use the active role** (`req.user.activeRole`), plus data scope: "homeroom teacher" = the teacher in
   `classes.homeroom_teacher_id`; teachers only see classes in their `teaching_assignments`; parents only their linked
   children (`student_parents`); students only themselves. `ProtectedRoute` on the client is only for navigation.

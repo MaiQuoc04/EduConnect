@@ -73,5 +73,5 @@ Source: Report 3 section 5.1 (draft v1.3). Screen numbers here are Report 3's; t
 | 67 | Registration List | FE-07 | Allows Homeroom Teacher to view the students registered for an event and to export the list to Excel. |
 | 68 | Grade Control | FE-11 | Allows School Manager to unlock finalized grades of a class, subject and semester and to view who changed which grade and when. |
 | 69 | Parent List | FE-14 | Allows School Manager to search and filter parents. |
-| 70 | Class Types & Subject Weights | FE-04 | Allows School Manager to define class types and set each subject's weight and periods per week for a school year. |
+| 70 | Class Types & Subject Weights | FE-04 | Allows School Manager to define class types (each for one grade or every grade) and set their subjects and periods per week for a school year (shown as "Loại lớp & số tiết"; every weight is 1). |
 | 71 | Password Reset Requests | FE-13 | Lists the automatic resets from password reset requests (tab waiting for sign-in / used): "sent by email" or "to hand over" with the temporary password; System Admin sees all, School Manager student, parent and teacher accounts (added 01/11/2026). |

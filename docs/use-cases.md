@@ -44,21 +44,21 @@ Source: Report 3 section 4.2 (draft v1.3). Actor "User" = any signed-in account.
 | ID | Use case | Actor | Sub-feature | Description |
 |---|---|---|---|---|
 | UC-20 | Manage School Years | School Manager | Academic Year & Subject Setup | Create and update school years. |
-| UC-21 | Manage Semesters | School Manager | Academic Year & Subject Setup | Create the two semesters of a school year and close a semester (closing ends attendance corrections). |
+| UC-21 | Manage Semesters | School Manager | Academic Year & Subject Setup | Create the two semesters of a school year, close a semester (closing ends attendance corrections) and reopen a closed one. |
 | UC-22 | View Subject List | School Manager | Academic Year & Subject Setup | List the school's subjects. |
 | UC-23 | View Subject Detail | School Manager | Academic Year & Subject Setup | View a subject and where it is taught. |
 | UC-24 | Create Subject | School Manager | Academic Year & Subject Setup | Add a subject. |
 | UC-25 | Update Subject | School Manager | Academic Year & Subject Setup | Update a subject. |
-| UC-26 | Manage Class Types | School Manager | Academic Year & Subject Setup | Define class types and, for each school year, each subject's weight and periods per week; weights lock once grades exist. |
+| UC-26 | Manage Class Types | School Manager | Academic Year & Subject Setup | Define class types (each for one grade or every grade) and, for each school year, their subjects and periods per week; subjects lock once grades exist. Every subject weight is 1 (not shown). |
 | UC-27 | Import Class List | School Manager | Class Groups | Import classes and their students (accounts must exist); automatically creates the general, student and parent groups of each class. |
-| UC-28 | Create Class Group | School Manager | Class Groups | Create a class group manually. |
+| UC-28 | Create Class Group | School Manager | Class Groups | Create a class manually (its three groups are created too) and add students who have no class in that school year, also to an existing class (max 45 studying students). |
 | UC-29 | View Group List | Teacher, Student, Parent, School Manager | Class Groups | View the groups the user belongs to (School Manager: all class groups, without their feeds or chats). |
 | UC-30 | View Group Detail | Teacher, Student, Parent, School Manager | Class Groups | View a group's information. |
 | UC-31 | View Group Members | Teacher, Student, Parent, School Manager | Class Groups | View the members of a group. |
 | UC-32 | Add Group Member | School Manager, Homeroom Teacher | Class Groups | Add members of the same class to a group. |
 | UC-33 | Remove Group Member | School Manager, Homeroom Teacher | Class Groups | Remove a member from a group. |
 | UC-34 | Set Student Nickname | Homeroom Teacher | Class Groups | Set a nickname shown only inside that class. |
-| UC-35 | Create Team Chat | Teacher, Student, Parent | Teams | Create a chat-only team with members of one class. |
+| UC-35 | Create Team Chat | Teacher, Student, Parent | Teams | Create a chat-only team with members of one class. Members can leave it later (the last one leaving closes it); nobody adds or removes members after creation. |
 
 ## FE-05 Group Feed
 
