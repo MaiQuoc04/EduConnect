@@ -3,6 +3,7 @@ import { emitToUsers } from '../../sockets/index.js';
 import { AppError, badRequest, forbidden } from '../../utils/AppError.js';
 import { findGroupForUser, groupScopeSql } from '../groups/groupAccess.js';
 import { byRankThenName, memberRows } from '../groups/groups.service.js';
+import { directPeer } from './direct.service.js';
 
 // FE-06 Messaging (owner: Khanh). UC-47 Chat in Group – SCR-43 Group Chat / SCR-50 Chat Room.
 // Group chats: GENERAL / STUDENT / PARENT (class groups), TEAM_CHAT (UC-35 teams) and TEACHER_SCHOOL. Who may open
@@ -38,8 +39,25 @@ const MESSAGE_SELECT = `
   LEFT JOIN students st ON st.user_id = m.sender_id
   LEFT JOIN class_enrollments e ON e.student_id = st.student_id AND e.class_id = g.class_id`;
 
-// The group if the user may chat in it (else 404 / 403), plus canSend.
+// The group if the user may chat in it (else 404 / 403), plus canSend and, when sending is not possible, why:
+// blockedReason READ_ONLY (ended school year), OUT_OF_SCOPE / LOCKED (1-1 chat, UC-49).
 async function openChat(db, user, groupId) {
+  const id = Number(groupId);
+  if (Number.isSafeInteger(id) && id > 0) {
+    // UC-49 1-1 chats: open to their two members under any role (the router already stops the System Admin).
+    const { rows: direct } = await db.query(
+      `SELECT g.group_id AS "groupId", g.group_type AS "groupType"
+       FROM groups g JOIN group_members gm ON gm.group_id = g.group_id
+       WHERE g.group_id = $1 AND g.group_type = 'DIRECT' AND g.deleted_at IS NULL
+         AND gm.user_id = $2 AND gm.left_at IS NULL`,
+      [id, user.userId],
+    );
+    if (direct.length) {
+      const peer = await directPeer(db, user, id);
+      const blockedReason = peer?.canSend ? null : peer?.locked ? 'LOCKED' : 'OUT_OF_SCOPE';
+      return { ...direct[0], classId: null, readOnly: false, canSend: !blockedReason, blockedReason, peer };
+    }
+  }
   const group = await findGroupForUser(db, user, groupId);
   if (!group.canSeeContent) {
     throw forbidden('MSG_CHAT_NO_ACCESS', 'The School Manager does not see class chats.');
@@ -50,7 +68,7 @@ async function openChat(db, user, groupId) {
     [group.groupId, user.userId],
   );
   if (!rows.length) throw forbidden('MSG_CHAT_NOT_MEMBER', 'You are not a member of this chat.');
-  return { ...group, canSend: !group.readOnly };
+  return { ...group, canSend: !group.readOnly, blockedReason: group.readOnly ? 'READ_ONLY' : null, peer: null };
 }
 
 // Read state of every active member, as message ids:
@@ -113,8 +131,11 @@ export async function listMessages(user, groupId, query) {
   const readById = new Map(reads.map((r) => [r.userId, r]));
   return {
     ...page,
+    groupType: group.groupType,
     readOnly: group.readOnly,
     canSend: group.canSend,
+    blockedReason: group.blockedReason,
+    peer: group.peer, // UC-49: the other person of a 1-1 chat (contacts only for teachers / School Manager)
     // No email / phone here: the member list (UC-31) shows contacts to teachers and the School Manager.
     members: members.sort(byRankThenName).map((m) => ({
       userId: m.userId,
@@ -133,12 +154,15 @@ export async function listMessages(user, groupId, query) {
 // UC-48 View Conversation List (SCR-49): for every chat the user can open with the active role, the latest message
 // they may see and how many messages from others arrived since they last read it. Same visibility rule as UC-47:
 // only messages since their latest joined_at. The School Manager gets the teacher group only (no class chats).
+// UC-49: 1-1 chats too, with the other person (`peer`); an empty 1-1 chat only for the person who opened it.
 // The client lays the chats out from GET /groups and fills in these summaries by groupId.
 export async function listConversations(user) {
   const { rows } = await pool.query(
     `SELECT g.group_id AS "groupId", g.group_type AS "groupType",
             lm.message_id AS "messageId", lm.content, lm.sent_at AS "sentAt", lm.sender_id AS "senderId",
             u.full_name AS "senderName", e.nickname AS "senderNickname",
+            peer.user_id AS "peerId", peer.full_name AS "peerName", peer.avatar_url AS "peerAvatarUrl",
+            peer.status AS "peerStatus",
             (SELECT COUNT(*) FROM messages x
              WHERE x.group_id = g.group_id AND x.deleted_at IS NULL AND x.sender_id <> $1
                AND x.sent_at >= gm.joined_at
@@ -153,14 +177,26 @@ export async function listConversations(user) {
      LEFT JOIN users u ON u.user_id = lm.sender_id
      LEFT JOIN students st ON st.user_id = lm.sender_id
      LEFT JOIN class_enrollments e ON e.student_id = st.student_id AND e.class_id = g.class_id
-     WHERE ${groupScopeSql('$1', '$2')}
-       AND NOT ($2 = 'SCHOOL_MANAGER' AND g.class_id IS NOT NULL)`,
+     LEFT JOIN LATERAL (SELECT pu.user_id, pu.full_name, pu.avatar_url, pu.status
+                        FROM group_members pm JOIN users pu ON pu.user_id = pm.user_id
+                        WHERE g.group_type = 'DIRECT' AND pm.group_id = g.group_id AND pm.user_id <> $1
+                        ORDER BY pm.member_id LIMIT 1) peer ON TRUE
+     WHERE (
+             (${groupScopeSql('$1', '$2')} AND NOT ($2 = 'SCHOOL_MANAGER' AND g.class_id IS NOT NULL))
+             -- UC-49 1-1 chats under every role (membership checked by the gm join); an empty one only for the
+             -- person who opened it, so nobody gets an empty chat they never asked for
+             OR (g.group_type = 'DIRECT' AND g.deleted_at IS NULL
+                 AND (lm.message_id IS NOT NULL OR g.created_by = $1))
+           )`,
     [user.userId, user.activeRole],
   );
   return rows.map((r) => ({
     groupId: r.groupId,
     groupType: r.groupType,
     unreadCount: r.unreadCount,
+    peer: r.peerId
+      ? { userId: r.peerId, fullName: r.peerName, avatarUrl: r.peerAvatarUrl, status: r.peerStatus }
+      : null,
     lastMessage: r.messageId
       ? {
           messageId: r.messageId,
@@ -194,6 +230,10 @@ function cleanContent(content) {
 export async function sendMessage(user, groupId, body) {
   const content = cleanContent(body?.content);
   const group = await openChat(pool, user, groupId);
+  if (group.blockedReason === 'LOCKED') throw conflict('MSG_DIRECT_LOCKED', 'This account is locked.');
+  if (group.blockedReason === 'OUT_OF_SCOPE') {
+    throw conflict('MSG_DIRECT_OUT_OF_SCOPE', 'You can no longer write to this person.');
+  }
   if (!group.canSend) throw conflict('MSG_GROUP_READ_ONLY', 'The school year has ended; the group is read only.');
 
   const message = await withTransaction(async (client) => {

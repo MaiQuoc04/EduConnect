@@ -102,6 +102,10 @@ const ERROR_MESSAGES = {
   MSG_MESSAGE_EMPTY: 'Vui lòng nhập nội dung tin nhắn.',
   MSG_MESSAGE_TOO_LONG: ({ max } = {}) => `Tin nhắn có tối đa ${max ?? 2000} ký tự.`,
   MSG_INVALID_INPUT: 'Dữ liệu gửi lên không hợp lệ.',
+  MSG_DIRECT_SELF: 'Bạn không thể nhắn tin cho chính mình.',
+  MSG_DIRECT_NOT_ALLOWED: 'Bạn chỉ nhắn tin riêng được với người trong lớp của mình.',
+  MSG_DIRECT_LOCKED: 'Tài khoản này đã bị khoá nên không nhận được tin nhắn.',
+  MSG_DIRECT_OUT_OF_SCOPE: 'Bạn không còn nhắn tin được với người này.',
   MSG_CLASS_STUDENT_DUPLICATE: 'Một học sinh bị chọn hai lần.',
   MSG_CLASS_FULL: ({ max, current } = {}) =>
     `Một lớp có tối đa ${max ?? 45} học sinh${current ? `; lớp đang có ${current} học sinh` : ''}.`,

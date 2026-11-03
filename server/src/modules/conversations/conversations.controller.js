@@ -1,4 +1,15 @@
 import * as service from './conversations.service.js';
+import * as direct from './direct.service.js';
+
+export async function contacts(req, res) {
+  const { q, classId } = req.query;
+  res.json(await direct.listContacts(req.user, { q, classId }));
+}
+
+export async function openDirect(req, res) {
+  const result = await direct.openDirect(req.user, req.body);
+  res.status(result.created ? 201 : 200).json(result);
+}
 
 export async function list(req, res) {
   res.json(await service.listConversations(req.user));

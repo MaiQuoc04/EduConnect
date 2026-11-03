@@ -26,12 +26,28 @@ function memberLabel(member) {
   return memberSubline(member) || MEMBER_KIND_LABELS[member.kinds?.[0]] || '';
 }
 
-export default function ChatThread({ groupId }) {
+// UC-49 1-1 chats (groupType DIRECT): no sender names, "Đã xem" without names, and sending closes when the two are
+// no longer in reach or the other account is locked (blockedReason). onPeer(peer) passes the other person's details
+// (labels, contacts for teachers / School Manager) to the header.
+const BLOCKED_TEXT = {
+  READ_ONLY: 'Nhóm chỉ còn để xem lại',
+  OUT_OF_SCOPE: 'Bạn không còn nhắn tin được với người này',
+  LOCKED: 'Tài khoản này đã bị khoá',
+};
+const BLOCKED_BY_CODE = {
+  MSG_GROUP_READ_ONLY: 'READ_ONLY',
+  MSG_DIRECT_OUT_OF_SCOPE: 'OUT_OF_SCOPE',
+  MSG_DIRECT_LOCKED: 'LOCKED',
+};
+
+export default function ChatThread({ groupId, onPeer }) {
   const { user } = useAuth();
   const me = user?.id;
   const socket = useSocket();
   const toast = useToast();
-  const [state, setState] = useState({ loading: true, error: '', canSend: false, readOnly: false });
+  const [state, setState] = useState({ loading: true, error: '', canSend: false, blockedReason: null, direct: false });
+  const onPeerRef = useRef(onPeer);
+  onPeerRef.current = onPeer;
   const [messages, setMessages] = useState([]);
   const [members, setMembers] = useState([]);
   const [hasMore, setHasMore] = useState(false);
@@ -61,7 +77,14 @@ export default function ChatThread({ groupId }) {
       setMessages(data.messages);
       setMembers(data.members);
       setHasMore(data.hasMore);
-      setState({ loading: false, error: '', canSend: data.canSend, readOnly: data.readOnly });
+      setState({
+        loading: false,
+        error: '',
+        canSend: data.canSend,
+        blockedReason: data.blockedReason,
+        direct: data.groupType === 'DIRECT',
+      });
+      if (data.peer) onPeerRef.current?.(data.peer);
       markRead();
     } catch (err) {
       setState((s) => ({ ...s, loading: false, error: errorText(err) }));
@@ -147,7 +170,9 @@ export default function ChatThread({ groupId }) {
       setText('');
     } catch (err) {
       toast(errorText(err));
-      if (err.code === 'MSG_GROUP_READ_ONLY') setState((s) => ({ ...s, canSend: false, readOnly: true }));
+      if (BLOCKED_BY_CODE[err.code]) {
+        setState((s) => ({ ...s, canSend: false, blockedReason: BLOCKED_BY_CODE[err.code] }));
+      }
     } finally {
       setSending(false);
       inputRef.current?.focus();
@@ -234,12 +259,13 @@ export default function ChatThread({ groupId }) {
                   newDay={newDay}
                   firstOfRun={firstOfRun}
                   label={memberLabel(member)}
+                  direct={state.direct}
                 />
               );
             })}
             {last && (seenBy.length > 0 || last.senderId === me) && (
               <li className={`msg-seen caption muted${last.senderId === me ? ' mine' : ''}`}>
-                {seenBy.length ? <SeenBy people={seenBy} /> : 'Đã gửi'}
+                {!seenBy.length ? 'Đã gửi' : state.direct ? <><Icon name="done_all" size="sm" /> Đã xem</> : <SeenBy people={seenBy} />}
               </li>
             )}
           </ol>
@@ -259,7 +285,7 @@ export default function ChatThread({ groupId }) {
           value={text}
           onChange={(e) => setText(e.target.value)}
           onKeyDown={onKeyDown}
-          placeholder={state.canSend ? 'Nhập tin nhắn…' : 'Nhóm chỉ còn để xem lại'}
+          placeholder={state.canSend ? 'Nhập tin nhắn…' : BLOCKED_TEXT[state.blockedReason] ?? BLOCKED_TEXT.READ_ONLY}
           disabled={!state.canSend}
           aria-label="Nhập tin nhắn"
         />
@@ -277,7 +303,7 @@ export default function ChatThread({ groupId }) {
   );
 }
 
-function MessageRow({ message: m, mine, newDay, firstOfRun, label }) {
+function MessageRow({ message: m, mine, newDay, firstOfRun, label, direct }) {
   const name = m.senderNickname ? `${m.senderNickname} (${m.senderName})` : m.senderName;
   return (
     <>
@@ -287,11 +313,11 @@ function MessageRow({ message: m, mine, newDay, firstOfRun, label }) {
         </li>
       )}
       <li className={`msg${mine ? ' mine' : ''}${firstOfRun ? ' first' : ''}`}>
-        {!mine && (
+        {!mine && !direct && (
           <span className="msg-avatar">{firstOfRun && <Avatar src={m.senderAvatarUrl} name={m.senderName} size={32} />}</span>
         )}
         <div className="msg-body">
-          {!mine && firstOfRun && (
+          {!mine && !direct && firstOfRun && (
             <p className="msg-sender caption">
               <strong>{name}</strong>
               {label && <span className="muted"> · {label}</span>}

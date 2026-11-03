@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Link, NavLink, useLocation, useParams } from 'react-router-dom';
+import { Link, NavLink, useLocation, useNavigate, useParams } from 'react-router-dom';
 import { api } from '../../api/client.js';
+import Avatar from '../../components/Avatar.jsx';
 import Icon from '../../components/Icon.jsx';
 import { useAuth } from '../../context/AuthContext.jsx';
 import { useSocket } from '../../context/SocketContext.jsx';
@@ -8,18 +9,21 @@ import { errorText } from '../../messages.js';
 import { fold } from '../subjects/subjectText.js';
 import { GROUP_TYPE_ICONS, GROUP_TYPE_LABELS } from '../groups/groupLabels.js';
 import ChatThread from './ChatThread.jsx';
-import { previewText, shortTime, unreadLabel } from './chatText.js';
+import { contactLabel, previewText, shortTime, unreadLabel } from './chatText.js';
+import NewChatDialog from './NewChatDialog.jsx';
 
 // "Trò chuyện" – split view: my groups on the left (~3/10), the chosen group's chat on the right (~7/10).
 // Shell built in FE-04 from the UC-29 group list; FE-06 Messaging (Khanh) fills the right pane with UC-47 Chat in
 // Group (ChatThread.jsx, SCR-43 / SCR-50). UC-48 View Conversation List (SCR-49): under each chat's name its latest
 // message (bold while unread, cut with "…") and the number of unread messages, from GET /conversations, kept up to
-// date by the socket; opening a chat clears its count. 1-1 chats arrive with UC-49. The server checks who may chat.
+// date by the socket; opening a chat clears its count. UC-49 Send Private Message: "Tin nhắn mới" (NewChatDialog)
+// opens a 1-1 chat; 1-1 chats are listed first ("Tin nhắn riêng") and use DirectRoom. The server checks who may chat.
 // The School Manager sees no class chat (business-rules §2): the list keeps only the school-wide teacher group.
 // Opened from a group or from "Nhóm của tôi", the router state { backTo, backLabel } (groupLabels.js) adds a
 // "Quay lại" button at the top left; it is passed on while the user switches chats so the way back stays.
 export default function ChatPage() {
   const { groupId } = useParams();
+  const navigate = useNavigate();
   const back = useLocation().state;
   const backState = back?.backTo ? back : undefined;
   const [list, setList] = useState({ loading: true, data: null, error: '' });
@@ -28,8 +32,10 @@ export default function ChatPage() {
   const me = user?.id;
   const manager = activeRole === 'SCHOOL_MANAGER';
   const socket = useSocket();
-  // UC-48 summaries by groupId: { unreadCount, lastMessage }.
+  // UC-48 summaries by groupId: { groupType, unreadCount, lastMessage, peer (1-1 chats) }.
   const [summaries, setSummaries] = useState({});
+  const [summariesLoaded, setSummariesLoaded] = useState(false);
+  const [newChat, setNewChat] = useState(false); // UC-49 "Tin nhắn mới" dialog
   const openId = groupId ? Number(groupId) : null;
   const openRef = useRef(openId);
   openRef.current = openId;
@@ -40,12 +46,22 @@ export default function ChatPage() {
       .then(({ data }) => setList({ loading: false, data, error: '' }))
       .catch((err) => setList({ loading: false, data: null, error: errorText(err) }));
   }, []);
-  const loadSummaries = useCallback(() => {
-    api
-      .get('/conversations')
-      .then(({ data }) => setSummaries(Object.fromEntries(data.map((c) => [c.groupId, c]))))
-      .catch(() => {}); // the list still works without previews
-  }, []);
+  const loadSummaries = useCallback(
+    () =>
+      api
+        .get('/conversations')
+        .then(({ data }) => setSummaries(Object.fromEntries(data.map((c) => [c.groupId, c]))))
+        .catch(() => {}) // the group list still works without previews
+        .finally(() => setSummariesLoaded(true)),
+    [],
+  );
+
+  // UC-49: the 1-1 chat was opened (or created) – refresh the list so it is there, then show it.
+  async function directOpened(id) {
+    await loadSummaries();
+    setNewChat(false);
+    navigate(`/chat/${id}`, { state: backState });
+  }
 
   useEffect(() => {
     loadGroups();
@@ -113,8 +129,19 @@ export default function ChatPage() {
         items: [{ ...g, title: g.groupName }].filter((i) => keep(i.title)),
       });
     }
+    // UC-49: 1-1 chats first, newest message first (a just-opened empty chat on top).
+    const direct = Object.values(summaries)
+      .filter((c) => c.groupType === 'DIRECT' && c.peer && keep(c.peer.fullName))
+      .sort(
+        (a, b) =>
+          (b.lastMessage?.messageId ?? Number.MAX_SAFE_INTEGER) - (a.lastMessage?.messageId ?? Number.MAX_SAFE_INTEGER),
+      )
+      .map((c) => ({ groupId: c.groupId, groupType: 'DIRECT', title: c.peer.fullName, peer: c.peer }));
+    if (direct.length) result.unshift({ key: 'direct', title: 'Tin nhắn riêng', items: direct });
     return result.filter((s) => s.items.length);
-  }, [list.data, query, manager]);
+  }, [list.data, query, manager, summaries]);
+
+  const openSummary = openId !== null ? summaries[openId] : null;
 
   return (
     <>
@@ -129,16 +156,27 @@ export default function ChatPage() {
       <div className={`chat-shell${groupId ? ' has-chat' : ''}${backState ? ' has-topbar' : ''}`}>
         <aside className="chat-list" aria-label="Danh sách nhóm trò chuyện">
           <div className="chat-list-head">
-            <h1 className="title-md">Trò chuyện</h1>
+            <div className="chat-list-title">
+              <h1 className="title-md">Trò chuyện</h1>
+              <button
+                type="button"
+                className="btn btn-icon chat-new"
+                onClick={() => setNewChat(true)}
+                aria-label="Tin nhắn mới"
+                title="Tin nhắn mới"
+              >
+                <Icon name="edit_square" />
+              </button>
+            </div>
             <div className="input-wrap subject-search">
               <Icon name="search" size="sm" className="subject-search-icon" />
               <input
                 className="input"
                 type="search"
-                placeholder="Tìm nhóm…"
+                placeholder="Tìm nhóm hoặc người…"
                 value={query}
                 onChange={(e) => setQuery(e.target.value)}
-                aria-label="Tìm nhóm"
+                aria-label="Tìm nhóm hoặc người"
               />
             </div>
           </div>
@@ -158,6 +196,7 @@ export default function ChatPage() {
                       const summary = summaries[g.groupId];
                       const last = summary?.lastMessage ?? null;
                       const unread = summary?.unreadCount ?? 0;
+                      const direct = g.groupType === 'DIRECT';
                       return (
                         <li key={g.groupId}>
                           <NavLink
@@ -165,9 +204,13 @@ export default function ChatPage() {
                             state={backState}
                             className={`chat-item${unread ? ' has-unread' : ''}`}
                           >
-                            <span className={`gd-mini-icon type-${g.groupType.toLowerCase()}`} aria-hidden="true">
-                              <Icon name={GROUP_TYPE_ICONS[g.groupType]} size="sm" />
-                            </span>
+                            {direct ? (
+                              <Avatar src={g.peer.avatarUrl} name={g.peer.fullName} size={32} />
+                            ) : (
+                              <span className={`gd-mini-icon type-${g.groupType.toLowerCase()}`} aria-hidden="true">
+                                <Icon name={GROUP_TYPE_ICONS[g.groupType]} size="sm" />
+                              </span>
+                            )}
                             <span className="chat-item-text">
                               <span className="chat-item-row">
                                 <span className="chat-item-name">{g.title}</span>
@@ -175,7 +218,7 @@ export default function ChatPage() {
                               </span>
                               <span className="chat-item-row">
                                 <span className={`caption chat-item-last${unread ? ' unread' : ''}`}>
-                                  {previewText(last, me)}
+                                  {previewText(last, me, direct)}
                                 </span>
                                 {unread > 0 && (
                                   <span className="chat-badge" aria-label={`${unread} tin nhắn chưa đọc`}>
@@ -196,19 +239,54 @@ export default function ChatPage() {
         </aside>
 
         <section className="chat-room" aria-label="Khung trò chuyện">
-          {groupId ? (
-            <ChatRoom key={groupId} groupId={groupId} backState={backState} />
-          ) : (
+          {!groupId ? (
             <div className="chat-empty">
               <span className="gd-pending-icon" aria-hidden="true">
                 <Icon name="forum" />
               </span>
-              <h2 className="title-md">Chọn một nhóm để trò chuyện</h2>
-              <p className="muted">Các nhóm lớp và team của bạn nằm ở cột bên trái.</p>
+              <h2 className="title-md">Chọn một cuộc trò chuyện</h2>
+              <p className="muted">Các nhóm lớp, team và tin nhắn riêng của bạn nằm ở cột bên trái.</p>
+              <button type="button" className="btn btn-secondary" onClick={() => setNewChat(true)}>
+                <Icon name="edit_square" size="sm" />
+                Tin nhắn mới
+              </button>
             </div>
+          ) : !summariesLoaded ? (
+            <p className="loading chat-list-note">Đang tải…</p>
+          ) : openSummary?.groupType === 'DIRECT' ? (
+            <DirectRoom key={groupId} summary={openSummary} backState={backState} />
+          ) : (
+            <ChatRoom key={groupId} groupId={groupId} backState={backState} />
           )}
         </section>
       </div>
+      {newChat && <NewChatDialog onOpened={directOpened} onClose={() => setNewChat(false)} />}
+    </>
+  );
+}
+
+// UC-49 right pane for a 1-1 chat: the other person (name, who they are to me, contacts for teachers / School
+// Manager, "Đã khoá"), then the chat. The summary gives the name at once; ChatThread adds the details.
+function DirectRoom({ summary, backState }) {
+  const [detail, setDetail] = useState(null);
+  const peer = detail ?? summary.peer;
+  const sub = [contactLabel(detail), detail?.phone, detail?.email].filter(Boolean).join(' · ');
+  return (
+    <>
+      <header className="chat-room-head">
+        <Link to="/chat" state={backState} className="btn btn-icon chat-back" aria-label="Về danh sách trò chuyện">
+          <Icon name="arrow_back" />
+        </Link>
+        <Avatar src={peer.avatarUrl} name={peer.fullName} size={36} />
+        <div className="chat-room-title">
+          <h2 className="title-sm">
+            {peer.fullName}
+            {peer.status === 'LOCKED' && <span className="pill msg-locked chat-peer-locked">Đã khoá</span>}
+          </h2>
+          <p className="caption muted">{sub || 'Tin nhắn riêng'}</p>
+        </div>
+      </header>
+      <ChatThread groupId={summary.groupId} onPeer={setDetail} />
     </>
   );
 }
