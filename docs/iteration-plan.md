@@ -35,6 +35,12 @@ Last updated: 03/11/2026 (FE-04 merged; FE-02 lead's follow-ups and UC-14 done o
   `patch_v0.3_departments.sql` (FE-03, already run before review; kept by the lead 02/11: table `departments`) +
   `patch_v0.3_class_track_grade.sql` (FE-04, run by Khanh 02/11 before approval; accepted 03/11:
   `class_tracks.grade_level_id`). 48 tables.
+- **Sample data added to the shared DB (03/11, Anh, agreed with the lead), through the app API (UC-96, UC-14, UC-28),
+  no SQL:** 90 student accounts `HS7001..HS7090` (no class yet), 90 parent accounts with phones
+  `0977000001..0977000090` (all with `must_change_password`), 65 links (HS7001–7020 two parents, HS7021–7045 one,
+  HS7046–7090 none; parents `0977000066..0977000090` not linked), 6 empty classes of 2027-2028 with their groups
+  (10A1, 10A2, 10D1, 11A1, 11C1, 12A1). Accounts are never deleted (business rules §3): to remove the set, lock them
+  or ask the lead; ids are in Anh's manifest file.
 - **develop:**
   - FE-01 complete for It1 (merged 01/11): UC-01..UC-06, UC-107 Update Address, UC-108 Update Occupation,
     UC-109 View Child Profile, password reset request with sign-in name + full name check; forced password change
