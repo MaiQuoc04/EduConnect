@@ -221,7 +221,7 @@ function ParentCard({ parent, onUnlink }) {
           <Icon name="link_off" size="sm" />
           Gỡ liên kết
         </button>
-        {/* TODO UC-106 View Parent Detail (FE-14, Khanh, SCR-10) */}
+        {/* TODO UC-105 View Parent Detail (FE-14, Khanh, SCR-10 Parent Detail) */}
         <button type="button" className="btn btn-secondary" disabled title={NOT_BUILT}>
           <Icon name="badge" size="sm" />
           Hồ sơ phụ huynh

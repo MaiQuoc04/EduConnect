@@ -422,7 +422,7 @@ export default function TransferStudentPage() {
 }
 
 // The transfer part (UC-10 Transfer Student).
-// Design: Stitch "SCR-10 Student Transfer & Promotion" (a page with two tabs; the promotion tab is UC-11).
+// Design: Stitch "SCR-11 Student Transfer & Promotion" (a page with two tabs; the promotion tab is UC-11).
 // A transfer cannot be undone (UNIQUE (student_id, class_id): no way back to the old class), hence the confirmation.
 function TransferStudentView() {
   const { studentId } = useParams();

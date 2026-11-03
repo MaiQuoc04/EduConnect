@@ -227,7 +227,7 @@ function LinkedParent({ parent, disabled, onUnlink }) {
   );
 }
 
-// Picking an EXISTING parent account. TODO FE-14 (Khanh): there is no parent list endpoint yet (UC-105 View Parent
+// Picking an EXISTING parent account. TODO FE-14 (Khanh): there is no parent list endpoint yet (UC-104 View Parent
 // List is not built). Until then two read-only ways, both through FE-02's own endpoints, and both show the parent's
 // name before linking:
 //  - "Tìm theo số điện thoại" (default): the phone identifies a parent (required for parents, business-rules §3) and

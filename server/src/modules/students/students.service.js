@@ -1,43 +1,13 @@
 import { pool, withTransaction } from '../../config/db.js';
 import { badRequest, notFound } from '../../utils/AppError.js';
 import { vietnameseNameOrder } from '../../utils/nameSort.js';
+import { containsPattern, VI_TRANSLATE } from '../../utils/search.js';
 
 // FE-02 Student Management (owner: Anh). SQL lives here; the controller validates the query first.
 // resolveSchoolYearId, enrollmentsOfYear and buildStudentFilter are shared by UC-07..UC-14.
 //
 // Schema v0.3: users, students, class_enrollments, school_years and grade_levels have no deleted_at; classes and
 // class_tracks do. Accounts are never deleted, only LOCKED (business-rules §3).
-
-// --- Accent-insensitive search -------------------------------------------------------------------------------
-// The unaccent extension (database/2026-10-26_enable_unaccent.sql) may or may not be installed on the shared DB
-// or a developer's local DB. It is looked up once (started when this module loads, i.e. at server start) and
-// cached; restart the server after installing it. Without it, search falls back to plain ILIKE (accents must
-// match). A failed lookup (DB unreachable) is not cached, so the next request tries again.
-let unaccentLookup;
-
-function getUnaccentFn() {
-  unaccentLookup ??= pool
-    .query(
-      `SELECT n.nspname AS schema FROM pg_extension e JOIN pg_namespace n ON n.oid = e.extnamespace
-       WHERE e.extname = 'unaccent'`,
-    )
-    .then(({ rows }) => {
-      const schema = rows[0]?.schema;
-      if (!schema) {
-        console.warn('[students] unaccent extension not installed: name search needs exact accents. '
-          + 'See database/2026-10-26_enable_unaccent.sql');
-        return null;
-      }
-      return `"${schema.replace(/"/g, '""')}".unaccent`;
-    })
-    .catch((err) => {
-      unaccentLookup = undefined;
-      throw err;
-    });
-  return unaccentLookup;
-}
-
-getUnaccentFn().catch((err) => console.warn('[students] unaccent check failed, retrying on first search:', err.message));
 
 // --- School year -----------------------------------------------------------------------------------------------
 
@@ -48,7 +18,8 @@ getUnaccentFn().catch((err) => console.warn('[students] unaccent check failed, r
 //   1. the year with CURRENT_DATE BETWEEN start_date AND end_date;
 //   2. none (e.g. summer break between two years): the latest year that has already started;
 //   3. every year is in the future: the earliest one.
-//   ASSUMPTION: steps 2 and 3 are not in business-rules.md yet (waiting for the team lead to add them).
+//   Business-rules §4 "School years" (agreed 03/11/2026): the latest that has started; before any has started,
+//   the earliest – the same choice as FE-04 resolveYear (years never overlap, so step 1 is step 2).
 export async function resolveSchoolYearId({ schoolYearId, classId } = {}, db = pool) {
   if (schoolYearId) {
     const { rows } = await db.query('SELECT school_year_id FROM school_years WHERE school_year_id = $1', [schoolYearId]);
@@ -112,24 +83,24 @@ export function enrollmentsOfYear(params, { status } = {}) {
  *   s = students, u = users (always needed: q, accountStatus), c = classes (needed only when classId is given).
  * The enrollment status filter is not here: it has to be applied inside enrollmentsOfYear (see there).
  *
- * @param {{ q?: string, classId?: number, accountStatus?: string, unaccentFn?: string|null }} filters
- *   unaccentFn: qualified name of unaccent() (from getUnaccentFn) for accent-insensitive name search, or null.
+ * @param {{ q?: string, classId?: number, accountStatus?: string }} filters
  * @param {unknown[]} params
  */
-export function buildStudentFilter({ q, classId, accountStatus, unaccentFn } = {}, params) {
+export function buildStudentFilter({ q, classId, accountStatus } = {}, params) {
   const conditions = [];
   const add = (value) => {
     params.push(value);
     return `$${params.length}`;
   };
-  if (q) {
-    // % and _ typed by the user are literal characters, not wildcards.
-    const pattern = add(`%${q.replace(/[\\%_]/g, '\\$&')}%`);
-    const name = unaccentFn
-      ? `${unaccentFn}(u.full_name) ILIKE ${unaccentFn}(${pattern}::text)`
-      : `u.full_name ILIKE ${pattern}`;
-    // student_code has no accents: plain ILIKE.
-    conditions.push(`(${name} OR s.student_code ILIKE ${pattern})`);
+  // Business-rules §16: "contains", ignoring case and Vietnamese accents ("bao" finds "Bảo"), with the shared
+  // utils/search.js; % and _ typed by the user are matched literally.
+  const pattern = containsPattern(q);
+  if (pattern) {
+    const p = add(pattern);
+    const from = add(VI_TRANSLATE.from);
+    const to = add(VI_TRANSLATE.to);
+    const fold = (column) => `lower(translate(${column}, ${from}, ${to}))`;
+    conditions.push(`(${fold('u.full_name')} LIKE ${p} OR lower(s.student_code) LIKE ${p})`);
   }
   if (classId) conditions.push(`c.class_id = ${add(classId)}`);
   if (accountStatus) conditions.push(`u.status = ${add(accountStatus)}`);
@@ -159,7 +130,6 @@ export async function listStudents({ q, classId, schoolYearId, status, accountSt
     if (!rows[0]) throw badRequest('MSG_CLASS_NOT_FOUND', 'The class does not exist in this school year.');
   }
 
-  const unaccentFn = q ? await getUnaccentFn() : null;
   const params = [yearId];
   let from;
   let columns;
@@ -190,7 +160,7 @@ export async function listStudents({ q, classId, schoolYearId, status, accountSt
             t.track_name AS "trackName", e.status AS "enrollmentStatus", u.status AS "accountStatus", ${PARENT_COUNT}`;
     orderBy = `c.class_name, ${vietnameseNameOrder('u.full_name')}, s.student_id, e.enrollment_id`;
   }
-  const where = buildStudentFilter({ q, classId, accountStatus, unaccentFn }, params);
+  const where = buildStudentFilter({ q, classId, accountStatus }, params);
 
   // Run one after the other: the Supabase Free pooler allows DB_POOL_MAX=3 per developer (README §6).
   const { rows: countRows } = await pool.query(`SELECT COUNT(*) AS total FROM ${from} AND ${where}`, params);
@@ -211,8 +181,7 @@ export async function listStudents({ q, classId, schoolYearId, status, accountSt
 // FE-13 (business-rules §2) – this only returns the account state the screen needs to show those buttons.
 // Queries run one after the other (DB_POOL_MAX=3, README §6). Viewing is not logged (business-rules §13).
 // The "student" object of UC-08, also returned by UC-09 so the client uses one shape. Throws 404 when missing.
-// address lives on users (moved from parents by the team lead). Shown read only: UC-09 does not edit it yet – who
-// updates a student's address (SM in UC-09 or SA) is not decided.
+// address lives on users (business-rules §3); School Manager edits it in UC-09 (business-rules §4 "Students").
 async function findStudent(studentId, db = pool) {
   // lockedUntil is the automatic temporary sign-in lock (business-rules §3), not the manual LOCKED status.
   // ASSUMPTION: a lock that has already expired is returned as null, so the UI never shows a past lock.
@@ -342,7 +311,7 @@ export async function getStudentParents(studentId, db = pool) {
 
 export const RELATIONSHIP_TYPES = ['FATHER', 'MOTHER', 'GUARDIAN']; // student_parents.relationship_type has no CHECK
 
-// TEMPORARY until FE-14 has UC-105 View Parent List (see lookupParent in the controller): remove with it.
+// TEMPORARY until FE-14 has UC-104 View Parent List (see lookupParent in the controller): remove with it.
 // One parent account by its exact phone (users.phone is UNIQUE; `phone` is already normalised). Only an account
 // that really has the PARENT role (as linkParent checks) is returned: a teacher's or student's phone gives null,
 // so the lookup never reveals that another kind of account exists. LOCKED accounts are returned (they can still be
@@ -486,7 +455,13 @@ export async function unlinkParent(studentId, parentId) {
 // body's keys); the controller has already rejected every other field. Login identifiers, password, account
 // status / lock fields and student_code are deliberately absent (business-rules §3, UC-99).
 const EDITABLE_COLUMNS = {
-  users: { key: 'user_id', columns: { fullName: { column: 'full_name', type: 'varchar' } } },
+  users: {
+    key: 'user_id',
+    columns: {
+      fullName: { column: 'full_name', type: 'varchar' },
+      address: { column: 'address', type: 'varchar' },
+    },
+  },
   students: {
     key: 'student_id',
     columns: { dob: { column: 'dob', type: 'date' }, gender: { column: 'gender', type: 'varchar' } },
@@ -513,13 +488,12 @@ function buildUpdate(table, keyValue, changes) {
   };
 }
 
-// ASSUMPTION: the documents set no age limits. A high-school student (grades 10-12) is normally 15-18; the range
-// is kept wide for early / late starters and repeated years: at least 10 and at most 30 years old today. This
-// also rules out a date in the future. Compared in SQL so "today" is the Vietnam date (CLAUDE.md).
+// Business-rules §4 "Students" (agreed 03/11/2026): the date of birth gives an age of 10–30 today (this also
+// rules out a date in the future). Compared in SQL so "today" is the Vietnam date (CLAUDE.md).
 const MIN_STUDENT_AGE_YEARS = 10;
 const MAX_STUDENT_AGE_YEARS = 30;
 
-// UC-09 Update Student (School Manager): full name (users), date of birth and gender (students). Returns the same
+// UC-09 Update Student (School Manager): full name and address (users), date of birth and gender (students). Returns the same
 // "student" object as UC-08. Not logged: profile edits are not in the activity_logs list (business-rules §13).
 // Decided 2026-10-27: LOCKED accounts and students who left school can still be edited; student_code is never
 // changed here (it is the matching key of the class import, UC-27).
@@ -665,7 +639,7 @@ const GROUP_MEMBER_COLUMNS = `g.group_id AS "groupId", g.group_type AS "groupTyp
             gm.user_id AS "userId"`;
 
 // Group memberships of a transfer, inside the transfer's transaction (business-rules §6: transferring sets
-// group_members.left_at and keeps the row; schema: re-joining = new row, one active row per user).
+// group_members.left_at and keeps the row; coming back to a group reopens that row, see joinClassGroups).
 // Groups that do not exist are not created (FE-04); a warning is returned instead.
 async function moveClassGroups(client, { studentId, studentUserId, fromClassId, toClassId }) {
   // ASSUMPTION: business-rules §6 only names the student. Their linked parents (student_parents) follow them:
@@ -745,7 +719,12 @@ async function leaveParentClassGroups(client, { classId, parentUserIds, exceptSt
 // memberTypeByUser: Map userId -> 'STUDENT' | 'PARENT' (one entry per user, so a parent of two children moving to
 // the same class is added once). Only the groups that really exist are used (UC-27 may not have run, or the class
 // was created by hand); a (user, group) pair that already has an active row is skipped. Never creates a group
-// (FE-04) and never touches other classes' groups. Returns the rows added (with memberType) and the warnings.
+// (FE-04) and never touches other classes' groups. Returns the rows joined (with memberType and restored) and the
+// warnings.
+// Business-rules §4 (agreed 03/11/2026): someone coming back to a group (e.g. transferred back to an old class, or a
+// parent linked again) gets their old row back – their latest row of that group has left_at cleared, so they see
+// the whole history again – instead of a new row; a new row is only added for someone never in that group. Same
+// rule as FE-04's syncClassTeachers (classes/classGroups.js).
 async function joinClassGroups(client, classId, memberTypeByUser) {
   // (user, group type) pairs to join.
   const userIds = [];
@@ -756,22 +735,49 @@ async function joinClassGroups(client, classId, memberTypeByUser) {
       groupTypes.push(type);
     }
   }
-  const { rows: joined } = await client.query(
-    `WITH added AS (
-       INSERT INTO group_members (group_id, user_id, joined_at)
-       SELECT g.group_id, w.user_id, NOW()
+  // The (group, user) pairs wanted in the existing groups of the class that have no active row yet.
+  const wanted = `wanted AS (
+       SELECT DISTINCT g.group_id, w.user_id
        FROM unnest($2::bigint[], $3::text[]) AS w(user_id, group_type)
        JOIN groups g ON g.group_type = w.group_type AND g.class_id = $1 AND g.deleted_at IS NULL
        WHERE NOT EXISTS (SELECT 1 FROM group_members x
-                         WHERE x.group_id = g.group_id AND x.user_id = w.user_id AND x.left_at IS NULL)
+                         WHERE x.group_id = g.group_id AND x.user_id = w.user_id AND x.left_at IS NULL))`;
+  const params = [classId, userIds, groupTypes];
+  const summary = (cte) => `SELECT g.group_id AS "groupId", g.group_type AS "groupType", g.group_name AS "groupName",
+            a.user_id AS "userId"
+     FROM ${cte} a JOIN groups g ON g.group_id = a.group_id`;
+
+  // 1. Back to a group they left: reopen their latest row (older data may hold several rows per person).
+  const { rows: restored } = await client.query(
+    `WITH ${wanted},
+     back AS (
+       UPDATE group_members m SET left_at = NULL
+       FROM wanted w
+       WHERE m.group_id = w.group_id AND m.user_id = w.user_id
+         AND m.member_id = (SELECT MAX(x.member_id) FROM group_members x
+                            WHERE x.group_id = w.group_id AND x.user_id = w.user_id)
+       RETURNING m.group_id, m.user_id
+     )
+     ${summary('back')}`,
+    params,
+  );
+  // 2. Never in that group: a new row.
+  const { rows: added } = await client.query(
+    `WITH ${wanted},
+     added AS (
+       INSERT INTO group_members (group_id, user_id, joined_at)
+       SELECT w.group_id, w.user_id, NOW() FROM wanted w
+       WHERE NOT EXISTS (SELECT 1 FROM group_members x WHERE x.group_id = w.group_id AND x.user_id = w.user_id)
        RETURNING group_id, user_id
      )
-     SELECT g.group_id AS "groupId", g.group_type AS "groupType", g.group_name AS "groupName", a.user_id AS "userId"
-     FROM added a JOIN groups g ON g.group_id = a.group_id
-     ORDER BY a.user_id, g.group_id`,
-    [classId, userIds, groupTypes],
+     ${summary('added')}`,
+    params,
   );
 
+  const joined = [
+    ...restored.map((row) => ({ ...row, restored: true })),
+    ...added.map((row) => ({ ...row, restored: false })),
+  ].sort((a, b) => a.userId - b.userId || a.groupId - b.groupId);
   return {
     joinedGroups: joined.map((row) => ({ ...row, memberType: memberTypeByUser.get(row.userId) })),
     warnings: await classGroupWarnings(client, classId, new Set(memberTypeByUser.values())),
@@ -824,47 +830,8 @@ async function insertEnrollments(client, rows) {
 
 // --- UC-11 -----------------------------------------------------------------------------------------------------
 
-// TEMPORARY READ-ONLY ENDPOINT (GET /students/promote/options). FE-04 (Khanh) has no GET /school-years and no
-// GET /classes yet, so the SCR-11 screen (UC-11 promotion, and the UC-10 class picker) reads the school years and
-// the classes of one year from here, to fill its selects instead of making School Manager type ids.
-// It only reads; creating / editing years and classes stays in FE-04 (UC-20, UC-27, UC-28).
-// TODO FE-04: delete this function, its route and controller once FE-04's endpoints exist, and switch the client
-// (getPromoteOptions in client/src/api/students.js) to them.
-//
-// - schoolYears: every school year, oldest first by start_date (not by id: a later year can be created first).
-//   isCurrent = CURRENT_DATE BETWEEN start_date AND end_date (school_years has no is_current column, MOM-05).
-// - classes: only with toSchoolYearId – the year's classes that are not soft-deleted, with their current size
-//   (STUDYING enrollments), by grade level then class name. MSG_SCHOOL_YEAR_NOT_FOUND when the year does not exist.
-//   ASSUMPTION: "10A2" before "10A10" (shorter name first), a natural order without a sort column in the schema.
-// Not logged (reading, business-rules §13).
-export async function getPromoteOptions({ toSchoolYearId }) {
-  const { rows: schoolYears } = await pool.query(
-    `SELECT school_year_id AS "schoolYearId", year_name AS "yearName", start_date AS "startDate",
-            end_date AS "endDate", CURRENT_DATE BETWEEN start_date AND end_date AS "isCurrent"
-     FROM school_years
-     ORDER BY start_date, school_year_id`,
-  );
-  if (!toSchoolYearId) return { schoolYears, classes: [] };
-
-  const yearId = await resolveSchoolYearId({ schoolYearId: toSchoolYearId });
-  // class_tracks.deleted_at is not filtered: a class keeps showing the type it was created with (as in UC-07).
-  const { rows: classes } = await pool.query(
-    `SELECT c.class_id AS "classId", c.class_name AS "className", gl.grade_level_name AS "gradeLevelName",
-            t.track_name AS "trackName",
-            (SELECT COUNT(*) FROM class_enrollments ce
-             WHERE ce.class_id = c.class_id AND ce.status = 'STUDYING') AS "studentCount"
-     FROM classes c
-     JOIN grade_levels gl ON gl.grade_level_id = c.grade_level_id
-     JOIN class_tracks t ON t.track_id = c.track_id
-     WHERE c.school_year_id = $1 AND c.deleted_at IS NULL
-     ORDER BY gl.grade_level_name, length(c.class_name), c.class_name, c.class_id`,
-    [yearId],
-  );
-  return { schoolYears, classes };
-}
-
-// ASSUMPTION: the documents set no batch size; at most 200 students per call so one request does not hold its row
-// locks for long. A whole grade is promoted in a few calls (the screen sends one class at a time).
+// Business-rules §4 "Who puts a student in a class" (agreed 03/11/2026): at most 200 students per call. A whole
+// grade is promoted in a few calls (the screen sends one class at a time).
 export const MAX_PROMOTE_STUDENTS = 200;
 
 // UC-11 Promote Students (School Manager): enrol students of one school year into classes of a LATER school year.

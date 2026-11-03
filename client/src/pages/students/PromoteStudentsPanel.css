@@ -1,7 +1,7 @@
 /* FE-02 Promote Students (SCR-11 Student Transfer & Promotion, promotion tab, UC-11). The page root carries both
    .transfer-student and .promote-students: the header, tabs, 8/4 grid, side panels, footer, class picker and dialog
    come from TransferStudentPage.css; this file only adds the promotion parts, every rule scoped under
-   .promote-students. Design: Stitch "SCR-10 Student Transfer & Promotion" (banner with the notebook margin rule and
+   .promote-students. Design: Stitch "SCR-11 Student Transfer & Promotion" (banner with the notebook margin rule and
    the ink stamp, table cards with a grey head bar). Colours, radii and type come from the tokens in styles.css.
    Breakpoints are the ones of the other FE-02 screens: 1080px (grid stacks), 900px (app shell becomes a drawer),
    640px. */

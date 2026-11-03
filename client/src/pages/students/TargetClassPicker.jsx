@@ -1,15 +1,14 @@
 import { useEffect, useState } from 'react';
-import { getPromoteOptions } from '../../api/students.js';
+import { getClassOptions } from '../../api/students.js';
 import Icon from '../../components/Icon.jsx';
 
 // Class field of SCR-11 Student Transfer & Promotion: the target class of UC-10 (one student, current school year)
 // and the source / target classes of UC-11.
 //
-// The classes come from GET /students/promote/options (every class of the year that is not soft-deleted, with its
-// current size, empty classes included).
-// TODO FE-04 (Khanh): switch to GET /classes?schoolYearId= once it exists (getPromoteOptions is temporary).
+// The classes come from FE-04's GET /classes?schoolYearId= (getClassOptions: every class of the year that is not
+// soft-deleted, with its current size, empty classes included).
 //
-// Either pass `options` (classes already loaded by the page, shape of the options endpoint) or `schoolYearId`
+// Either pass `options` (classes already loaded by the page, shape of getClassOptions) or `schoolYearId`
 // (the picker loads that year's classes itself).
 // value: { classId, className } or null. include(option) -> false leaves an option out of the list (e.g. another
 // grade level); describe(option) -> { disabled, note } shows an option but marks it as not selectable.
@@ -36,8 +35,8 @@ export default function TargetClassPicker({
     const controller = new AbortController();
     setLoaded(null);
     setLoadError(false);
-    getPromoteOptions({ toSchoolYearId: schoolYearId }, { signal: controller.signal })
-      .then((data) => setLoaded(data.classes))
+    getClassOptions(schoolYearId, { signal: controller.signal })
+      .then(setLoaded)
       .catch(() => {
         if (!controller.signal.aborted) setLoadError(true);
       });

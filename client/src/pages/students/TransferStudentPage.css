@@ -1,5 +1,5 @@
 /* FE-02 Transfer Student (SCR-11 Student Transfer & Promotion, UC-10). Only this screen's styles; every rule is
-   scoped under .transfer-student (the dialog is rendered inside it). Design: Stitch "SCR-10 Student Transfer &
+   scoped under .transfer-student (the dialog is rendered inside it). Design: Stitch "SCR-11 Student Transfer &
    Promotion". Colours, radii and type come from the tokens in styles.css; rules that override a shared class
    (.card, .input, .notice) are prefixed with .transfer-student to win on specificity.
    Breakpoints are the ones of the profile screen and the other FE-02 screens: 1080px (8/4 grid stacks),

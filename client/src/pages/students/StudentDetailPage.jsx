@@ -579,8 +579,8 @@ export default function StudentDetailPage() {
             <Field label="Ngày tạo tài khoản">
               {student.createdAt && <span className="mono">{formatDate(student.createdAt)}</span>}
             </Field>
-            {/* ASSUMPTION: read only until the team decides who edits a student's address (UC-09 does not yet). */}
-            <Field label="Địa chỉ" readOnly wide>
+            {/* School Manager edits the address in UC-09 (business-rules §4 "Students"). */}
+            <Field label="Địa chỉ" wide>
               {student.address}
             </Field>
             <div className="wide student-detail-security-wrap">

@@ -9,6 +9,7 @@ import { handOverDetail } from './detailHandoff.js';
 import './UpdateStudentPage.css';
 
 const MAX_FULL_NAME_LENGTH = 150; // users.full_name VARCHAR(150)
+const MAX_ADDRESS_LENGTH = 500; // users.address, business-rules §3 (same limit as the server)
 const GENDERS = ['MALE', 'FEMALE', 'OTHER'];
 const REQUIRED = 'Trường này là bắt buộc.'; // MSG02
 const LOAD_ERROR = 'Không tải được thông tin học sinh. Vui lòng thử lại.';
@@ -21,11 +22,15 @@ const SERVER_FIELD_ERRORS = {
   fullName: 'Họ và tên không hợp lệ.',
   dob: 'Ngày sinh không hợp lệ hoặc nằm ngoài độ tuổi học sinh cho phép.',
   gender: 'Giới tính không hợp lệ.',
+  address: 'Địa chỉ không hợp lệ.',
 };
-const FIELD_LABELS = { fullName: 'Họ và tên', dob: 'Ngày sinh', gender: 'Giới tính' };
+const FIELD_LABELS = { fullName: 'Họ và tên', dob: 'Ngày sinh', gender: 'Giới tính', address: 'Địa chỉ' };
+const FIELD_ORDER = ['fullName', 'dob', 'gender', 'address'];
 
 // Same normalisation as the server: NFC, trimmed, runs of spaces collapsed.
 const normalizeName = (value) => value.normalize('NFC').trim().replace(/\s+/g, ' ');
+// The address is cleaned the same way (as the server and UC-107 do); empty means "cleared" (null).
+const normalizeAddress = (value) => normalizeName(value) || null;
 
 // Local calendar date as "YYYY-MM-DD".
 function todayIso() {
@@ -57,11 +62,15 @@ function validate(form) {
   if (dob === undefined) errors.dob = 'Ngày sinh không hợp lệ. Nhập theo dạng ngày/tháng/năm.';
   else if (dob && dob > todayIso()) errors.dob = 'Ngày sinh không được ở tương lai.';
   if (form.gender && !GENDERS.includes(form.gender)) errors.gender = 'Vui lòng chọn giới tính trong danh sách.';
+  const address = normalizeAddress(form.address);
+  if (address && [...address].length > MAX_ADDRESS_LENGTH) {
+    errors.address = `Địa chỉ không được vượt quá ${MAX_ADDRESS_LENGTH} ký tự.`;
+  }
   return errors;
 }
 
-// Only the fields whose value really differs from the loaded student, and only fullName / dob / gender: the server
-// rejects any other key (UC-09 does not change login identifiers, student code or nickname).
+// Only the fields whose value really differs from the loaded student, and only fullName / dob / gender / address:
+// the server rejects any other key (UC-09 does not change login identifiers, student code or nickname).
 function changedFields(form, student) {
   const changes = {};
   const name = normalizeName(form.fullName);
@@ -70,6 +79,8 @@ function changedFields(form, student) {
   if (dob !== (student.dob ?? null)) changes.dob = dob;
   const gender = form.gender || null;
   if (gender !== (student.gender ?? null)) changes.gender = gender;
+  const address = normalizeAddress(form.address);
+  if (address !== (student.address ?? null)) changes.address = address;
   return changes;
 }
 
@@ -77,6 +88,7 @@ const formFromStudent = (student) => ({
   fullName: student.fullName ?? '',
   dob: student.dob ? formatDate(student.dob) : '',
   gender: student.gender ?? '',
+  address: student.address ?? '',
 });
 
 /**
@@ -319,7 +331,8 @@ function FieldMessage({ id, error, help }) {
   );
 }
 
-// SCR-09 Update Student (UC-09), School Manager only. Edits full name, date of birth and gender – nothing else:
+// SCR-09 Update Student (UC-09), School Manager only. Edits full name, date of birth, gender and address
+// (business-rules §4 "Students") – nothing else:
 // username, email and phone belong to System Admin (UC-99, business-rules §3), the student code is the matching key
 // of the class import (UC-27) and the class nickname belongs to the homeroom teacher (UC-34). Design: Stitch "SCR-09
 // Update Student" (a page of its own, not a dialog).
@@ -466,7 +479,7 @@ export default function UpdateStudentPage() {
     if (saving) return;
     setSubmitted(true);
     setFormError('');
-    const firstInvalid = ['fullName', 'dob', 'gender'].find((f) => errors[f]);
+    const firstInvalid = FIELD_ORDER.find((f) => errors[f]);
     if (firstInvalid) {
       document.getElementById(`update-student-${firstInvalid}`)?.focus();
       return;
@@ -487,11 +500,11 @@ export default function UpdateStudentPage() {
       const known = errorText({ code: err.code, details: err.details });
       const hasText = known !== fallback || err.code === 'SERVER_ERROR';
       if (err.code === 'MSG_FIELD_NOT_EDITABLE') {
-        // Programming error: this form must only send fullName, dob and gender.
+        // Programming error: this form must only send fullName, dob, gender and address.
         const fields = err.details?.fields ?? [];
         console.warn('[UpdateStudent] The server refused fields this form must never send:', fields);
         setFormError(`Máy chủ từ chối các trường không được sửa ở màn này: ${fields.join(', ')}. Vui lòng báo cho nhóm phát triển.`);
-      } else if (err.code === 'MSG_INVALID_PARAM' && SERVER_FIELD_ERRORS[err.details?.field]) {
+      } else if (['MSG_INVALID_PARAM', 'MSG_ADDRESS_TOO_LONG'].includes(err.code) && SERVER_FIELD_ERRORS[err.details?.field]) {
         const field = err.details.field;
         if (!hasText) console.warn(`[UpdateStudent] No Vietnamese message for ${err.code} (${field}):`, err.message);
         setServerErrors({ [field]: hasText ? known : SERVER_FIELD_ERRORS[field] });
@@ -506,6 +519,7 @@ export default function UpdateStudentPage() {
   const nameError = shown('fullName');
   const dobError = shown('dob');
   const genderError = shown('gender');
+  const addressError = shown('address');
 
   return (
     <div className="update-student">
@@ -634,6 +648,31 @@ export default function UpdateStudentPage() {
               </div>
               <FieldMessage id="update-student-gender-msg" error={genderError} help="Theo giấy khai sinh của học sinh." />
             </div>
+
+            <div className={`field wide${addressError ? ' invalid' : ''}`}>
+              <label className="field-label" htmlFor="update-student-address">
+                Địa chỉ
+              </label>
+              <div className="input-wrap">
+                <textarea
+                  id="update-student-address"
+                  className="input"
+                  rows={3}
+                  value={form.address}
+                  onChange={(e) => setField('address', e.target.value)}
+                  onBlur={() => setTouched((t) => ({ ...t, address: true }))}
+                  autoComplete="off"
+                  disabled={saving}
+                  aria-invalid={Boolean(addressError)}
+                  aria-describedby="update-student-address-msg"
+                />
+              </div>
+              <FieldMessage
+                id="update-student-address-msg"
+                error={addressError}
+                help={`Nơi ở hiện tại, tối đa ${MAX_ADDRESS_LENGTH} ký tự. Để trống nếu muốn xoá địa chỉ.`}
+              />
+            </div>
           </div>
         </section>
 
@@ -664,14 +703,6 @@ export default function UpdateStudentPage() {
             <ReadOnlyField label="Tên đăng nhập" value={student.username} mono help={SA_ONLY} />
             <ReadOnlyField label="Email" value={student.email} help={SA_ONLY} />
             <ReadOnlyField label="Số điện thoại" value={student.phone} mono help={SA_ONLY} />
-            {/* ASSUMPTION: not editable and no owner named until the team decides who updates a student's address. */}
-            <ReadOnlyField
-              label="Địa chỉ"
-              value={student.address}
-              multiline
-              wide
-              help="Chưa sửa được ở màn này."
-            />
           </div>
         </section>
 

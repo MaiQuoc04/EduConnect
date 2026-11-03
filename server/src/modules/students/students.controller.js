@@ -1,4 +1,5 @@
 import { badRequest } from '../../utils/AppError.js';
+import { normalizePhone, PHONE_RE } from '../../utils/phone.js';
 import * as studentsService from './students.service.js';
 
 const ENROLLMENT_STATUSES = ['STUDYING', 'TRANSFERRED', 'DROPPED'];
@@ -97,20 +98,11 @@ function parseParentId(value) {
   return Number(value);
 }
 
-// Phone numbers are stored as "0" + 9 digits (checked on Supabase on 2026-10-28). Spaces, dots and dashes are
-// dropped, and a leading +84 becomes 0, so "+84 905.000.041" and "0905-000-041" find the same account.
-// ASSUMPTION: the documents do not say how a phone is written; +84 and 0 are treated as the same number, and a
-// valid number is 0 followed by 9 or 10 digits (10-digit mobile numbers, 11-digit landline numbers).
-const PHONE_PATTERN = /^0\d{9,10}$/;
-
-function normalizePhone(value) {
-  const compact = value.replace(/[\s.-]/g, '');
-  return compact.startsWith('+84') ? `0${compact.slice(3)}` : compact;
-}
-
 // TEMPORARY (UC-13, SCR-13): GET /students/parents/lookup?phone=. Read-only lookup of ONE existing parent account
 // by its exact phone number, so School Manager sees the parent's name before linking. It exists only because FE-14
-// (UC-105 View Parent List, owner: Khanh) is not built yet: remove it and switch SCR-13 to Khanh's endpoint then.
+// (UC-104 View Parent List, owner: Khanh) is not built yet: remove it and switch SCR-13 to Khanh's endpoint then.
+// The phone is normalised as everywhere a phone is typed (business-rules §3, utils/phone.js): spaces, dots and
+// dashes removed, a leading +84 becomes 0; valid = 0 + 9 digits.
 // Not finding anyone is a normal answer (200 { found: false }), not a 404.
 export async function lookupParent(req, res) {
   const query = req.query ?? {};
@@ -118,7 +110,7 @@ export async function lookupParent(req, res) {
   const raw = optionalString(query, 'phone');
   if (!raw) throw invalid('phone');
   const phone = normalizePhone(raw);
-  if (!PHONE_PATTERN.test(phone)) throw invalid('phone');
+  if (!PHONE_RE.test(phone)) throw invalid('phone');
   const parent = await studentsService.findParentByPhone(phone);
   res.json(parent ? { found: true, parent } : { found: false });
 }
@@ -158,9 +150,10 @@ export async function unlinkParent(req, res) {
 // The only fields UC-09 may change. Login identifiers (email, phone, username) belong to System Admin (UC-99,
 // business-rules §3); student_code, account status, class and nickname have their own owners. Any other key is
 // rejected with 400, never silently ignored, so School Manager does not think it was saved.
-const EDITABLE_FIELDS = ['fullName', 'dob', 'gender'];
+const EDITABLE_FIELDS = ['fullName', 'dob', 'gender', 'address'];
 const GENDERS = ['MALE', 'FEMALE', 'OTHER']; // students.gender has no CHECK constraint, so it is enforced here
 const MAX_FULL_NAME_LENGTH = 150; // users.full_name VARCHAR(150)
+const MAX_ADDRESS_LENGTH = 500; // users.address, business-rules §3 (same limit and code as UC-107)
 
 // "2011-02-30" passes the pattern but is not a real date: rebuild it and compare.
 function isRealDate(value) {
@@ -171,7 +164,8 @@ function isRealDate(value) {
   return date.getUTCFullYear() === y && date.getUTCMonth() === m - 1 && date.getUTCDate() === d;
 }
 
-// UC-09 Update Student: partial update of fullName / dob / gender. Fields left out keep their value.
+// UC-09 Update Student: partial update of fullName / dob / gender / address (business-rules §4 "Students").
+// Fields left out keep their value.
 export async function update(req, res) {
   const studentId = parseStudentId(req.params.studentId);
   const body = req.body ?? {};
@@ -203,6 +197,16 @@ export async function update(req, res) {
     if (body.gender !== null && !GENDERS.includes(body.gender)) throw invalid('gender');
     changes.gender = body.gender;
   }
+  if ('address' in body) {
+    // Cleaned as in UC-107 (trim, single spaces); null, empty or blank clears it (business-rules §3).
+    if (body.address !== null && typeof body.address !== 'string') throw invalid('address');
+    const address = (body.address ?? '').normalize('NFC').trim().replace(/\s+/g, ' ');
+    if ([...address].length > MAX_ADDRESS_LENGTH) {
+      throw badRequest('MSG_ADDRESS_TOO_LONG', `The address must not exceed ${MAX_ADDRESS_LENGTH} characters.`,
+        { field: 'address', max: MAX_ADDRESS_LENGTH });
+    }
+    changes.address = address || null;
+  }
   res.json(await studentsService.updateStudent(studentId, changes));
 }
 
@@ -231,17 +235,6 @@ export async function transfer(req, res) {
 }
 
 // --- UC-11 ---------------------------------------------------------------------------------------------------
-
-// TEMPORARY until FE-04 has GET /school-years and GET /classes (see getPromoteOptions in the service).
-// School years, plus the classes of toSchoolYearId when given, for the selects of SCR-11.
-export async function promoteOptions(req, res) {
-  const query = req.query ?? {};
-  const rejected = Object.keys(query).filter((key) => key !== 'toSchoolYearId');
-  if (rejected.length) {
-    throw badRequest('MSG_INVALID_PARAM', 'These parameters are not accepted here.', { fields: rejected });
-  }
-  res.json(await studentsService.getPromoteOptions({ toSchoolYearId: optionalInt(query, 'toSchoolYearId') }));
-}
 
 const PROMOTE_FIELDS = ['fromSchoolYearId', 'toSchoolYearId', 'groups'];
 const PROMOTE_GROUP_FIELDS = ['toClassId', 'studentIds'];

@@ -31,7 +31,7 @@ export async function getStudentParents(studentId, { signal } = {}) {
 // TEMPORARY (UC-13): GET /students/parents/lookup?phone= -> { found: true, parent: { parentId, userId, fullName,
 // avatarUrl, phone, email, occupation, address, accountStatus, linkedStudentCount } } or { found: false } (200).
 // The server drops spaces, dots and dashes and reads +84 as 0; 400 MSG_INVALID_PARAM for an invalid number.
-// TODO FE-14 (Khanh): switch to the UC-105 parent list endpoint once it exists; the server endpoint is removed then.
+// TODO FE-14 (Khanh): switch to the UC-104 parent list endpoint once it exists; the server endpoint is removed then.
 export async function lookupParentByPhone(phone, { signal } = {}) {
   const { data } = await api.get('/students/parents/lookup', { params: { phone }, signal });
   return data;
@@ -76,14 +76,37 @@ export async function promoteStudents(body) {
   return data;
 }
 
-// TEMPORARY: GET /students/promote/options -> { schoolYears, classes } for the SCR-11 selects (UC-10, UC-11).
-// schoolYears: [{ schoolYearId, yearName, startDate, endDate, isCurrent }] by start_date; classes (only with
-// toSchoolYearId): [{ classId, className, gradeLevelName, trackName, studentCount }].
-// TODO FE-04 (Khanh): switch to GET /school-years and GET /classes?schoolYearId= once they exist; the server
-// endpoint is removed then.
-export async function getPromoteOptions({ toSchoolYearId } = {}, { signal } = {}) {
-  const { data } = await api.get('/students/promote/options', { params: compact({ toSchoolYearId }), signal });
-  return data;
+// School years for the SCR-11 selects (UC-10, UC-11), from FE-04's GET /school-years (UC-20), oldest first:
+// [{ schoolYearId, yearName, startDate, endDate, isCurrent, ended }]. isCurrent = today is inside the year.
+export async function getSchoolYearOptions({ signal } = {}) {
+  const { data } = await api.get('/school-years', { signal });
+  return data
+    .map((y) => ({
+      schoolYearId: y.schoolYearId,
+      yearName: y.yearName,
+      startDate: y.startDate,
+      endDate: y.endDate,
+      isCurrent: y.status === 'CURRENT',
+      ended: y.status === 'ENDED',
+    }))
+    .sort((a, b) => a.startDate.localeCompare(b.startDate));
+}
+
+// The classes of one school year, from FE-04's GET /classes?schoolYearId= (SCR-20): every class that is not
+// soft-deleted, empty ones included, with its number of studying students. Natural order ("10A2" before "10A10").
+// -> [{ classId, className, gradeLevelName, trackName, studentCount }]
+export async function getClassOptions(schoolYearId, { signal } = {}) {
+  const { data } = await api.get('/classes', { params: compact({ schoolYearId }), signal });
+  return data.classes
+    .map((c) => ({
+      classId: c.classId,
+      className: c.className,
+      gradeLevelName: c.gradeLevel,
+      trackName: c.trackName,
+      studentCount: c.studentCount,
+    }))
+    .sort((a, b) => a.gradeLevelName.localeCompare(b.gradeLevelName, 'vi', { numeric: true })
+      || a.className.localeCompare(b.className, 'vi', { numeric: true }));
 }
 
 // Every student of a UC-07 query, page after page (100 per page, at most MAX_OPTION_PAGES pages), for the
@@ -98,29 +121,16 @@ export async function listAllStudents(params, { signal } = {}) {
   return items;
 }
 
-// Class options for the Student List filter, grouped by grade level. (SCR-11 uses getPromoteOptions instead.)
-// TODO FE-04 (Khanh): replace with the class list API (GET /classes?schoolYearId=) once it exists.
-// ASSUMPTION: until then the options are collected from the students of the year (at most 20 pages of 100), so a
-// class without students does not appear. Cached per school year for the session.
+// Class options for the Student List filter, from FE-04's class list (getClassOptions), so a class without
+// students appears too. Cached per school year for the session.
 const classOptionsCache = new Map();
 const MAX_OPTION_PAGES = 20;
 
 export function fetchClassOptions(schoolYearId) {
   const key = schoolYearId ?? 'current';
   if (!classOptionsCache.has(key)) {
-    const load = (async () => {
-      const classes = new Map();
-      for (let page = 1; page <= MAX_OPTION_PAGES; page += 1) {
-        const data = await listStudents({ schoolYearId, page, pageSize: 100 });
-        for (const s of data.items) {
-          if (s.classId && !classes.has(s.classId)) {
-            classes.set(s.classId, { id: s.classId, name: s.className, gradeLevelName: s.gradeLevelName });
-          }
-        }
-        if (page * data.pageSize >= data.total) break;
-      }
-      return [...classes.values()].sort((a, b) => a.name.localeCompare(b.name, 'vi', { numeric: true }));
-    })();
+    const load = getClassOptions(schoolYearId).then((classes) =>
+      classes.map((c) => ({ id: c.classId, name: c.className, gradeLevelName: c.gradeLevelName })));
     load.catch(() => classOptionsCache.delete(key));
     classOptionsCache.set(key, load);
   }

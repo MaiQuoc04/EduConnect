@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
-import { getPromoteOptions, listAllStudents, promoteStudents } from '../../api/students.js';
+import { getClassOptions, getSchoolYearOptions, listAllStudents, promoteStudents } from '../../api/students.js';
 import Avatar from '../../components/Avatar.jsx';
 import Icon from '../../components/Icon.jsx';
 import { useAuth } from '../../context/AuthContext.jsx';
@@ -78,13 +78,13 @@ function warningText({ code, details, message }) {
   return WARNING_FALLBACK;
 }
 
-// School years of GET /students/promote/options ({ schoolYearId, yearName, startDate, isCurrent }, by start_date),
+// School years of getSchoolYearOptions (FE-04 GET /school-years: { schoolYearId, yearName, startDate, isCurrent },
+// by start_date),
 // kept on the page as { id, name, startDate }.
 const asYear = (y) => (y ? { id: y.schoolYearId, name: y.yearName, startDate: y.startDate } : null);
 
-// Default source year: the current one (isCurrent). Between two years (summer break) none is current.
-// ASSUMPTION: then the latest year that has already started, else the earliest one – the same choice as the
-// server's resolveSchoolYearId for "the current year". Dates are "YYYY-MM-DD" strings (db.js), compared as text.
+// Default source year: the current one – business-rules §4: the latest year that has started; before any has
+// started, the earliest (the same choice as the server). Dates are "YYYY-MM-DD" strings (db.js), compared as text.
 function defaultSourceYear(years, today) {
   return years.find((y) => y.isCurrent) ?? [...years].reverse().find((y) => y.startDate <= today) ?? years[0] ?? null;
 }
@@ -370,7 +370,7 @@ const newGroup = () => ({ key: nextGroupKey++, target: null });
 // transfer page). Steps: 1. source year, source class and destination year; 2. students (STUDYING ones of the
 // class); 3. one or more groups, each with a destination class (split a class, or keep some students in the same
 // grade); 4. confirmation. The grade level is not checked (UC-11): School Manager picks every class.
-// Design: Stitch "SCR-10 Student Transfer & Promotion", promotion tab. Its school-wide grade table (with academic
+// Design: Stitch "SCR-11 Student Transfer & Promotion", promotion tab. Its school-wide grade table (with academic
 // review and graduation) has no API behind it; this keeps its look (banner, stamp, table card) for one class at a time.
 export default function PromoteStudentsPanel({ tabs }) {
   const location = useLocation();
@@ -379,8 +379,8 @@ export default function PromoteStudentsPanel({ tabs }) {
   const handoff = location.state ?? {};
   const backTo = `/students${handoff.listSearch ?? ''}`;
 
-  // Step 1 – scope. Years and classes come from GET /students/promote/options (temporary, TODO FE-04).
-  const [years, setYears] = useState(null); // schoolYears of the options endpoint, by start_date
+  // Step 1 – scope. Years and classes come from FE-04 (GET /school-years, GET /classes?schoolYearId=).
+  const [years, setYears] = useState(null); // getSchoolYearOptions(), by start_date
   const [yearsError, setYearsError] = useState('');
   const [yearsAttempt, setYearsAttempt] = useState(0);
   const [fromYear, setFromYear] = useState(null); // { id, name, startDate }
@@ -412,8 +412,8 @@ export default function PromoteStudentsPanel({ tabs }) {
   useEffect(() => {
     const controller = new AbortController();
     setYearsError('');
-    getPromoteOptions({}, { signal: controller.signal })
-      .then(({ schoolYears }) => {
+    getSchoolYearOptions({ signal: controller.signal })
+      .then((schoolYears) => {
         setYears(schoolYears);
         const handed = schoolYears.find((y) => y.schoolYearId === handoff.fromSchoolYear?.id);
         const source = handed ?? defaultSourceYear(schoolYears, todayText());
@@ -434,8 +434,8 @@ export default function PromoteStudentsPanel({ tabs }) {
     setClassesError('');
     if (!fromYear) return undefined;
     const controller = new AbortController();
-    getPromoteOptions({ toSchoolYearId: fromYear.id }, { signal: controller.signal })
-      .then(({ classes }) => setSourceClasses(classes))
+    getClassOptions(fromYear.id, { signal: controller.signal })
+      .then(setSourceClasses)
       .catch(() => {
         if (!controller.signal.aborted) setClassesError(CLASSES_ERROR);
       });
@@ -447,8 +447,8 @@ export default function PromoteStudentsPanel({ tabs }) {
     setClassesError('');
     if (!toYear) return undefined;
     const controller = new AbortController();
-    getPromoteOptions({ toSchoolYearId: toYear.id }, { signal: controller.signal })
-      .then(({ classes }) => setTargetClasses(classes))
+    getClassOptions(toYear.id, { signal: controller.signal })
+      .then(setTargetClasses)
       .catch(() => {
         if (!controller.signal.aborted) setClassesError(CLASSES_ERROR);
       });
