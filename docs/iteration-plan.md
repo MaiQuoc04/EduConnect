@@ -57,6 +57,12 @@ Last updated: 03/11/2026.
   grade with `grade_level_id`, every weight 1, classes max 45 students, UC-28 adds students without a class,
   nickname, teams: members picked at creation, anyone can leave, no admin; semester reopen; homeroom removes
   students / parents only; class group membership follows the class) and in UC-21 / UC-26 / UC-28 / UC-35.
+- **FE-02 review (03/11):** UC-07..UC-13 built, UC-14 missing. Lead decisions in business rules §4 ("Who puts a
+  student in a class", "Students") and §16 (search, name order): promotion is the only way for previous-year
+  students, transfer same year and grade, create class / import only for students with no enrollment the previous
+  year, no "drop out" use case (lock the account), SM edits a student's address, Anh's assumptions accepted, anyone
+  coming back to a group gets the old row back. Shared accent-insensitive search `server/src/utils/search.js` (from
+  Dung's helpers; FE-13 account list and FE-03 teacher list use it, 03/11).
 - **Numbering changes (01/11):** UC-104 View Activity Log and SCR-64 Activity Log removed; UC-105..UC-110 became
   UC-104..UC-109 and SCR-65..SCR-71 became SCR-64..SCR-70; then SCR-71 Password Reset Requests (FE-13) was added.
   109 use cases, 71 screens.
@@ -65,8 +71,18 @@ Last updated: 03/11/2026.
 - **Follow-ups owed:**
   - FE-13 (Linh): pull `develop` and continue from it; do not run SQL patches on the shared DB before the lead
     approves them.
-  - FE-02 (Anh): `parents.address` → `users.address`; phone input = business rules §3 (use `utils/phone.js`, only
-    `0` + 9 digits); UC references to FE-14 shift by one (UC-105 → UC-104).
+  - FE-02 (Anh), before the merge (doc "FE-02 – Việc cần làm trước khi merge"):
+    - Merge `develop` into the branch (conflicts only in `App.jsx`, `navigation.js`, `routes.js`: keep both sides).
+    - Build UC-14 Import Parent–Student Links (It1).
+    - UC-09: SM edits the student's address (`users.address`).
+    - Phone: use `utils/phone.js` (only `0` + 9 digits, `+84` → `0`) in the parent lookup instead of its own
+      normaliser; search: use `utils/search.js`; drop the unaccent fallback and delete
+      `database/2026-10-26_enable_unaccent.sql`.
+    - Groups: someone coming back to a group gets the old row back (`left_at = NULL`), not a new row.
+    - UC references: UC-105 → UC-104 (View Parent List), UC-106 → UC-105 (View Parent Detail); "SCR-10 Student
+      Transfer & Promotion" → SCR-11. Delete the empty root `package-lock.json`; keep `server/scripts/dev-local-db.js`.
+    - After FE-04 is merged: switch the promotion screen to FE-04's school year / class endpoints and remove the
+      temporary ones.
   - FE-04 (Khanh), before the merge (doc "FE-04 – Việc cần làm trước khi merge"):
     - Merge `develop` into the branch; for `docs/` and `database/` keep develop's version (the decisions are
       written there); keep both sides in `App.jsx`, `navigation.js`, `messages.js`, `routes.js`; regenerate the seed.
@@ -77,6 +93,10 @@ Last updated: 03/11/2026.
       sync for teaching assignment changes (UC-18); run the test cases and report them.
     - Soft-delete the test class types left in the shared DB (`Kh?i A`, `10 � Th?`, `QA Thử`, `QA Thử 2`, extra
       `Khối E`).
+    - Create class / import (UC-28, UC-27): remove "students of last year's class" from the wizard; take only
+      students with no enrollment in the previous school year and none this year (§4 "Who puts a student in a
+      class"); an import row with a previous-year student is refused with a message to use promotion (UC-11).
+    - Search: use `utils/search.js`.
     - FE-14 (It2) uses UC-104..UC-106; a parent's address is `users.address`, occupation stays `parents.occupation`.
   - Group sync for FE-03 saves (after FE-04 is merged): business rules §4 "Class group membership follows the
     class" – `server/src/modules/teacher/homeroom.service.js` (UC-19) and `teaching.service.js` (UC-18) must call

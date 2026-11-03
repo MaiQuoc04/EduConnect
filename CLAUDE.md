@@ -74,7 +74,8 @@ server/src/
 - Reuse the shared pieces: `components/Icon` (Material Symbols), `Avatar`, `PasswordInput`, `useToast()`, the
   CSS classes in `styles.css` (`card`, `btn btn-primary`, `field`/`input`, `pill`, `stamp`, `notice`, `dl`, `table`).
   Server: `middlewares/upload.js` (`uploadSingle`), `utils/storage.js` (`saveFile`), `utils/mailer.js`
-  (`sendMail`), `utils/password.js` (password rules).
+  (`sendMail`), `utils/password.js` (password rules), `utils/phone.js` (phone format), `utils/search.js`
+  (accent-insensitive search), `utils/nameSort.js` (Vietnamese name order, arrives with FE-02).
 - Styling: plain CSS with the tokens in `styles.css` ("Ink & Paper" purple ink, light background). Student / parent
   screens listed in `docs/screens.md` also need a mobile layout. No dashboard.
 
@@ -83,6 +84,8 @@ server/src/
   the SQL change and wait for the team lead; schema changes go into `database/` first.
 - Keep changes small and inside the feature you were asked about; do not refactor other members' modules.
 - Mark anything you had to assume with `// ASSUMPTION:` and mention it in your summary.
+- Test endpoints that WRITE data on a throw-away local DB (`server/scripts/dev-local-db.js`, arrives with FE-02), not on
+  the shared Supabase DB.
 - Before finishing: run the server and exercise the endpoint you changed; run `npm run build` in `client/` if you
   touched the client.
 - Git: branch `feature/fe-xx-<short-name>` from `develop`, PR into `develop`. Never commit `.env` or `*.pem`.

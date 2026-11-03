@@ -6,7 +6,6 @@
 // an apostrophe or hyphen between letters ("H'Hen Niê"). No digits, no symbols, no emoji. Each word starts with a
 // capital letter.
 import { normalizePhone } from '../../utils/phone.js';
-import { removeAccents } from '../../utils/username.js';
 
 // Zero-width spaces/joiners, BOM, soft hyphen, bidi marks and control characters: invisible, never wanted.
 const INVISIBLE = /[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F-\u009F­​-‏‪-‮⁠-⁤﻿]/g;
@@ -64,26 +63,9 @@ export function checkPersonName(input, { min = 2, max = 150 } = {}) {
 
 // ── Search helpers ──────────────────────────────────────────────────────────
 
-// Vietnamese letters (both cases) → base latin letter. Used in SQL translate() so search ignores accents
-// without depending on the Postgres "unaccent" extension or the database locale. In JS the same result comes from
-// removeAccents() (utils/username.js).
-const VI_FROM =
-  'àáạảãâầấậẩẫăằắặẳẵèéẹẻẽêềếệểễìíịỉĩòóọỏõôồốộổỗơờớợởỡùúụủũưừứựửữỳýỵỷỹđ' +
-  'ÀÁẠẢÃÂẦẤẬẨẪĂẰẮẶẲẴÈÉẸẺẼÊỀẾỆỂỄÌÍỊỈĨÒÓỌỎÕÔỒỐỘỔỖƠỜỚỢỞỠÙÚỤỦŨƯỪỨỰỬỮỲÝỴỶỸĐ';
-const VI_TO =
-  'aaaaaaaaaaaaaaaaaeeeeeeeeeeeiiiiiooooooooooooooooouuuuuuuuuuuyyyyyd' +
-  'aaaaaaaaaaaaaaaaaeeeeeeeeeeeiiiiiooooooooooooooooouuuuuuuuuuuyyyyyd';
-export const VI_TRANSLATE = { from: VI_FROM, to: VI_TO };
-
-/** Lower case, no Vietnamese accents: "Nguyễn Văn Đức" -> "nguyen van duc". Same result as the SQL fold. */
-export function foldVietnamese(value) {
-  return removeAccents(String(value).normalize('NFC')).toLowerCase();
-}
-
-/** Escapes LIKE wildcards so "%" and "_" typed by a user are matched literally (used with ESCAPE '\'). */
-export function escapeLike(value) {
-  return String(value).replace(/[\\%_]/g, (c) => `\\${c}`);
-}
+// Accent-insensitive search helpers moved to the shared utils/search.js (business-rules §16); re-exported here so the
+// teacher module keeps its imports.
+export { escapeLike, foldVietnamese, VI_TRANSLATE } from '../../utils/search.js';
 
 /**
  * Phone digits for searching: "0914 882 119", "0914.882.119", "+84 914 882 119" → "0914882119" (utils/phone.js).

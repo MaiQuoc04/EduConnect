@@ -134,12 +134,27 @@ Boundaries that are easy to get wrong:
   attendance corrections** (it does not lock grades). SM may **reopen** a closed semester (e.g. closed by mistake),
   which gives the homeroom teacher the excused ↔ unexcused correction back (03/11/2026).
 - **School years** (FE-04, agreed 03/11/2026): name `YYYY-YYYY` with consecutive years; the year starts in the first
-  year of its name and ends in the second; two school years never overlap (the current year is found by date); a
-  school year that has ended is **read only** (classes, class types, groups).
+  year of its name and ends in the second; two school years never overlap; the current year is found by date (the latest that has started; before any
+  has started, the earliest); a school year that has ended is **read only** (classes, class types, groups).
 - **Subjects:** the subject code is unique and is what Excel imports refer to; no two subjects share a name
   (case-insensitive).
 - Classes are created **per school year** (10A1 of 2026–2027 is a different row from 10A1 of 2027–2028).
   Promotion = new enrollment in the new class; transfer = old enrollment `TRANSFERRED` + new enrollment.
+- **Who puts a student in a class** (agreed 03/11/2026) – one path per case, so the rules live in one place:
+  - Students who studied in a class **the previous school year** go to the new year only by **promotion (UC-11,
+    FE-02)**: to a higher grade or the same grade (repeating a year); only students still `STUDYING` in the source
+    year count (a student transferred inside that year moves from the class they study in now); at most 200
+    students per call.
+  - **Transfer (UC-10, FE-02)**: to another class of the **same school year and the same grade**.
+  - **Create class / import class list (UC-28, UC-27, FE-04)** only take students with **no enrollment in the
+    previous school year** and no studying enrollment this year (new to the school, coming from another school, or
+    coming back after a year away); a row with a student of the previous year is refused with a message to use
+    promotion.
+  - **Leaving the school:** no separate use case. The account is **locked** (UC-101; accounts are never deleted,
+    §3). Coming back during the same year: unlock; coming back in a later year: added as above.
+- **Students** (FE-02, agreed 03/11/2026): date of birth gives an age of 10–30 today; SM updates name, date of
+  birth, gender and **address** (`users.address`) in UC-09; username / email / phone stay System Admin only. A
+  locked parent account can be linked; two parents with the same relationship are allowed (max 2 parents, §3).
 - Every class has a **class type** (`class_tracks`, NOT NULL), e.g. type A = Maths/Physics/Chemistry focus.
   `track_subjects` holds, per school year, the subjects and **periods per week** (whole number 1–10) of that type;
   copied from the previous year by default; editable, but subjects can no longer be added or removed **once the year
@@ -154,8 +169,8 @@ Boundaries that are easy to get wrong:
   always 1.00 and is not shown.
 - **Classes** (FE-04, agreed 03/11/2026): a class name is the grade followed by 1–8 letters or digits, no spaces or
   accents (`10A1`, `12CT`; typed names are upper-cased). A class has at most **45 studying students**, checked when
-  creating a class, adding students and importing a class list. UC-28 creates a class and also **adds students
-  who have no class in that school year** to an existing class. A class list import has at most 2000 rows; a locked
+  creating a class, adding students and importing a class list. UC-28 creates a class and also adds students to
+  an existing class, only the students it may take (see "Who puts a student in a class"). A class list import has at most 2000 rows; a locked
   account is still imported, with a warning.
 - Homeroom teacher may be empty → show a warning so SM assigns one.
 - `teacher_subjects`: which subjects a teacher can teach (one teacher may teach several). Teaching assignments only
@@ -200,8 +215,9 @@ Boundaries that are easy to get wrong:
     homeroom teacher is in all three groups, a subject teacher (current or future assignment) in GENERAL. A teacher
     who no longer has a reason to be in a group leaves it (`left_at`): the previous homeroom teacher leaves STUDENT
     and PARENT, and also GENERAL and the class's teams unless they still teach a subject there. A teacher who is
-    also the parent of a student of the class keeps the groups a parent belongs to. Someone who comes back gets
-    their old membership row back (`left_at` cleared) and sees the group's whole history. Shared function in FE-04
+    also the parent of a student of the class keeps the groups a parent belongs to.
+  - Anyone who comes back to a group (teacher, student or parent) gets their old membership row back (`left_at`
+    cleared) and sees the group's whole history. Shared function in FE-04
     `classGroups.js`; nothing changes for classes of an ended school year.
 
 ## 5. Group feed (FE-05)
@@ -317,3 +333,10 @@ Boundaries that are easy to get wrong:
 - Auto sign-out time after inactivity.
 - Final cloud storage provider for files; whether attachments get a `storage_key` and short-lived links for private
   files (proposed, not confirmed).
+
+## 16. Lists and search (agreed 03/11/2026)
+- Search boxes on list screens match **"contains"**, ignoring case and Vietnamese accents ("bao" finds "Phạm Gia
+  Bảo"). Every module uses the shared `server/src/utils/search.js` (SQL `translate()`, no Postgres extension, works
+  on every database); `%` and `_` typed by a user are matched literally.
+- Lists of people are sorted the Vietnamese way: by the given name (last word), then the rest (collation
+  `vi-VN-x-icu`, `server/src/utils/nameSort.js` from FE-02).

@@ -6,7 +6,8 @@ import { hashPassword } from '../../utils/password.js';
 import { open as openSecret } from '../../utils/secretBox.js';
 import { generateTemporaryPassword } from '../../utils/tempPassword.js';
 import { normalizePhone, PHONE_RE } from '../../utils/phone.js';
-import { isValidUsername, removeAccents } from '../../utils/username.js';
+import { containsPattern, VI_TRANSLATE } from '../../utils/search.js';
+import { isValidUsername } from '../../utils/username.js';
 import { ROLE_CODES } from './accounts.service.js';
 
 // FE-13 System Administration (owner: Linh) – account list and control:
@@ -19,14 +20,12 @@ const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const STATUSES = ['ACTIVE', 'LOCKED'];
 const SCHOOL_ROLES = ['TEACHER', 'STUDENT', 'PARENT']; // what School Manager may reset / lock (permissions note 1)
 
-// Accent-insensitive search without the unaccent extension: translate() folds Vietnamese letters.
-const VN_LETTERS = 'àáảãạăằắẳẵặâầấẩẫậèéẻẽẹêềếểễệìíỉĩịòóỏõọôồốổỗộơờớởỡợùúủũụưừứửữựỳýỷỹỵđ';
-const VN_FOLDED = removeAccents(VN_LETTERS);
+// Accent-insensitive search: shared utils/search.js (business-rules §16).
 
 // ---------------------------------------------------------------- UC-97 / UC-98 list
 
 function readFilters(query = {}) {
-  const search = typeof query.search === 'string' ? removeAccents(query.search.trim().toLowerCase()).slice(0, 100) : '';
+  const search = containsPattern(query.search);
   const role = ROLE_CODES.includes(query.role) ? query.role : null;
   const status = STATUSES.includes(query.status) ? query.status : null;
   const classId = /^\d{1,15}$/.test(String(query.classId ?? '')) ? Number(query.classId) : null;
@@ -76,11 +75,11 @@ const LIST_SQL = `
   LEFT JOIN teachers t ON t.user_id = u.user_id
   LEFT JOIN parents p ON p.user_id = u.user_id
   WHERE ($1::text IS NULL
-         OR translate(LOWER(u.full_name), $4, $5) LIKE '%' || $1 || '%'
-         OR u.username LIKE '%' || $1 || '%'
-         OR LOWER(COALESCE(u.email, '')) LIKE '%' || $1 || '%'
-         OR COALESCE(u.phone, '') LIKE '%' || $1 || '%'
-         OR LOWER(COALESCE(s.student_code, t.teacher_code, '')) LIKE '%' || $1 || '%')
+         OR lower(translate(u.full_name, $4, $5)) LIKE $1
+         OR u.username LIKE $1
+         OR LOWER(COALESCE(u.email, '')) LIKE $1
+         OR COALESCE(u.phone, '') LIKE $1
+         OR LOWER(COALESCE(s.student_code, t.teacher_code, '')) LIKE $1)
     AND ($2::text IS NULL OR EXISTS (SELECT 1 FROM user_roles ur JOIN roles r ON r.role_id = ur.role_id
                                      WHERE ur.user_id = u.user_id AND r.role_code = $2))
     AND ($3::text IS NULL OR u.status = $3)
@@ -98,8 +97,8 @@ async function queryAccounts(filters, limit, offset) {
     filters.search,
     filters.role,
     filters.status,
-    VN_LETTERS,
-    VN_FOLDED,
+    VI_TRANSLATE.from,
+    VI_TRANSLATE.to,
     limit,
     offset,
     filters.classId,
