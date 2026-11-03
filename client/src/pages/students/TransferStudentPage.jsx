@@ -14,28 +14,18 @@ import './TransferStudentPage.css';
 const LOAD_ERROR = 'Không tải được thông tin học sinh. Vui lòng thử lại.';
 const TRANSFER_ERROR = 'Không chuyển được lớp cho học sinh. Vui lòng thử lại.';
 
-// TODO messages.js: these codes are waiting for the team lead's approval (with the other FE-02 codes). Until then
-// the Vietnamese text lives here; errorText() wins as soon as messages.js has the code.
+// FE-02 error codes are in messages.js (lead, 03/11/2026); errorText() is used first. Only the texts that depend
+// on this screen stay here.
 const TRANSFER_ERRORS = {
-  MSG_TRANSFER_SAME_CLASS: 'Học sinh đang học ở lớp này. Vui lòng chọn lớp khác.',
-  MSG_TRANSFER_DIFFERENT_YEAR: 'Lớp đích thuộc năm học khác. Vui lòng dùng chức năng lên lớp.',
-  MSG_CLASS_ALREADY_ENROLLED: 'Học sinh đã từng học ở lớp này, không thể chuyển về lại.',
-  MSG_NO_ACTIVE_ENROLLMENT: 'Học sinh hiện không học ở lớp nào trong năm học này.',
-  MSG_CLASS_NOT_FOUND: 'Không tìm thấy lớp học.',
-  MSG_STUDENT_NOT_FOUND: 'Không tìm thấy học sinh.',
   MSG_INVALID_PARAM: 'Mã lớp không hợp lệ.',
-  MSG_TRANSFER_DIFFERENT_GRADE_LEVEL: ({ currentGradeLevel, targetGradeLevel } = {}) =>
-    currentGradeLevel && targetGradeLevel
-      ? `Chỉ chuyển lớp trong cùng khối. Lớp đích thuộc khối ${targetGradeLevel}, học sinh đang học khối ${currentGradeLevel}; vui lòng dùng chức năng lên lớp.`
-      : 'Chỉ chuyển lớp trong cùng khối. Lớp đích thuộc khối khác, vui lòng dùng chức năng lên lớp.',
 };
 // Errors about the chosen class are shown under the class field; the rest above the buttons.
 const CLASS_ERRORS = ['MSG_TRANSFER_SAME_CLASS', 'MSG_TRANSFER_DIFFERENT_YEAR', 'MSG_TRANSFER_DIFFERENT_GRADE_LEVEL',
-  'MSG_CLASS_ALREADY_ENROLLED', 'MSG_CLASS_NOT_FOUND', 'MSG_INVALID_PARAM'];
+  'MSG_CLASS_FULL', 'MSG_CLASS_NOT_FOUND', 'MSG_INVALID_PARAM'];
 
 const GROUP_LABELS = { GENERAL: 'Nhóm chung', STUDENT: 'Nhóm học sinh', PARENT: 'Nhóm phụ huynh', TEAM_CHAT: 'Nhóm nhỏ' };
 
-// TODO messages.js: WARN_* codes are waiting for approval too. warnings[].message is English (CLAUDE.md), so it is
+// WARN_* texts depend on the screen, so they stay here. warnings[].message is English (CLAUDE.md), so it is
 // never shown; an unknown code gets a general sentence and a console warning.
 const WARNING_TEXTS = {
   WARN_CLASS_HAS_NO_GROUPS: () => 'Lớp đích chưa có nhóm lớp, học sinh chưa được thêm vào nhóm nào.',
@@ -501,9 +491,9 @@ function TransferStudentView() {
   if ((loading && !result) || !data) return <Skeleton backTo={backTo} detailPath={detailPath} />;
 
   const { student, currentEnrollment: current, enrollmentHistory, parents } = data;
-  // Classes of this school year the student already studied in (or studies in now): the server refuses them
-  // (MSG_TRANSFER_SAME_CLASS / MSG_CLASS_ALREADY_ENROLLED), so they cannot be picked. Class names are unique within
-  // a school year (classes UNIQUE (class_name, school_year_id)) and the options are the current year's classes.
+  // Classes of this school year the student already studied in: they can be picked again – the server reopens the
+  // old enrollment (business-rules §4, lead 03/11/2026) – and are marked so School Manager knows. Class names are
+  // unique within a school year (classes UNIQUE (class_name, school_year_id)) and the options are this year's.
   const usedNames = new Set(
     current ? enrollmentHistory.filter((e) => e.schoolYearName === current.schoolYearName).map((e) => e.className) : [],
   );
@@ -512,7 +502,7 @@ function TransferStudentView() {
   const sameGradeLevel = (option) => option.gradeLevelName === current?.gradeLevelName;
   const describe = (option) => {
     if (option.name === current?.className) return { disabled: true, note: 'lớp hiện tại' };
-    if (usedNames.has(option.name)) return { disabled: true, note: 'đã từng học' };
+    if (usedNames.has(option.name)) return { note: 'đã từng học' };
     return null;
   };
   const toName = target ? (target.className ? `Lớp ${target.className}` : `Lớp mã ${target.classId}`) : '';
@@ -534,7 +524,7 @@ function TransferStudentView() {
       return;
     }
     if (target.classId === current.classId) {
-      setClassError(TRANSFER_ERRORS.MSG_TRANSFER_SAME_CLASS);
+      setClassError(errorText({ code: 'MSG_TRANSFER_SAME_CLASS' }));
       return;
     }
     setConfirming(true);

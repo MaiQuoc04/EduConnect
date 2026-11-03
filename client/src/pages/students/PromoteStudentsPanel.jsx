@@ -18,25 +18,13 @@ const CLASSES_ERROR = 'Không tải được danh sách lớp. Vui lòng thử l
 const ENROLLMENT_LABELS = { STUDYING: 'Đang học', TRANSFERRED: 'Đã chuyển lớp', DROPPED: 'Đã nghỉ học' };
 const GROUP_LABELS = { GENERAL: 'Nhóm chung', STUDENT: 'Nhóm học sinh', PARENT: 'Nhóm phụ huynh' };
 
-// TODO messages.js: these codes are waiting for the team lead's approval (with the other FE-02 codes). Until then
-// the Vietnamese text lives here; errorText() wins as soon as messages.js has the code.
+// FE-02 error codes are in messages.js (lead, 03/11/2026); errorText() is used first. Only the texts that depend
+// on this screen stay here.
 const PROMOTE_ERRORS = {
-  MSG_SAME_SCHOOL_YEAR: 'Năm học đích phải khác năm học nguồn. Chuyển lớp trong cùng năm thì dùng chức năng chuyển lớp.',
-  MSG_INVALID_YEAR_ORDER: 'Năm học đích phải bắt đầu sau năm học nguồn.',
-  MSG_DUPLICATE_STUDENT_IN_REQUEST: 'Có học sinh được chọn nhiều lần. Mỗi học sinh chỉ thuộc một lớp đích.',
-  MSG_TOO_MANY_STUDENTS: `Mỗi lần chỉ xử lý tối đa ${MAX_STUDENTS} học sinh.`,
-  MSG_SCHOOL_YEAR_NOT_FOUND: 'Không tìm thấy năm học.',
-  MSG_CLASS_NOT_FOUND: 'Không tìm thấy lớp học.',
   MSG_INVALID_PARAM: 'Dữ liệu gửi đi không hợp lệ. Vui lòng tải lại trang và thử lại.',
 };
 
-// Per-student reasons of a SKIPPED result (results[].message is English, CLAUDE.md). Same TODO as above.
-const SKIP_REASONS = {
-  SKIP_NO_ACTIVE_ENROLLMENT: 'Học sinh không còn theo học lớp nào trong năm học nguồn.',
-  SKIP_ALREADY_ENROLLED: 'Học sinh đã được xếp lớp trong năm học đích.',
-  SKIP_STUDENT_NOT_FOUND: 'Không tìm thấy học sinh.',
-  SKIP_CLASS_ENROLLMENT_EXISTS: 'Học sinh đã từng học ở lớp này.',
-};
+// Per-student reasons of a SKIPPED result (results[].message is English, CLAUDE.md): SKIP_* are in messages.js.
 const SKIP_FALLBACK = 'Học sinh chưa đủ điều kiện lên lớp.';
 
 // Warnings of a promotion are about a whole class of students, while the server's English text (shared with UC-10)
@@ -64,10 +52,9 @@ function promoteErrorText(err) {
   return PROMOTE_ERROR;
 }
 
-function skipText({ reason, message }) {
-  const known = errorText({ code: reason });
+function skipText({ reason, message, details }) {
+  const known = errorText({ code: reason, details });
   if (known !== errorText({ code: 'SERVER_ERROR' }) && known !== message) return known;
-  if (SKIP_REASONS[reason]) return SKIP_REASONS[reason];
   console.warn(`[PromoteStudents] No Vietnamese message for skip reason ${reason}:`, message);
   return SKIP_FALLBACK;
 }
@@ -569,10 +556,10 @@ export default function PromoteStudentsPanel({ tabs }) {
     const next = {};
     if (!fromYear) next.fromYear = 'Vui lòng chọn năm học nguồn.';
     if (!toYear) next.toYear = 'Vui lòng nhập năm học đích.';
-    else if (sameYear) next.toYear = PROMOTE_ERRORS.MSG_SAME_SCHOOL_YEAR;
+    else if (sameYear) next.toYear = errorText({ code: 'MSG_SAME_SCHOOL_YEAR' });
     if (fromYear && !fromClass) next.fromClass = 'Vui lòng chọn lớp nguồn.';
     if (fromClass && roster && chosen.length === 0) next.students = 'Vui lòng chọn ít nhất một học sinh.';
-    if (chosen.length > MAX_STUDENTS) next.students = PROMOTE_ERRORS.MSG_TOO_MANY_STUDENTS;
+    if (chosen.length > MAX_STUDENTS) next.students = errorText({ code: 'MSG_TOO_MANY_STUDENTS', details: { max: MAX_STUDENTS } });
     const groupErrors = {};
     groups.forEach((g) => {
       if (!g.target) groupErrors[g.key] = 'Vui lòng chọn lớp đích.';
@@ -746,7 +733,7 @@ export default function PromoteStudentsPanel({ tabs }) {
                       value={toYear}
                       onChange={changeToYear}
                       disabled={busy || !years}
-                      error={errors.toYear || (sameYear ? PROMOTE_ERRORS.MSG_SAME_SCHOOL_YEAR : '')}
+                      error={errors.toYear || (sameYear ? errorText({ code: 'MSG_SAME_SCHOOL_YEAR' }) : '')}
                       placeholder={years ? 'Chưa có năm học' : 'Đang tải năm học…'}
                       help="Mặc định là năm học kế tiếp."
                     />

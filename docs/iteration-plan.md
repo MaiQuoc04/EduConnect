@@ -18,14 +18,18 @@ Code due dates: It1 30/10, It2 13/11, It3 27/11.
 | Iteration | Dates | Quoc | Anh | Dung | Khanh | Linh |
 |---|---|---|---|---|---|---|
 | Iteration 1 | 19/10 – 30/10/2026 | FE-01 | FE-02 | FE-03 | FE-04 | FE-13 |
-| Iteration 2 | 02/11 – 13/11/2026 | review | FE-05 | FE-10 timetable | FE-08, FE-14 | testing, integration |
-| Iteration 3 | 16/11 – 27/11/2026 | FE-09, FE-12 | FE-06 | FE-10 calendar, FE-07 | – | FE-11 |
+| Iteration 2 | 02/11 – 13/11/2026 | review | FE-08, FE-14 | FE-10 timetable | FE-05, FE-06 | testing, integration |
+| Iteration 3 | 16/11 – 27/11/2026 | FE-09, FE-12 | – | FE-10 calendar, FE-07 | – | FE-11 |
 
-FE-10 is split: timetable in It2, class calendar in It3.
+FE-10 is split: timetable in It2, class calendar in It3. It2 changed by the lead on 03/11/2026: Anh takes FE-08 School
+Feed and FE-14 Parent Management (follows FE-02), Khanh takes FE-05 Group Feed and FE-06 Messaging (follow FE-04
+groups; FE-06 moved back from It3). FE-05 and FE-08 are built separately; code they share (posts, comments,
+reactions, attachments) is merged into one place after both are on `develop`.
 
 ## Current status (read first; update after every merge, schema patch or new decision)
 
-Last updated: 03/11/2026 (FE-04 merged; FE-02 lead's follow-ups and UC-14 done on the branch, waiting for review).
+Last updated: 03/11/2026 (FE-02 merged – every It1 feature is on `develop`; It2 reassigned: Anh FE-08 + FE-14,
+Khanh FE-05 + FE-06).
 
 - **Shared DB (Supabase):** schema v0.3 + `patch_v0.3_password_reset_requests.sql` (27/10) +
   `patch_v0.3_users_address.sql` (28/10: `users.address` added, `parents.address` dropped) +
@@ -35,7 +39,7 @@ Last updated: 03/11/2026 (FE-04 merged; FE-02 lead's follow-ups and UC-14 done o
   `patch_v0.3_departments.sql` (FE-03, already run before review; kept by the lead 02/11: table `departments`) +
   `patch_v0.3_class_track_grade.sql` (FE-04, run by Khanh 02/11 before approval; accepted 03/11:
   `class_tracks.grade_level_id`). 48 tables.
-- **Sample data added to the shared DB (03/11, Anh, agreed with the lead), through the app API (UC-96, UC-14, UC-28),
+- **Sample data added to the shared DB (03/11, Anh, accepted by the lead 03/11), through the app API (UC-96, UC-14, UC-28),
   no SQL:** 90 student accounts `HS7001..HS7090` (no class yet), 90 parent accounts with phones
   `0977000001..0977000090` (all with `must_change_password`), 65 links (HS7001–7020 two parents, HS7021–7045 one,
   HS7046–7090 none; parents `0977000066..0977000090` not linked), 6 empty classes of 2027-2028 with their groups
@@ -57,9 +61,10 @@ Last updated: 03/11/2026 (FE-04 merged; FE-02 lead's follow-ups and UC-14 done o
     grade, create / import classes for students not in a class the previous year, groups, members, nickname, teams
     with leave), `syncClassTeachers` in `server/src/modules/classes/classGroups.js` (tested by the lead in a
     rolled-back transaction), all FE-04 screen numbers per `screens.md`.
-- **Not merged yet:** `feature/fe-02-student-management` (Anh), `develop` already merged into it. UC-07..UC-14
-  built (all 8 FE-02 use cases) and the lead's FE-02 follow-ups done (03/11, see "Follow-ups owed"); waiting for
-  Anh's push / PR and the lead's review. No schema change, no SQL run on the shared DB.
+  - FE-02 (Anh) merged 03/11: UC-07..UC-14 (student list / detail / update with address, transfer with reopening
+    of an old enrollment, promotion with the next-year / grade / 45 / ended-year checks, parent links, UC-14 import),
+    finished by the lead (see "FE-02 (Anh)" below). No schema change.
+- **Not merged yet:** none of It1. It2 branches start from `develop`.
 - **FE-03 review (02/11):** endpoints work and the client builds. Lead decisions: keep the `departments` table;
   Dung's assumptions became business rules §4 "Teachers" (homeroom max 1 class per year, no new assignment for a
   locked teacher, assignments never back-dated, at least one subject per teacher, no empty pair while lessons
@@ -82,7 +87,7 @@ Last updated: 03/11/2026 (FE-04 merged; FE-02 lead's follow-ups and UC-14 done o
 - **Follow-ups owed:**
   - FE-13 (Linh): pull `develop` and continue from it; do not run SQL patches on the shared DB before the lead
     approves them.
-  - FE-02 (Anh) – the lead's list is done on the branch (03/11), all tested on the throw-away local DB
+  - FE-02 (Anh) – merged 03/11. The lead's list was done on the branch, all tested on the throw-away local DB
     (`dev-local-db.js`), nothing written to the shared DB:
     - Done: `develop` merged in. UC-09 edits the address (`users.address`, max 500, cleared when empty, as UC-107).
       Parent lookup uses `utils/phone.js`; the student list search uses `utils/search.js`; unaccent fallback and
@@ -106,27 +111,30 @@ Last updated: 03/11/2026 (FE-04 merged; FE-02 lead's follow-ups and UC-14 done o
       student / parent / SA and 401 without a token. UC-09 address set / cleared; parent lookup `+84…`, `0905.000.041`
       found, 11 digits invalid; "bao" finds "Bảo", "%" matches only a literal %. Client: `npm run build` passes; UI
       checked at 1440 / 768 / 390 px.
-    - For the lead to decide:
-      - "Transfer back to an old class → old group rows come back" cannot run: `class_enrollments` has
-        `UNIQUE (student_id, class_id)`, so a transfer back is refused (`MSG_CLASS_ALREADY_ENROLLED`). Reopening old
-        rows is tested through UC-13 / UC-14 (parent unlinked, then linked again). Keep the constraint and drop the
-        case, or change the schema?
-      - Still in business rules §4 "Who puts a student in a class" but not enforced by FE-02 yet: UC-11 only from the
-        school year just before (code allows any earlier year) and only to the next or the same grade; the 45-student
-        class limit in UC-10 / UC-11; refusing a school year that has ended in UC-10 / UC-11.
-      - Error codes waiting for `messages.js` (texts proposed in the page / hand-over): `MSG_PARENT_PHONE_NOT_FOUND`,
-        `MSG_DUPLICATE_LINK_IN_FILE` (new for UC-14) and the earlier FE-02 codes (`MSG_STUDENT_NOT_FOUND`,
-        `MSG_INVALID_RELATIONSHIP_TYPE`, `MSG_LINK_ALREADY_EXISTS`, `MSG_MAX_PARENTS_REACHED`, `WARN_*`…); the FE-02
-        pages map them locally for now.
-      - UC-14 `// ASSUMPTION:`s: relationship words compared without accents / case; the 2-parent count only counts
-        earlier VALID rows; "same pair twice" counts any earlier row with that pair; the preview opens on all rows
-        (not only errors) so the names are read before confirming.
-      - Proposal: move UC-96's file reading (`loadWorksheet`, `headerKey`, not exported) into `utils/excel.js` and the
-        import screen classes of `pages/admin/admin.css` into `styles.css`; UC-14 mirrors the first and imports the
-        second.
-    - Left for Anh: push `feature/fe-02-student-management` and open the PR into `develop`.
-  - FE-04 / FE-14 (Khanh):
-    - FE-14 (It2) uses UC-104..UC-106; a parent's address is `users.address`, occupation stays `parents.occupation`.
+    - Lead decisions on Anh's questions (03/11), done by the lead on the branch:
+      - Sample data on the shared DB accepted (see "Sample data" above).
+      - Transfer back to a class already studied in that year **reopens the old enrollment** (`STUDYING`, `left_at`
+        cleared, its grades and attendance come back); `UNIQUE (student_id, class_id)` stays, no schema change;
+        `MSG_CLASS_ALREADY_ENROLLED` removed. The transfer screen lets such a class be picked ("đã từng học").
+      - Now enforced (business rules §4): UC-11 only from the school year right before the destination
+        (`MSG_NOT_NEXT_SCHOOL_YEAR`), destination not ended (`MSG_SCHOOL_YEAR_ENDED`), next or same grade
+        (`SKIP_GRADE_NOT_ALLOWED`, per student), target class max 45 (`MSG_CLASS_FULL`, whole call refused); UC-10
+        refuses an ended year and a full class. FE-04's `lockOpenYear`, `MAX_CLASS_SIZE` and `previousYearSql` are
+        reused.
+      - FE-02 error codes moved into `client/src/messages.js`; the pages keep only texts that depend on the screen
+        (`MSG_INVALID_PARAM`, `WARN_*`, UC-14 row texts). The link page's phone check is `0` + 9 digits like
+        `utils/phone.js`.
+      - UC-14 `// ASSUMPTION:`s accepted. Moving UC-96's file reading into `utils/excel.js` waits until the It2
+        clean-up (shared code is merged after the features are on `develop`).
+      - Tested by the lead on the shared DB inside rolled-back transactions (nothing kept): transfer A → B → A
+        reopens the same enrollment and its group rows, one `STUDYING` row; full class and ended year refused for
+        UC-10 / UC-11; UC-11 from a year that is not the one right before refused; 10 → 11 and 10 → 10 promoted,
+        10 → 12 skipped; plus the API checks (401 / 403, list search, parent lookup, UC-14 template / preview,
+        link path). `npm run build` passes.
+    - Left after the merge: FE-14 (Anh) replaces the temporary `GET /students/parents/lookup` with UC-104; the
+      `utils/excel.js` clean-up with FE-13 in It2.
+  - FE-14 (Anh, It2 since 03/11): uses UC-104..UC-106; a parent's address is `users.address`, occupation stays
+    `parents.occupation`.
   - Group sync for FE-03 saves: business rules §4 "Class group membership follows the class" –
     `server/src/modules/teacher/homeroom.service.js` (UC-19) and `teaching.service.js` (UC-18) must call
     `await syncClassTeachers(client, classId)` (FE-04 `classGroups.js`) for every class they change, in the same
@@ -214,7 +222,35 @@ Also: seed data for the shared DB (school year, semesters, subjects, classes, sa
 
 ## Iteration 2 (02/11 – 13/11/2026)
 
-### Anh: FE-05 Group Feed (11 UC)
+### Anh: FE-08 School Feed (9 UC)
+
+Built separately from FE-05; shared feed code is merged after both are on `develop`.
+
+| ID | Use case | Actor |
+|---|---|---|
+| UC-58 | View School Feed & News | Teacher, Student, Parent, School Manager |
+| UC-59 | View School Post Detail | Teacher, Student, Parent, School Manager |
+| UC-60 | Create School Post | School Manager |
+| UC-61 | Update School Post | School Manager |
+| UC-62 | Delete School Post | School Manager |
+| UC-63 | Pin / Unpin School Post | School Manager |
+| UC-64 | React to School Post | Teacher, Student, Parent, School Manager |
+| UC-65 | Comment on School Post | Teacher, Student, Parent, School Manager |
+| UC-66 | Delete School Post Comment | School Manager |
+
+### Anh: FE-14 Parent Management (3 UC)
+
+Reuses FE-02 parent–student linking (UC-12..14), do not duplicate it. Start after FE-02 is merged.
+
+| ID | Use case | Actor |
+|---|---|---|
+| UC-104 | View Parent List | School Manager |
+| UC-105 | View Parent Detail | School Manager |
+| UC-106 | Update Parent Information | School Manager |
+
+### Khanh: FE-05 Group Feed (11 UC)
+
+Built separately from FE-08; shared feed code is merged after both are on `develop`.
 
 | ID | Use case | Actor |
 |---|---|---|
@@ -230,6 +266,16 @@ Also: seed data for the shared DB (school year, semesters, subjects, classes, sa
 | UC-45 | Hide Post / Delete Comment | Homeroom Teacher (class), School Manager (teacher group) |
 | UC-46 | Approve / Reject Post | Homeroom Teacher (class), School Manager (teacher group) |
 
+### Khanh: FE-06 Messaging (3 UC)
+
+Moved from It2 to It3 on 20/10, back to It2 for Khanh on 03/11 (builds on the FE-04 groups, teams and chat shell).
+
+| ID | Use case | Actor |
+|---|---|---|
+| UC-47 | Chat in Group | Teacher, Student, Parent, School Manager (teacher group) |
+| UC-48 | View Conversation List | Teacher, Student, Parent, School Manager |
+| UC-49 | Send Private Message | Teacher, Student, Parent, School Manager (teacher group) |
+
 ### Dung: FE-10 Schedule Management (6 UC)
 
 Timetable part only (UC-70..75).
@@ -243,45 +289,11 @@ Timetable part only (UC-70..75).
 | UC-74 | View Class Timetable | Teacher, Student, Parent |
 | UC-75 | View Teaching Schedule | Teacher |
 
-### Khanh: FE-08 School Feed (9 UC)
-
-| ID | Use case | Actor |
-|---|---|---|
-| UC-58 | View School Feed & News | Teacher, Student, Parent, School Manager |
-| UC-59 | View School Post Detail | Teacher, Student, Parent, School Manager |
-| UC-60 | Create School Post | School Manager |
-| UC-61 | Update School Post | School Manager |
-| UC-62 | Delete School Post | School Manager |
-| UC-63 | Pin / Unpin School Post | School Manager |
-| UC-64 | React to School Post | Teacher, Student, Parent, School Manager |
-| UC-65 | Comment on School Post | Teacher, Student, Parent, School Manager |
-| UC-66 | Delete School Post Comment | School Manager |
-
-### Khanh: FE-14 Parent Management (3 UC)
-
-Reuses FE-02 parent–student linking (UC-12..14), do not duplicate it.
-
-| ID | Use case | Actor |
-|---|---|---|
-| UC-104 | View Parent List | School Manager |
-| UC-105 | View Parent Detail | School Manager |
-| UC-106 | Update Parent Information | School Manager |
-
 ### Linh: Testing and integration of It1 + It2 features.
 
 ### Quoc: Review.
 
 ## Iteration 3 (16/11 – 27/11/2026)
-
-### Anh: FE-06 Messaging (3 UC)
-
-Moved from It2 on 20/10.
-
-| ID | Use case | Actor |
-|---|---|---|
-| UC-47 | Chat in Group | Teacher, Student, Parent, School Manager (teacher group) |
-| UC-48 | View Conversation List | Teacher, Student, Parent, School Manager |
-| UC-49 | Send Private Message | Teacher, Student, Parent, School Manager (teacher group) |
 
 ### Dung: FE-10 Schedule Management (5 UC)
 

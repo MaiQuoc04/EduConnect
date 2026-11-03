@@ -12,11 +12,9 @@ const NOT_BUILT = 'Chức năng đang phát triển';
 const LOAD_ERROR = 'Không tải được thông tin phụ huynh. Vui lòng thử lại.';
 const EMPTY_VALUE = 'Chưa cập nhật';
 
-// TODO messages.js: these codes are waiting for the team lead's approval (with the other FE-02 codes). Until then
-// the Vietnamese text lives here; errorText() wins as soon as messages.js has the code. Both are normally shown as
-// the "not found" page below, the texts are only a fallback.
+// MSG_STUDENT_NOT_FOUND is in messages.js. Both errors are normally shown as the "not found" page below; this text
+// is only a fallback.
 const LOAD_ERRORS = {
-  MSG_STUDENT_NOT_FOUND: 'Không tìm thấy học sinh.',
   MSG_INVALID_PARAM: 'Mã học sinh không hợp lệ.',
 };
 
@@ -221,7 +219,7 @@ function ParentCard({ parent, onUnlink }) {
           <Icon name="link_off" size="sm" />
           Gỡ liên kết
         </button>
-        {/* TODO UC-105 View Parent Detail (FE-14, Khanh, SCR-10 Parent Detail) */}
+        {/* TODO UC-105 View Parent Detail (FE-14, Anh, SCR-10 Parent Detail) */}
         <button type="button" className="btn btn-secondary" disabled title={NOT_BUILT}>
           <Icon name="badge" size="sm" />
           Hồ sơ phụ huynh

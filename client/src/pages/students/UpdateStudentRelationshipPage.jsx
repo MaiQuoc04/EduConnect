@@ -14,29 +14,22 @@ const MIN_QUERY_LENGTH = 2;
 const SEARCH_DELAY_MS = 300;
 const SEARCH_PAGE_SIZE = 8;
 const PHONE_DELAY_MS = 400;
-// Same rule as the server (students.controller.js): 0 followed by 9 or 10 digits once normalised.
-const PHONE_PATTERN = /^0\d{9,10}$/;
+// Same rule as the server (utils/phone.js, business-rules §3): 0 followed by 9 digits once normalised.
+const PHONE_PATTERN = /^0\d{9}$/;
 const LOAD_ERROR = 'Không tải được thông tin phụ huynh. Vui lòng thử lại.';
 const LINK_ERROR = 'Không liên kết được phụ huynh. Vui lòng thử lại.';
 const UNLINK_ERROR = 'Không gỡ được liên kết. Vui lòng thử lại.';
 const FULL_NOTE = 'Đã đủ 2 phụ huynh. Gỡ liên kết trước khi thêm.';
 
-// TODO messages.js: these codes are waiting for the team lead's approval (with the other FE-02 codes). Until then
-// the Vietnamese text lives here; errorText() wins as soon as messages.js has the code.
+// FE-02 error codes are in messages.js (lead, 03/11/2026); errorText() is used first. Only the texts that depend
+// on this screen stay here.
 const ACTION_ERRORS = {
-  MSG_PARENT_NOT_FOUND: 'Không tìm thấy phụ huynh.',
-  MSG_USER_NOT_PARENT: 'Tài khoản này không phải tài khoản phụ huynh.',
-  MSG_LINK_ALREADY_EXISTS: 'Phụ huynh này đã được liên kết với học sinh.',
-  MSG_MAX_PARENTS_REACHED: 'Học sinh đã có đủ 2 phụ huynh. Vui lòng gỡ liên kết trước khi thêm.',
-  MSG_LINK_NOT_FOUND: 'Liên kết này không tồn tại.',
-  MSG_INVALID_RELATIONSHIP_TYPE: 'Quan hệ không hợp lệ.',
-  MSG_STUDENT_NOT_FOUND: 'Không tìm thấy học sinh.',
   MSG_INVALID_PARAM: 'Giá trị không hợp lệ.',
 };
 // Errors about the chosen parent are shown under the parent field; the relationship one under its select.
 const PARENT_ERRORS = ['MSG_PARENT_NOT_FOUND', 'MSG_USER_NOT_PARENT', 'MSG_LINK_ALREADY_EXISTS'];
 
-// TODO messages.js: WARN_* codes are waiting for approval too. warnings[].message is English (CLAUDE.md), so it is
+// WARN_* texts depend on the screen, so they stay here. warnings[].message is English (CLAUDE.md), so it is
 // never shown; an unknown code gets a general sentence and a console warning.
 const WARNING_TEXTS = {
   WARN_STUDENT_HAS_NO_CLASS: 'Học sinh chưa thuộc lớp nào nên chưa thay đổi nhóm lớp.',
@@ -668,7 +661,7 @@ export default function UpdateStudentRelationshipPage() {
       setParentError('Vui lòng chọn phụ huynh.');
       ok = false;
     } else if (linkedIds.has(selected.parentId)) {
-      setParentError(ACTION_ERRORS.MSG_LINK_ALREADY_EXISTS);
+      setParentError(errorText({ code: 'MSG_LINK_ALREADY_EXISTS' }));
       ok = false;
     }
     if (!RELATIONSHIP_TYPES.includes(relationship)) {

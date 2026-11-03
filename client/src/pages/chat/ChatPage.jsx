@@ -181,7 +181,7 @@ function ChatRoom({ groupId, backState }) {
   );
 }
 
-// FE-06 (Anh): replace with the message list and composer.
+// FE-06 (Khanh): replace with the message list and composer.
 function ChatPending({ readOnly }) {
   return (
     <>

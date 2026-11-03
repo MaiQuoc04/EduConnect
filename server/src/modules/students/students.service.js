@@ -2,6 +2,8 @@ import { pool, withTransaction } from '../../config/db.js';
 import { badRequest, notFound } from '../../utils/AppError.js';
 import { vietnameseNameOrder } from '../../utils/nameSort.js';
 import { containsPattern, VI_TRANSLATE } from '../../utils/search.js';
+// FE-04 (merged): one place for the class-size limit, the ended-year check and "the school year just before".
+import { conflict, lockOpenYear, MAX_CLASS_SIZE, previousYearSql } from '../classes/classes.service.js';
 
 // FE-02 Student Management (owner: Anh). SQL lives here; the controller validates the query first.
 // resolveSchoolYearId, enrollmentsOfYear and buildStudentFilter are shared by UC-07..UC-14.
@@ -571,9 +573,9 @@ const JOIN_GROUP_TYPES = { STUDENT: ['GENERAL', 'STUDENT'], PARENT: ['GENERAL', 
 // Everything runs in one transaction: enrollments and group memberships change together or not at all.
 // Not logged: transfers are not in the activity_logs list (business-rules §13).
 //
-// Known limit kept on purpose (team decision): class_enrollments has UNIQUE (student_id, class_id), so a student
-// can never go back to a class they already left (11D1 -> 11A1 -> 11D1). It is checked before the INSERT and
-// answered with MSG_CLASS_ALREADY_ENROLLED.
+// Back to a class already left this year (11D1 -> 11A1 -> 11D1): class_enrollments keeps UNIQUE (student_id,
+// class_id), so the old enrollment is reopened (STUDYING, left_at NULL) instead of a new one (lead, 03/11/2026).
+// Also refused: a school year that has ended (MSG_SCHOOL_YEAR_ENDED) and a full class (MSG_CLASS_FULL, 45).
 export async function transferStudent(studentId, toClassId) {
   return withTransaction(async (client) => {
     // Lock the student first: two School Managers transferring the same student run one after the other, and the
@@ -630,23 +632,36 @@ export async function transferStudent(studentId, toClassId) {
         'The class is in another grade level. A transfer stays within the same grade level.',
         { currentGradeLevel: from.grade_level_name, targetGradeLevel: to.grade_level_name });
     }
-    const { rows: pastRows } = await client.query(
-      'SELECT 1 FROM class_enrollments WHERE student_id = $1 AND class_id = $2',
-      [studentId, to.class_id],
+    // Business-rules §4: a school year that has ended is read only (lockOpenYear, FE-04: 409 MSG_SCHOOL_YEAR_ENDED).
+    await lockOpenYear(client, from.school_year_id);
+    // Business-rules §4: at most 45 studying students per class (MAX_CLASS_SIZE, FE-04).
+    const { rows: [{ size }] } = await client.query(
+      `SELECT COUNT(*) AS size FROM class_enrollments WHERE class_id = $1 AND status = 'STUDYING'`,
+      [to.class_id],
     );
-    if (pastRows[0]) {
-      throw badRequest('MSG_CLASS_ALREADY_ENROLLED',
-        'The student has already studied in this class and cannot be transferred back to it.');
+    if (size >= MAX_CLASS_SIZE) {
+      throw conflict('MSG_CLASS_FULL', `A class has at most ${MAX_CLASS_SIZE} students.`, { max: MAX_CLASS_SIZE, current: size });
     }
 
-    // 1. Close the old enrollment (kept, with its grades and attendances). 2. Open the new one.
+    // 1. Close the old enrollment (kept, with its grades and attendances). 2. Open the new one – or, back to a class
+    // the student already studied in this year, reopen that enrollment (business-rules §4, lead 03/11/2026:
+    // UNIQUE (student_id, class_id) stays; the earlier grades and attendances of that class come back with it).
     const { rows: [fromEnrollment] } = await client.query(
       `UPDATE class_enrollments SET status = 'TRANSFERRED', left_at = NOW()
        WHERE enrollment_id = $1
        RETURNING enrollment_id AS "enrollmentId", class_id AS "classId", status, left_at AS "leftAt"`,
       [from.enrollment_id],
     );
-    const [{ studentId: _studentId, ...toEnrollment }] = await insertEnrollments(client, [{ studentId, classId: to.class_id }]);
+    const { rows: [reopened] } = await client.query(
+      `UPDATE class_enrollments SET status = 'STUDYING', left_at = NULL
+       WHERE student_id = $1 AND class_id = $2
+       RETURNING enrollment_id AS "enrollmentId", class_id AS "classId", status, enrolled_at AS "enrolledAt"`,
+      [studentId, to.class_id],
+    );
+    const toEnrollment = reopened
+      ? { ...reopened, reopened: true }
+      : (({ studentId: _studentId, ...row }) => ({ ...row, reopened: false }))(
+        (await insertEnrollments(client, [{ studentId, classId: to.class_id }]))[0]);
 
     // BR-05: exactly one STUDYING enrollment in the year. Cannot fail after the checks above unless the data was
     // already broken (two STUDYING rows); then everything is rolled back instead of being saved half right.
@@ -874,8 +889,12 @@ export const MAX_PROMOTE_STUDENTS = 200;
 // Unlike UC-10 (business-rules §4), the old enrollment is left exactly as it is (STUDYING, left_at NULL): it is the
 // history of the old year. Only a new STUDYING enrollment is added; users and students are not changed. BR-05 (one
 // STUDYING enrollment per school year) still holds because the two rows are in different years.
-// The grade level is NOT checked: promotion changes it (10 -> 11) and a student repeating a year stays in it
-// (10 -> 10 of the next year); School Manager picks the class.
+// Business-rules §4 "Who puts a student in a class" (lead, 03/11/2026), checked here:
+// - the destination year is the one right after the source year (MSG_NOT_NEXT_SCHOOL_YEAR) and has not ended
+//   (MSG_SCHOOL_YEAR_ENDED, FE-04 lockOpenYear);
+// - a student goes to the next grade or stays in the same grade (repeating), else SKIP_GRADE_NOT_ALLOWED;
+// - a target class never goes over 45 studying students (MSG_CLASS_FULL, FE-04 MAX_CLASS_SIZE): the whole request
+//   is refused, School Manager picks another class or fewer students.
 //
 // groups: [{ toClassId, studentIds }] (already validated by the controller: no student twice, at most
 // MAX_PROMOTE_STUDENTS). A whole-request problem (school year / class) is a 400; a student who does not qualify
@@ -899,17 +918,26 @@ export async function promoteStudents({ fromSchoolYearId, toSchoolYearId, groups
     if (!inOrder) {
       throw badRequest('MSG_INVALID_YEAR_ORDER', 'The destination school year must start after the source school year.');
     }
+    const { rows: [{ previousId }] } = await client.query(`SELECT ${previousYearSql('$1')} AS "previousId"`,
+      [toSchoolYearId]);
+    if (previousId !== fromSchoolYearId) {
+      throw badRequest('MSG_NOT_NEXT_SCHOOL_YEAR',
+        'Students are promoted only from the school year right before the destination school year.');
+    }
+    await lockOpenYear(client, toSchoolYearId);
 
     // Target classes: must exist, not be soft-deleted and belong to the destination year. FOR SHARE: none of them
     // can be soft-deleted while the promotion runs.
     const classIds = [...new Set(groups.map((group) => group.toClassId))];
     const { rows: classRows } = await client.query(
-      `SELECT class_id, class_name FROM classes
-       WHERE class_id = ANY($1::bigint[]) AND school_year_id = $2 AND deleted_at IS NULL
-       FOR SHARE`,
+      `SELECT c.class_id, c.class_name, gl.grade_level_name FROM classes c
+       JOIN grade_levels gl ON gl.grade_level_id = c.grade_level_id
+       WHERE c.class_id = ANY($1::bigint[]) AND c.school_year_id = $2 AND c.deleted_at IS NULL
+       FOR SHARE OF c`,
       [classIds, toSchoolYearId],
     );
     const classNameById = new Map(classRows.map((row) => [row.class_id, row.class_name]));
+    const gradeByClass = new Map(classRows.map((row) => [row.class_id, Number(row.grade_level_name)]));
     const missingClassIds = classIds.filter((id) => !classNameById.has(id));
     if (missingClassIds.length) {
       throw badRequest('MSG_CLASS_NOT_FOUND', 'The class does not exist in the destination school year.',
@@ -938,9 +966,10 @@ export async function promoteStudents({ fromSchoolYearId, toSchoolYearId, groups
     // enrollment of the source year is DROPPED, or TRANSFERRED with no STUDYING row after it, is skipped; a
     // student who transferred inside the source year is promoted from the class they study in now.
     const { rows: sourceRows } = await client.query(
-      `SELECT ce.student_id, ce.class_id, c.class_name
+      `SELECT ce.student_id, ce.class_id, c.class_name, gl.grade_level_name
        FROM class_enrollments ce
        JOIN classes c ON c.class_id = ce.class_id
+       JOIN grade_levels gl ON gl.grade_level_id = c.grade_level_id
        WHERE ce.student_id = ANY($1::bigint[]) AND ce.status = 'STUDYING'
          AND c.school_year_id = $2 AND c.deleted_at IS NULL
        ORDER BY ce.student_id, ce.enrolled_at DESC, ce.enrollment_id DESC
@@ -972,11 +1001,18 @@ export async function promoteStudents({ fromSchoolYearId, toSchoolYearId, groups
     const decisions = requested.map(({ studentId, toClassId }) => {
       const student = studentById.get(studentId);
       const base = { studentId, studentCode: student?.student_code ?? null, fullName: student?.full_name ?? null };
-      const skip = (reason, message) => ({ ...base, status: 'SKIPPED', reason, message });
+      const skip = (reason, message, details) => ({ ...base, status: 'SKIPPED', reason, message, ...(details && { details }) });
       if (!student) return skip('SKIP_STUDENT_NOT_FOUND', 'The student does not exist.');
       const source = sourceByStudent.get(studentId);
       if (!source) {
         return skip('SKIP_NO_ACTIVE_ENROLLMENT', 'The student is not studying in any class of the source school year.');
+      }
+      // Grade names are 10, 11, 12 (grade_levels): the next grade or the same one (repeating a year).
+      const fromGrade = Number(source.grade_level_name);
+      const toGrade = gradeByClass.get(toClassId);
+      if (toGrade !== fromGrade && toGrade !== fromGrade + 1) {
+        return skip('SKIP_GRADE_NOT_ALLOWED', 'A student goes to the next grade or stays in the same grade.',
+          { fromGradeLevel: source.grade_level_name, toGradeLevel: String(toGrade) });
       }
       if (enrolledInTargetYear.has(studentId)) {
         return skip('SKIP_ALREADY_ENROLLED', 'The student already has an enrollment in the destination school year.');
@@ -989,6 +1025,22 @@ export async function promoteStudents({ fromSchoolYearId, toSchoolYearId, groups
       return { ...base, status: 'PROMOTED', toClassId, userId: student.user_id, fromClassName: source.class_name };
     });
     const toPromote = decisions.filter((decision) => decision.status === 'PROMOTED');
+
+    // At most MAX_CLASS_SIZE studying students per class, counting the students promoted into it now.
+    const { rows: sizeRows } = await client.query(
+      `SELECT class_id, COUNT(*) AS size FROM class_enrollments
+       WHERE class_id = ANY($1::bigint[]) AND status = 'STUDYING' GROUP BY class_id`,
+      [classIds],
+    );
+    const sizeByClass = new Map(sizeRows.map((row) => [row.class_id, row.size]));
+    for (const classId of classIds) {
+      const current = sizeByClass.get(classId) ?? 0;
+      const adding = toPromote.filter((decision) => decision.toClassId === classId).length;
+      if (adding && current + adding > MAX_CLASS_SIZE) {
+        throw conflict('MSG_CLASS_FULL', `A class has at most ${MAX_CLASS_SIZE} students.`,
+          { max: MAX_CLASS_SIZE, current, adding, classId, className: classNameById.get(classId) });
+      }
+    }
 
     const warnings = [];
     const enrollmentIdByStudent = new Map();

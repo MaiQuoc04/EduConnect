@@ -221,11 +221,11 @@ export default function App() {
           }
         >
           <Route index element={<GroupOverview />} />
-          {/* FE-05 (Anh): replace GroupPendingTab with the group feed page. */}
+          {/* FE-05 (Khanh): replace GroupPendingTab with the group feed page. */}
           <Route path="feed" element={<GroupPendingTab kind="feed" />} />
           <Route path="members" element={<GroupMembersPage />} />
         </Route>
-        {/* Split chat view: shell from FE-04, messages by FE-06 (Anh). */}
+        {/* Split chat view: shell from FE-04, messages by FE-06 (Khanh). */}
         {['chat', 'chat/:groupId'].map((path) => (
           <Route
             key={path}

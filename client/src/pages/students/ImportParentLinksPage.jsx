@@ -20,7 +20,7 @@ import './ImportParentLinksPage.css';
 const ACCEPT = '.xlsx,.csv';
 const MAX_ROWS = 500; // business-rules §4
 
-// TODO messages.js: row error codes of UC-14 waiting for the team lead's approval (then use errorText()).
+// Row texts of UC-14, phrased for one row of the file (the general texts of the same codes are in messages.js).
 const ROW_ERRORS = {
   MSG_REQUIRED: () => 'Thiếu giá trị bắt buộc.',
   MSG_STUDENT_NOT_FOUND: () => 'Không tìm thấy học sinh với mã này.',
@@ -32,7 +32,7 @@ const ROW_ERRORS = {
     d?.duplicateOf ? `Học sinh và phụ huynh này đã có ở dòng ${d.duplicateOf} trong file.` : 'Học sinh và phụ huynh này đã có ở một dòng phía trên trong file.',
 };
 const ROW_ERROR_FALLBACK = 'Dòng này không hợp lệ.';
-// TODO messages.js: WARN_* codes are waiting for approval too (same texts as SCR-13).
+// WARN_* texts of an import (about a whole file), kept here.
 const WARNINGS = {
   WARN_STUDENT_HAS_NO_CLASS: 'Một học sinh chưa thuộc lớp nào nên phụ huynh chưa được thêm vào nhóm lớp.',
   WARN_CLASS_HAS_NO_GROUPS: (d) => `Lớp ${d?.className ?? ''} chưa có nhóm lớp, phụ huynh chưa được thêm vào nhóm nào.`,
