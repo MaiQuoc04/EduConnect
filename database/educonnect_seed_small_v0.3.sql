@@ -23,7 +23,7 @@
 --   * Each teacher teaches several subjects so that every subject of both classes has a teacher.
 --   * student_code = HS + 4 digits, teacher_code = GV + 4 digits (business rules §3). The sample usernames are
 --     the old short ones (huynq, lannt…), kept as if System Admin had changed them; new accounts get the role formats.
---   * Class type weights: focus subjects 2.00, others 1.00; focus subjects get one extra period per week.
+--   * Every subject weight is 1.00 (no longer shown); focus subjects get one extra period per week.
 --   * The homeroom teacher teaches HDTN of their class.
 --   * Group members: GENERAL = homeroom + subject teachers + students + parents; STUDENT = homeroom + students;
 --     PARENT = homeroom + parents; TEACHER_SCHOOL = all teachers + all School Managers.
@@ -63,42 +63,42 @@ INSERT INTO class_tracks (track_name, description) VALUES
 INSERT INTO track_subjects (track_id, subject_id, school_year_id, weight, periods_per_week)
 SELECT t.track_id, s.subject_id, (SELECT school_year_id FROM school_years WHERE year_name = '2026-2027'), v.weight::numeric, v.periods
 FROM (VALUES
-  ('Khối A', 'TOAN', '2.00', 4),
+  ('Khối A', 'TOAN', '1.00', 4),
   ('Khối A', 'VAN', '1.00', 3),
   ('Khối A', 'ANH', '1.00', 3),
   ('Khối A', 'SU', '1.00', 2),
   ('Khối A', 'GDTC', '1.00', 2),
   ('Khối A', 'QPAN', '1.00', 1),
   ('Khối A', 'HDTN', '1.00', 3),
-  ('Khối A', 'LY', '2.00', 3),
-  ('Khối A', 'HOA', '2.00', 3),
+  ('Khối A', 'LY', '1.00', 3),
+  ('Khối A', 'HOA', '1.00', 3),
   ('Khối A', 'SINH', '1.00', 2),
   ('Khối A', 'TIN', '1.00', 2),
-  ('Khối B', 'TOAN', '2.00', 4),
+  ('Khối B', 'TOAN', '1.00', 4),
   ('Khối B', 'VAN', '1.00', 3),
   ('Khối B', 'ANH', '1.00', 3),
   ('Khối B', 'SU', '1.00', 2),
   ('Khối B', 'GDTC', '1.00', 2),
   ('Khối B', 'QPAN', '1.00', 1),
   ('Khối B', 'HDTN', '1.00', 3),
-  ('Khối B', 'HOA', '2.00', 3),
-  ('Khối B', 'SINH', '2.00', 3),
+  ('Khối B', 'HOA', '1.00', 3),
+  ('Khối B', 'SINH', '1.00', 3),
   ('Khối B', 'LY', '1.00', 2),
   ('Khối B', 'DIA', '1.00', 2),
   ('Khối C', 'TOAN', '1.00', 3),
-  ('Khối C', 'VAN', '2.00', 4),
+  ('Khối C', 'VAN', '1.00', 4),
   ('Khối C', 'ANH', '1.00', 3),
-  ('Khối C', 'SU', '2.00', 3),
+  ('Khối C', 'SU', '1.00', 3),
   ('Khối C', 'GDTC', '1.00', 2),
   ('Khối C', 'QPAN', '1.00', 1),
   ('Khối C', 'HDTN', '1.00', 3),
-  ('Khối C', 'DIA', '2.00', 3),
+  ('Khối C', 'DIA', '1.00', 3),
   ('Khối C', 'KTPL', '1.00', 2),
   ('Khối C', 'TIN', '1.00', 2),
   ('Khối C', 'CN', '1.00', 2),
-  ('Khối D', 'TOAN', '2.00', 4),
-  ('Khối D', 'VAN', '2.00', 4),
-  ('Khối D', 'ANH', '2.00', 4),
+  ('Khối D', 'TOAN', '1.00', 4),
+  ('Khối D', 'VAN', '1.00', 4),
+  ('Khối D', 'ANH', '1.00', 4),
   ('Khối D', 'SU', '1.00', 2),
   ('Khối D', 'GDTC', '1.00', 2),
   ('Khối D', 'QPAN', '1.00', 1),

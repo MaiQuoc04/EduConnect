@@ -146,10 +146,11 @@ Boundaries that are easy to get wrong:
     year count (a student transferred inside that year moves from the class they study in now); at most 200
     students per call.
   - **Transfer (UC-10, FE-02)**: to another class of the **same school year and the same grade**.
-  - **Create class / import class list (UC-28, UC-27, FE-04)** only take students with **no enrollment in the
-    previous school year** and no studying enrollment this year (new to the school, coming from another school, or
-    coming back after a year away); a row with a student of the previous year is refused with a message to use
-    promotion.
+  - **Create class / import class list (UC-28, UC-27, FE-04)** only take students who were **not studying in a
+    class of the previous school year** (no `STUDYING` enrollment there – the same students promotion would take)
+    and are not studying in a class this year: new to the school, coming from another school, coming back after a
+    year away, or left without a class there after a transfer; a row with a student of the previous year is refused
+    with a message to use promotion.
   - **Leaving the school:** no separate use case. The account is **locked** (UC-101; accounts are never deleted,
     §3). Coming back during the same year: unlock; coming back in a later year: added as above.
 - **Students** (FE-02, agreed 03/11/2026): date of birth gives an age of 10–30 today; SM updates name, date of
@@ -213,7 +214,8 @@ Boundaries that are easy to get wrong:
 - **Group moderator = the current homeroom teacher**, read from `classes.homeroom_teacher_id` (nothing stored per
   group), so the rights move at once when the homeroom teacher changes, posts waiting for approval included.
 - **Removing members** (UC-33): the homeroom teacher removes students and parents only; teachers are removed by the
-  School Manager (who also makes the teaching assignments).
+  School Manager (who also makes the teaching assignments). A teacher removed while still assigned to the class
+  comes back at the next membership sync (membership follows the class); to take a teacher out, end the assignment.
 - **Class group membership follows the class** (agreed 03/11/2026), in the same transaction as the change that
   causes it:
   - Transfer (UC-10) / promotion (UC-11): the student leaves every group and team of the old class and joins GENERAL

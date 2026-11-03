@@ -14,6 +14,22 @@ export const NAV_SECTIONS = [
     ],
   },
   {
+    label: 'Cộng đồng',
+    items: [
+      { to: '/groups', label: 'Nhóm của tôi', icon: 'groups', roles: ['TEACHER', 'STUDENT', 'PARENT'] }, // FE-04 UC-29
+      { to: '/chat', label: 'Trò chuyện', icon: 'forum', roles: ['TEACHER', 'STUDENT', 'PARENT'] }, // FE-06 shell (FE-04)
+    ],
+  },
+  {
+    label: 'Đào tạo',
+    items: [
+      { to: '/school-years', label: 'Năm học & học kỳ', icon: 'date_range', roles: ['SCHOOL_MANAGER'] }, // FE-04 UC-20, UC-21
+      { to: '/subjects', label: 'Môn học', icon: 'book', roles: ['SCHOOL_MANAGER'] }, // FE-04 UC-22..UC-25
+      { to: '/class-tracks', label: 'Loại lớp & số tiết', icon: 'category', roles: ['SCHOOL_MANAGER'] }, // FE-04 UC-26
+      { to: '/classes', label: 'Lớp & nhóm', icon: 'groups', roles: ['SCHOOL_MANAGER'] }, // FE-04 UC-27..UC-29
+    ],
+  },
+  {
     label: 'Tài khoản',
     items: [
       { to: '/profile', label: 'Hồ sơ của tôi', icon: 'person' }, // FE-01 UC-04
