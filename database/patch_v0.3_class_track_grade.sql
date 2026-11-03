@@ -1,5 +1,6 @@
 -- EduConnect patch for schema v0.3 – class types per grade (FE-04 UC-26, SCR-70).
--- Proposed by the team lead (02/11/2026), reviewed by Khanh, approved to run on the shared DB.
+-- Proposed by the team lead (02/11/2026), written by Khanh. Already run on the shared DB (02/11/2026, before the
+-- lead's approval; accepted 03/11/2026) – only needed for another (local) database.
 --
 -- A class type (class_tracks) belongs to one grade or to every grade (grade_level_id NULL). Before this patch the
 -- grade was written as a prefix of track_name ("10 · Khối A", commit 1a4d4fc); this moves it to its own column.

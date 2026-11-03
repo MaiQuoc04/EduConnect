@@ -4,6 +4,16 @@
 //   { to: '/students', label: 'Học sinh', icon: 'school', roles: ['SCHOOL_MANAGER'] }
 export const NAV_SECTIONS = [
   {
+    label: 'Quản trị hệ thống', // School Manager sees only the password reset requests here
+    items: [
+      // FE-13 System Administration
+      { to: '/admin/accounts', label: 'Tài khoản người dùng', icon: 'manage_accounts', roles: ['SYSTEM_ADMIN'] }, // UC-95..98
+      { to: '/admin/password-reset-requests', label: 'Yêu cầu cấp lại mật khẩu', icon: 'key', roles: ['SYSTEM_ADMIN', 'SCHOOL_MANAGER'] }, // UC-100 via FE-01 requests
+      { to: '/admin/settings', label: 'Cài đặt hệ thống', icon: 'settings', roles: ['SYSTEM_ADMIN'] }, // UC-102
+      { to: '/admin/maintenance', label: 'Bảo trì hệ thống', icon: 'engineering', roles: ['SYSTEM_ADMIN'] }, // UC-103
+    ],
+  },
+  {
     label: 'Cộng đồng',
     items: [
       { to: '/groups', label: 'Nhóm của tôi', icon: 'groups', roles: ['TEACHER', 'STUDENT', 'PARENT'] }, // FE-04 UC-29
@@ -26,6 +36,14 @@ export const NAV_SECTIONS = [
       { to: '/change-password', label: 'Đổi mật khẩu', icon: 'lock_reset' }, // FE-01 UC-05
     ],
   },
+  {
+    label: 'Hồ sơ',
+    items: [
+      { to: '/teachers', label: 'Giáo viên', icon: 'badge', roles: ['SCHOOL_MANAGER'] }, // SCR-13
+      { to: '/homeroom-assignments', label: 'Phân công chủ nhiệm', icon: 'assignment_ind', roles: ['SCHOOL_MANAGER'] }, // SCR-16
+      { to: '/teaching-assignments', label: 'Phân công giảng dạy', icon: 'co_present', roles: ['SCHOOL_MANAGER'] }, // SCR-17
+    ],
+  },
 ];
 
 export function navFor(activeRole) {
@@ -37,7 +55,7 @@ export function navFor(activeRole) {
 
 // Where each role lands after sign-in (the product has no dashboard). Update when the role's main screen exists.
 export const HOME_BY_ROLE = {
-  SYSTEM_ADMIN: '/profile',
+  SYSTEM_ADMIN: '/admin/accounts',
   SCHOOL_MANAGER: '/profile',
   TEACHER: '/profile',
   STUDENT: '/profile',

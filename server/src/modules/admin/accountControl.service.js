@@ -1,0 +1,480 @@
+import ExcelJS from 'exceljs';
+import { pool, withTransaction } from '../../config/db.js';
+import { AppError, badRequest, forbidden, notFound } from '../../utils/AppError.js';
+import { logActivity } from '../../utils/activityLog.js';
+import { hashPassword } from '../../utils/password.js';
+import { open as openSecret } from '../../utils/secretBox.js';
+import { generateTemporaryPassword } from '../../utils/tempPassword.js';
+import { normalizePhone, PHONE_RE } from '../../utils/phone.js';
+import { containsPattern, VI_TRANSLATE } from '../../utils/search.js';
+import { isValidUsername } from '../../utils/username.js';
+import { ROLE_CODES } from './accounts.service.js';
+
+// FE-13 System Administration (owner: Linh) – account list and control:
+// UC-97 View Account List, UC-98 Export Account List, UC-99 Update Login Identifiers,
+// UC-100 Reset Password, UC-101 Lock / Unlock Account.
+
+const PAGE_SIZE = 20;
+const EXPORT_LIMIT = 10000;
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+const STATUSES = ['ACTIVE', 'LOCKED'];
+const SCHOOL_ROLES = ['TEACHER', 'STUDENT', 'PARENT']; // what School Manager may reset / lock (permissions note 1)
+
+// Accent-insensitive search: shared utils/search.js (business-rules §16).
+
+// ---------------------------------------------------------------- UC-97 / UC-98 list
+
+function readFilters(query = {}) {
+  const search = containsPattern(query.search);
+  const role = ROLE_CODES.includes(query.role) ? query.role : null;
+  const status = STATUSES.includes(query.status) ? query.status : null;
+  const classId = /^\d{1,15}$/.test(String(query.classId ?? '')) ? Number(query.classId) : null;
+  return { search: search || null, role, status, classId };
+}
+
+// The current school year: the one containing today, otherwise the latest one.
+// ASSUMPTION: "current" is decided by the school_years dates; FE-04 may add an explicit current year later.
+const CURRENT_YEAR_SQL = `(SELECT school_year_id FROM school_years
+                           ORDER BY (CURRENT_DATE BETWEEN start_date AND end_date) DESC, start_date DESC LIMIT 1)`;
+
+// Classes of the current school year, for the class filter of SCR-59.
+export async function listClassOptions() {
+  const { rows } = await pool.query(
+    `SELECT c.class_id AS id, c.class_name AS name, g.grade_level_name AS "gradeLevel"
+     FROM classes c JOIN grade_levels g ON g.grade_level_id = c.grade_level_id
+     WHERE c.deleted_at IS NULL AND c.school_year_id = ${CURRENT_YEAR_SQL}
+     ORDER BY g.grade_level_name, c.class_name`,
+  );
+  return { items: rows };
+}
+
+// One SQL for the list and the export. $1 search, $2 role, $3 status, $4 / $5 letters for translate(), $6 limit, $7 offset,
+// $8 class. A class matches its students (still STUDYING), their parents (student_parents) and its homeroom teacher.
+// "classNames" lists the same links for the current school year.
+const LIST_SQL = `
+  SELECT u.user_id AS id, u.username, u.full_name AS "fullName", u.email, u.phone, u.status,
+         u.must_change_password AS "mustChangePassword",
+         COALESCE(u.locked_until > NOW(), FALSE) AS "tempLocked",
+         u.created_at AS "createdAt",
+         COALESCE(ARRAY(SELECT r.role_code FROM user_roles ur JOIN roles r ON r.role_id = ur.role_id
+                        WHERE ur.user_id = u.user_id ORDER BY r.role_id), '{}') AS roles,
+         COALESCE(s.student_code, t.teacher_code) AS code,
+         u.address, s.dob, s.gender, t.department, p.occupation,
+         (SELECT string_agg(DISTINCT c.class_name, ', ' ORDER BY c.class_name)
+          FROM classes c
+          WHERE c.deleted_at IS NULL AND c.school_year_id = ${CURRENT_YEAR_SQL}
+            AND (c.homeroom_teacher_id = t.teacher_id
+                 OR EXISTS (SELECT 1 FROM class_enrollments e
+                            WHERE e.class_id = c.class_id AND e.status = 'STUDYING'
+                              AND (e.student_id = s.student_id
+                                   OR e.student_id IN (SELECT sp.student_id FROM student_parents sp
+                                                       WHERE sp.parent_id = p.parent_id))))) AS "classNames",
+         COUNT(*) OVER() AS total
+  FROM users u
+  LEFT JOIN students s ON s.user_id = u.user_id
+  LEFT JOIN teachers t ON t.user_id = u.user_id
+  LEFT JOIN parents p ON p.user_id = u.user_id
+  WHERE ($1::text IS NULL
+         OR lower(translate(u.full_name, $4, $5)) LIKE $1
+         OR u.username LIKE $1
+         OR LOWER(COALESCE(u.email, '')) LIKE $1
+         OR COALESCE(u.phone, '') LIKE $1
+         OR LOWER(COALESCE(s.student_code, t.teacher_code, '')) LIKE $1)
+    AND ($2::text IS NULL OR EXISTS (SELECT 1 FROM user_roles ur JOIN roles r ON r.role_id = ur.role_id
+                                     WHERE ur.user_id = u.user_id AND r.role_code = $2))
+    AND ($3::text IS NULL OR u.status = $3)
+    AND ($8::bigint IS NULL
+         OR EXISTS (SELECT 1 FROM classes c WHERE c.class_id = $8 AND c.homeroom_teacher_id = t.teacher_id)
+         OR EXISTS (SELECT 1 FROM class_enrollments e
+                    WHERE e.class_id = $8 AND e.status = 'STUDYING'
+                      AND (e.student_id = s.student_id
+                           OR e.student_id IN (SELECT sp.student_id FROM student_parents sp WHERE sp.parent_id = p.parent_id))))
+  ORDER BY u.created_at DESC, u.user_id DESC
+  LIMIT $6 OFFSET $7`;
+
+async function queryAccounts(filters, limit, offset) {
+  const { rows } = await pool.query(LIST_SQL, [
+    filters.search,
+    filters.role,
+    filters.status,
+    VI_TRANSLATE.from,
+    VI_TRANSLATE.to,
+    limit,
+    offset,
+    filters.classId,
+  ]);
+  return rows;
+}
+
+// UC-97 View Account List: search by name / username / email / phone / code, filter by role, status and class.
+export async function listAccounts(query) {
+  const filters = readFilters(query);
+  const page = Math.max(1, Number.parseInt(query.page, 10) || 1);
+  const rows = await queryAccounts(filters, PAGE_SIZE, (page - 1) * PAGE_SIZE);
+  return {
+    items: rows.map(({ total, ...r }) => r),
+    total: rows[0]?.total ?? 0,
+    page,
+    pageSize: PAGE_SIZE,
+  };
+}
+
+const ROLE_TEXT = {
+  SYSTEM_ADMIN: 'Quản trị hệ thống',
+  SCHOOL_MANAGER: 'Quản lý nhà trường',
+  TEACHER: 'Giáo viên',
+  STUDENT: 'Học sinh',
+  PARENT: 'Phụ huynh',
+};
+
+const GENDER_TEXT = { MALE: 'Nam', FEMALE: 'Nữ', OTHER: 'Khác' };
+const dmy = (value) => (value ? String(value).slice(0, 10).split('-').reverse().join('/') : '');
+
+// UC-98 Export Account List: every matching account (not only one page) with all its profile fields, in the same
+// words as the UC-96 templates. No passwords – they are only hashes.
+export async function exportAccounts(query) {
+  const rows = await queryAccounts(readFilters(query), EXPORT_LIMIT, 0);
+  const wb = new ExcelJS.Workbook();
+  const ws = wb.addWorksheet('Tai khoan');
+  ws.columns = [
+    { header: 'STT', key: 'no', width: 6 },
+    { header: 'Tên đăng nhập', key: 'username', width: 18 },
+    { header: 'Họ và tên', key: 'fullName', width: 28 },
+    { header: 'Vai trò', key: 'roles', width: 26 },
+    { header: 'Mã HS/GV', key: 'code', width: 14 },
+    { header: 'Lớp', key: 'classNames', width: 14 },
+    { header: 'Ngày sinh', key: 'dob', width: 12 },
+    { header: 'Giới tính', key: 'gender', width: 10 },
+    { header: 'Tổ chuyên môn', key: 'department', width: 20 },
+    { header: 'Nghề nghiệp', key: 'occupation', width: 20 },
+    { header: 'Email', key: 'email', width: 30 },
+    { header: 'Số điện thoại', key: 'phone', width: 16, style: { numFmt: '@' } },
+    { header: 'Địa chỉ', key: 'address', width: 40 },
+    { header: 'Trạng thái', key: 'status', width: 14 },
+    { header: 'Phải đổi mật khẩu', key: 'mustChange', width: 18 },
+    { header: 'Ngày tạo', key: 'createdAt', width: 12 },
+  ];
+  ws.getRow(1).font = { bold: true };
+  ws.views = [{ state: 'frozen', ySplit: 1 }];
+  rows.forEach((r, i) =>
+    ws.addRow({
+      no: i + 1,
+      username: r.username,
+      fullName: r.fullName,
+      roles: r.roles.map((c) => ROLE_TEXT[c] ?? c).join(', '),
+      code: r.code ?? '',
+      classNames: r.classNames ?? '',
+      dob: dmy(r.dob),
+      gender: GENDER_TEXT[r.gender] ?? '',
+      department: r.department ?? '',
+      occupation: r.occupation ?? '',
+      email: r.email ?? '',
+      phone: r.phone ?? '',
+      address: r.address ?? '',
+      status: r.status === 'ACTIVE' ? 'Hoạt động' : 'Đã khoá',
+      mustChange: r.mustChangePassword ? 'Có' : 'Không',
+      createdAt: dmy(r.createdAt),
+    }),
+  );
+  const date = new Date().toLocaleDateString('sv-SE', { timeZone: 'Asia/Ho_Chi_Minh' }).replaceAll('-', '');
+  return {
+    fileName: `educonnect-accounts-${date}.xlsx`,
+    contentType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    buffer: Buffer.from(await wb.xlsx.writeBuffer()),
+  };
+}
+
+// ---------------------------------------------------------------- detail (SCR-60)
+
+function readId(value) {
+  const id = Number(value);
+  if (!Number.isSafeInteger(id) || id <= 0) throw notFound('NOT_FOUND', 'Account not found.');
+  return id;
+}
+
+// Account with its roles; 404 when it does not exist.
+async function loadAccount(db, id) {
+  const { rows } = await db.query(
+    `SELECT u.user_id AS id, u.username, u.full_name AS "fullName", u.email, u.phone, u.avatar_url AS "avatarUrl",
+            u.address, u.status, u.must_change_password AS "mustChangePassword", u.failed_login_count AS "failedLoginCount",
+            CASE WHEN u.locked_until > NOW() THEN u.locked_until END AS "lockedUntil",
+            COALESCE(u.locked_until > NOW(), FALSE) AS "tempLocked",
+            u.created_at AS "createdAt", u.updated_at AS "updatedAt",
+            COALESCE(ARRAY(SELECT r.role_code FROM user_roles ur JOIN roles r ON r.role_id = ur.role_id
+                           WHERE ur.user_id = u.user_id ORDER BY r.role_id), '{}') AS roles,
+            (SELECT json_build_object('id', q.request_id, 'reason', q.reason, 'createdAt', q.created_at)
+             FROM password_reset_requests q WHERE q.user_id = u.user_id AND q.status = 'PENDING') AS "pendingResetRequest"
+     FROM users u WHERE u.user_id = $1`,
+    [id],
+  );
+  if (!rows.length) throw notFound('NOT_FOUND', 'Account not found.');
+  return rows[0];
+}
+
+export async function getAccount(idParam) {
+  const id = readId(idParam);
+  const account = await loadAccount(pool, id);
+  const [student, teacher, parent, lastLogin] = await Promise.all([
+    pool.query('SELECT student_code AS code, dob, gender FROM students WHERE user_id = $1', [id]),
+    pool.query('SELECT teacher_code AS code, department FROM teachers WHERE user_id = $1', [id]),
+    pool.query('SELECT occupation FROM parents WHERE user_id = $1', [id]),
+    pool.query(
+      `SELECT MAX(created_at) AS at FROM activity_logs WHERE user_id = $1 AND action = 'LOGIN_SUCCESS'`,
+      [id],
+    ),
+  ]);
+  return {
+    ...account,
+    student: student.rows[0] ?? null,
+    teacher: teacher.rows[0] ?? null,
+    parent: parent.rows[0] ?? null,
+    lastLoginAt: lastLogin.rows[0]?.at ?? null,
+  };
+}
+
+// ---------------------------------------------------------------- UC-99 Update Login Identifiers
+
+export async function updateIdentifiers({ idParam, body = {} }) {
+  const id = readId(idParam);
+  const account = await loadAccount(pool, id);
+
+  const username = typeof body.username === 'string' ? body.username.trim().toLowerCase() : '';
+  const email = typeof body.email === 'string' && body.email.trim() ? body.email.trim().toLowerCase() : null;
+  const phone = typeof body.phone === 'string' && body.phone.trim() ? normalizePhone(body.phone) : null;
+
+  const fields = {};
+  if (!username) fields.username = 'REQUIRED';
+  else if (!isValidUsername(username) || username.includes('@')) fields.username = 'INVALID';
+  if (email && (!EMAIL_RE.test(email) || email.length > 150)) fields.email = 'INVALID';
+  if (phone && !PHONE_RE.test(phone)) fields.phone = 'INVALID';
+  if (!phone && account.roles.includes('PARENT')) fields.phone = 'REQUIRED_FOR_PARENT';
+  if (Object.keys(fields).length) throw badRequest('MSG_ACCOUNT_INVALID', 'Some fields are missing or invalid.', { fields });
+
+  if (username === account.username && email === (account.email?.toLowerCase() ?? null) && phone === account.phone) {
+    throw badRequest('MSG_NOTHING_CHANGED', 'Nothing was changed.');
+  }
+
+  const { rows } = await pool.query(
+    `SELECT
+       EXISTS (SELECT 1 FROM users WHERE username = $1 AND user_id <> $4) AS username,
+       EXISTS (SELECT 1 FROM users WHERE $2::text IS NOT NULL AND LOWER(email) = $2 AND user_id <> $4) AS email,
+       EXISTS (SELECT 1 FROM users WHERE $3::text IS NOT NULL AND phone = $3 AND user_id <> $4) AS phone`,
+    [username, email, phone, id],
+  );
+  for (const [field, used] of Object.entries(rows[0])) if (used) fields[field] = 'DUPLICATE';
+  if (Object.keys(fields).length) throw badRequest('MSG_ACCOUNT_INVALID', 'Some fields are missing or invalid.', { fields });
+
+  try {
+    await pool.query('UPDATE users SET username = $1, email = $2, phone = $3 WHERE user_id = $4', [
+      username,
+      email,
+      phone,
+      id,
+    ]);
+  } catch (err) {
+    if (err.code === '23505') {
+      const field = /username/.test(err.constraint) ? 'username' : /email/.test(err.constraint) ? 'email' : 'phone';
+      throw badRequest('MSG_ACCOUNT_INVALID', 'Some fields are missing or invalid.', { fields: { [field]: 'DUPLICATE' } });
+    }
+    throw err;
+  }
+  return getAccount(id);
+}
+
+// ---------------------------------------------------------------- UC-100 / UC-101 (System Admin and School Manager)
+
+// School Manager acts only on accounts without the System Admin or School Manager role (permissions note 1).
+function assertScope(actor, account) {
+  if (actor.activeRole === 'SYSTEM_ADMIN') return;
+  const inScope =
+    actor.activeRole === 'SCHOOL_MANAGER' &&
+    account.roles.length > 0 &&
+    account.roles.every((r) => SCHOOL_ROLES.includes(r));
+  if (!inScope) throw forbidden();
+}
+
+const stateError = (message) => new AppError(409, 'MSG_ACCOUNT_STATE', message);
+
+// UC-100 Reset Password: random temporary password shown once; clears the temporary sign-in lock and unused OTPs.
+export async function resetPassword({ idParam, actor, ip }) {
+  const id = readId(idParam);
+  const account = await loadAccount(pool, id);
+  assertScope(actor, account);
+
+  const temporaryPassword = generateTemporaryPassword({ username: account.username, phone: account.phone });
+  const hash = await hashPassword(temporaryPassword);
+  let requestClosed = false;
+  await withTransaction(async (client) => {
+    await client.query(
+      `UPDATE users SET password_hash = $1, must_change_password = TRUE, failed_login_count = 0, locked_until = NULL
+       WHERE user_id = $2`,
+      [hash, id],
+    );
+    await client.query(
+      `UPDATE password_reset_otps SET expires_at = NOW() WHERE user_id = $1 AND used_at IS NULL AND expires_at > NOW()`,
+      [id],
+    );
+    // business-rules §3 (27/10): resetting answers the account's pending password reset request (marked DONE); the
+    // one-time password issued with the request no longer works, so its stored copy is cleared.
+    const { rowCount } = await client.query(
+      `UPDATE password_reset_requests SET status = 'DONE', handled_by = $2, handled_at = NOW(), temp_password_enc = NULL
+       WHERE user_id = $1 AND status = 'PENDING'`,
+      [id, actor.userId],
+    );
+    requestClosed = rowCount > 0;
+  });
+  await logActivity({
+    userId: actor.userId,
+    action: 'PASSWORD_RESET',
+    targetType: 'USER',
+    targetId: id,
+    detail: { by: actor.activeRole, username: account.username, ...(requestClosed ? { fromRequest: true } : {}) },
+    ip,
+  });
+  return {
+    account: { id, username: account.username, fullName: account.fullName, status: account.status, pendingResetRequest: null },
+    temporaryPassword,
+    requestClosed,
+  };
+}
+
+// UC-101 Lock: the user can no longer sign in; nothing is deleted. A locked teacher is announced to every School
+// Manager so they reassign homeroom and teaching (business-rules §3).
+export async function lockAccount({ idParam, actor, reason, ip }) {
+  const id = readId(idParam);
+  const account = await loadAccount(pool, id);
+  assertScope(actor, account);
+  if (id === actor.userId) throw forbidden('MSG_CANNOT_LOCK_SELF', 'You cannot lock your own account.');
+  if (account.status === 'LOCKED') throw stateError('The account is already locked.');
+  const why = typeof reason === 'string' && reason.trim() ? reason.trim().slice(0, 255) : null;
+
+  await withTransaction(async (client) => {
+    await client.query(`UPDATE users SET status = 'LOCKED' WHERE user_id = $1`, [id]);
+    if (account.roles.includes('TEACHER')) {
+      const { rows } = await client.query(
+        `INSERT INTO notifications (type, title, detail, is_personal, target_type, target_id, created_by)
+         VALUES ('SYSTEM', $1, $2, TRUE, 'USER', $3, $4) RETURNING notification_id`,
+        [
+          `Tài khoản giáo viên ${account.fullName} đã bị khoá`,
+          'Vui lòng phân công lại giáo viên chủ nhiệm và giáo viên bộ môn cho các lớp của giáo viên này.',
+          id,
+          actor.userId,
+        ],
+      );
+      await client.query(
+        `INSERT INTO notification_recipients (notification_id, user_id)
+         SELECT $1, u.user_id FROM users u
+         JOIN user_roles ur ON ur.user_id = u.user_id JOIN roles r ON r.role_id = ur.role_id
+         WHERE r.role_code = 'SCHOOL_MANAGER' AND u.status = 'ACTIVE'`,
+        [rows[0].notification_id],
+      );
+    }
+  });
+  await logActivity({
+    userId: actor.userId,
+    action: 'ACCOUNT_LOCK',
+    targetType: 'USER',
+    targetId: id,
+    detail: { by: actor.activeRole, username: account.username, reason: why },
+    ip,
+  });
+  return loadAccount(pool, id);
+}
+
+// UC-101 Unlock: ACTIVE again; also clears any temporary sign-in lock.
+export async function unlockAccount({ idParam, actor, ip }) {
+  const id = readId(idParam);
+  const account = await loadAccount(pool, id);
+  assertScope(actor, account);
+  if (account.status !== 'LOCKED') throw stateError('The account is not locked.');
+  await pool.query(
+    `UPDATE users SET status = 'ACTIVE', failed_login_count = 0, locked_until = NULL WHERE user_id = $1`,
+    [id],
+  );
+  await logActivity({
+    userId: actor.userId,
+    action: 'ACCOUNT_UNLOCK',
+    targetType: 'USER',
+    targetId: id,
+    detail: { by: actor.activeRole, username: account.username, type: 'ACCOUNT' },
+    ip,
+  });
+  return loadAccount(pool, id);
+}
+
+// UC-101 alternative 1b: clear the automatic lock after too many wrong passwords.
+export async function clearTemporaryLock({ idParam, actor, ip }) {
+  const id = readId(idParam);
+  const account = await loadAccount(pool, id);
+  assertScope(actor, account);
+  if (!account.tempLocked) throw stateError('The account has no temporary sign-in lock.');
+  await pool.query('UPDATE users SET failed_login_count = 0, locked_until = NULL WHERE user_id = $1', [id]);
+  await logActivity({
+    userId: actor.userId,
+    action: 'ACCOUNT_UNLOCK',
+    targetType: 'USER',
+    targetId: id,
+    detail: { by: actor.activeRole, username: account.username, type: 'TEMPORARY' },
+    ip,
+  });
+  return loadAccount(pool, id);
+}
+
+// Account status for the reset / lock buttons on School Manager screens (FE-02, FE-03, FE-14 detail pages).
+export async function getSecurityState({ idParam, actor }) {
+  const account = await loadAccount(pool, readId(idParam));
+  assertScope(actor, account);
+  const { id, username, fullName, status, tempLocked, lockedUntil, mustChangePassword, roles, pendingResetRequest } = account;
+  return { id, username, fullName, status, tempLocked, lockedUntil, mustChangePassword, roles, pendingResetRequest };
+}
+
+// ---------------------------------------------------------------- password reset requests (business-rules §3, 27/10)
+// Users who cannot use the OTP email send a request from the Forgot Password screen (FE-01). The system issues a
+// one-time password at once (resetRequests.js). System Admin sees every request, School Manager those of student /
+// parent / teacher accounts; they read the password and hand it over. The request is DONE when the user signs in
+// (or an admin resets the password from the account page). No accept / reject step (31/10/2026).
+
+const REQUEST_STATUSES = ['PENDING', 'DONE'];
+
+// School Manager sees only requests of accounts without the System Admin / School Manager role.
+const SM_SCOPE_SQL = `NOT EXISTS (SELECT 1 FROM user_roles ur2 JOIN roles r2 ON r2.role_id = ur2.role_id
+                                  WHERE ur2.user_id = u.user_id AND r2.role_code IN ('SYSTEM_ADMIN', 'SCHOOL_MANAGER'))`;
+
+export async function listResetRequests({ query = {}, actor }) {
+  const status = REQUEST_STATUSES.includes(query.status) ? query.status : 'PENDING';
+  const page = Math.max(1, Number.parseInt(query.page, 10) || 1);
+  const { rows } = await pool.query(
+    `SELECT q.request_id AS id, q.reason, q.status, q.created_at AS "createdAt", q.handled_at AS "handledAt",
+            q.temp_password_enc AS "sealed", q.delivery,
+            u.user_id AS "userId", u.username, u.full_name AS "fullName", u.email, u.phone, u.status AS "accountStatus",
+            COALESCE(ARRAY(SELECT r.role_code FROM user_roles ur JOIN roles r ON r.role_id = ur.role_id
+                           WHERE ur.user_id = u.user_id ORDER BY r.role_id), '{}') AS roles,
+            COALESCE(s.student_code, t.teacher_code) AS code,
+            h.full_name AS "handledByName",
+            COUNT(*) OVER() AS total
+     FROM password_reset_requests q
+     JOIN users u ON u.user_id = q.user_id
+     LEFT JOIN students s ON s.user_id = u.user_id
+     LEFT JOIN teachers t ON t.user_id = u.user_id
+     LEFT JOIN users h ON h.user_id = q.handled_by
+     WHERE q.status = $1 AND ($2::boolean OR ${SM_SCOPE_SQL})
+     ORDER BY CASE WHEN q.status = 'PENDING' AND q.delivery = 'SCHOOL' THEN 0 ELSE 1 END,
+              CASE WHEN q.status = 'PENDING' THEN q.created_at END ASC, q.handled_at DESC NULLS LAST, q.request_id DESC
+     LIMIT $3 OFFSET $4`,
+    [status, actor.activeRole === 'SYSTEM_ADMIN', PAGE_SIZE, (page - 1) * PAGE_SIZE],
+  );
+  const { rows: count } = await pool.query(
+    `SELECT COUNT(*) AS n FROM password_reset_requests q JOIN users u ON u.user_id = q.user_id
+     WHERE q.status = 'PENDING' AND q.delivery = 'SCHOOL' AND ($1::boolean OR ${SM_SCOPE_SQL})`,
+    [actor.activeRole === 'SYSTEM_ADMIN'],
+  );
+  return {
+    // temporaryPassword: only while PENDING; null if it cannot be read (e.g. JWT_SECRET changed).
+    items: rows.map(({ total, sealed, ...r }) => ({ ...r, temporaryPassword: r.status === 'PENDING' ? openSecret(sealed) : null })),
+    total: rows[0]?.total ?? 0,
+    pendingCount: count[0].n, // only the passwords still to hand over (delivery SCHOOL); emailed ones need no action
+    status,
+    page,
+    pageSize: PAGE_SIZE,
+  };
+}

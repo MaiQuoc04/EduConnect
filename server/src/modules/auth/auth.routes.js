@@ -14,5 +14,6 @@ router.get('/me', requireAuthAllowingPasswordChange, ctrl.me);
 router.post('/forgot-password', ctrl.forgotPassword);
 router.post('/forgot-password/verify', ctrl.verifyOtp);
 router.post('/forgot-password/reset', ctrl.resetPassword);
+router.post('/password-reset-requests', ctrl.requestAdminReset); // UC-02: name + full name match → automatic reset (email, or SA / SM read it)
 
 export default router;

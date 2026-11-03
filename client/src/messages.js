@@ -1,3 +1,5 @@
+import { DEPARTMENT_REASON_TEXT, NAME_REASON_TEXT } from './utils/teacherValidation.js';
+
 // Vietnamese UI text for API error codes. The server keeps its messages in English; the client shows these.
 // Add a line here whenever a module introduces a new error code.
 const ERROR_MESSAGES = {
@@ -23,7 +25,12 @@ const ERROR_MESSAGES = {
   MSG_OTP_TOO_MANY: 'Bạn đã nhập sai quá 5 lần. Vui lòng yêu cầu mã mới.',
   MSG_OTP_INVALID: 'Mã xác thực không hợp lệ hoặc đã hết hạn. Vui lòng yêu cầu mã mới.',
   MSG_RESET_EXPIRED: 'Phiên đặt lại mật khẩu đã hết hạn. Vui lòng thực hiện lại từ đầu.',
-  MSG_PASSWORD_RULES: 'Mật khẩu mới chưa đáp ứng các yêu cầu bảo mật.',
+  MSG_ACCOUNT_NOT_MATCH: 'Thông tin tài khoản không khớp. Vui lòng kiểm tra lại tên đăng nhập và họ tên.',
+  MSG_RESET_TOO_SOON: ({ minutesLeft } = {}) =>
+    `Mật khẩu của tài khoản này vừa được đặt lại. Vui lòng thử lại sau ${minutesLeft ?? 'ít'} phút.`,
+  MSG_REQUEST_PENDING: 'Bạn đã gửi yêu cầu trước đó. Vui lòng chờ nhà trường xử lý.',
+  MSG_REASON_TOO_LONG: ({ max } = {}) => `Lý do không được vượt quá ${max ?? 500} ký tự.`,
+  MSG_PASSWORD_RULES:'Mật khẩu mới chưa đáp ứng các yêu cầu bảo mật.',
   MSG_WRONG_CURRENT_PASSWORD: 'Mật khẩu hiện tại không đúng.',
   MSG_FILE_TOO_LARGE: ({ maxMb } = {}) => `Tệp vượt quá dung lượng cho phép (tối đa ${maxMb} MB).`,
   MSG_UPLOAD_FAILED: 'Không tải được tệp lên. Vui lòng thử lại.',
@@ -66,8 +73,6 @@ const ERROR_MESSAGES = {
   MSG_IMPORT_FILE_TYPE: 'Vui lòng chọn tệp Excel (.xlsx).',
   MSG_IMPORT_HEADER: ({ missing } = {}) =>
     `Tệp thiếu cột${missing?.length ? `: ${missing.join(', ')}` : ''}. Vui lòng dùng file mẫu.`,
-  MSG_IMPORT_EMPTY: 'Tệp chưa có dòng dữ liệu nào.',
-  MSG_IMPORT_TOO_MANY_ROWS: ({ maxRows } = {}) => `Tệp có quá ${maxRows ?? 2000} dòng.`,
   MSG_IMPORT_INVALID: 'Tệp còn lỗi nên chưa nhập dòng nào. Vui lòng sửa các dòng được liệt kê.',
   MSG_CLASS_IMPORT_CONFLICT: 'Danh sách lớp vừa thay đổi. Vui lòng kiểm tra lại tệp.',
   MSG_CLASS_NAME_TAKEN: 'Lớp này đã có trong năm học.',
@@ -98,7 +103,76 @@ const ERROR_MESSAGES = {
   MSG_STUDENT_LEFT_CLASS: 'Có học sinh đã chuyển đi hoặc thôi học ở lớp này nên không thêm lại được.',
   MSG_STUDENT_ALREADY_ENROLLED: ({ classes } = {}) =>
     `Có học sinh đang học lớp khác trong năm học${classes?.length ? ` (${classes.join(', ')})` : ''}.`,
+  // FE-03 Teacher Management
+  TEACHER_NOT_FOUND: 'Không tìm thấy giáo viên này.',
+  INVALID_DATE: 'Ngày không hợp lệ.',
+  MSG_FIELD_TOO_LONG: ({ field, max } = {}) =>
+    `${{ fullName: 'Họ và tên', department: 'Tên tổ', search: 'Từ khoá tìm kiếm', subject: 'Tên môn' }[field] ?? 'Nội dung'} quá dài (tối đa ${max ?? ''} ký tự).`,
+  MSG_SUBJECT_INVALID: 'Có môn học không còn tồn tại. Vui lòng tải lại trang.',
+  MSG_SUBJECT_IN_USE: ({ subjects = [] } = {}) =>
+    `Không thể bỏ ${subjects.map((s) => `môn ${s.name} (đang dạy ${s.classes.join(', ')})`).join('; ')}. ` +
+    'Hãy phân công lại giảng dạy trước.',
+  MSG_INVALID_INPUT: 'Dữ liệu gửi lên không hợp lệ. Vui lòng tải lại trang.',
+  MSG_TOO_MANY: ({ field, max } = {}) =>
+    field === 'subjectIds' ? `Chỉ chọn tối đa ${max} môn.` : 'Quá nhiều thay đổi trong một lần lưu.',
+  MSG_INVALID_NAME: ({ reason } = {}) => NAME_REASON_TEXT[reason] ?? 'Họ và tên không hợp lệ.',
+  MSG_INVALID_DEPARTMENT: ({ reason } = {}) => DEPARTMENT_REASON_TEXT[reason] ?? 'Tên tổ chuyên môn không hợp lệ.',
+  MSG_DEPARTMENT_INVALID: 'Tổ chuyên môn không còn trong danh sách. Vui lòng tải lại trang và chọn lại.',
+  MSG_DEPARTMENTS_NOT_READY:
+    'Danh sách tổ chuyên môn chưa được tạo trong cơ sở dữ liệu (cần chạy database/patch_v0.3_departments.sql).',
+  MSG_LOGIN_IDENTIFIER_READONLY: 'Chỉ Quản trị hệ thống mới được đổi tên đăng nhập, email và số điện thoại.',
+  MSG_UNKNOWN_FIELD: 'Dữ liệu gửi lên có trường không được phép. Vui lòng tải lại trang.',
+  SCHOOL_YEAR_NOT_FOUND: 'Không tìm thấy năm học.',
+  MSG_HOMEROOM_STALE: ({ classes = [] } = {}) =>
+    `Lớp ${classes.join(', ')} vừa được người khác thay đổi. Hãy tải lại dữ liệu rồi phân công lại.`,
+  MSG_TEACHER_LOCKED: ({ teachers = [] } = {}) =>
+    `Không thể phân công ${teachers.join(', ')} làm chủ nhiệm vì tài khoản đã bị khoá.`,
+  MSG_HOMEROOM_LIMIT: ({ max = 1, conflicts = [] } = {}) =>
+    `Mỗi giáo viên chủ nhiệm tối đa ${max} lớp: ` +
+    conflicts.map((c) => `${c.teacher} (${c.classes.join(', ')})`).join('; ') + '.',
+  MSG_EFFECTIVE_DATE: ({ min, max } = {}) =>
+    `Ngày áp dụng phải từ ${formatVnDate(min)} đến ${formatVnDate(max)} (không sửa phân công trong quá khứ).`,
+  MSG_SUBJECT_NOT_IN_CLASS: 'Lớp này không học môn đã chọn trong năm học.',
+  MSG_ASSIGNMENT_STALE: ({ cells = [] } = {}) =>
+    `Ô ${cells.join(', ')} vừa được người khác thay đổi. Hãy tải lại dữ liệu rồi phân công lại.`,
+  MSG_TEACHER_NOT_QUALIFIED: ({ items = [] } = {}) =>
+    `Giáo viên chưa đăng ký dạy môn: ${items.map((i) => `${i.teacher} (${i.cell})`).join('; ')}.`,
+  MSG_ASSIGNMENT_IN_TIMETABLE: ({ items = [] } = {}) =>
+    `Không thể bỏ trống ${items.map((i) => `${i.cell} (còn ${i.periods} tiết trên thời khoá biểu)`).join('; ')}. ` +
+    'Hãy chọn giáo viên khác hoặc sửa thời khoá biểu trước.',
+  MSG_TIMETABLE_CLASH: ({ items = [] } = {}) =>
+    'Trùng lịch dạy: ' +
+    items
+      .map((i) => `${i.cell} – giáo viên mới đã dạy ${i.items.map((x) => `${x.otherClass} tiết ${x.period} ngày ${formatVnDate(x.date)}`).join(', ')}`)
+      .join('; ') +
+    '.',
+  MSG_OCCUPATION_TOO_LONG: ({ max } = {}) => `Nghề nghiệp không được vượt quá ${max ?? 100} ký tự.`,
+  MSG_ADDRESS_TOO_LONG: ({ max } = {}) => `Địa chỉ không được vượt quá ${max ?? 500} ký tự.`,
+  // FE-13 System Administration
+  MSG_ACCOUNT_INVALID: 'Vui lòng kiểm tra lại các thông tin được đánh dấu.',
+  MSG_NOTHING_CHANGED: 'Bạn chưa thay đổi thông tin nào.',
+  MSG_CANNOT_LOCK_SELF: 'Bạn không thể tự khoá tài khoản của mình.',
+  MSG_ACCOUNT_STATE: 'Trạng thái tài khoản vừa thay đổi. Vui lòng tải lại trang.',
+  MSG_SETTINGS_INVALID: 'Một số giá trị chưa hợp lệ. Vui lòng kiểm tra các ô được đánh dấu.',
+  MSG_MAINTENANCE_INVALID: 'Vui lòng kiểm tra lại các thông tin được đánh dấu.',
+  MSG_MAINTENANCE_STATE: 'Trạng thái đợt bảo trì vừa thay đổi. Vui lòng tải lại trang.',
+  MSG_IMPORT_TYPE: 'Vui lòng chọn loại tài khoản của file.',
+  MSG_IMPORT_FILE: 'Chỉ nhập được file .xlsx hoặc .csv tạo từ file mẫu.',
+  MSG_IMPORT_TEMPLATE: ({ missing } = {}) =>
+    `File không đúng mẫu: thiếu cột ${(missing ?? []).join(', ')}. Vui lòng tải file mẫu và điền lại.`,
+  MSG_IMPORT_EMPTY: 'File chưa có dòng dữ liệu nào.',
+  // Shared by FE-13 account import (details.max) and FE-04 class import (details.maxRows).
+  MSG_IMPORT_TOO_MANY_ROWS: ({ max, maxRows } = {}) => `Mỗi file chỉ được tối đa ${max ?? maxRows ?? 2000} dòng. Vui lòng chia nhỏ file.`,
+  MSG_IMPORT_NO_VALID_ROWS: 'File không có dòng hợp lệ nào để nhập.',
+  MSG_IMPORT_CONFLICT: 'Dữ liệu vừa thay đổi trong lúc nhập nên chưa có tài khoản nào được lưu. Kết quả kiểm tra đã được cập nhật, vui lòng xem lại.',
 };
+
+// 'YYYY-MM-DD' -> 'DD/MM/YYYY' (kept local so messages.js has no imports)
+function formatVnDate(v) {
+  if (!v) return '';
+  const [y, m, d] = String(v).slice(0, 10).split('-');
+  return d ? `${d}/${m}/${y}` : String(v);
+}
 
 export function errorText({ code, message, details } = {}) {
   const entry = ERROR_MESSAGES[code];

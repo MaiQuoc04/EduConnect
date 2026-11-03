@@ -9,6 +9,7 @@ import { errorText } from '../../messages.js';
 import { evaluatePassword } from '../../utils/passwordRules.js';
 
 const RESEND_SECONDS = 60; // the server sends at most one email per minute
+const REASON_MAX = 500;
 
 function useCountdown() {
   const [endsAt, setEndsAt] = useState(0);
@@ -34,10 +35,15 @@ function FormError({ text }) {
   );
 }
 
-// SCR-02 Forgot Password (UC-02): email → 6-digit OTP (valid N minutes, 5 tries) → new password.
+// SCR-32 Forgot Password (UC-02): email → 6-digit OTP (valid N minutes, 5 tries) → new password.
+// Without a usable email the user sends a request to SA / SM instead (steps request → requested).
 export default function ForgotPasswordPage() {
-  const [step, setStep] = useState('email'); // email | otp | password | done
+  const [step, setStep] = useState('email'); // email | otp | password | done | request | requested
   const [email, setEmail] = useState('');
+  const [identifier, setIdentifier] = useState('');
+  const [fullName, setFullName] = useState('');
+  const [reason, setReason] = useState('');
+  const [delivery, setDelivery] = useState(''); // EMAIL | SCHOOL, from the reset request answer
   const [otp, setOtp] = useState('');
   const [resetToken, setResetToken] = useState('');
   const [password, setPassword] = useState('');
@@ -85,6 +91,23 @@ export default function ForgotPasswordPage() {
       setStep('done');
     });
 
+  const sendRequest = () =>
+    run(async () => {
+      const { data } = await api.post('/auth/password-reset-requests', {
+        identifier: identifier.trim(),
+        fullName: fullName.trim(),
+        reason: reason.trim(),
+      });
+      setDelivery(data.delivery);
+      setStep('requested');
+    });
+
+  const openRequest = () => {
+    setError('');
+    setStep('request');
+  };
+
+  const isRequestFlow = step === 'request' || step === 'requested';
   const stepIndex = { email: 1, otp: 2, password: 3, done: 3 }[step];
 
   return (
@@ -94,11 +117,13 @@ export default function ForgotPasswordPage() {
       footer={<p className="auth-meta label-upper">Hệ thống thông tin trường học · EduConnect</p>}
     >
       <div className="card card-outline auth-panel wide">
-        <div className="steps" aria-label={`Bước ${stepIndex} trên 3`}>
-          {[1, 2, 3].map((i) => (
-            <span key={i} className={i <= stepIndex ? 'done' : ''} />
-          ))}
-        </div>
+        {!isRequestFlow && (
+          <div className="steps" aria-label={`Bước ${stepIndex} trên 3`}>
+            {[1, 2, 3].map((i) => (
+              <span key={i} className={i <= stepIndex ? 'done' : ''} />
+            ))}
+          </div>
+        )}
 
         {step === 'email' && (
           <form
@@ -251,18 +276,107 @@ export default function ForgotPasswordPage() {
           </div>
         )}
 
-        {step !== 'done' && (
+        {step === 'request' && (
+          <form
+            className="stack"
+            style={{ gap: 16 }}
+            onSubmit={(e) => {
+              e.preventDefault();
+              sendRequest();
+            }}
+          >
+            <div>
+              <h2 className="title-md">Gửi yêu cầu cấp lại mật khẩu</h2>
+              <p className="muted" style={{ marginTop: 4 }}>
+                Nhập đúng tên đăng nhập và họ tên của tài khoản. Hệ thống sẽ đặt lại mật khẩu ngay: nếu tài khoản có
+                email, mật khẩu tạm thời được gửi qua email; nếu không, nhà trường sẽ xác minh và đưa mật khẩu cho bạn.
+                Sau khi gửi, mật khẩu hiện tại không dùng được nữa.
+              </p>
+            </div>
+            <label className="field">
+              <span className="field-label">Tên đăng nhập, email hoặc số điện thoại</span>
+              <input
+                className="input"
+                value={identifier}
+                onChange={(e) => setIdentifier(e.target.value)}
+                autoComplete="username"
+                autoFocus
+                required
+              />
+            </label>
+            <label className="field">
+              <span className="field-label">Họ và tên</span>
+              <input
+                className="input"
+                value={fullName}
+                onChange={(e) => setFullName(e.target.value)}
+                autoComplete="name"
+                placeholder="Họ tên đầy đủ như trong hồ sơ nhà trường"
+                required
+              />
+            </label>
+            <label className="field">
+              <span className="field-label">
+                Lý do (không bắt buộc)
+                <span className="caption muted">
+                  {reason.length}/{REASON_MAX}
+                </span>
+              </span>
+              <textarea
+                className="input"
+                value={reason}
+                onChange={(e) => setReason(e.target.value.slice(0, REASON_MAX))}
+                placeholder="Ví dụ: email cũ không còn sử dụng"
+              />
+            </label>
+            <FormError text={error} />
+            <button className="btn btn-primary btn-block" type="submit" disabled={busy || !identifier.trim() || !fullName.trim()}>
+              {busy ? 'Đang gửi…' : 'Gửi yêu cầu'}
+            </button>
+            <button type="button" className="link-button" onClick={() => setStep('email')}>
+              Thử lại bằng email
+            </button>
+          </form>
+        )}
+
+        {step === 'requested' && (
+          <div className="stack" style={{ gap: 16 }}>
+            <div className="notice ink">
+              <Icon name="check_circle" />
+              <div>
+                <p className="notice-title">Đã đặt lại mật khẩu</p>
+                <p>
+                  {delivery === 'EMAIL'
+                    ? 'Mật khẩu tạm thời đã được gửi tới email của tài khoản. Lần đăng nhập tiếp theo, bạn sẽ đặt mật khẩu mới.'
+                    : 'Hệ thống đã cấp mật khẩu tạm thời. Vui lòng liên hệ nhà trường để được xác minh và nhận mật khẩu. Lần đăng nhập tiếp theo, bạn sẽ đặt mật khẩu mới.'}
+                </p>
+              </div>
+            </div>
+            <Link to="/login" className="btn btn-primary btn-block">
+              Quay lại đăng nhập
+            </Link>
+          </div>
+        )}
+
+        {step !== 'done' && step !== 'requested' && (
           <>
             <div style={{ textAlign: 'center' }}>
               <Link to="/login" style={{ fontWeight: 500 }}>
                 Quay lại đăng nhập
               </Link>
             </div>
-            <hr className="divider" />
-            <p className="caption muted" style={{ display: 'flex', gap: 6 }}>
-              <Icon name="help" size="sm" />
-              Không có email? Liên hệ quản lý nhà trường để được cấp lại mật khẩu.
-            </p>
+            {!isRequestFlow && (
+              <>
+                <hr className="divider" />
+                <p className="caption muted" style={{ display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap' }}>
+                  <Icon name="help" size="sm" />
+                  Không có email hoặc không nhận được mã?
+                  <button type="button" className="link-button caption" onClick={openRequest}>
+                    Gửi yêu cầu cấp lại mật khẩu
+                  </button>
+                </p>
+              </>
+            )}
           </>
         )}
       </div>
