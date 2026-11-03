@@ -1,5 +1,9 @@
 import * as service from './conversations.service.js';
 
+export async function list(req, res) {
+  res.json(await service.listConversations(req.user));
+}
+
 export async function messages(req, res) {
   const { before, limit } = req.query;
   res.json(await service.listMessages(req.user, req.params.groupId, { before, limit }));

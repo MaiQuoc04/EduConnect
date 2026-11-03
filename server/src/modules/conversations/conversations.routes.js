@@ -9,6 +9,7 @@ const router = Router();
 
 router.use(requireAuth, requireRole('SCHOOL_MANAGER', 'TEACHER', 'STUDENT', 'PARENT'));
 
+router.get('/', ctrl.list); // UC-48 View Conversation List (last message, unread count)
 router.get('/:groupId/messages', ctrl.messages); // UC-47 Chat in Group (read)
 router.post('/:groupId/messages', ctrl.send); // UC-47 Chat in Group (send)
 router.post('/:groupId/read', ctrl.read); // UC-47 read receipts

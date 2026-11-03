@@ -1,7 +1,7 @@
 import { pool, withTransaction } from '../../config/db.js';
 import { emitToUsers } from '../../sockets/index.js';
 import { AppError, badRequest, forbidden } from '../../utils/AppError.js';
-import { findGroupForUser } from '../groups/groupAccess.js';
+import { findGroupForUser, groupScopeSql } from '../groups/groupAccess.js';
 import { byRankThenName, memberRows } from '../groups/groups.service.js';
 
 // FE-06 Messaging (owner: Khanh). UC-47 Chat in Group – SCR-43 Group Chat / SCR-50 Chat Room.
@@ -128,6 +128,50 @@ export async function listMessages(user, groupId, query) {
       joinedAfterMessageId: readById.get(m.userId)?.joinedAfterMessageId ?? 0,
     })),
   };
+}
+
+// UC-48 View Conversation List (SCR-49): for every chat the user can open with the active role, the latest message
+// they may see and how many messages from others arrived since they last read it. Same visibility rule as UC-47:
+// only messages since their latest joined_at. The School Manager gets the teacher group only (no class chats).
+// The client lays the chats out from GET /groups and fills in these summaries by groupId.
+export async function listConversations(user) {
+  const { rows } = await pool.query(
+    `SELECT g.group_id AS "groupId", g.group_type AS "groupType",
+            lm.message_id AS "messageId", lm.content, lm.sent_at AS "sentAt", lm.sender_id AS "senderId",
+            u.full_name AS "senderName", e.nickname AS "senderNickname",
+            (SELECT COUNT(*) FROM messages x
+             WHERE x.group_id = g.group_id AND x.deleted_at IS NULL AND x.sender_id <> $1
+               AND x.sent_at >= gm.joined_at
+               AND (gm.last_read_at IS NULL OR x.sent_at > gm.last_read_at)) AS "unreadCount"
+     FROM groups g
+     JOIN LATERAL (SELECT vm.joined_at, vm.last_read_at FROM group_members vm
+                   WHERE vm.group_id = g.group_id AND vm.user_id = $1 AND vm.left_at IS NULL
+                   ORDER BY vm.joined_at DESC LIMIT 1) gm ON TRUE
+     LEFT JOIN LATERAL (SELECT m.message_id, m.content, m.sent_at, m.sender_id FROM messages m
+                        WHERE m.group_id = g.group_id AND m.deleted_at IS NULL AND m.sent_at >= gm.joined_at
+                        ORDER BY m.message_id DESC LIMIT 1) lm ON TRUE
+     LEFT JOIN users u ON u.user_id = lm.sender_id
+     LEFT JOIN students st ON st.user_id = lm.sender_id
+     LEFT JOIN class_enrollments e ON e.student_id = st.student_id AND e.class_id = g.class_id
+     WHERE ${groupScopeSql('$1', '$2')}
+       AND NOT ($2 = 'SCHOOL_MANAGER' AND g.class_id IS NOT NULL)`,
+    [user.userId, user.activeRole],
+  );
+  return rows.map((r) => ({
+    groupId: r.groupId,
+    groupType: r.groupType,
+    unreadCount: r.unreadCount,
+    lastMessage: r.messageId
+      ? {
+          messageId: r.messageId,
+          content: r.content,
+          sentAt: r.sentAt,
+          senderId: r.senderId,
+          senderName: r.senderName,
+          senderNickname: r.senderNickname,
+        }
+      : null,
+  }));
 }
 
 function cleanContent(content) {

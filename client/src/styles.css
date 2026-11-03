@@ -1052,6 +1052,16 @@ a.mc-head:hover { text-decoration: none; }
 .chat-item-text { display: grid; min-width: 0; }
 .chat-item-name { font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .chat-item-text .caption { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* FE-06 UC-48: name + time, then last message + unread badge */
+.chat-item-text { flex: 1; gap: 2px; }
+.chat-item-row { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.chat-item-row .chat-item-name { flex: 1; min-width: 0; }
+.chat-item-last { flex: 1; min-width: 0; color: var(--graphite-500); }
+.chat-item-last.unread { color: var(--graphite-900); font-weight: 600; }
+.chat-item-time { flex: none; color: var(--graphite-500); }
+.chat-item.has-unread .chat-item-name { font-weight: 700; }
+.chat-item.has-unread .chat-item-time { color: var(--ink-700); font-weight: 600; }
+.chat-badge { flex: none; min-width: 20px; height: 20px; padding: 0 6px; border-radius: 999px; background: var(--ink-600); color: #fff; font: 600 11px/20px var(--font-ui); text-align: center; }
 .chat-room { display: flex; flex-direction: column; min-width: 0; min-height: 0; }
 .chat-room-head { display: flex; align-items: center; gap: 12px; padding: 12px 16px; border-bottom: 1px solid var(--graphite-200); }
 .chat-room-title { flex: 1; min-width: 0; }

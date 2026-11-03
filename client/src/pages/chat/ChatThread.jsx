@@ -8,6 +8,7 @@ import { useToast } from '../../context/ToastContext.jsx';
 import { errorText } from '../../messages.js';
 import { MEMBER_KIND_LABELS } from '../groups/groupLabels.js';
 import { memberSubline } from '../groups/memberText.js';
+import { dayLabel, dayOf, timeOf } from './chatText.js';
 
 // UC-47 Chat in Group (FE-06, Khanh) – SCR-43 Group Chat / SCR-50 Chat Room: the messages of one group and the
 // composer. The server decides who may read or send (active role, data scope, read-only year) and sends only the
@@ -19,18 +20,6 @@ const NEAR_BOTTOM_PX = 120;
 const INPUT_MIN_PX = 36; // = .btn height
 const INPUT_MAX_PX = 136; // about six lines of 20px
 
-const VN_DAY = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Ho_Chi_Minh' });
-function dayLabel(day) {
-  const today = VN_DAY.format(new Date());
-  const yesterday = VN_DAY.format(new Date(Date.now() - 86_400_000));
-  if (day === today) return 'Hôm nay';
-  if (day === yesterday) return 'Hôm qua';
-  const [y, m, d] = day.split('-');
-  return `${d}/${m}/${y}`;
-}
-// "2026-11-04 08:30:12.345+07" -> "2026-11-04" and "08:30"
-const dayOf = (sentAt) => sentAt.slice(0, 10);
-const timeOf = (sentAt) => sentAt.slice(11, 16);
 
 function memberLabel(member) {
   if (!member) return '';
