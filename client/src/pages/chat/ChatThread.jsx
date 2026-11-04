@@ -12,7 +12,7 @@ import { dayLabel, dayOf, timeOf } from './chatText.js';
 
 // UC-47 Chat in Group (FE-06, Khanh) – SCR-43 Group Chat / SCR-50 Chat Room: the messages of one group and the
 // composer. The server decides who may read or send (active role, data scope, read-only year) and sends only the
-// messages since the user joined the group (business-rules §6). New messages and read receipts arrive over the
+// messages since the user first joined the group (business-rules §6). New messages and read receipts arrive over the
 // socket ("message:new", "message:read"); "seen by" compares message ids sent by the server, not times.
 const MESSAGE_MAX = 2000; // same limit as the server (ASSUMPTION there, plan question Q5)
 const SEEN_NAMES = 3;

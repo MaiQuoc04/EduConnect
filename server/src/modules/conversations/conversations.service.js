@@ -10,8 +10,8 @@ import { directPeer } from './direct.service.js';
 // which group is FE-04's groupAccess.js (active role + data scope); 1-1 chats (DIRECT) arrive with UC-49.
 // Rules (business-rules §2, §4, §6):
 //   * the School Manager never sees class chats – only the teacher group (canSeeContent);
-//   * a chat member sees only messages sent since their latest joined_at (agreed 04/11/2026), first-time members
-//     and people coming back alike; nothing from an earlier membership period;
+//   * a chat member sees the messages sent since they first joined the group (their earliest joined_at); someone
+//     who comes back sees the whole history again, the time they were away included (business-rules §4, §6);
 //   * groups of an ended school year are read only: messages can be read, not sent;
 //   * read receipts: group_members.last_read_at; "seen by" = members whose last_read_at ≥ sent_at and who had
 //     joined by then. Times are compared in SQL, so the client gets message ids instead of timestamps.
@@ -22,10 +22,11 @@ const PAGE_MAX = 100;
 // ASSUMPTION: no agreed limit for one message (plan question Q5); 2000 characters until the lead decides.
 export const MESSAGE_MAX_LENGTH = 2000;
 
-// SQL: the latest joined_at of the user's active membership in the message's group (alias m). Messages before it are
-// not shown (business-rules §6).
-const visibleFrom = (userParam) => `(SELECT MAX(vm.joined_at) FROM group_members vm
-   WHERE vm.group_id = m.group_id AND vm.user_id = ${userParam} AND vm.left_at IS NULL)`;
+// SQL: when the user first joined the message's group (alias m). All their membership rows count, left ones too:
+// UC-32 adds someone back with a new row, FE-02 / FE-04 reopen the old one (business-rules §6). Whether they are
+// a member now is checked by openChat.
+const visibleFrom = (userParam) => `(SELECT MIN(vm.joined_at) FROM group_members vm
+   WHERE vm.group_id = m.group_id AND vm.user_id = ${userParam})`;
 
 // One message with its sender. The nickname (UC-34) is shown only inside the class (business-rules §4): it comes
 // from the sender's enrollment in the group's class, so it never appears in the teacher group.
@@ -73,18 +74,21 @@ async function openChat(db, user, groupId) {
 
 // Read state of every active member, as message ids:
 //   lastReadMessageId    – newest message (visible to them) sent at or before their last_read_at
-//   joinedAfterMessageId – newest message sent before they joined (0 if none)
+//   joinedAfterMessageId – newest message sent before they first joined (0 if none)
 // The member has seen message X when joinedAfterMessageId < X.messageId <= lastReadMessageId.
 async function readStates(db, groupId, userId = null) {
   const { rows } = await db.query(
     `SELECT gm.user_id AS "userId",
             COALESCE((SELECT MAX(x.message_id) FROM messages x
-                      WHERE x.group_id = gm.group_id AND x.deleted_at IS NULL
+                      WHERE x.group_id = $1 AND x.deleted_at IS NULL
                         AND x.sent_at >= gm.joined_at AND x.sent_at <= gm.last_read_at), 0) AS "lastReadMessageId",
             COALESCE((SELECT MAX(x.message_id) FROM messages x
-                      WHERE x.group_id = gm.group_id AND x.sent_at < gm.joined_at), 0) AS "joinedAfterMessageId"
-     FROM group_members gm
-     WHERE gm.group_id = $1 AND gm.left_at IS NULL AND ($2::bigint IS NULL OR gm.user_id = $2)`,
+                      WHERE x.group_id = $1 AND x.sent_at < gm.joined_at), 0) AS "joinedAfterMessageId"
+     FROM (SELECT vm.user_id, MIN(vm.joined_at) AS joined_at, MAX(vm.last_read_at) AS last_read_at
+           FROM group_members vm
+           WHERE vm.group_id = $1 AND ($2::bigint IS NULL OR vm.user_id = $2)
+           GROUP BY vm.user_id
+           HAVING bool_or(vm.left_at IS NULL)) gm`,
     [groupId, userId],
   );
   return rows;
@@ -153,7 +157,7 @@ export async function listMessages(user, groupId, query) {
 
 // UC-48 View Conversation List (SCR-49): for every chat the user can open with the active role, the latest message
 // they may see and how many messages from others arrived since they last read it. Same visibility rule as UC-47:
-// only messages since their latest joined_at. The School Manager gets the teacher group only (no class chats).
+// messages since they first joined. The School Manager gets the teacher group only (no class chats).
 // UC-49: 1-1 chats too, with the other person (`peer`); an empty 1-1 chat only for the person who opened it.
 // The client lays the chats out from GET /groups and fills in these summaries by groupId.
 export async function listConversations(user) {
@@ -168,9 +172,10 @@ export async function listConversations(user) {
                AND x.sent_at >= gm.joined_at
                AND (gm.last_read_at IS NULL OR x.sent_at > gm.last_read_at)) AS "unreadCount"
      FROM groups g
-     JOIN LATERAL (SELECT vm.joined_at, vm.last_read_at FROM group_members vm
-                   WHERE vm.group_id = g.group_id AND vm.user_id = $1 AND vm.left_at IS NULL
-                   ORDER BY vm.joined_at DESC LIMIT 1) gm ON TRUE
+     JOIN LATERAL (SELECT MIN(vm.joined_at) AS joined_at, MAX(vm.last_read_at) AS last_read_at
+                   FROM group_members vm
+                   WHERE vm.group_id = g.group_id AND vm.user_id = $1
+                   HAVING bool_or(vm.left_at IS NULL)) gm ON TRUE
      LEFT JOIN LATERAL (SELECT m.message_id, m.content, m.sent_at, m.sender_id FROM messages m
                         WHERE m.group_id = g.group_id AND m.deleted_at IS NULL AND m.sent_at >= gm.joined_at
                         ORDER BY m.message_id DESC LIMIT 1) lm ON TRUE

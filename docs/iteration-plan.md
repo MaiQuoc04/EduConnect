@@ -28,7 +28,7 @@ reactions, attachments) is merged into one place after both are on `develop`.
 
 ## Current status (read first; update after every merge, schema patch or new decision)
 
-Last updated: 04/11/2026 (FE-06 decision: chat history starts at joining; FE-03 group sync wired and FE-03 screen numbers fixed on `fix/it1-follow-ups`; FE-02
+Last updated: 04/11/2026 (FE-06 decision changed: coming back shows the whole chat history again; FE-03 group sync wired and FE-03 screen numbers fixed on `fix/it1-follow-ups`; FE-02
 merged 03/11 – every It1 feature is on `develop`; It2: Anh FE-08 + FE-14, Khanh FE-05 + FE-06).
 
 - **Shared DB (Supabase):** schema v0.3 + `patch_v0.3_password_reset_requests.sql` (27/10) +
@@ -79,12 +79,12 @@ merged 03/11 – every It1 feature is on `develop`; It2: Anh FE-08 + FE-14, Khan
   year, no "drop out" use case (lock the account), SM edits a student's address, Anh's assumptions accepted, anyone
   coming back to a group gets the old row back. Shared accent-insensitive search `server/src/utils/search.js` (from
   Dung's helpers; FE-13 account list and FE-03 teacher list use it, 03/11).
-- **FE-06 decision (04/11, approved by the lead):** chat history starts at joining (business rules §4, §6): a chat
-  member sees only messages sent since their latest `joined_at`, for first-time members and for people coming
-  back; no earlier membership period is shown again; the group feed (FE-05) is not affected. Code owed with FE-06
-  (Khanh): coming back to a group resets `joined_at = NOW()` and clears `last_read_at` in FE-04 `classGroups.js`
-  (`syncClassTeachers`) and in FE-02 `students.service.js` (`joinClassGroups`, owner Anh – tell Anh / Quoc before
-  changing it). Side effect: the member list (UC-31) shows the latest join date.
+- **FE-06 decision (04/11, changed the same day by Khanh; the lead to be told):** business rules §4 are back to
+  "anyone coming back sees the whole history", feed and chat; the earlier version (a member coming back sees only
+  new messages) is dropped. Still in §6: a first-time member sees the chat only from when they joined. The chat counts
+  from the earliest `joined_at` of all the person's rows in the group, because UC-32 adds someone back with a new
+  row while FE-02 / FE-04 reopen the old one. `joined_at` is no longer reset, so FE-02 `joinClassGroups` needs no
+  change. The group feed (FE-05) always shows its whole history.
 - **FE-06 assumptions waiting for the lead (Khanh, 04/11, "as proposed"; marked `// ASSUMPTION:` in
   `server/src/modules/conversations/`):** Q1 two people no longer in reach (transfer, promotion, assignment ended):
   the old 1-1 chat stays readable, sending is closed (`MSG_DIRECT_OUT_OF_SCOPE`); Q2 locked accounts are not listed

@@ -85,9 +85,8 @@ const CLASS_GROUP_TYPES = ['GENERAL', 'STUDENT', 'PARENT'];
 //   * who must be where (classPeopleSql + GROUP_RULE_SQL): the homeroom teacher in the three groups, a subject teacher
 //     (current or future assignment) in GENERAL, a teacher who is also a parent of a studying student in GENERAL and
 //     PARENT – so the previous homeroom teacher leaves STUDENT and PARENT and keeps GENERAL while still teaching there;
-//   * teachers who must be in a group and are not are added, or get their old row back (left_at cleared, joined_at
-//     reset, last_read_at cleared: the chat shows only messages from now on, the feed its whole history –
-//     business-rules §4 / §6, agreed 04/11/2026); no duplicate rows;
+//   * teachers who must be in a group and are not are added, or get their old row back (left_at cleared – they see
+//     the whole history of the feed and the chat again); no duplicate rows;
 //   * a teacher in a class group for no reason any more leaves it (left_at, row kept), and leaves the class's teams
 //     when the class no longer explains them at all;
 //   * only teachers are touched: students and parents follow transfer / promotion (FE-02), so someone removed with
@@ -116,7 +115,7 @@ export async function syncClassTeachers(client, classId) {
 
   const { rows: back } = await client.query(
     `WITH ${ctes}
-     UPDATE group_members m SET left_at = NULL, joined_at = NOW(), last_read_at = NULL
+     UPDATE group_members m SET left_at = NULL
      FROM wanted w
      WHERE m.group_id = w.group_id AND m.user_id = w.user_id AND m.left_at IS NOT NULL
        -- only their latest row, and only when no row is active (older data may hold several rows per person)
