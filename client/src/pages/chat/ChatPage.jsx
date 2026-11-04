@@ -9,6 +9,7 @@ import { useToast } from '../../context/ToastContext.jsx';
 import { errorText } from '../../messages.js';
 import { fold } from '../subjects/subjectText.js';
 import { GROUP_TYPE_ICONS, GROUP_TYPE_LABELS } from '../groups/groupLabels.js';
+import TeamCreatePanel from '../groups/TeamCreatePanel.jsx';
 import ChatThread from './ChatThread.jsx';
 import { contactLabel, previewText, shortTime, unreadLabel } from './chatText.js';
 
@@ -22,14 +23,18 @@ const NOT_FOUND_PERSON = 'Không phải thành viên trong nhóm mà bạn đã 
 // (GET /conversations/contacts – who the active role may write to); choosing one opens or creates the 1-1 chat.
 // Nobody found: "not a member of a group you are in, or does not exist". 1-1 chats are listed first ("Tin nhắn
 // riêng") and use DirectRoom. The server checks who may chat.
+// UC-35: "Tạo team mới" opens the FE-04 form in the right pane; the new team's chat opens afterwards. Teachers, students
+// and parents only (business-rules §4), not for an ended school year.
 // The School Manager sees no class chat (business-rules §2): the list keeps only the school-wide teacher group.
 // Opened from a group or from "Nhóm của tôi", the router state { backTo, backLabel } (groupLabels.js) adds a
 // "Quay lại" button at the top left; it is passed on while the user switches chats so the way back stays.
 export default function ChatPage() {
   const { groupId } = useParams();
   const navigate = useNavigate();
-  const back = useLocation().state;
+  const location = useLocation();
+  const back = location.state;
   const backState = back?.backTo ? back : undefined;
+  const [creatingTeam, setCreatingTeam] = useState(false); // UC-35 form in the right pane
   const [list, setList] = useState({ loading: true, data: null, error: '' });
   const [query, setQuery] = useState('');
   const { activeRole, user } = useAuth();
@@ -48,7 +53,7 @@ export default function ChatPage() {
   openRef.current = openId;
 
   const loadGroups = useCallback(() => {
-    api
+    return api
       .get('/groups')
       .then(({ data }) => setList({ loading: false, data, error: '' }))
       .catch((err) => setList({ loading: false, data: null, error: errorText(err) }));
@@ -62,6 +67,16 @@ export default function ChatPage() {
         .finally(() => setSummariesLoaded(true)),
     [],
   );
+
+  // Choosing a chat in the list closes the team form, even the chat that is already open.
+  useEffect(() => setCreatingTeam(false), [location.key]);
+
+  // UC-35: show the new team in the list, then open its chat.
+  async function teamCreated(id) {
+    await Promise.all([loadGroups(), loadSummaries()]);
+    setCreatingTeam(false);
+    navigate(`/chat/${id}`, { state: backState });
+  }
 
   // UC-49: people for the text in the search box (after a short pause).
   useEffect(() => {
@@ -179,6 +194,10 @@ export default function ChatPage() {
   }, [list.data, query, manager, summaries]);
 
   const openSummary = openId !== null ? summaries[openId] : null;
+  const canCreateTeam = !manager && Boolean(list.data?.classes.length) && !list.data?.schoolYear?.ended;
+  // The form starts on the class of the open chat, when there is one.
+  const openClassId =
+    list.data?.classes.find((c) => [...c.groups, ...c.teams].some((g) => g.groupId === openId))?.classId ?? null;
   const searching = Boolean(query.trim());
   // People already shown as a matching 1-1 chat above are not repeated.
   const shownDirect = new Set(sections.find((s) => s.key === 'direct')?.items.map((i) => i.peer.userId) ?? []);
@@ -195,10 +214,23 @@ export default function ChatPage() {
           </Link>
         </div>
       )}
-      <div className={`chat-shell${groupId ? ' has-chat' : ''}${backState ? ' has-topbar' : ''}`}>
+      <div className={`chat-shell${groupId || creatingTeam ? ' has-chat' : ''}${backState ? ' has-topbar' : ''}`}>
         <aside className="chat-list" aria-label="Danh sách nhóm trò chuyện">
           <div className="chat-list-head">
-            <h1 className="title-md">Trò chuyện</h1>
+            <div className="chat-list-title">
+              <h1 className="title-md">Trò chuyện</h1>
+              {canCreateTeam && (
+                <button
+                  type="button"
+                  className="btn btn-secondary"
+                  onClick={() => setCreatingTeam(true)}
+                  disabled={creatingTeam}
+                >
+                  <Icon name="add_circle" size="sm" />
+                  Tạo team mới
+                </button>
+              )}
+            </div>
             <div className="input-wrap subject-search">
               <Icon name="search" size="sm" className="subject-search-icon" />
               <input
@@ -308,7 +340,15 @@ export default function ChatPage() {
         </aside>
 
         <section className="chat-room" aria-label="Khung trò chuyện">
-          {!groupId ? (
+          {creatingTeam ? (
+            <div className="chat-team-form">
+              <TeamCreatePanel
+                classId={openClassId}
+                onCancel={() => setCreatingTeam(false)}
+                onCreated={teamCreated}
+              />
+            </div>
+          ) : !groupId ? (
             <div className="chat-empty">
               <span className="gd-pending-icon" aria-hidden="true">
                 <Icon name="forum" />

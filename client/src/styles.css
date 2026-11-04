@@ -1076,6 +1076,9 @@ a.mc-head:hover { text-decoration: none; }
 .chat-empty { flex: 1; display: grid; place-content: center; justify-items: center; gap: 8px; padding: 32px; text-align: center; }
 .chat-composer { display: flex; align-items: flex-end; gap: 8px; padding: 12px 16px; border-top: 1px solid var(--graphite-200); }
 .chat-composer .input { flex: 1; }
+/* FE-06: "Tạo team mới" in the chat list, UC-35 form in the right pane */
+.chat-list-title { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px; }
+.chat-team-form { flex: 1; min-height: 0; overflow-y: auto; padding: 16px; }
 /* FE-06 UC-49: people found by the chat search box, 1-1 header */
 .chat-person { width: 100%; border: 0; background: transparent; text-align: left; font: inherit; cursor: pointer; }
 .chat-person:disabled { cursor: default; opacity: 0.7; }

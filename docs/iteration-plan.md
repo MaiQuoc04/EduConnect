@@ -93,7 +93,8 @@ merged 03/11 – every It1 feature is on `develop`; It2: Anh FE-08 + FE-14, Khan
   teacher may also write to the teacher group members (teachers, School Managers); Q10 a 1-1 chat is listed under
   every role of its two members (not System Admin), sending is checked with the active role. Also: an empty 1-1
   chat is listed only for the person who opened it; Q3 (no `CHAT` notifications until FE-09) and Q4 (no edit /
-  delete of messages) stay as proposed.
+  delete of messages) stay as proposed. A student who transfers back to a class does not rejoin its teams
+  automatically (only GENERAL + STUDENT), so the old team's chat stays closed to them; they can create a new team.
 - **Numbering changes (01/11):** UC-104 View Activity Log and SCR-64 Activity Log removed; UC-105..UC-110 became
   UC-104..UC-109 and SCR-65..SCR-71 became SCR-64..SCR-70; then SCR-71 Password Reset Requests (FE-13) was added.
   109 use cases, 71 screens.
