@@ -52,8 +52,8 @@ export async function teamOptions(req, res) {
 }
 
 export async function createTeam(req, res) {
-  const { classId, teamName, memberIds } = req.body ?? {};
-  res.status(201).json(await teamService.createTeam(req.user, { classId, teamName, memberIds }));
+  const { source, classId, teamName, memberIds } = req.body ?? {};
+  res.status(201).json(await teamService.createTeam(req.user, { source, classId, teamName, memberIds }));
 }
 
 export async function leave(req, res) {

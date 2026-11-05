@@ -85,6 +85,9 @@ merged 03/11 – every It1 feature is on `develop`; It2: Anh FE-08 + FE-14, Khan
   from the earliest `joined_at` of all the person's rows in the group, because UC-32 adds someone back with a new
   row while FE-02 / FE-04 reopen the old one. `joined_at` is no longer reset, so FE-02 `joinClassGroups` needs no
   change. The group feed (FE-05) always shows its whole history.
+- **Teacher teams (lead OK 05/11, Khanh; UC-35, business rules §4):** a teacher creates a team with no class from the
+  teachers of the teacher group (filter by department). No schema change (`groups.class_id` is already nullable).
+  `POST /groups/teams` takes `source: 'TEACHER_SCHOOL'`; `GET /groups` adds `teacherTeams`. Listed under "Toàn trường".
 - **FE-06 assumptions waiting for the lead (Khanh, 04/11, "as proposed"; marked `// ASSUMPTION:` in
   `server/src/modules/conversations/`):** Q1 two people no longer in reach (transfer, promotion, assignment ended):
   the old 1-1 chat stays readable, sending is closed (`MSG_DIRECT_OUT_OF_SCOPE`); Q2 locked accounts are not listed

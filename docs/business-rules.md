@@ -207,7 +207,8 @@ Boundaries that are easy to get wrong:
 - Importing a class creates 3 groups automatically: **GENERAL** (feed + chat), **STUDENT** (chat), **PARENT** (chat).
   Groups can also be created by hand. One **TEACHER_SCHOOL** group for the whole school (feed + chat, all teachers +
   SMs, managed by SM, reused across years). After promotion, last year's groups are read only.
-- **Teams** (`TEAM_CHAT`): chat only, members from one class; Teachers, Students and Parents can create them
+- **Teams** (`TEAM_CHAT`): chat only, members from one class, or teachers of the school ("teacher team", below);
+  Teachers, Students and Parents can create them
   (`groups.created_by`); SA and SM cannot.
 - Student **nickname** (max 50 characters) is set by the homeroom teacher only and shown only inside that class:
   to the members of the class's groups and to the School Manager (never in the teacher group or outside the class).
@@ -216,6 +217,11 @@ Boundaries that are easy to get wrong:
   **nobody adds or removes members** and a team has **no admin**. **Anyone can leave a team**, the creator too;
   when the last member leaves, the team is closed (soft-deleted). The three class groups cannot be left (membership
   follows the class). Not possible once the school year has ended.
+- **Teacher teams** (agreed by the lead 05/11/2026, e.g. a head of department with the department's teachers): a team
+  with no class (`class_id` NULL), created by a teacher (active role) who is in the teacher group. Members are
+  picked from the teachers of the teacher group, whatever their class; School Managers cannot be picked, cannot create
+  one and do not see it. Same size, name, leave and no-admin rules as above. It has no school year, so it never
+  becomes read only. A teacher whose account is locked later stays in it with the "Locked" label.
 - **Group moderator = the current homeroom teacher**, read from `classes.homeroom_teacher_id` (nothing stored per
   group), so the rights move at once when the homeroom teacher changes, posts waiting for approval included.
 - **Removing members** (UC-33): the homeroom teacher removes students and parents only; teachers are removed by the

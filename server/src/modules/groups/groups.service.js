@@ -32,6 +32,18 @@ async function visibleYears(user) {
   return rows.map(({ schoolYearId, yearName, ended, started }) => ({ schoolYearId, yearName, ended, started }));
 }
 
+// Teacher teams (UC-35, no class) the user is in; only with the Teacher role (groupScopeSql).
+async function listTeacherTeams(user) {
+  const { rows } = await pool.query(
+    `SELECT ${TEAM_JSON} AS team
+     FROM groups g LEFT JOIN users tc ON tc.user_id = g.created_by
+     WHERE g.group_type = 'TEAM_CHAT' AND g.class_id IS NULL AND ${groupScopeSql('$1', '$2')}
+     ORDER BY g.created_at, g.group_id`,
+    [user.userId, user.activeRole],
+  );
+  return rows.map((r) => r.team);
+}
+
 // UC-29 View Group List. The groups (and teams, UC-35) the user can see in one school year, grouped by class (a parent with two
 // children in two classes gets two cards), plus the school-wide teacher group when visible. Default year: the
 // current one (started, newest), else the newest the user has groups in. isHomeroom: the user, acting as a teacher,
@@ -87,6 +99,7 @@ export async function listMyGroups(user, { schoolYearId }) {
     schoolYears: years.map(strip),
     schoolYear: strip(schoolYear),
     teacherGroup: teacherGroups[0] ?? null,
+    teacherTeams: await listTeacherTeams(user),
     classes,
   };
 }
@@ -209,7 +222,7 @@ export async function getGroup(user, groupId) {
     schoolYear: row ? { schoolYearId: row.schoolYearId, yearName: row.yearName, ended: row.ended } : null,
     homeroom: row?.homeroomName ? { fullName: row.homeroomName, status: row.homeroomStatus } : null,
     classGroups: row?.classGroups ?? [],
-    teams: row?.teams ?? [],
+    teams: row?.teams ?? (group.classId === null ? await listTeacherTeams(user) : []),
     createdByName: group.groupType === 'TEAM_CHAT' ? group.createdByName : null,
     counts: countKinds(members),
     readOnly: group.readOnly,

@@ -25,8 +25,11 @@ export default function GroupOverview() {
   const team = g.groupType === 'TEAM_CHAT';
   const others = g.classGroups.filter((x) => x.groupId !== g.groupId);
   const teams = g.teams.filter((x) => x.groupId !== g.groupId);
-  const canCreateTeam = Boolean(g.class) && !g.readOnly && activeRole !== 'SCHOOL_MANAGER' && !creating;
-  const showTeams = g.class && g.canSeeContent && (teams.length > 0 || canCreateTeam);
+  // The teacher group and teacher teams (no class) list the teacher teams; only a teacher can create one.
+  const school = !g.class && (team || g.groupType === 'TEACHER_SCHOOL');
+  const canCreateTeam =
+    !g.readOnly && !creating && (school ? activeRole === 'TEACHER' : Boolean(g.class) && activeRole !== 'SCHOOL_MANAGER');
+  const showTeams = (g.class || school) && g.canSeeContent && (teams.length > 0 || canCreateTeam);
   const feed = groupHasFeed(g.groupType);
   const kinds = g.class
     ? [
@@ -119,7 +122,8 @@ export default function GroupOverview() {
 
         {creating && (
           <TeamCreatePanel
-            classId={g.class.classId}
+            classId={g.class?.classId}
+            school={school}
             onCancel={() => setCreating(false)}
             onCreated={(groupId) => {
               setCreating(false);
@@ -131,7 +135,8 @@ export default function GroupOverview() {
           <section className="card card-outline gd-card">
             <h2 className="title-sm gd-card-title">
               <Icon name="forum" />
-              Team của lớp{teams.length ? ` (${teams.length})` : ''}
+              {school ? 'Team giáo viên' : 'Team của lớp'}
+              {teams.length ? ` (${teams.length})` : ''}
             </h2>
             <div className="my-subchannels">
               {teams.map((t) => (

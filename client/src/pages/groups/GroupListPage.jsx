@@ -68,7 +68,12 @@ export default function GroupListPage() {
       (!q || fold(`lớp ${c.className}`).includes(q) || c.teams.some((t) => fold(t.groupName).includes(q))),
   );
   const teacherGroup = data?.teacherGroup;
-  const showTeacherGroup = teacherGroup && !scope && (!q || fold(teacherGroup.groupName).includes(q));
+  const teacherTeams = data?.teacherTeams ?? [];
+  const canCreateSchoolTeam = teacher && Boolean(teacherGroup);
+  const showTeacherGroup =
+    teacherGroup &&
+    !scope &&
+    (!q || fold(teacherGroup.groupName).includes(q) || teacherTeams.some((t) => fold(t.groupName).includes(q)));
   const empty = data && !classes.length && !teacherGroup;
   const showToolbar = showTabs || classes.length > 3 || data?.schoolYears.length > 1;
 
@@ -92,7 +97,7 @@ export default function GroupListPage() {
           <h1 className="headline-lg">Nhóm của tôi</h1>
           <p>Nơi trao đổi với giáo viên, học sinh và phụ huynh trong các lớp bạn tham gia.</p>
         </div>
-        {classes.length > 0 && !readOnly && (
+        {((classes.length > 0 && !readOnly) || canCreateSchoolTeam) && (
           <button type="button" className="btn btn-primary" onClick={() => setCreating({ classId: null })} disabled={Boolean(creating)}>
             <Icon name="add_circle" size="sm" />
             Tạo team
@@ -144,6 +149,7 @@ export default function GroupListPage() {
       {creating && (
         <TeamCreatePanel
           classId={creating.classId}
+          school={Boolean(creating.school)}
           onCancel={() => setCreating(null)}
           onCreated={(groupId) => navigate(`/groups/${groupId}`)}
         />
@@ -176,7 +182,14 @@ export default function GroupListPage() {
             </div>
           )}
 
-          {showTeacherGroup && <SchoolGroupCard group={teacherGroup} />}
+          {showTeacherGroup && (
+            <SchoolGroupCard
+              group={teacherGroup}
+              teams={teacherTeams}
+              canCreateTeam={canCreateSchoolTeam && !creating}
+              onCreateTeam={() => setCreating({ classId: null, school: true })}
+            />
+          )}
 
           {!shown.length && !showTeacherGroup && (
             <div className="card card-outline class-empty">
@@ -197,7 +210,7 @@ export default function GroupListPage() {
               <p className="muted">
                 Nhóm chung có bảng tin và trò chuyện; nhóm học sinh và nhóm phụ huynh chỉ dùng để trò chuyện. Theo mặc
                 định, bài đăng trong nhóm chung cần giáo viên chủ nhiệm duyệt. Team chỉ để trò chuyện, gồm các thành
-                viên của cùng một lớp.
+                viên của cùng một lớp, hoặc các giáo viên trong trường.
               </p>
             </div>
           </aside>
@@ -301,7 +314,7 @@ function FeedHint() {
 }
 
 // The school-wide teacher group: like a class card, clicking it opens its feed.
-function SchoolGroupCard({ group }) {
+function SchoolGroupCard({ group, teams, canCreateTeam, onCreateTeam }) {
   const feedPath = `/groups/${group.groupId}/feed`;
   const onClick = useFeedClick(feedPath);
   return (
@@ -324,6 +337,26 @@ function SchoolGroupCard({ group }) {
       <ul className="mc-groups">
         <GroupRow group={group} label={group.groupName} />
       </ul>
+      {(teams.length > 0 || canCreateTeam) && (
+        <div className="mc-teams">
+          <span className="label-upper">Team giáo viên{teams.length ? ` (${teams.length})` : ''}</span>
+          <div className="mc-team-list">
+            {teams.map((t) => (
+              <Link key={t.groupId} to={`/chat/${t.groupId}`} state={CHAT_BACK_FROM_LIST} className="mc-team" title={t.createdByName ? `Do ${t.createdByName} tạo` : undefined}>
+                <Icon name={GROUP_TYPE_ICONS.TEAM_CHAT} size="sm" />
+                {t.groupName}
+                <span className="mc-team-count">{t.memberCount}</span>
+              </Link>
+            ))}
+            {canCreateTeam && (
+              <button type="button" className="mc-team is-new" onClick={onCreateTeam}>
+                <Icon name="add" size="sm" />
+                Tạo team
+              </button>
+            )}
+          </div>
+        </div>
+      )}
     </section>
   );
 }

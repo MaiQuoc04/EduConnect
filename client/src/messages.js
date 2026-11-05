@@ -95,7 +95,8 @@ const ERROR_MESSAGES = {
   MSG_TEAM_TOO_FEW: ({ min } = {}) => `Vui lòng chọn ít nhất ${min ?? 2} người khác cho team.`,
   MSG_TEAM_TOO_MANY: ({ max } = {}) => `Một team có tối đa ${max ?? 50} thành viên.`,
   MSG_TEAM_CLASS_NOT_ALLOWED: 'Bạn chỉ tạo được team trong lớp của mình.',
-  MSG_TEAM_MEMBER_NOT_ELIGIBLE: 'Có người không thuộc lớp hoặc tài khoản đang bị khoá.',
+  MSG_TEAM_MEMBER_NOT_ELIGIBLE: 'Có người không thuộc lớp hoặc nhóm này, hoặc tài khoản đang bị khoá.',
+  MSG_TEAM_SCHOOL_NOT_ALLOWED: 'Chỉ giáo viên trong nhóm giáo viên toàn trường mới tạo được team giáo viên.',
   // FE-06 Messaging
   MSG_CHAT_NO_ACCESS: 'Quản lý trường không xem tin nhắn của nhóm lớp.',
   MSG_CHAT_NOT_MEMBER: 'Bạn không còn là thành viên của cuộc trò chuyện này.',

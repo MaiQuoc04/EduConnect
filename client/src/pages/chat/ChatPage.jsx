@@ -24,7 +24,7 @@ const NOT_FOUND_PERSON = 'Không phải thành viên trong nhóm mà bạn đã 
 // Nobody found: "not a member of a group you are in, or does not exist". 1-1 chats are listed first ("Tin nhắn
 // riêng") and use DirectRoom. The server checks who may chat.
 // UC-35: "Tạo team mới" opens the FE-04 form in the right pane; the new team's chat opens afterwards. Teachers, students
-// and parents only (business-rules §4), not for an ended school year.
+// and parents only (business-rules §4), not for an ended school year; a teacher can always create a teacher team.
 // The School Manager sees no class chat (business-rules §2): the list keeps only the school-wide teacher group.
 // Opened from a group or from "Nhóm của tôi", the router state { backTo, backLabel } (groupLabels.js) adds a
 // "Quay lại" button at the top left; it is passed on while the user switches chats so the way back stays.
@@ -178,7 +178,9 @@ export default function ChatPage() {
       result.push({
         key: 'school',
         title: 'Toàn trường',
-        items: [{ ...g, title: g.groupName }].filter((i) => keep(i.title)),
+        items: [{ ...g, title: g.groupName }, ...(data.teacherTeams ?? []).map((t) => ({ ...t, title: t.groupName }))].filter(
+          (i) => keep(i.title),
+        ),
       });
     }
     // UC-49: 1-1 chats first, newest message first. A chat without a message is not listed: it can be open on the
@@ -192,7 +194,13 @@ export default function ChatPage() {
   }, [list.data, query, manager, summaries]);
 
   const openSummary = openId !== null ? summaries[openId] : null;
-  const canCreateTeam = !manager && Boolean(list.data?.classes.length) && !list.data?.schoolYear?.ended;
+  const canCreateTeam =
+    !manager &&
+    ((Boolean(list.data?.classes.length) && !list.data?.schoolYear?.ended) ||
+      (activeRole === 'TEACHER' && Boolean(list.data?.teacherGroup)));
+  // Opened from the teacher group or a teacher team, the form starts on "Giáo viên toàn trường".
+  const openSchool =
+    list.data?.teacherGroup?.groupId === openId || Boolean(list.data?.teacherTeams?.some((t) => t.groupId === openId));
   // The form starts on the class of the open chat, when there is one.
   const openClassId =
     list.data?.classes.find((c) => [...c.groups, ...c.teams].some((g) => g.groupId === openId))?.classId ?? null;
@@ -342,6 +350,7 @@ export default function ChatPage() {
             <div className="chat-team-form">
               <TeamCreatePanel
                 classId={openClassId}
+                school={openSchool && activeRole === 'TEACHER'}
                 onCancel={() => setCreatingTeam(false)}
                 onCreated={teamCreated}
               />

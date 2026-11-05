@@ -5,7 +5,7 @@ import { notFound } from '../../utils/AppError.js';
 //   const group = await findGroupForUser(pool, req.user, req.params.groupId);
 //   if (!group.canSeeContent) throw forbidden();
 // Covers the class groups (GENERAL / STUDENT / PARENT), the school-wide TEACHER_SCHOOL group and class teams
-// (TEAM_CHAT, UC-35); 1-1 chats (DIRECT) are not handled here.
+// (TEAM_CHAT, UC-35, with or without a class: a teacher team has none); 1-1 chats (DIRECT) are not handled here.
 
 // SQL condition on the group alias `g`: true when the user ($user) acting as $role may see the group.
 // School Manager: every class group (lists and members only) and the teacher group. Others: groups they are an
@@ -26,6 +26,7 @@ export function groupScopeSql(user, role) {
         AND (
           (${role} = 'TEACHER' AND (
              g.group_type = 'TEACHER_SCHOOL'
+             OR (g.group_type = 'TEAM_CHAT' AND g.class_id IS NULL)
              OR EXISTS (SELECT 1 FROM classes sc JOIN teachers st ON st.teacher_id = sc.homeroom_teacher_id
                         WHERE sc.class_id = g.class_id AND st.user_id = ${user})
              OR (g.group_type IN ('GENERAL', 'TEAM_CHAT') AND EXISTS (
