@@ -39,6 +39,9 @@ const BY_FIELD = {
   teacherCode: { INVALID: 'Mã giáo viên gồm GV và 4 chữ số, ví dụ GV0001.', DUPLICATE: 'Mã giáo viên này đã tồn tại.' },
   dob: { INVALID: 'Ngày sinh không hợp lệ (dạng dd/mm/yyyy, không sau hôm nay).' },
   gender: { INVALID: 'Giới tính ghi Nam, Nữ hoặc Khác.' },
+  department: {
+    NOT_IN_LIST: 'Tổ chuyên môn không có trong danh sách của trường. Xem các tổ ở trang Hướng dẫn của file mẫu.',
+  },
 };
 
 // fieldText('email', 'DUPLICATE') -> 'Email này đã được dùng cho tài khoản khác.'

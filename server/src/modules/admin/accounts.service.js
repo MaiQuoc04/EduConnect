@@ -5,6 +5,7 @@ import { hashPassword } from '../../utils/password.js';
 import { normalizePhone, PHONE_RE } from '../../utils/phone.js';
 import { generateTemporaryPassword } from '../../utils/tempPassword.js';
 import { nextFreeUsername } from '../../utils/username.js';
+import { applyDepartment, listDepartments, needsDepartments } from './departments.js';
 
 // FE-13 System Administration – accounts (owner: Linh).
 
@@ -68,9 +69,13 @@ export function readAccountInput(body = {}) {
   }
   if (roles.includes('TEACHER')) {
     const t = body.teacher ?? {};
-    const teacher = { teacherCode: code(t.teacherCode), department: optional(t.department) };
+    // Department: an id of FE-03's list (create form) or a name (import file); checked against the list by
+    // applyDepartment (departments.js), which needs the database.
+    const departmentId = t.departmentId == null || t.departmentId === '' ? null : String(t.departmentId);
+    const teacher = { teacherCode: code(t.teacherCode), department: optional(t.department), departmentId };
     if (!teacher.teacherCode) errors.teacherCode = 'REQUIRED';
     else if (!TEACHER_CODE_RE.test(teacher.teacherCode)) errors.teacherCode = 'INVALID';
+    if (departmentId != null && !/^\d{1,15}$/.test(departmentId)) errors.department = 'NOT_IN_LIST';
     maxLength('department', teacher.department, 100);
     input.teacher = teacher;
   }
@@ -153,6 +158,7 @@ export async function createAccount({ body, actorId, ip }) {
   if ((!errors.roles || errors.roles === 'EXCLUSIVE') && input.roles.includes('SYSTEM_ADMIN')) {
     errors.roles = 'SYSTEM_ADMIN_NOT_ALLOWED';
   }
+  if (needsDepartments(input)) applyDepartment(input, errors, await listDepartments());
   if (Object.keys(errors).length) throwFieldErrors(errors);
 
   const duplicates = await findDuplicates(pool, input);
