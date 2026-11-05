@@ -158,7 +158,8 @@ export async function listMessages(user, groupId, query) {
 // UC-48 View Conversation List (SCR-49): for every chat the user can open with the active role, the latest message
 // they may see and how many messages from others arrived since they last read it. Same visibility rule as UC-47:
 // messages since they first joined. The School Manager gets the teacher group only (no class chats).
-// UC-49: 1-1 chats too, with the other person (`peer`); an empty 1-1 chat only for the person who opened it.
+// UC-49: 1-1 chats too, with the other person (`peer`). An empty 1-1 chat is returned to both its members so it can
+// be opened (lastMessage null); the client does not list it until it has a message.
 // The client lays the chats out from GET /groups and fills in these summaries by groupId.
 export async function listConversations(user) {
   const { rows } = await pool.query(
@@ -188,10 +189,8 @@ export async function listConversations(user) {
                         ORDER BY pm.member_id LIMIT 1) peer ON TRUE
      WHERE (
              (${groupScopeSql('$1', '$2')} AND NOT ($2 = 'SCHOOL_MANAGER' AND g.class_id IS NOT NULL))
-             -- UC-49 1-1 chats under every role (membership checked by the gm join); an empty one only for the
-             -- person who opened it, so nobody gets an empty chat they never asked for
-             OR (g.group_type = 'DIRECT' AND g.deleted_at IS NULL
-                 AND (lm.message_id IS NOT NULL OR g.created_by = $1))
+             -- UC-49 1-1 chats under every role (membership checked by the gm join)
+             OR (g.group_type = 'DIRECT' AND g.deleted_at IS NULL)
            )`,
     [user.userId, user.activeRole],
   );

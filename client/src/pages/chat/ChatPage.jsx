@@ -181,13 +181,11 @@ export default function ChatPage() {
         items: [{ ...g, title: g.groupName }].filter((i) => keep(i.title)),
       });
     }
-    // UC-49: 1-1 chats first, newest message first (a just-opened empty chat on top).
+    // UC-49: 1-1 chats first, newest message first. A chat without a message is not listed: it can be open on the
+    // right, it appears with its first message, and nothing stays behind when the user moves on without writing.
     const direct = Object.values(summaries)
-      .filter((c) => c.groupType === 'DIRECT' && c.peer && keep(c.peer.fullName))
-      .sort(
-        (a, b) =>
-          (b.lastMessage?.messageId ?? Number.MAX_SAFE_INTEGER) - (a.lastMessage?.messageId ?? Number.MAX_SAFE_INTEGER),
-      )
+      .filter((c) => c.groupType === 'DIRECT' && c.peer && c.lastMessage && keep(c.peer.fullName))
+      .sort((a, b) => b.lastMessage.messageId - a.lastMessage.messageId)
       .map((c) => ({ groupId: c.groupId, groupType: 'DIRECT', title: c.peer.fullName, peer: c.peer }));
     if (direct.length) result.unshift({ key: 'direct', title: 'Tin nhắn riêng', items: direct });
     return result.filter((s) => s.items.length);
@@ -324,7 +322,7 @@ export default function ChatPage() {
                             <span className="chat-item-row">
                               <span className="chat-item-name">{c.fullName}</span>
                               <span className="caption chat-item-time">
-                                {opening === c.userId ? 'Đang mở…' : c.directGroupId ? '' : 'Nhắn tin'}
+                                {opening === c.userId ? 'Đang mở…' : 'Nhắn tin'}
                               </span>
                             </span>
                             <span className="caption chat-item-last">{contactLabel(c)}</span>

@@ -91,8 +91,8 @@ merged 03/11 – every It1 feature is on `develop`; It2: Anh FE-08 + FE-14, Khan
   and cannot be written to (`MSG_DIRECT_LOCKED`), old chats stay readable; Q5 a message has at most 2000 characters;
   Q6 1-1 chats show full names, never the class nickname; Q7 who one may write to follows the active role; Q9 a
   teacher may also write to the teacher group members (teachers, School Managers); Q10 a 1-1 chat is listed under
-  every role of its two members (not System Admin), sending is checked with the active role. Also: an empty 1-1
-  chat is listed only for the person who opened it; Q3 (no `CHAT` notifications until FE-09) and Q4 (no edit /
+  every role of its two members (not System Admin), sending is checked with the active role. Also: a 1-1
+  chat is not listed for anyone until it has a message (Khanh, 05/11); Q3 (no `CHAT` notifications until FE-09) and Q4 (no edit /
   delete of messages) stay as proposed. A student who transfers back to a class does not rejoin its teams
   automatically (only GENERAL + STUDENT), so the old team's chat stays closed to them; they can create a new team.
 - **Numbering changes (01/11):** UC-104 View Activity Log and SCR-64 Activity Log removed; UC-105..UC-110 became
