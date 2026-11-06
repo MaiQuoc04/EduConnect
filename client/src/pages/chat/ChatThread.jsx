@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { api } from '../../api/client.js';
-import Avatar from '../../components/Avatar.jsx';
 import Icon from '../../components/Icon.jsx';
 import { useAuth } from '../../context/AuthContext.jsx';
 import { useSocket } from '../../context/SocketContext.jsx';
@@ -8,18 +7,26 @@ import { useToast } from '../../context/ToastContext.jsx';
 import { errorText } from '../../messages.js';
 import { MEMBER_KIND_LABELS } from '../groups/groupLabels.js';
 import { memberSubline } from '../groups/memberText.js';
-import { dayLabel, dayOf, timeOf } from './chatText.js';
+import { dayOf } from './chatText.js';
+import DeleteMessageDialog from './DeleteMessageDialog.jsx';
+import EmojiPicker from './EmojiPicker.jsx';
+import MessageRow from './MessageRow.jsx';
 
 // UC-47 Chat in Group (FE-06, Khanh) – SCR-43 Group Chat / SCR-50 Chat Room: the messages of one group and the
 // composer. The server decides who may read or send (active role, data scope, read-only year) and sends only the
 // messages since the user first joined the group (business-rules §6). New messages and read receipts arrive over the
 // socket ("message:new", "message:read"); "seen by" compares message ids sent by the server, not times.
+// UC-110 reply, UC-111 reactions, UC-112 emoji, UC-113 delete message: the composer holds the message being answered;
+// reactions and deletions also arrive over the socket ("message:reaction", "message:deleted", "message:hidden").
 const MESSAGE_MAX = 2000; // same limit as the server (ASSUMPTION there, plan question Q5)
 const SEEN_NAMES = 3;
 const NEAR_BOTTOM_PX = 120;
 const INPUT_MIN_PX = 36; // = .btn height
 const INPUT_MAX_PX = 136; // about six lines of 20px
 
+// When the user's own message can no longer be deleted for everyone, from the seconds left the server sent. Only
+// decides which choices to show; the server checks the time again.
+const stamp = (m) => ({ ...m, deleteUntil: Date.now() + (m.deleteSecondsLeft ?? 0) * 1000 });
 
 function memberLabel(member) {
   if (!member) return '';
@@ -54,6 +61,11 @@ export default function ChatThread({ groupId, onPeer }) {
   const [olderLoading, setOlderLoading] = useState(false);
   const [text, setText] = useState('');
   const [sending, setSending] = useState(false);
+  const [replyTo, setReplyTo] = useState(null); // the message being answered
+  const [menu, setMenu] = useState(null); // { id, kind: 'react' | 'who' } popup of one message
+  const [emojiOpen, setEmojiOpen] = useState(false);
+  const [deleting, setDeleting] = useState(null); // { message, forEveryone, expired }
+  const jumpTo = useRef(null); // message to scroll to once it is loaded
   const listRef = useRef(null);
   const inputRef = useRef(null);
   const stickToBottom = useRef(true);
@@ -74,7 +86,7 @@ export default function ChatThread({ groupId, onPeer }) {
     try {
       const { data } = await api.get(`/conversations/${id}/messages`);
       stickToBottom.current = true;
-      setMessages(data.messages);
+      setMessages(data.messages.map(stamp));
       setMembers(data.members);
       setHasMore(data.hasMore);
       setState({
@@ -96,6 +108,28 @@ export default function ChatThread({ groupId, onPeer }) {
     return () => clearTimeout(readTimer.current);
   }, [loadLatest]);
 
+  // A message deleted for everyone: only the placeholder is left, and quotes of it no longer show its text.
+  const markDeleted = useCallback((messageId) => {
+    setMessages((list) =>
+      list.map((m) => {
+        if (m.messageId === messageId) return { ...m, isDeleted: true, content: null, reactions: [], replyTo: null };
+        if (m.replyTo?.messageId === messageId) return { ...m, replyTo: { state: 'DELETED', messageId } };
+        return m;
+      }),
+    );
+    setReplyTo((r) => (r?.messageId === messageId ? null : r));
+  }, []);
+
+  // A message deleted for me: gone from this view, in quotes too.
+  const removeFromView = useCallback((messageId) => {
+    setMessages((list) =>
+      list
+        .filter((m) => m.messageId !== messageId)
+        .map((m) => (m.replyTo?.messageId === messageId ? { ...m, replyTo: { state: 'HIDDEN', messageId } } : m)),
+    );
+    setReplyTo((r) => (r?.messageId === messageId ? null : r));
+  }, []);
+
   // Real time: new messages of this group, read receipts, and a reload after a lost connection comes back.
   useEffect(() => {
     if (!socket) return undefined;
@@ -104,8 +138,18 @@ export default function ChatThread({ groupId, onPeer }) {
       const box = listRef.current;
       stickToBottom.current =
         message.senderId === me || !box || box.scrollHeight - box.scrollTop - box.clientHeight < NEAR_BOTTOM_PX;
-      setMessages((list) => (list.some((m) => m.messageId === message.messageId) ? list : [...list, message]));
+      setMessages((list) => (list.some((m) => m.messageId === message.messageId) ? list : [...list, stamp(message)]));
       if (message.senderId !== me) markRead();
+    };
+    const onReaction = ({ groupId: gid, messageId, reactions }) => {
+      if (gid !== id) return;
+      setMessages((list) => list.map((m) => (m.messageId === messageId ? { ...m, reactions } : m)));
+    };
+    const onDeleted = ({ groupId: gid, messageId }) => {
+      if (gid === id) markDeleted(messageId);
+    };
+    const onHidden = ({ groupId: gid, messageId }) => {
+      if (gid === id) removeFromView(messageId);
     };
     const onRead = ({ groupId: gid, userId, lastReadMessageId }) => {
       if (gid !== id) return;
@@ -113,13 +157,30 @@ export default function ChatThread({ groupId, onPeer }) {
     };
     socket.on('message:new', onNew);
     socket.on('message:read', onRead);
+    socket.on('message:reaction', onReaction);
+    socket.on('message:deleted', onDeleted);
+    socket.on('message:hidden', onHidden);
     socket.io.on('reconnect', loadLatest);
     return () => {
       socket.off('message:new', onNew);
       socket.off('message:read', onRead);
+      socket.off('message:reaction', onReaction);
+      socket.off('message:deleted', onDeleted);
+      socket.off('message:hidden', onHidden);
       socket.io.off('reconnect', loadLatest);
     };
-  }, [socket, id, me, markRead, loadLatest]);
+  }, [socket, id, me, markRead, loadLatest, markDeleted, removeFromView]);
+
+  // A click anywhere else closes the small popups.
+  useEffect(() => {
+    if (!menu && !emojiOpen) return undefined;
+    const close = () => {
+      setMenu(null);
+      setEmojiOpen(false);
+    };
+    document.addEventListener('click', close);
+    return () => document.removeEventListener('click', close);
+  }, [menu, emojiOpen]);
 
   // Coming back to the tab counts as reading what arrived meanwhile.
   useEffect(() => {
@@ -137,7 +198,93 @@ export default function ChatThread({ groupId, onPeer }) {
     } else if (stickToBottom.current) {
       box.scrollTop = box.scrollHeight;
     }
+    if (jumpTo.current) {
+      showMessage(jumpTo.current);
+      jumpTo.current = null;
+    }
   }, [messages]);
+
+  function showMessage(messageId) {
+    const row = document.getElementById(`msg-${messageId}`);
+    const box = listRef.current;
+    if (!row || !box) return false;
+    stickToBottom.current = false;
+    // Only the message list scrolls (scrollIntoView would move the whole page too).
+    const middle = (box.clientHeight - row.offsetHeight) / 2;
+    box.scrollTop += row.getBoundingClientRect().top - box.getBoundingClientRect().top - middle;
+    row.classList.remove('msg-flash');
+    void row.offsetWidth; // restart the highlight when the same message is shown twice
+    row.classList.add('msg-flash');
+    return true;
+  }
+
+  // Bấm vào trích dẫn: go to the original, loading the older messages up to it when it is not on screen.
+  async function jump(messageId) {
+    if (showMessage(messageId) || !messages.length) return;
+    try {
+      const { data } = await api.get(`/conversations/${id}/messages`, {
+        params: { before: messages[0].messageId, from: messageId },
+      });
+      if (!data.messages.some((m) => m.messageId === messageId)) {
+        toast(errorText({ code: 'MSG_MESSAGE_NOT_FOUND' }));
+        return;
+      }
+      stickToBottom.current = false;
+      jumpTo.current = messageId;
+      setMessages((list) => [...data.messages.map(stamp), ...list]);
+      setHasMore(data.hasMore);
+    } catch (err) {
+      toast(errorText(err));
+    }
+  }
+
+  // UC-111: choosing the reaction one already has removes it; another one replaces it.
+  async function react(message, code) {
+    setMenu(null);
+    const mine = (message.reactions ?? []).find((r) => r.userIds.includes(me))?.code;
+    const url = `/conversations/${id}/messages/${message.messageId}/reaction`;
+    try {
+      const { data } = await (mine === code ? api.delete(url) : api.put(url, { code }));
+      setMessages((list) => list.map((m) => (m.messageId === message.messageId ? { ...m, reactions: data.reactions } : m)));
+    } catch (err) {
+      toast(errorText(err));
+    }
+  }
+
+  function startReply(message) {
+    setMenu(null);
+    setReplyTo(message);
+    inputRef.current?.focus();
+  }
+
+  // UC-113: only the choices open to this message right now.
+  function startDelete(message) {
+    setMenu(null);
+    const own = message.senderId === me && !message.isDeleted;
+    const inTime = own && message.deleteUntil > Date.now();
+    setDeleting({ message, forEveryone: inTime && state.canSend, expired: own && !inTime });
+  }
+
+  async function confirmDelete(scope) {
+    const { messageId } = deleting.message;
+    await api.delete(`/conversations/${id}/messages/${messageId}`, { params: { scope } });
+    if (scope === 'everyone') markDeleted(messageId);
+    else removeFromView(messageId);
+    setDeleting(null);
+    toast(scope === 'everyone' ? 'Đã xoá tin nhắn ở phía mọi người.' : 'Đã xoá tin nhắn ở phía bạn.');
+  }
+
+  // UC-112: put the emoji where the cursor is.
+  function insertEmoji(emoji) {
+    const box = inputRef.current;
+    const start = box?.selectionStart ?? text.length;
+    const end = box?.selectionEnd ?? start;
+    setText(text.slice(0, start) + emoji + text.slice(end));
+    requestAnimationFrame(() => {
+      box?.focus();
+      box?.setSelectionRange(start + emoji.length, start + emoji.length);
+    });
+  }
 
   async function loadOlder() {
     if (!messages.length || olderLoading) return;
@@ -146,7 +293,7 @@ export default function ChatThread({ groupId, onPeer }) {
       const { data } = await api.get(`/conversations/${id}/messages`, { params: { before: messages[0].messageId } });
       const box = listRef.current;
       prepend.current = { height: box.scrollHeight, top: box.scrollTop };
-      setMessages((list) => [...data.messages, ...list]);
+      setMessages((list) => [...data.messages.map(stamp), ...list]);
       setHasMore(data.hasMore);
     } catch (err) {
       toast(errorText(err));
@@ -164,12 +311,17 @@ export default function ChatThread({ groupId, onPeer }) {
     }
     setSending(true);
     try {
-      const { data: message } = await api.post(`/conversations/${id}/messages`, { content });
+      const { data: message } = await api.post(`/conversations/${id}/messages`, {
+        content,
+        ...(replyTo ? { replyToMessageId: replyTo.messageId } : {}),
+      });
       stickToBottom.current = true;
-      setMessages((list) => (list.some((m) => m.messageId === message.messageId) ? list : [...list, message]));
+      setMessages((list) => (list.some((m) => m.messageId === message.messageId) ? list : [...list, stamp(message)]));
       setText('');
+      setReplyTo(null);
     } catch (err) {
       toast(errorText(err));
+      if (err.code === 'MSG_REPLY_INVALID') setReplyTo(null);
       if (BLOCKED_BY_CODE[err.code]) {
         setState((s) => ({ ...s, canSend: false, blockedReason: BLOCKED_BY_CODE[err.code] }));
       }
@@ -198,6 +350,10 @@ export default function ChatThread({ groupId, onPeer }) {
   }, [text]);
 
   const memberById = useMemo(() => new Map(members.map((m) => [m.userId, m])), [members]);
+  const nameOf = (userId) => {
+    const member = memberById.get(userId);
+    return member ? member.nickname || member.fullName : 'Thành viên cũ';
+  };
 
   // "Seen by" under the last message: members other than its sender (and me) who had joined before it was sent
   // and have read up to it.
@@ -248,18 +404,25 @@ export default function ChatThread({ groupId, onPeer }) {
             {messages.map((m, i) => {
               const prev = messages[i - 1];
               const newDay = !prev || dayOf(prev.sentAt) !== dayOf(m.sentAt);
-              const mine = m.senderId === me;
               const firstOfRun = newDay || prev.senderId !== m.senderId;
               const member = memberById.get(m.senderId);
               return (
                 <MessageRow
                   key={m.messageId}
                   message={m}
-                  mine={mine}
+                  me={me}
                   newDay={newDay}
                   firstOfRun={firstOfRun}
                   label={memberLabel(member)}
                   direct={state.direct}
+                  canAct={state.canSend}
+                  menu={menu}
+                  nameOf={nameOf}
+                  onMenu={setMenu}
+                  onReact={react}
+                  onReply={startReply}
+                  onDelete={startDelete}
+                  onJump={jump}
                 />
               );
             })}
@@ -271,6 +434,19 @@ export default function ChatThread({ groupId, onPeer }) {
           </ol>
         )}
       </div>
+      {replyTo && (
+        <div className="chat-reply-bar">
+          <span className="chat-reply-text">
+            <strong>
+              Đang trả lời {replyTo.senderId === me ? 'chính bạn' : replyTo.senderNickname || replyTo.senderName}
+            </strong>
+            <span className="caption muted">{replyTo.content}</span>
+          </span>
+          <button type="button" className="btn btn-icon" onClick={() => setReplyTo(null)} aria-label="Huỷ trả lời">
+            <Icon name="close" size="sm" />
+          </button>
+        </div>
+      )}
       <form
         className="chat-composer"
         onSubmit={(e) => {
@@ -278,6 +454,22 @@ export default function ChatThread({ groupId, onPeer }) {
           send();
         }}
       >
+        <div className="chat-emoji">
+          <button
+            type="button"
+            className="btn btn-icon"
+            onClick={(e) => {
+              e.stopPropagation();
+              setEmojiOpen((v) => !v);
+            }}
+            disabled={!state.canSend}
+            aria-label="Chọn biểu tượng"
+            title="Chọn biểu tượng"
+          >
+            <Icon name="mood" />
+          </button>
+          {emojiOpen && <EmojiPicker onPick={insertEmoji} />}
+        </div>
         <textarea
           ref={inputRef}
           className="input chat-input"
@@ -299,39 +491,14 @@ export default function ChatThread({ groupId, onPeer }) {
           Gửi
         </button>
       </form>
-    </>
-  );
-}
-
-function MessageRow({ message: m, mine, newDay, firstOfRun, label, direct }) {
-  const name = m.senderNickname ? `${m.senderNickname} (${m.senderName})` : m.senderName;
-  return (
-    <>
-      {newDay && (
-        <li className="msg-day">
-          <span className="caption">{dayLabel(dayOf(m.sentAt))}</span>
-        </li>
+      {deleting && (
+        <DeleteMessageDialog
+          forEveryone={deleting.forEveryone}
+          expired={deleting.expired}
+          onDelete={confirmDelete}
+          onCancel={() => setDeleting(null)}
+        />
       )}
-      <li className={`msg${mine ? ' mine' : ''}${firstOfRun ? ' first' : ''}`}>
-        {!mine && !direct && (
-          <span className="msg-avatar">{firstOfRun && <Avatar src={m.senderAvatarUrl} name={m.senderName} size={32} />}</span>
-        )}
-        <div className="msg-body">
-          {!mine && !direct && firstOfRun && (
-            <p className="msg-sender caption">
-              <strong>{name}</strong>
-              {label && <span className="muted"> · {label}</span>}
-              {m.senderStatus === 'LOCKED' && <span className="pill msg-locked">Đã khoá</span>}
-            </p>
-          )}
-          <div className="msg-bubble">
-            <p className="msg-text">{m.content}</p>
-            <time className="msg-time" dateTime={m.sentAt}>
-              {timeOf(m.sentAt)}
-            </time>
-          </div>
-        </div>
-      </li>
     </>
   );
 }

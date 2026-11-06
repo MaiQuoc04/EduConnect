@@ -1,4 +1,5 @@
 import * as service from './conversations.service.js';
+import * as actions from './messageActions.service.js';
 import * as direct from './direct.service.js';
 
 export async function contacts(req, res) {
@@ -16,12 +17,27 @@ export async function list(req, res) {
 }
 
 export async function messages(req, res) {
-  const { before, limit } = req.query;
-  res.json(await service.listMessages(req.user, req.params.groupId, { before, limit }));
+  const { before, limit, from } = req.query;
+  res.json(await service.listMessages(req.user, req.params.groupId, { before, limit, from }));
 }
 
 export async function send(req, res) {
   res.status(201).json(await service.sendMessage(req.user, req.params.groupId, req.body));
+}
+
+export async function setReaction(req, res) {
+  const { groupId, messageId } = req.params;
+  res.json(await actions.setReaction(req.user, groupId, messageId, req.body?.code));
+}
+
+export async function removeReaction(req, res) {
+  const { groupId, messageId } = req.params;
+  res.json(await actions.removeReaction(req.user, groupId, messageId));
+}
+
+export async function deleteMessage(req, res) {
+  const { groupId, messageId } = req.params;
+  res.json(await actions.deleteMessage(req.user, groupId, messageId, req.query.scope));
 }
 
 export async function read(req, res) {

@@ -1,6 +1,6 @@
 import { pool, withTransaction } from '../../config/db.js';
 import { emitToUsers } from '../../sockets/index.js';
-import { AppError, badRequest, forbidden } from '../../utils/AppError.js';
+import { AppError, badRequest, forbidden, notFound } from '../../utils/AppError.js';
 import { findGroupForUser, groupScopeSql } from '../groups/groupAccess.js';
 import { byRankThenName, memberRows } from '../groups/groups.service.js';
 import { directPeer } from './direct.service.js';
@@ -15,12 +15,15 @@ import { directPeer } from './direct.service.js';
 //   * groups of an ended school year are read only: messages can be read, not sent;
 //   * read receipts: group_members.last_read_at; "seen by" = members whose last_read_at ≥ sent_at and who had
 //     joined by then. Times are compared in SQL, so the client gets message ids instead of timestamps.
+// UC-110 reply, UC-111 reactions, UC-113 delete message (business-rules §6, agreed 07/11/2026). A message deleted for everyone stays as a placeholder without its content;
+// a message deleted for me (message_user_deletions) is left out for that person only.
 
 const conflict = (code, message, details) => new AppError(409, code, message, details);
 const PAGE_DEFAULT = 30;
 const PAGE_MAX = 100;
 // ASSUMPTION: no agreed limit for one message (plan question Q5); 2000 characters until the lead decides.
 export const MESSAGE_MAX_LENGTH = 2000;
+const FROM_LIMIT = 500; // the most messages one jump to a quoted message loads
 
 // SQL: when the user first joined the message's group (alias m). All their membership rows count, left ones too:
 // UC-32 adds someone back with a new row, FE-02 / FE-04 reopen the old one (business-rules §6). Whether they are
@@ -28,21 +31,101 @@ export const MESSAGE_MAX_LENGTH = 2000;
 const visibleFrom = (userParam) => `(SELECT MIN(vm.joined_at) FROM group_members vm
    WHERE vm.group_id = m.group_id AND vm.user_id = ${userParam})`;
 
-// One message with its sender. The nickname (UC-34) is shown only inside the class (business-rules §4): it comes
-// from the sender's enrollment in the group's class, so it never appears in the teacher group.
-const MESSAGE_SELECT = `
-  SELECT m.message_id AS "messageId", m.group_id AS "groupId", m.sender_id AS "senderId", m.content,
+// SQL: true when the viewer removed message `alias` from their own view ("delete for me").
+const hiddenFor = (viewer, alias = 'm') => `EXISTS (SELECT 1 FROM message_user_deletions d
+   WHERE d.message_id = ${alias}.message_id AND d.user_id = ${viewer})`;
+
+// SQL: minutes allowed for "delete for everyone". The setting is edited on the FE-13 screen, which has no range for
+// it yet, so anything that is not a whole number falls back to 15 and the value is kept within 1-1440.
+export const DELETE_MINUTES_SQL = `COALESCE((SELECT LEAST(GREATEST(s.setting_value::int, 1), 1440) FROM system_settings s
+   WHERE s.setting_key = 'chat.delete_for_everyone_minutes' AND s.setting_value ~ '^[0-9]{1,5}$'), 15)`;
+
+// SQL (JSON) for the message `m` is answering, as this viewer may see it. state: OK, DELETED (for everyone), HIDDEN
+// (the viewer deleted it for themselves) or BEFORE_JOIN (sent before the viewer first joined, business-rules §6: nothing
+// about it is revealed). Read when shown, so a quote follows what happens to the original.
+const replyToSql = (viewer) => `(
+  SELECT CASE
+           WHEN rm.sent_at < ${visibleFrom(viewer)} THEN json_build_object('state', 'BEFORE_JOIN')
+           WHEN rm.deleted_for_everyone_at IS NOT NULL THEN json_build_object('state', 'DELETED', 'messageId', rm.message_id)
+           WHEN ${hiddenFor(viewer, 'rm')} THEN json_build_object('state', 'HIDDEN', 'messageId', rm.message_id)
+           ELSE json_build_object('state', 'OK', 'messageId', rm.message_id, 'senderId', rm.sender_id,
+                                  'senderName', ru.full_name, 'senderNickname', re.nickname,
+                                  'content', left(rm.content, 200))
+         END
+  FROM messages rm
+  JOIN users ru ON ru.user_id = rm.sender_id
+  LEFT JOIN students rs ON rs.user_id = rm.sender_id
+  LEFT JOIN class_enrollments re ON re.student_id = rs.student_id AND re.class_id = g.class_id
+  WHERE rm.message_id = m.reply_to_message_id AND rm.deleted_at IS NULL AND m.deleted_for_everyone_at IS NULL)`;
+
+// SQL (JSON array) [{ code, userIds }] of message `alias`; empty once it is deleted for everyone.
+export const reactionsSql = (alias = 'm') => `CASE WHEN ${alias}.deleted_for_everyone_at IS NOT NULL THEN '[]'::json
+  ELSE COALESCE((SELECT json_agg(json_build_object('code', r.code, 'userIds', r.ids) ORDER BY r.first_at)
+                 FROM (SELECT mr.reaction_code AS code, array_agg(mr.user_id ORDER BY mr.created_at) AS ids,
+                              MIN(mr.created_at) AS first_at
+                       FROM message_reactions mr WHERE mr.message_id = ${alias}.message_id
+                       GROUP BY mr.reaction_code) r), '[]'::json) END`;
+
+// One message with its sender, as this viewer sees it. The nickname (UC-34) is shown only inside the class
+// (business-rules §4): it comes from the sender's enrollment in the group's class, so it never appears in the teacher
+// group. deleteSecondsLeft: how long the viewer may still delete their own message for everyone (0 = no longer).
+// viewerFrom / columns: to read one message for several viewers at once (messageForViewers).
+const messageSelect = (viewer, viewerFrom = '', columns = '') => `
+  SELECT m.message_id AS "messageId", m.group_id AS "groupId", m.sender_id AS "senderId",
+         CASE WHEN m.deleted_for_everyone_at IS NULL THEN m.content END AS content,
+         m.deleted_for_everyone_at IS NOT NULL AS "isDeleted",
          m.sent_at AS "sentAt", u.full_name AS "senderName", u.avatar_url AS "senderAvatarUrl",
-         u.status AS "senderStatus", e.nickname AS "senderNickname"
-  FROM messages m
+         u.status AS "senderStatus", e.nickname AS "senderNickname",
+         ${replyToSql(viewer)} AS "replyTo", ${reactionsSql()} AS reactions,
+         (CASE WHEN m.sender_id = ${viewer} AND m.deleted_for_everyone_at IS NULL
+               THEN GREATEST(0, CEIL(EXTRACT(EPOCH FROM (m.sent_at + make_interval(mins => ${DELETE_MINUTES_SQL}) - NOW()))))
+               ELSE 0 END)::int AS "deleteSecondsLeft"${columns}
+  FROM messages m ${viewerFrom}
   JOIN groups g ON g.group_id = m.group_id
   JOIN users u ON u.user_id = m.sender_id
   LEFT JOIN students st ON st.user_id = m.sender_id
   LEFT JOIN class_enrollments e ON e.student_id = st.student_id AND e.class_id = g.class_id`;
 
+// A message this user can see in this chat (else 404): since they first joined, not deleted for themselves. A message
+// deleted for everyone is still found (isDeleted), so the placeholder can be removed from one's own view.
+export async function findVisibleMessage(db, user, groupId, messageId) {
+  const id = Number(messageId);
+  if (Number.isSafeInteger(id) && id > 0) {
+    const { rows } = await db.query(
+      `SELECT m.message_id AS "messageId", m.sender_id AS "senderId",
+              m.deleted_for_everyone_at IS NOT NULL AS "isDeleted"
+       FROM messages m
+       WHERE m.message_id = $1 AND m.group_id = $2 AND m.deleted_at IS NULL
+         AND m.sent_at >= ${visibleFrom('$3')} AND NOT ${hiddenFor('$3')}`,
+      [id, groupId, user.userId],
+    );
+    if (rows.length) return rows[0];
+  }
+  throw notFound('MSG_MESSAGE_NOT_FOUND', 'Message not found.');
+}
+
+// Replying, reacting and deleting for everyone change the chat, so they stop where sending stops.
+export function assertCanSend(group) {
+  if (group.blockedReason === 'LOCKED') throw conflict('MSG_DIRECT_LOCKED', 'This account is locked.');
+  if (group.blockedReason === 'OUT_OF_SCOPE') {
+    throw conflict('MSG_DIRECT_OUT_OF_SCOPE', 'You can no longer write to this person.');
+  }
+  if (!group.canSend) throw conflict('MSG_GROUP_READ_ONLY', 'The school year has ended; the group is read only.');
+}
+
+// The same message once per viewer: a quote may be hidden from some of them (replyToSql).
+async function messageForViewers(db, messageId, viewerIds) {
+  const { rows } = await db.query(
+    `${messageSelect('v.id', 'CROSS JOIN unnest($2::bigint[]) AS v(id)', ', v.id AS "viewerId"')}
+     WHERE m.message_id = $1`,
+    [messageId, viewerIds],
+  );
+  return rows;
+}
+
 // The group if the user may chat in it (else 404 / 403), plus canSend and, when sending is not possible, why:
 // blockedReason READ_ONLY (ended school year), OUT_OF_SCOPE / LOCKED (1-1 chat, UC-49).
-async function openChat(db, user, groupId) {
+export async function openChat(db, user, groupId) {
   const id = Number(groupId);
   if (Number.isSafeInteger(id) && id > 0) {
     // UC-49 1-1 chats: open to their two members under any role (the router already stops the System Admin).
@@ -94,14 +177,14 @@ async function readStates(db, groupId, userId = null) {
   return rows;
 }
 
-const activeMemberIds = async (db, groupId) =>
+export const activeMemberIds = async (db, groupId) =>
   (
     await db.query(`SELECT DISTINCT user_id AS "userId" FROM group_members WHERE group_id = $1 AND left_at IS NULL`, [
       groupId,
     ])
   ).rows.map((r) => r.userId);
 
-function parsePage({ before, limit }) {
+function parsePage({ before, limit, from }) {
   const beforeId = before === undefined || before === '' ? null : Number(before);
   if (beforeId !== null && (!Number.isSafeInteger(beforeId) || beforeId <= 0)) {
     throw badRequest('MSG_INVALID_INPUT', 'before must be a message id.');
@@ -110,24 +193,36 @@ function parsePage({ before, limit }) {
   if (!Number.isSafeInteger(size) || size < 1 || size > PAGE_MAX) {
     throw badRequest('MSG_INVALID_INPUT', `limit must be between 1 and ${PAGE_MAX}.`);
   }
-  return { beforeId, size };
+  const fromId = from === undefined || from === '' ? null : Number(from);
+  if (fromId !== null && (!Number.isSafeInteger(fromId) || fromId <= 0 || beforeId === null)) {
+    throw badRequest('MSG_INVALID_INPUT', 'from must be a message id, together with before.');
+  }
+  return { beforeId, fromId, size: fromId === null ? size : FROM_LIMIT };
 }
 
 // UC-47: one page of messages, oldest first. Without `before` (first page) the response also carries the chat's
 // header data and its active members with their read state, so the client can show labels and "seen by".
+// `from` (with `before`): everything from that message up to `before`, to jump to a quoted message that is not loaded.
 export async function listMessages(user, groupId, query) {
-  const { beforeId, size } = parsePage(query);
+  const { beforeId, fromId, size } = parsePage(query);
   const group = await openChat(pool, user, groupId);
+  const visible = `m.group_id = $1 AND m.deleted_at IS NULL AND m.sent_at >= ${visibleFrom('$2')} AND NOT ${hiddenFor('$2')}`;
   const { rows } = await pool.query(
-    `${MESSAGE_SELECT}
-     WHERE m.group_id = $1 AND m.deleted_at IS NULL AND m.sent_at >= ${visibleFrom('$2')}
-       AND ($3::bigint IS NULL OR m.message_id < $3)
+    `${messageSelect('$2')}
+     WHERE ${visible} AND ($3::bigint IS NULL OR m.message_id < $3) AND ($5::bigint IS NULL OR m.message_id >= $5)
      ORDER BY m.message_id DESC
      LIMIT $4`,
-    [group.groupId, user.userId, beforeId, size + 1],
+    [group.groupId, user.userId, beforeId, size + 1, fromId],
   );
-  const hasMore = rows.length > size;
+  let hasMore = rows.length > size;
   const messages = rows.slice(0, size).reverse();
+  if (fromId !== null && !hasMore && messages.length) {
+    const { rows: older } = await pool.query(
+      `SELECT EXISTS (SELECT 1 FROM messages m WHERE ${visible} AND m.message_id < $3) AS "hasMore"`,
+      [group.groupId, user.userId, messages[0].messageId],
+    );
+    hasMore = older[0].hasMore;
+  }
   const page = { groupId: group.groupId, messages, hasMore };
   if (beforeId !== null) return page;
 
@@ -164,12 +259,15 @@ export async function listMessages(user, groupId, query) {
 export async function listConversations(user) {
   const { rows } = await pool.query(
     `SELECT g.group_id AS "groupId", g.group_type AS "groupType",
-            lm.message_id AS "messageId", lm.content, lm.sent_at AS "sentAt", lm.sender_id AS "senderId",
+            lm.message_id AS "messageId", lm.is_deleted AS "isDeleted",
+            CASE WHEN lm.is_deleted THEN NULL ELSE lm.content END AS content,
+            lm.sent_at AS "sentAt", lm.sender_id AS "senderId",
             u.full_name AS "senderName", e.nickname AS "senderNickname",
             peer.user_id AS "peerId", peer.full_name AS "peerName", peer.avatar_url AS "peerAvatarUrl",
             peer.status AS "peerStatus",
             (SELECT COUNT(*) FROM messages x
              WHERE x.group_id = g.group_id AND x.deleted_at IS NULL AND x.sender_id <> $1
+               AND x.deleted_for_everyone_at IS NULL AND NOT ${hiddenFor('$1', 'x')}
                AND x.sent_at >= gm.joined_at
                AND (gm.last_read_at IS NULL OR x.sent_at > gm.last_read_at)) AS "unreadCount"
      FROM groups g
@@ -177,8 +275,11 @@ export async function listConversations(user) {
                    FROM group_members vm
                    WHERE vm.group_id = g.group_id AND vm.user_id = $1
                    HAVING bool_or(vm.left_at IS NULL)) gm ON TRUE
-     LEFT JOIN LATERAL (SELECT m.message_id, m.content, m.sent_at, m.sender_id FROM messages m
+     LEFT JOIN LATERAL (SELECT m.message_id, m.content, m.sent_at, m.sender_id,
+                               m.deleted_for_everyone_at IS NOT NULL AS is_deleted
+                        FROM messages m
                         WHERE m.group_id = g.group_id AND m.deleted_at IS NULL AND m.sent_at >= gm.joined_at
+                          AND NOT ${hiddenFor('$1')}
                         ORDER BY m.message_id DESC LIMIT 1) lm ON TRUE
      LEFT JOIN users u ON u.user_id = lm.sender_id
      LEFT JOIN students st ON st.user_id = lm.sender_id
@@ -204,6 +305,7 @@ export async function listConversations(user) {
     lastMessage: r.messageId
       ? {
           messageId: r.messageId,
+          isDeleted: r.isDeleted,
           content: r.content,
           sentAt: r.sentAt,
           senderId: r.senderId,
@@ -234,33 +336,41 @@ function cleanContent(content) {
 export async function sendMessage(user, groupId, body) {
   const content = cleanContent(body?.content);
   const group = await openChat(pool, user, groupId);
-  if (group.blockedReason === 'LOCKED') throw conflict('MSG_DIRECT_LOCKED', 'This account is locked.');
-  if (group.blockedReason === 'OUT_OF_SCOPE') {
-    throw conflict('MSG_DIRECT_OUT_OF_SCOPE', 'You can no longer write to this person.');
+  assertCanSend(group);
+  // Reply: one level; the original must be a message the sender can see in this chat, not deleted for everyone.
+  let replyTo = null;
+  if (body?.replyToMessageId !== undefined && body.replyToMessageId !== null) {
+    const original = await findVisibleMessage(pool, user, group.groupId, body.replyToMessageId).catch(() => null);
+    if (!original || original.isDeleted) throw badRequest('MSG_REPLY_INVALID', 'This message can no longer be answered.');
+    replyTo = original.messageId;
   }
-  if (!group.canSend) throw conflict('MSG_GROUP_READ_ONLY', 'The school year has ended; the group is read only.');
 
-  const message = await withTransaction(async (client) => {
+  const messageId = await withTransaction(async (client) => {
     const { rows } = await client.query(
-      `INSERT INTO messages (group_id, sender_id, content) VALUES ($1, $2, $3) RETURNING message_id`,
-      [group.groupId, user.userId, content],
+      `INSERT INTO messages (group_id, sender_id, content, reply_to_message_id) VALUES ($1, $2, $3, $4)
+       RETURNING message_id`,
+      [group.groupId, user.userId, content, replyTo],
     );
     await client.query(
       `UPDATE group_members SET last_read_at = NOW() WHERE group_id = $1 AND user_id = $2 AND left_at IS NULL`,
       [group.groupId, user.userId],
     );
-    const { rows: full } = await client.query(`${MESSAGE_SELECT} WHERE m.message_id = $1`, [rows[0].message_id]);
-    return full[0];
+    return rows[0].message_id;
   });
 
+  // One payload per member: a quote may be hidden from someone who joined after the original (replyToSql).
   const memberIds = await activeMemberIds(pool, group.groupId);
-  emitToUsers(memberIds, 'message:new', { groupId: group.groupId, message });
+  const copies = await messageForViewers(pool, messageId, memberIds);
+  for (const { viewerId, ...message } of copies) {
+    emitToUsers([viewerId], 'message:new', { groupId: group.groupId, message });
+  }
   emitToUsers(memberIds, 'message:read', {
     groupId: group.groupId,
     userId: user.userId,
-    lastReadMessageId: message.messageId,
+    lastReadMessageId: messageId,
   });
-  return message;
+  const { viewerId: _viewerId, ...mine } = copies.find((c) => c.viewerId === user.userId);
+  return mine;
 }
 
 // UC-47: the user has read the chat up to now (opening it, or a new message arriving while it is open).

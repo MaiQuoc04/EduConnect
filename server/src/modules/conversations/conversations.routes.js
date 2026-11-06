@@ -15,5 +15,8 @@ router.post('/direct', ctrl.openDirect); // UC-49: open (or create) the 1-1 chat
 router.get('/:groupId/messages', ctrl.messages); // UC-47 Chat in Group (read)
 router.post('/:groupId/messages', ctrl.send); // UC-47 Chat in Group (send)
 router.post('/:groupId/read', ctrl.read); // UC-47 read receipts
+router.put('/:groupId/messages/:messageId/reaction', ctrl.setReaction); // UC-111 React to Message
+router.delete('/:groupId/messages/:messageId/reaction', ctrl.removeReaction);
+router.delete('/:groupId/messages/:messageId', ctrl.deleteMessage); // UC-113 Delete Message, ?scope=everyone | me
 
 export default router;

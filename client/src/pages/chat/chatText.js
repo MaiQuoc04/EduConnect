@@ -31,6 +31,10 @@ export function shortTime(sentAt) {
 // in a 1-1 chat (UC-49) the other person's messages need no name. The line is cut with "…" by CSS.
 export function previewText(message, myId, direct = false) {
   if (!message) return 'Chưa có tin nhắn';
+  if (message.isDeleted) {
+    if (message.senderId === myId) return 'Bạn đã xoá một tin nhắn';
+    return direct ? 'Tin nhắn đã được xoá' : `${message.senderNickname || message.senderName} đã xoá một tin nhắn`;
+  }
   const text = (message.content ?? '').replace(/\s+/g, ' ').trim();
   if (message.senderId === myId) return `Bạn: ${text}`;
   return direct ? text : `${message.senderNickname || message.senderName}: ${text}`;
@@ -45,5 +49,16 @@ export function contactLabel(person) {
   const classes = (person.classes ?? []).map((c) => c.className).join(', ');
   return [who, classes].filter(Boolean).join(' · ');
 }
+
+// UC-111: the fixed set of reactions (same codes as the server).
+export const REACTIONS = [
+  { code: 'LIKE', emoji: '👍', label: 'Thích' },
+  { code: 'LOVE', emoji: '❤️', label: 'Yêu thích' },
+  { code: 'HAHA', emoji: '😆', label: 'Vui' },
+  { code: 'WOW', emoji: '😮', label: 'Ngạc nhiên' },
+  { code: 'SAD', emoji: '😢', label: 'Buồn' },
+  { code: 'THANKS', emoji: '🙏', label: 'Cảm ơn' },
+];
+export const REACTION_EMOJI = Object.fromEntries(REACTIONS.map((r) => [r.code, r.emoji]));
 
 export const unreadLabel = (n) => (n > 99 ? '99+' : String(n));

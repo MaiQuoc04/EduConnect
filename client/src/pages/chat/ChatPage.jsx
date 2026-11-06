@@ -151,10 +151,15 @@ export default function ChatPage() {
     };
     socket.on('message:new', onNew);
     socket.on('message:read', onRead);
+    // A deleted message changes the preview and maybe the unread count: the server recounts.
+    socket.on('message:deleted', loadSummaries);
+    socket.on('message:hidden', loadSummaries);
     socket.io.on('reconnect', loadSummaries);
     return () => {
       socket.off('message:new', onNew);
       socket.off('message:read', onRead);
+      socket.off('message:deleted', loadSummaries);
+      socket.off('message:hidden', loadSummaries);
       socket.io.off('reconnect', loadSummaries);
     };
   }, [socket, me, loadGroups, loadSummaries]);
