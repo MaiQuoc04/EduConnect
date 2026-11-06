@@ -382,12 +382,12 @@ export default function ChatPage() {
   );
 }
 
-// UC-49 right pane for a 1-1 chat: the other person (name, who they are to me, contacts for teachers / School
-// Manager, "Đã khoá"), then the chat. The summary gives the name at once; ChatThread adds the details.
+// UC-49 right pane for a 1-1 chat: the other person (name, who they are to me, "Đã khoá"; never phone or email),
+// then the chat. The summary gives the name at once; ChatThread adds the details.
 function DirectRoom({ summary, backState }) {
   const [detail, setDetail] = useState(null);
   const peer = detail ?? summary.peer;
-  const sub = [contactLabel(detail), detail?.phone, detail?.email].filter(Boolean).join(' · ');
+  const sub = contactLabel(detail);
   return (
     <>
       <header className="chat-room-head">

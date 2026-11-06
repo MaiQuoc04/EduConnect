@@ -234,7 +234,7 @@ export async function listMessages(user, groupId, query) {
     readOnly: group.readOnly,
     canSend: group.canSend,
     blockedReason: group.blockedReason,
-    peer: group.peer, // UC-49: the other person of a 1-1 chat (contacts only for teachers / School Manager)
+    peer: group.peer, // UC-49: the other person of a 1-1 chat, without phone or email
     // No email / phone here: the member list (UC-31) shows contacts to teachers and the School Manager.
     members: members.sort(byRankThenName).map((m) => ({
       userId: m.userId,

@@ -258,8 +258,8 @@ Boundaries that are easy to get wrong:
 - Group chats (GENERAL / STUDENT / PARENT / TEACHER_SCHOOL / TEAM_CHAT) and **1-1 chats**. A 1-1 chat is a group of
   type `DIRECT` with 2 members and `direct_key = "<smallerUserId>_<largerUserId>"` (unique → never two chats for the
   same pair). Every message has a `group_id`.
-- Private messages only with people in one's own classes (SM: within the teacher group). Phone and email are visible
-  only to teachers and SM.
+- Private messages only with people in one's own classes (SM: within the teacher group). Chat screens show nobody's
+  phone or email (Khanh 07/11/2026); teachers and SM see them on the group member list (§4, UC-31).
 - **Chat history starts at the first joining** (04/11/2026): in every chat (group, team, teacher group, 1-1) a
   first-time member (e.g. a student who transfers in) sees only the messages sent since they joined. Someone who
   comes back sees the whole history again, the time they were away included (§4): what counts is their earliest

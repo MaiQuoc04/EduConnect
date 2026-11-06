@@ -22,7 +22,8 @@ import { byRankThenName } from '../groups/groups.service.js';
 //     stays readable but nobody can send in it.
 //   * ASSUMPTION (Q10): a 1-1 chat shows under every role of its two members (it is personal); sending is checked
 //     with the active role. ASSUMPTION (Q6): full names only, never the class nickname.
-// Phone and email of contacts only for teachers and the School Manager (permissions note 2).
+// Phone and email are never sent from here: chat screens do not show them to anyone (Khanh 07/11/2026). Teachers and the
+// School Manager still see them on the group member list (UC-31).
 
 const conflict = (code, message, details) => new AppError(409, code, message, details);
 const CONTACT_LIMIT = 50;
@@ -34,8 +35,6 @@ const KINDS_BY_ROLE = {
   PARENT: ['PARENT'],
   SCHOOL_MANAGER: [],
 };
-
-export const seesContacts = (user) => ['TEACHER', 'SCHOOL_MANAGER'].includes(user.activeRole);
 
 // CTEs "reach" (user_id, class_id, kind) = everyone the user ($1, role $2, class kinds $3) may write to.
 // class_id is NULL for the teacher group. Includes the user and locked accounts – callers filter them out.
@@ -66,7 +65,7 @@ const REACH_CTES = `
 const reachParams = (user) => [user.userId, user.activeRole, KINDS_BY_ROLE[user.activeRole] ?? []];
 
 // People in reach with their labels: kinds, the shared classes, children (for parents: their studying children in
-// the shared classes), the existing 1-1 chat, and contacts when the role may see them.
+// the shared classes) and the existing 1-1 chat.
 //   filters: { search, classId, userIds, activeOnly }
 async function findContacts(db, user, { search = null, classId = null, userIds = null, activeOnly = true } = {}) {
   const { rows } = await db.query(
@@ -80,7 +79,6 @@ async function findContacts(db, user, { search = null, classId = null, userIds =
      )
      SELECT u.user_id AS "userId", u.full_name AS "fullName", u.avatar_url AS "avatarUrl", u.status,
             p.kinds,
-            CASE WHEN $8 THEN u.email END AS email, CASE WHEN $8 THEN u.phone END AS phone,
             COALESCE((SELECT json_agg(json_build_object('classId', mc.class_id, 'className', mc.class_name)
                                       ORDER BY mc.class_name)
                       FROM my_classes mc WHERE mc.class_id = ANY(p.class_ids)), '[]'::json) AS classes,
@@ -99,15 +97,14 @@ async function findContacts(db, user, { search = null, classId = null, userIds =
      FROM people p
      JOIN users u ON u.user_id = p.user_id
      WHERE ($4::text IS NULL OR lower(translate(u.full_name, $6, $7)) LIKE $4)
-       AND ($9::bigint[] IS NULL OR u.user_id = ANY($9::bigint[]))
-       AND (NOT $10 OR u.status = 'ACTIVE')`,
+       AND ($8::bigint[] IS NULL OR u.user_id = ANY($8::bigint[]))
+       AND (NOT $9 OR u.status = 'ACTIVE')`,
     [
       ...reachParams(user),
       search,
       classId,
       VI_TRANSLATE.from,
       VI_TRANSLATE.to,
-      seesContacts(user),
       userIds,
       activeOnly,
     ],

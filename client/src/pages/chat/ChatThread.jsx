@@ -35,7 +35,7 @@ function memberLabel(member) {
 
 // UC-49 1-1 chats (groupType DIRECT): no sender names, "Đã xem" without names, and sending closes when the two are
 // no longer in reach or the other account is locked (blockedReason). onPeer(peer) passes the other person's details
-// (labels, contacts for teachers / School Manager) to the header.
+// (labels) to the header.
 const BLOCKED_TEXT = {
   READ_ONLY: 'Nhóm chỉ còn để xem lại',
   OUT_OF_SCOPE: 'Bạn không còn nhắn tin được với người này',
