@@ -83,6 +83,10 @@ Source: Report 3 section 4.2 (draft v1.3). Actor "User" = any signed-in account.
 | UC-47 | Chat in Group | Teacher, Student, Parent, School Manager (teacher group) | Group & Team Chat | Send and receive real-time messages in a group or team. |
 | UC-48 | View Conversation List | Teacher, Student, Parent, School Manager | Private Messaging | View group, team and private conversations. |
 | UC-49 | Send Private Message | Teacher, Student, Parent, School Manager (teacher group) | Private Messaging | Search a member within one's classes (School Manager: within the teacher group) and chat one-to-one. |
+| UC-110 | Reply to Message | Teacher, Student, Parent, School Manager (teacher group) | Message Actions | Answer a message with a quote of it; clicking the quote goes to the original (added 07/11/2026). |
+| UC-111 | React to Message | Teacher, Student, Parent, School Manager (teacher group) | Message Actions | Add, change or remove one's reaction from a fixed set of six; see who reacted (added 07/11/2026). |
+| UC-112 | Insert Emoji | Teacher, Student, Parent, School Manager (teacher group) | Message Actions | Choose an emoji from a list while writing a message (added 07/11/2026). |
+| UC-113 | Delete Message | Teacher, Student, Parent, School Manager (teacher group) | Message Actions | Delete one's own message for everyone within the time limit, or any visible message for oneself (added 07/11/2026). |
 
 ## FE-07 Extracurricular Event Management
 

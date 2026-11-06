@@ -238,7 +238,8 @@ Boundaries that are easy to get wrong:
     and PARENT, and also GENERAL and the class's teams unless they still teach a subject there. A teacher who is
     also the parent of a student of the class keeps the groups a parent belongs to.
   - Anyone who comes back to a group (teacher, student or parent) gets their old membership row back (`left_at`
-    cleared) and sees the group's whole history, feed and chat. Shared function in FE-04
+    cleared) and sees the group's whole history, feed and chat, except chat messages they deleted for themselves (§6).
+    Shared function in FE-04
     `classGroups.js`; nothing changes for classes of an ended school year.
 
 ## 5. Group feed (FE-05)
@@ -267,6 +268,21 @@ Boundaries that are easy to get wrong:
 - Read receipts: `group_members.last_read_at`; "seen by" = members whose `last_read_at ≥ message.sent_at` (and
   who had first joined by then, earliest `joined_at ≤ message.sent_at`).
 - Removing a member / transferring a student sets `group_members.left_at` (row is kept).
+- **Reply, reactions, emoji, delete** (agreed by the lead 07/11/2026; UC-110..UC-113):
+  - **Reply:** one level, to a message of the same chat the sender can see and that is not deleted for everyone. The
+    quote is read from the original when shown. Someone who joined after the original sees only "message from before
+    you joined", nothing of it. Clicking a quote goes to the original.
+  - **Reactions:** fixed set of 6 (like, love, haha, wow, sad, thanks; "Only Like" in §5 is for the feed); one per person
+    per message, another one replaces it, the same one removes it. They do not count as unread or move the chat up.
+  - **Emoji:** the system's own emoji in the text; no stickers.
+  - **Delete for everyone:** own message only, within `chat.delete_for_everyone_minutes` (default 15, from sending).
+    It stays as "Tin nhắn đã được xoá" with its reactions and attachments hidden, no longer counts as unread, and cannot
+    be answered or reacted to. The database keeps the content; the API never returns it and no screen shows it.
+  - **Delete for me:** any message one can see, no time limit; others see no change. It stays hidden after leaving a
+    group and coming back. The preview falls back to the last message still visible; a 1-1 chat with none left drops
+    off the list until a new message arrives.
+  - Neither can be undone. In an ended school year or a closed 1-1 chat only delete for me is possible. Group moderators
+    cannot delete other people's messages.
 
 ## 7. Extracurricular activities (FE-07)
 - The homeroom teacher posts an activity in the class feed (a `posts` row + `extracurricular_events` row) with a

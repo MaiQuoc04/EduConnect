@@ -30,6 +30,9 @@ Source: Report 3 section 4.4 (draft v1.3). Full = all records; Restricted (n) = 
 | Group feed comment | Delete | No | Restricted (6) | Restricted (16) | Restricted (16) | Restricted (16) | Restricted (16) |
 | Group / team chat | Send / read | No | Restricted (6) | Restricted (4) | Restricted (4) | Restricted (4) | Restricted (4) |
 | Private message | Send / read | No | Restricted (6) | Restricted (4) | Restricted (4) | Restricted (4) | Restricted (4) |
+| Chat message | Reply / react | No | Restricted (6) | Restricted (4) | Restricted (4) | Restricted (4) | Restricted (4) |
+| Chat message | Delete for everyone | No | Restricted (19) | Restricted (19) | Restricted (19) | Restricted (19) | Restricted (19) |
+| Chat message | Delete for me | No | Restricted (6) | Restricted (4) | Restricted (4) | Restricted (4) | Restricted (4) |
 | Extracurricular event | Create / update / cancel / export list | No | No | Restricted (5) | No | No | No |
 | Extracurricular event | View | No | No | Restricted (5) | No | Restricted (4) | Restricted (4) |
 | Extracurricular event | Register / cancel child | No | No | No | No | No | Restricted (7) |
@@ -73,3 +76,4 @@ Notes:
 16. Own comments and any comment on their own posts; homeroom teacher: any comment in their class groups.
 17. Own comments only.
 18. Personal notifications about items they created (class events, extracurricular events, school announcements).
+19. Own messages only, within the time limit (School Manager: in the teacher group and their 1-1 chats).
