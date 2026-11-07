@@ -1,6 +1,6 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { createAccount } from '../../api/admin.js';
+import { createAccount, listDepartmentOptions } from '../../api/admin.js';
 import Icon from '../../components/Icon.jsx';
 import { useToast } from '../../context/ToastContext.jsx';
 import { errorText, GENDER_LABELS, ROLE_LABELS } from '../../messages.js';
@@ -23,7 +23,7 @@ const EMPTY = {
   dob: '',
   gender: '',
   teacherCode: '',
-  department: '',
+  departmentId: '',
   occupation: '',
   address: '',
 };
@@ -121,6 +121,18 @@ export default function CreateAccountPage() {
   const [formError, setFormError] = useState('');
   const [saving, setSaving] = useState(false);
   const [result, setResult] = useState(null);
+  // FE-03's departments list (It1 closing item #2): the department is picked, never typed. null = still loading.
+  const [departments, setDepartments] = useState(null);
+  const [departmentsError, setDepartmentsError] = useState('');
+
+  useEffect(() => {
+    listDepartmentOptions()
+      .then(setDepartments)
+      .catch((err) => {
+        setDepartments([]);
+        setDepartmentsError(errorText(err));
+      });
+  }, []);
 
   const has = (role) => form.roles.includes(role);
   const set = (key) => (e) => {
@@ -169,7 +181,7 @@ export default function CreateAccountPage() {
         email: form.email,
         phone: form.phone,
         student: has('STUDENT') ? { studentCode: form.studentCode, dob: form.dob, gender: form.gender } : undefined,
-        teacher: has('TEACHER') ? { teacherCode: form.teacherCode, department: form.department } : undefined,
+        teacher: has('TEACHER') ? { teacherCode: form.teacherCode, departmentId: form.departmentId || null } : undefined,
         address: form.address,
         parent: has('PARENT') ? { occupation: form.occupation } : undefined,
       };
@@ -340,15 +352,35 @@ export default function CreateAccountPage() {
                     autoComplete="off"
                   />
                 </Field>
-                <Field id="department" label="Tổ chuyên môn" error={err('department')}>
-                  <input
+                <Field
+                  id="department"
+                  label="Tổ chuyên môn"
+                  error={err('department')}
+                  help={
+                    departmentsError
+                      ? `Không tải được danh sách tổ chuyên môn: ${departmentsError}`
+                      : departments && !departments.length
+                        ? 'Trường chưa có tổ chuyên môn nào trong hệ thống. Có thể để trống và cập nhật sau.'
+                        : undefined
+                  }
+                >
+                  <select
                     id="department"
                     className="input"
-                    value={form.department}
-                    onChange={set('department')}
-                    maxLength={100}
-                    placeholder="Ví dụ: Toán – Tin"
-                  />
+                    value={form.departmentId}
+                    onChange={(e) => {
+                      set('departmentId')(e);
+                      setErrors((errs) => ({ ...errs, department: undefined }));
+                    }}
+                    disabled={!departments}
+                  >
+                    <option value="">{departments ? 'Chưa chọn' : 'Đang tải…'}</option>
+                    {departments?.map((d) => (
+                      <option key={d.departmentId} value={d.departmentId}>
+                        {d.name}
+                      </option>
+                    ))}
+                  </select>
                 </Field>
               </div>
             </>

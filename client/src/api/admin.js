@@ -55,6 +55,12 @@ export async function listAccounts(params) {
   return data;
 }
 
+// FE-03's departments list for the Create Account form (UC-95): [{ departmentId, name }].
+export async function listDepartmentOptions() {
+  const { data } = await api.get('/admin/accounts/department-options');
+  return data.departments;
+}
+
 export async function listClassOptions() {
   const { data } = await api.get('/admin/accounts/classes'); // UC-97 class filter
   return data.items;

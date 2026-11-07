@@ -1,5 +1,6 @@
 import * as accountImport from './accountImport.service.js';
 import * as accounts from './accounts.service.js';
+import { listDepartments } from './departments.js';
 import * as control from './accountControl.service.js';
 import * as maintenance from './maintenance.service.js';
 import * as settings from './settings.service.js';
@@ -46,6 +47,11 @@ const actorOf = (req) => ({ userId: req.user.userId, activeRole: req.user.active
 
 export async function listAccounts(req, res) {
   res.json(await control.listAccounts(req.query)); // UC-97
+}
+
+// FE-03's department list for the Create Account form (UC-95); GET /teachers/department-options is School Manager only.
+export async function departmentOptions(_req, res) {
+  res.json({ departments: await listDepartments() });
 }
 
 export async function listClassOptions(_req, res) {

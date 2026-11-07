@@ -14,6 +14,7 @@ router.get('/accounts', ...systemAdmin, ctrl.listAccounts); // UC-97 ?search&rol
 router.post('/accounts', ...systemAdmin, ctrl.createAccount); // UC-95
 router.get('/accounts/export', ...systemAdmin, ctrl.exportAccounts); // UC-98 ?search&role&status&classId
 router.get('/accounts/classes', ...systemAdmin, ctrl.listClassOptions); // UC-97 class filter options
+router.get('/accounts/department-options', ...systemAdmin, ctrl.departmentOptions); // UC-95 department picker (FE-03 list)
 router.get('/accounts/import/template', ...systemAdmin, ctrl.importTemplate); // UC-96 ?type=STUDENT|TEACHER|PARENT|SCHOOL_MANAGER
 router.post('/accounts/import/preview', ...systemAdmin, uploadSingle('file'), ctrl.previewImport); // UC-96 (multipart: type, file)
 router.post('/accounts/import', ...systemAdmin, uploadSingle('file'), ctrl.importAccounts); // UC-96

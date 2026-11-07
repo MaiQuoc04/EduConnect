@@ -5,6 +5,7 @@ import { AppError, badRequest } from '../../utils/AppError.js';
 import { logActivity } from '../../utils/activityLog.js';
 import { removeAccents, planUsernames } from '../../utils/username.js';
 import { prepareCredentials, readAccountInput } from './accounts.service.js';
+import { applyDepartment, listDepartments } from './departments.js';
 
 // UC-96 Import Accounts (FE-13, owner: Linh): System Admin uploads one .xlsx / .csv file per account type, checks a
 // preview, then creates every valid row in one transaction. The temporary passwords are returned once.
@@ -80,6 +81,14 @@ export async function buildTemplate(type) {
   ].forEach((line, i) => {
     help.addRow([line]).font = i === 0 ? { bold: true, size: 13 } : {};
   });
+  if (type === 'TEACHER') {
+    // FE-03's list of departments: the "Tổ chuyên môn" column takes one of these names (or stays empty).
+    const departments = await listDepartments();
+    help.addRow([]);
+    help.addRow(['Tổ chuyên môn: ghi đúng một tên trong danh sách dưới đây hoặc để trống (không phân biệt chữ hoa, chữ thường và dấu).']).font = { bold: true };
+    if (departments.length) departments.forEach((d) => help.addRow([`• ${d.name}`]));
+    else help.addRow(['(Trường chưa có tổ chuyên môn nào trong hệ thống; để trống cột này.)']);
+  }
 
   return {
     fileName: `mau-nhap-tai-khoan-${template.name}.xlsx`,
@@ -210,6 +219,12 @@ async function analyse(file, type) {
     if (values.gender && !GENDER_WORDS[genderWord]) errors.gender = 'INVALID';
     return { row, input, errors, duplicateOf: {} };
   });
+
+  // Teachers: the department must be one of FE-03's list (accents and case ignored); the list's spelling is stored.
+  if (type === 'TEACHER' && checked.some((r) => r.input.teacher?.department)) {
+    const departments = await listDepartments();
+    for (const r of checked) applyDepartment(r.input, r.errors, departments);
+  }
 
   // Same email / phone / code twice in the file: the later rows are invalid.
   const firstRow = {};
