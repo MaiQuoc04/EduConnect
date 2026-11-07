@@ -1,21 +1,24 @@
 import { pool, withTransaction } from '../../config/db.js';
 import { badRequest, forbidden, notFound } from '../../utils/AppError.js';
 import { containsPattern, VI_TRANSLATE } from '../../utils/search.js';
+// Likes / comments rows shared with FE-05 Group Feed: data only; who may do what in the school feed (§8) is here.
+import * as feed from '../../utils/feedInteractions.js';
 // FE-02 (merged): the one rule for "the current school year" and "the class a student studies in this year".
 import { enrollmentsOfYear, resolveSchoolYearId } from '../students/students.service.js';
 
 // FE-08 School Feed (owner: Anh), iteration 2.
 //   Stage 1 (reading): UC-58 View School Feed & News, UC-59 View School Post Detail (SCR-02, SCR-05).
 //   Stage 2 (School Manager writes): UC-60 Create, UC-61 Update, UC-62 Delete, UC-63 Pin / Unpin (SCR-31, SCR-06).
-//   Later: likes, comments (UC-64..UC-66) and attachments (business-rules §15: storage provider not decided yet).
+//   Stage 3 (interaction): UC-64 React (Like), UC-65 Comment, UC-66 Delete Comment (SCR-05).
+//   Later: attachments (business-rules §15: storage provider not decided yet).
 //
 // Schema v0.3: school_posts, comments, attachments and classes have deleted_at; users, students, parents,
 // class_enrollments, student_parents, post_likes, grade_levels, the two *_targets tables, notifications and
 // notification_recipients do not. school_posts has no updated_at trigger: UC-61 sets updated_at itself.
 //
 // comments / post_likes / attachments are shared with FE-05 Group Feed (each row belongs to exactly one of post_id /
-// school_post_id). The counting helpers below only read school_post_id, take a list of ids and stay apart from the
-// post query, so they can be merged with FE-05's once both features are on develop (iteration-plan.md).
+// school_post_id). Reading and writing those rows lives in utils/feedInteractions.js (FE-05 reuses it with post_id);
+// the permission checks of the SCHOOL feed (§8) stay in this file, never there.
 
 // Roles that see school posts (permissions.md "School post – View"). System Admin sees no content (§1).
 const READER_ROLES = ['SCHOOL_MANAGER', 'TEACHER', 'STUDENT', 'PARENT'];
@@ -171,33 +174,20 @@ export async function recipientsOfSchoolPost(schoolPostId, db = pool) {
  * Likes per school post: Map id → { likeCount, likedByMe }. Posts with no like are missing from the map.
  * Callers pass ANNOUNCEMENT ids only: NEWS cannot be liked (business-rules §8), so it always shows 0 / false.
  */
-export async function countSchoolPostLikes(schoolPostIds, userId, db = pool) {
-  if (!schoolPostIds.length) return new Map();
-  const { rows } = await db.query(
-    `SELECT school_post_id AS "schoolPostId", COUNT(*) AS "likeCount", BOOL_OR(user_id = $2) AS "likedByMe"
-     FROM post_likes
-     WHERE school_post_id = ANY($1::bigint[])
-     GROUP BY school_post_id`,
-    [schoolPostIds, userId],
-  );
-  return new Map(rows.map(({ schoolPostId, ...counts }) => [schoolPostId, counts]));
+export function countSchoolPostLikes(schoolPostIds, userId, db = pool) {
+  return feed.countLikes(SCHOOL_POST, schoolPostIds, userId, db);
 }
 
 /**
  * Comments per school post (not deleted, replies included): Map id → commentCount. ANNOUNCEMENT ids only (§8).
- * ASSUMPTION: a reply whose parent comment was deleted still counts; it is deleted only when it is deleted itself.
+ * ASSUMPTION: a reply whose parent comment was deleted still counts; it is deleted only when it is deleted itself
+ * (it is still shown under the "Bình luận đã bị xoá" placeholder of UC-65).
  */
-export async function countSchoolPostComments(schoolPostIds, db = pool) {
-  if (!schoolPostIds.length) return new Map();
-  const { rows } = await db.query(
-    `SELECT school_post_id AS "schoolPostId", COUNT(*) AS "commentCount"
-     FROM comments
-     WHERE school_post_id = ANY($1::bigint[]) AND deleted_at IS NULL
-     GROUP BY school_post_id`,
-    [schoolPostIds],
-  );
-  return new Map(rows.map((r) => [r.schoolPostId, r.commentCount]));
+export function countSchoolPostComments(schoolPostIds, db = pool) {
+  return feed.countComments(SCHOOL_POST, schoolPostIds, db);
 }
+
+const SCHOOL_POST = feed.FEED_COLUMNS.SCHOOL_POST; // the column of school posts in post_likes / comments
 
 /** Attachments per school post (not deleted): Map id → { attachmentCount, firstImageUrl }. */
 async function summarizeAttachments(schoolPostIds, db = pool) {
