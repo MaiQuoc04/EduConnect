@@ -337,7 +337,7 @@ export async function listSchoolPosts(user, { postType, q, page, pageSize }) {
 /**
  * UC-59: one post with its targets, counts and attachments. A post that does not exist, is deleted or is not
  * addressed to the reader gives the same 404, so nobody learns that a post outside their audience exists.
- * Comments themselves are listed by UC-65 (stage 3); only commentCount here.
+ * Comments themselves are listed by UC-65 (listSchoolPostComments); only commentCount here.
  * Also the answer of UC-60..UC-63, read with their transaction client (db) so it sees their own writes.
  */
 export async function getSchoolPost(user, schoolPostId, db = pool) {
@@ -429,7 +429,7 @@ async function checkTargets(client, { gradeLevelIds, classIds }) {
 }
 
 // Writes the target rows of a post (ids already checked and de-duplicated). Two set-based INSERTs, no loop.
-// Kept apart so UC-61 can reuse it once changing the audience is allowed (see updateSchoolPost).
+// Used by UC-60 and by UC-61 when the audience changes (see updateSchoolPost).
 async function saveTargets(client, schoolPostId, { gradeLevelIds, classIds }) {
   if (gradeLevelIds.length) {
     await client.query(
@@ -522,22 +522,61 @@ async function lockSchoolPost(client, schoolPostId) {
 // already rejected every other field).
 const EDITABLE_COLUMNS = { title: 'title', content: 'content' };
 
+// The target ids a post has now, sorted (UC-61 compares them with the new ones).
+async function currentTargetIds(client, schoolPostId) {
+  const { rows: grades } = await client.query(
+    'SELECT grade_level_id AS id FROM school_post_grade_targets WHERE school_post_id = $1 ORDER BY 1',
+    [schoolPostId],
+  );
+  const { rows: classes } = await client.query(
+    'SELECT class_id AS id FROM school_post_class_targets WHERE school_post_id = $1 ORDER BY 1',
+    [schoolPostId],
+  );
+  return { gradeLevelIds: grades.map((r) => r.id), classIds: classes.map((r) => r.id) };
+}
+
+const sameIds = (a, b) => {
+  const sorted = [...b].sort((x, y) => x - y);
+  return a.length === sorted.length && a.every((id, i) => id === sorted[i]);
+};
+
 /**
- * UC-61 Update School Post (SCR-06): title and content (changes = { title?, content? }, validated).
- * Written only when a value really differs (IS DISTINCT FROM, as UC-09); then updated_at = NOW() (no trigger on
- * school_posts). Nothing changed → no write, updated_at kept, still 200.
+ * UC-61 Update School Post (SCR-06). changes = { title?, content?, audience? } (validated by the controller;
+ * audience = { gradeLevelIds, classIds }, de-duplicated).
+ * - title / content: written only when a value really differs (IS DISTINCT FROM, as UC-09).
+ * - audience (lead OK 07/11/2026): replaces ALL the targets of the post. The target rows are HARD deleted and written
+ *   again in this transaction (school_post_grade_targets / school_post_class_targets are join tables, like
+ *   student_parents; the proposal to add them to business-rules §14 is with the lead). Same set as now → no write.
+ *   ANNOUNCEMENT must keep at least one target (§8) → 400 MSG_AUDIENCE_REQUIRED; NEWS with none = whole school.
+ * Something really changed → updated_at = NOW() (no trigger on school_posts). Nothing changed → still 200.
  * ASSUMPTION: an update sends no new notification (§8 does not say so; one per typo fix would be noise).
- * NOT here, refused by the controller:
- *   - postType: ANNOUNCEMENT ↔ NEWS changes likes, comments, pinning and the notification already sent.
- *   - sendNotification: the notification was sent (or not) when the post was created.
- *   - gradeLevelIds / classIds: changing the audience means removing target rows, and school_post_grade_targets /
- *     school_post_class_targets have no deleted_at and are not in the hard-delete list (business-rules §14, schema
- *     header). Waiting for the lead. Once allowed: DELETE both target tables for the post, checkTargets +
- *     saveTargets in this transaction, and keep at least one target for an ANNOUNCEMENT (MSG_AUDIENCE_REQUIRED).
+ * ASSUMPTION: also when the audience changes, people who are new in it get NO notification: the post's notification
+ * row was sent once, and sending again would notify twice the people who were already in it. To confirm with the lead.
+ * ASSUMPTION: likes and comments written by people who are no longer in the audience stay (and still count).
+ * Refused by the controller: postType (ANNOUNCEMENT ↔ NEWS changes likes, comments, pinning and the notification
+ * already sent – the lead said no 07/11) and sendNotification (sent, or not, when the post was created).
  */
 export async function updateSchoolPost(user, schoolPostId, changes) {
   return withTransaction(async (client) => {
-    await lockSchoolPost(client, schoolPostId);
+    const post = await lockSchoolPost(client, schoolPostId);
+    let changed = false;
+
+    const { audience } = changes;
+    if (audience) {
+      if (post.postType === 'ANNOUNCEMENT' && !audience.gradeLevelIds.length && !audience.classIds.length) {
+        throw badRequest('MSG_AUDIENCE_REQUIRED', 'An announcement needs at least one grade level or class.',
+          { fields: ['gradeLevelIds', 'classIds'] });
+      }
+      const now = await currentTargetIds(client, schoolPostId);
+      if (!sameIds(now.gradeLevelIds, audience.gradeLevelIds) || !sameIds(now.classIds, audience.classIds)) {
+        await checkTargets(client, audience);
+        await client.query('DELETE FROM school_post_grade_targets WHERE school_post_id = $1', [schoolPostId]);
+        await client.query('DELETE FROM school_post_class_targets WHERE school_post_id = $1', [schoolPostId]);
+        await saveTargets(client, schoolPostId, audience);
+        changed = true;
+      }
+    }
+
     const params = [schoolPostId];
     const sets = [];
     const differs = [];
@@ -547,10 +586,12 @@ export async function updateSchoolPost(user, schoolPostId, changes) {
       sets.push(`${column} = $${params.length}`);
       differs.push(`${column} IS DISTINCT FROM $${params.length}`);
     }
-    if (sets.length) {
+    if (sets.length || changed) {
+      // With an audience change updated_at moves even when title / content stay the same.
+      const condition = changed ? 'TRUE' : differs.join(' OR ');
       await client.query(
-        `UPDATE school_posts SET ${sets.join(', ')}, updated_at = NOW()
-         WHERE school_post_id = $1 AND (${differs.join(' OR ')})`,
+        `UPDATE school_posts SET ${[...sets, 'updated_at = NOW()'].join(', ')}
+         WHERE school_post_id = $1 AND (${condition})`,
         params,
       );
     }
@@ -593,5 +634,116 @@ export async function pinSchoolPost(user, schoolPostId, isPinned) {
       [schoolPostId, isPinned],
     );
     return getSchoolPost(user, schoolPostId, client);
+  });
+}
+
+// --- UC-64..UC-66 Like and comment (SCR-05) ----------------------------------------------------------------------
+// permissions.md "School post (announcement) – React / comment": School Manager Full, Teacher / Student / Parent
+// Restricted (15) = within the audience, news view only. "School post comment – Delete": School Manager Full (UC-66),
+// the others Restricted (17) = own comments only. System Admin: refused by the route and by resolveAudience (§1).
+// The rows are read and written by utils/feedInteractions.js; the checks of the school feed are made here, first.
+// Not logged (business-rules §13 does not list them). No real-time event (not asked for SCR-05 yet).
+
+/**
+ * The post the user wants to interact with, read with UC-59's visibility rule (visibleSchoolPostsSql): it does not
+ * exist, is deleted or is not addressed to the user → 404 MSG_SCHOOL_POST_NOT_FOUND (same answer, so nobody learns a
+ * post outside their audience exists). Writes pass lock: the row is read FOR SHARE, so UC-61 / UC-62 (FOR UPDATE)
+ * wait until the transaction ends: nobody likes or comments a post that is being deleted or moved to another audience
+ * at the same moment.
+ */
+async function openSchoolPostForInteraction(client, user, schoolPostId, { lock = false } = {}) {
+  const audience = await resolveAudience(user, client);
+  const params = [schoolPostId];
+  const { rows } = await client.query(
+    `SELECT sp.school_post_id AS "schoolPostId", sp.post_type AS "postType"
+     FROM school_posts sp
+     WHERE sp.school_post_id = $1 AND ${visibleSchoolPostsSql(audience, params)}
+     ${lock ? 'FOR SHARE' : ''}`,
+    params,
+  );
+  if (!rows[0]) throw schoolPostNotFound();
+  return { ...rows[0], target: { column: SCHOOL_POST, id: rows[0].schoolPostId } };
+}
+
+// Only announcements can be liked and commented on; NEWS is view only (business-rules §8). Checked on the server even
+// though UC-59 gives the client canInteract.
+function assertAnnouncement(post, code, message) {
+  if (post.postType !== 'ANNOUNCEMENT') throw badRequest(code, message);
+}
+
+/**
+ * UC-64 React to School Post: like (liked = true) or unlike (false). Only Like exists (§5). Both are idempotent:
+ * liking twice or unliking a post one did not like is 200 and changes nothing (PUT / DELETE, not a toggle, so a double
+ * click never undoes itself). Unlike HARD deletes the post_likes row (§14). NEWS → 400 MSG_CANNOT_REACT_NEWS.
+ * @returns {Promise<{ likeCount: number, likedByMe: boolean }>} the same numbers UC-58 / UC-59 show
+ */
+export async function setSchoolPostLike(user, schoolPostId, liked) {
+  return withTransaction(async (client) => {
+    const post = await openSchoolPostForInteraction(client, user, schoolPostId, { lock: true });
+    assertAnnouncement(post, 'MSG_CANNOT_REACT_NEWS', 'News posts cannot be liked.');
+    if (liked) await feed.addLike(post.target, user.userId, client);
+    else await feed.removeLike(post.target, user.userId, client);
+    return feed.likeSummary(post.target, user.userId, client);
+  });
+}
+
+// permissions.md note 17 / UC-66: School Manager deletes any comment; everyone else only their own.
+const mayDeleteComment = (user) => (comment) =>
+  user.activeRole === 'SCHOOL_MANAGER' || comment.authorId === user.userId;
+
+/**
+ * UC-65 (reading): one page of the comments of an announcement, as a tree paged by top-level comment (see
+ * feed.listComments: every reply comes with its top-level comment; deleted comments with a visible reply stay as a
+ * placeholder). canDelete follows UC-66. NEWS → an empty page, not an error (it has no comments to show).
+ * commentCount = the post's count in UC-58 / UC-59, so the client can refresh it.
+ */
+export async function listSchoolPostComments(user, schoolPostId, { page, pageSize }) {
+  // A read: no transaction, no lock (one query after the other, DB_POOL_MAX=3 on the shared pooler).
+  const post = await openSchoolPostForInteraction(pool, user, schoolPostId);
+  if (post.postType !== 'ANNOUNCEMENT') return { items: [], page, pageSize, total: 0, commentCount: 0 };
+  const result = await feed.listComments(post.target, { page, pageSize, canDelete: mayDeleteComment(user) });
+  return { ...result, commentCount: await commentCountOf(post.schoolPostId) };
+}
+
+/**
+ * UC-65 Comment on School Post: a comment, or a reply when parentCommentId is given (any level, §5). The parent must
+ * be a comment of THIS post (400 MSG_INVALID_PARENT_COMMENT) and not deleted (409 MSG_PARENT_COMMENT_DELETED).
+ * NEWS → 400 MSG_CANNOT_COMMENT_NEWS. Returns the new comment (canDelete true: it is the user's own).
+ */
+export async function createSchoolPostComment(user, schoolPostId, { content, parentCommentId }) {
+  return withTransaction(async (client) => {
+    const post = await openSchoolPostForInteraction(client, user, schoolPostId, { lock: true });
+    assertAnnouncement(post, 'MSG_CANNOT_COMMENT_NEWS', 'News posts cannot be commented on.');
+    const comment = await feed.insertComment(post.target, { authorId: user.userId, content, parentCommentId }, client);
+    return { ...comment, canDelete: true };
+  });
+}
+
+// The post's commentCount exactly as UC-58 / UC-59 show it.
+const commentCountOf = async (schoolPostId, db = pool) =>
+  (await countSchoolPostComments([schoolPostId], db)).get(schoolPostId) ?? 0;
+
+const commentNotFound = () => notFound('MSG_COMMENT_NOT_FOUND', 'The comment was not found.');
+
+/**
+ * UC-66 Delete School Post Comment: SOFT delete (deleted_at = NOW(), deleted_by = user; §5 "deleted, never hidden").
+ * School Manager: any comment (UC-66); Teacher / Student / Parent: their own only (permissions.md note 17) → else 403.
+ * The comment does not exist, belongs to another post or is already deleted → 404 MSG_COMMENT_NOT_FOUND (checked
+ * before the permission: a comment that is gone is gone for everyone). Its replies stay.
+ * ASSUMPTION: on a NEWS post the comments do not exist for the API (UC-65 shows none), so deleting one is 404 too.
+ * ASSUMPTION: a user who left the post's audience can no longer delete their old comment there (they no longer see
+ * the post: 404). A School Manager still can.
+ */
+export async function deleteSchoolPostComment(user, schoolPostId, commentId) {
+  return withTransaction(async (client) => {
+    const post = await openSchoolPostForInteraction(client, user, schoolPostId, { lock: true });
+    if (post.postType !== 'ANNOUNCEMENT') throw commentNotFound();
+    const comment = await feed.findComment(post.target, commentId, { forUpdate: true }, client);
+    if (!comment || comment.isDeleted) throw commentNotFound();
+    if (!mayDeleteComment(user)(comment)) {
+      throw forbidden('FORBIDDEN', 'You can only delete your own comments.');
+    }
+    await feed.softDeleteComment(post.target, commentId, user.userId, client);
+    return { commentId, isDeleted: true, commentCount: await commentCountOf(post.schoolPostId, client) };
   });
 }
