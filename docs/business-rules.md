@@ -260,6 +260,18 @@ Boundaries that are easy to get wrong:
   same pair). Every message has a `group_id`.
 - Private messages only with people in one's own classes (SM: within the teacher group). Chat screens show nobody's
   phone or email (Khanh 07/11/2026); teachers and SM see them on the group member list (§4, UC-31).
+- **1-1 chats and sending** (Khanh's proposals 04–05/11, accepted by the lead 07/11/2026):
+  - Who one may write to follows the **active role**; a teacher may also write to the members of the teacher group
+    (teachers and School Managers).
+  - A 1-1 chat is listed under every role of its two members (never System Admin); sending is checked with the
+    active role. It is not listed for anyone until it has a message.
+  - When the two are no longer in reach (transfer, promotion, assignment ended), the old 1-1 chat stays readable and
+    sending is closed. Locked accounts are not offered and cannot be written to; their old chats stay readable.
+  - 1-1 chats show full names, never the class nickname.
+  - A message has at most 2000 characters. Messages cannot be edited (deleting: UC-113, below). No `CHAT`
+    notifications until FE-09.
+  - A student who transfers back to a class does not rejoin its teams (only GENERAL + STUDENT); the old team's chat
+    stays closed to them and they can create a new team.
 - **Chat history starts at the first joining** (04/11/2026): in every chat (group, team, teacher group, 1-1) a
   first-time member (e.g. a student who transfers in) sees only the messages sent since they joined. Someone who
   comes back sees the whole history again, the time they were away included (§4): what counts is their earliest
@@ -355,9 +367,10 @@ Boundaries that are easy to get wrong:
 
 ## 13. System administration (FE-13)
 - `system_settings` (key–value, loaded by SQL; SA edits values only): sign-in lock thresholds, upload limits, OTP
-  lifetime, password reset request cooldown, attendance edit deadline. Allowed values (01/11/2026): wrong passwords
-  before a lock 3–10; lock step 1–60 min; lock max 1–1440 min; images / files 1–50 MB; videos 1–200 MB; OTP lifetime
-  1–30 min; reset request cooldown 1–1440 min (default 15); attendance deadline a time `HH:MM`.
+  lifetime, password reset request cooldown, attendance edit deadline, chat delete-for-everyone time. Allowed values
+  (01/11/2026): wrong passwords before a lock 3–10; lock step 1–60 min; lock max 1–1440 min; images / files 1–50 MB;
+  videos 1–200 MB; OTP lifetime 1–30 min; reset request cooldown 1–1440 min (default 15); attendance deadline a time
+  `HH:MM`; `chat.delete_for_everyone_minutes` 1–1440 min (default 15, §6; agreed by the lead 07/11/2026).
 - `activity_logs` (never deleted) records only important actions: sign-in success / failure, account create /
   import / lock / unlock, password reset, role change, setting change, grade unlock. **The log is only kept in the
   database – there is no screen to view it** (UC "View Activity Log" and its screen removed 01/11/2026 on the
@@ -366,7 +379,8 @@ Boundaries that are easy to get wrong:
 ## 14. Deleting data
 - **Every delete in the system is a soft delete** (`deleted_at`, often `deleted_by`): never `DELETE` business rows,
   always filter `deleted_at IS NULL`.
-- Hard delete is allowed only for technical / configuration rows: `post_likes` (unlike), `class_event_viewers`,
+- Hard delete is allowed only for technical / configuration rows: `post_likes` (unlike), `message_reactions`
+  (reaction removed, §6), `class_event_viewers`,
   `teacher_subjects`, `user_roles`, `student_parents` (unlink), expired OTPs, `track_subjects` (a subject removed
   from a class type while the year has no grades, §4).
 - Status changes instead of deletes: accounts (`LOCKED`), enrollments (`TRANSFERRED` / `DROPPED`), group members

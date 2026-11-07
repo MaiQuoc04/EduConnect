@@ -24,7 +24,7 @@ copy .env.example .env      # macOS/Linux: cp .env.example .env
 ```
 - Cách nhanh nhất: xin nhóm trưởng file `.env` (gửi riêng, không gửi vào nhóm chat) rồi đặt vào `server/.env`.
 - Hoặc tự điền: `DB_PASSWORD` (mật khẩu database Supabase – nhóm trưởng gửi riêng) và `JWT_SECRET` (chuỗi ngẫu nhiên ≥ 32 ký tự, cả nhóm dùng **giống nhau**). Các giá trị `DB_HOST`, `DB_USER`… đã có sẵn trong `.env.example`.
-- Kiểm tra kết nối: `npm run db:check` → phải báo `PostgreSQL 17…, 47 tables` và `time zone Asia/Ho_Chi_Minh`.
+- Kiểm tra kết nối: `npm run db:check` → phải báo `PostgreSQL 17…, 50 tables` và `time zone Asia/Ho_Chi_Minh`.
 
 ```bash
 cd ../client

@@ -76,4 +76,4 @@ Notes:
 16. Own comments and any comment on their own posts; homeroom teacher: any comment in their class groups.
 17. Own comments only.
 18. Personal notifications about items they created (class events, extracurricular events, school announcements).
-19. Own messages only, within the time limit (School Manager: in the teacher group and their 1-1 chats).
+19. Own messages only, within the time limit (`chat.delete_for_everyone_minutes`), in chats the user may send in (notes 4 and 6).

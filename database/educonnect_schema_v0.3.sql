@@ -5,9 +5,6 @@
 -- 27/10/2026: + password_reset_requests (47 tables). Existing database: run patch_v0.3_password_reset_requests.sql.
 -- 31/10/2026: + password_reset_requests.temp_password_enc. Existing database: run
 --   patch_v0.3_reset_request_password.sql.
--- 07/11/2026: FE-06 reply, reactions, delete message: messages.reply_to_message_id, deleted_for_everyone_at / _by, tables
---   message_user_deletions and message_reactions (50 tables), setting chat.delete_for_everyone_minutes. Existing database:
---   run patch_v0.3_message_actions.sql.
 -- 02/11/2026: departments table (FE-03 Update Teacher picks a department from it). Existing database: run
 --   patch_v0.3_departments.sql.
 -- 28/10/2026: address moved from parents to users (every user edits their own). Existing database: run
@@ -18,10 +15,13 @@
 --   patch_v0.3_reset_request_delivery.sql.
 -- 02/11/2026: + class_tracks.grade_level_id (class types per grade). Existing database: run
 --   patch_v0.3_class_track_grade.sql.
+-- 07/11/2026: FE-06 reply, reactions, delete message: messages.reply_to_message_id, deleted_for_everyone_at / _by, tables
+--   message_user_deletions and message_reactions (50 tables), setting chat.delete_for_everyone_minutes. Existing database:
+--   run patch_v0.3_message_actions.sql.
 -- How to run: Supabase > SQL Editor > paste the whole file > Run (on an empty database).
 -- Conventions:
 --   * Soft delete everywhere (deleted_at / deleted_by). Hard delete only for: post_likes (unlike),
---     class_event_viewers, teacher_subjects, user_roles, student_parents (unlink), expired OTPs,
+--     message_reactions (reaction removed), class_event_viewers, teacher_subjects, user_roles, student_parents (unlink), expired OTPs,
 --     track_subjects (subject removed from a class type before the year has grades).
 --   * Rules marked "code" are checked in the application, not in the DB.
 --   * Times are TIMESTAMPTZ; the database time zone is Asia/Ho_Chi_Minh, so NOW() and ::date follow Vietnam time.

@@ -28,8 +28,10 @@ reactions, attachments) is merged into one place after both are on `develop`.
 
 ## Current status (read first; update after every merge, schema patch or new decision)
 
-Last updated: 07/11/2026 (FE-06 message actions UC-110..UC-113, patch run on the shared DB; FE-06 decision changed: coming back shows the whole chat history again; FE-03 group sync wired and FE-03 screen numbers fixed on `fix/it1-follow-ups`; FE-02
-merged 03/11 – every It1 feature is on `develop`; It2: Anh FE-08 + FE-14, Khanh FE-05 + FE-06).
+Last updated: 07/11/2026 (FE-06 Messaging merged with UC-110..UC-113, patch run on the shared DB; FE-13 departments
+merged (It1 item #2 done); lead accepted Khanh's FE-06 decisions and assumptions (business rules §6) and the 1–1440
+min range of `chat.delete_for_everyone_minutes`;
+It2: Anh FE-08 + FE-14, Khanh FE-05 + FE-06).
 
 - **Shared DB (Supabase):** schema v0.3 + `patch_v0.3_password_reset_requests.sql` (27/10) +
   `patch_v0.3_users_address.sql` (28/10: `users.address` added, `parents.address` dropped) +
@@ -65,6 +67,11 @@ merged 03/11 – every It1 feature is on `develop`; It2: Anh FE-08 + FE-14, Khan
   - FE-02 (Anh) merged 03/11: UC-07..UC-14 (student list / detail / update with address, transfer with reopening
     of an old enrollment, promotion with the next-year / grade / 45 / ended-year checks, parent links, UC-14 import),
     finished by the lead (see "FE-02 (Anh)" below). No schema change.
+  - FE-13 (Linh) commit "select a specialized department/team" merged 07/11 (create / import accounts pick a
+    department, `admin/departments.js`).
+  - FE-06 (Khanh) merged 07/11: UC-47 Chat in Group, UC-48 View Conversation List, UC-49 Send Private Message,
+    UC-110..UC-113 message actions, UC-35 teacher teams; module `server/src/modules/conversations/`, screens in
+    `client/src/pages/chat/`. Needs `patch_v0.3_message_actions.sql` (run on the shared DB 07/11).
 - **Not merged yet:** none of It1. It2 branches start from `develop`.
 - **FE-03 review (02/11):** endpoints work and the client builds. Lead decisions: keep the `departments` table;
   Dung's assumptions became business rules §4 "Teachers" (homeroom max 1 class per year, no new assignment for a
@@ -80,7 +87,7 @@ merged 03/11 – every It1 feature is on `develop`; It2: Anh FE-08 + FE-14, Khan
   year, no "drop out" use case (lock the account), SM edits a student's address, Anh's assumptions accepted, anyone
   coming back to a group gets the old row back. Shared accent-insensitive search `server/src/utils/search.js` (from
   Dung's helpers; FE-13 account list and FE-03 teacher list use it, 03/11).
-- **FE-06 decision (04/11, changed the same day by Khanh; the lead to be told):** business rules §4 are back to
+- **FE-06 decision (04/11, changed the same day by Khanh; accepted by the lead 07/11):** business rules §4 are back to
   "anyone coming back sees the whole history", feed and chat; the earlier version (a member coming back sees only
   new messages) is dropped. Still in §6: a first-time member sees the chat only from when they joined. The chat counts
   from the earliest `joined_at` of all the person's rows in the group, because UC-32 adds someone back with a new
@@ -90,19 +97,21 @@ merged 03/11 – every It1 feature is on `develop`; It2: Anh FE-08 + FE-14, Khan
   teachers of the teacher group (filter by department). No schema change (`groups.class_id` is already nullable).
   `POST /groups/teams` takes `source: 'TEACHER_SCHOOL'`; `GET /groups` adds `teacherTeams`. Listed under "Toàn trường".
 - **FE-06 message actions (lead OK 07/11, Khanh):** UC-110 Reply, UC-111 React, UC-112 Insert Emoji, UC-113 Delete
-  Message (for everyone within 15 minutes, or for me), business rules §4, §6, built on `feature/fe-06-messaging`.
-  Patch `database/patch_v0.3_message_actions.sql` (50 tables) ran on the shared DB 07/11.
-  113 use cases. Moderator removal of other people's messages: not built (Khanh 07/11). FE-13 (Linh): the settings
-  screen lists `chat.delete_for_everyone_minutes` by itself; add its range 1-1440 to `RULES` in `settings.service.js`.
-- **FE-06 assumptions waiting for the lead (Khanh, 04/11, "as proposed"; marked `// ASSUMPTION:` in
-  `server/src/modules/conversations/`):** Q1 two people no longer in reach (transfer, promotion, assignment ended):
+  Message (for everyone within `chat.delete_for_everyone_minutes`, default 15, or for me), business rules §4, §6,
+  merged 07/11. Patch `database/patch_v0.3_message_actions.sql` (50 tables) ran on the shared DB 07/11.
+  113 use cases. Moderator removal of other people's messages: not built (Khanh 07/11). Setting range 1–1440 min
+  agreed by the lead 07/11 (business rules §13); the settings screen part is Linh's (see "Follow-ups owed").
+  Chat screens show nobody's phone or email (Khanh 07/11, accepted by the lead 07/11).
+- **FE-06 assumptions accepted by the lead 07/11 (Khanh, 04/11; now business rules §6, still marked
+  `// ASSUMPTION:` in `server/src/modules/conversations/`):** Q1 two people no longer in reach (transfer, promotion, assignment ended):
   the old 1-1 chat stays readable, sending is closed (`MSG_DIRECT_OUT_OF_SCOPE`); Q2 locked accounts are not listed
   and cannot be written to (`MSG_DIRECT_LOCKED`), old chats stay readable; Q5 a message has at most 2000 characters;
   Q6 1-1 chats show full names, never the class nickname; Q7 who one may write to follows the active role; Q9 a
   teacher may also write to the teacher group members (teachers, School Managers); Q10 a 1-1 chat is listed under
   every role of its two members (not System Admin), sending is checked with the active role. Also: a 1-1
-  chat is not listed for anyone until it has a message (Khanh, 05/11); Q3 (no `CHAT` notifications until FE-09) and Q4 (no edit /
-  delete of messages) stay as proposed. A student who transfers back to a class does not rejoin its teams
+  chat is not listed for anyone until it has a message (Khanh, 05/11); Q3 (no `CHAT` notifications until FE-09) stays
+  as proposed; Q4: messages cannot be edited, deleting follows UC-113 (lead OK 07/11). A student who transfers back
+  to a class does not rejoin its teams
   automatically (only GENERAL + STUDENT), so the old team's chat stays closed to them; they can create a new team.
 - **Numbering changes (01/11):** UC-104 View Activity Log and SCR-64 Activity Log removed; UC-105..UC-110 became
   UC-104..UC-109 and SCR-65..SCR-71 became SCR-64..SCR-70; then SCR-71 Password Reset Requests (FE-13) was added.
@@ -115,7 +124,7 @@ merged 03/11 – every It1 feature is on `develop`; It2: Anh FE-08 + FE-14, Khan
   | # | Work left from It1 | Owner | When |
   |---|---|---|---|
   | 1 | Merge `fix/it1-follow-ups` (FE-03 group sync, FE-03 screen numbers – details below) | Quoc | 04/11 |
-  | 2 | FE-13 departments: create / import pick from the `departments` list (details below) | Linh | by 13/11 (It2) |
+  | 2 | FE-13 departments: create / import pick from the `departments` list (details below) | Linh | **done**, merged 07/11 (the follow-up patch is still open) |
   | 3 | Replace the temporary `GET /students/parents/lookup` with FE-14 UC-104 | Anh | with FE-14 (It2) |
   | 4 | Shared Excel reading `utils/excel.js` for UC-96 / UC-14 / UC-27 (It2 clean-up, after the features merge) | Linh | It2 clean-up |
   | 5 | Decide: who adds a new department (SQL only today, or a screen for SM / SA) | Quoc | before Linh starts #2 |
@@ -125,6 +134,17 @@ merged 03/11 – every It1 feature is on `develop`; It2: Anh FE-08 + FE-14, Khan
 - **Follow-ups owed:**
   - FE-13 (Linh): pull `develop` and continue from it; do not run SQL patches on the shared DB before the lead
     approves them.
+  - FE-13 (Linh), after FE-06 (owed since 07/11): the setting `chat.delete_for_everyone_minutes` is listed on the
+    settings screen with its English description and no check. (1) `server/src/modules/admin/settings.service.js`:
+    add `'chat.delete_for_everyone_minutes': { type: 'int', min: 1, max: 1440 }` to `RULES` (business rules §13).
+    (2) `client/src/pages/admin/SystemSettingsPage.jsx`: add it to `META` (group "Tin nhắn", label "Thời gian được thu
+    hồi tin nhắn với mọi người", unit "phút"). Test on the local DB: set 1, send a message, after 1 minute "delete for
+    everyone" is refused (`MSG_DELETE_EXPIRED`); 0, 2000 and "abc" are refused; a `SETTING_CHANGE` row is logged;
+    `npm run build` passes. FE-06 already reads the value on every request (falls back to 15 if it is not a number).
+  - FE-06 (Khanh), owed since the 07/11 merge: (1) chat attachments (business rules §5: images / files ≤ 10 MB,
+    video ≤ 50 MB) are not built yet; they come with the upload code shared with FE-05 (see the FE-05 / FE-08 note
+    at the top). (2) The `// ASSUMPTION:` comments in `server/src/modules/conversations/` still say "until the lead
+    decides" / "to be confirmed"; reword them as accepted 07/11 (business rules §6).
   - FE-02 (Anh) – merged 03/11. The lead's list was done on the branch, all tested on the throw-away local DB
     (`dev-local-db.js`), nothing written to the shared DB:
     - Done: `develop` merged in. UC-09 edits the address (`users.address`, max 500, cleared when empty, as UC-107).
@@ -185,7 +205,10 @@ merged 03/11 – every It1 feature is on `develop`; It2: Anh FE-08 + FE-14, Khan
     the class is synced again (no daily job); an assignment starting later counts from the day it is saved (rule:
     "current or future assignment"). Option: a daily job in FE-09 (It3) that calls `syncClassTeachers` for classes
     whose assignments ended yesterday.
-  - FE-13 (Linh) – departments (closing item #2). Today UC-17 (FE-03) picks the department from the `departments`
+  - FE-13 (Linh) – departments (closing item #2) – **done, merged 07/11** (`server/src/modules/admin/departments.js`
+    reuses `findActiveDepartments`; SA reads the list with `GET /admin/accounts/department-options`). Still open: the
+    patch in the last point below. The original task:
+    Before, UC-17 (FE-03) picked the department from the `departments`
     list, but account create (UC-96 single) and import (UC-96 / UC-97 file) still take free text into
     `teachers.department` (only max 100 is checked), so one department can be spelled several ways and is then missing
     from the UC-17 list. On the shared DB 04/11: one teacher has "Toán - Tin", which is not in the list.

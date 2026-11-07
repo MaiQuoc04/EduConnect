@@ -1,4 +1,4 @@
-# Use cases (109) – numbering after the 20/10/2026 database review
+# Use cases (113) – numbering after the 20/10/2026 database review
 
 Source: Report 3 section 4.2 (draft v1.3). Actor "User" = any signed-in account. "Homeroom Teacher" is not a role: it is a Teacher who is `classes.homeroom_teacher_id` of that class.
 

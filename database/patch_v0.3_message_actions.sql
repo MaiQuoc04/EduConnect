@@ -1,4 +1,4 @@
--- Approved by the team lead 07/11/2026 (Khanh). Same definitions as in educonnect_schema_v0.3.sql.
+-- Written by Khanh, approved by the team lead (Quoc) 07/11/2026. Same definitions as in educonnect_schema_v0.3.sql.
 -- Patch for a database already created from schema v0.3: FE-06 reply, reactions, delete message.
 -- The code on feature/fe-06-messaging needs this patch: without it every chat screen fails. Run on the shared DB 07/11/2026.
 -- How to run: Supabase > SQL Editor > paste > Run (once).
