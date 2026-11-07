@@ -207,7 +207,8 @@ Boundaries that are easy to get wrong:
 - Importing a class creates 3 groups automatically: **GENERAL** (feed + chat), **STUDENT** (chat), **PARENT** (chat).
   Groups can also be created by hand. One **TEACHER_SCHOOL** group for the whole school (feed + chat, all teachers +
   SMs, managed by SM, reused across years). After promotion, last year's groups are read only.
-- **Teams** (`TEAM_CHAT`): chat only, members from one class; Teachers, Students and Parents can create them
+- **Teams** (`TEAM_CHAT`): chat only, members from one class, or teachers of the school ("teacher team", below);
+  Teachers, Students and Parents can create them
   (`groups.created_by`); SA and SM cannot.
 - Student **nickname** (max 50 characters) is set by the homeroom teacher only and shown only inside that class:
   to the members of the class's groups and to the School Manager (never in the teacher group or outside the class).
@@ -216,6 +217,11 @@ Boundaries that are easy to get wrong:
   **nobody adds or removes members** and a team has **no admin**. **Anyone can leave a team**, the creator too;
   when the last member leaves, the team is closed (soft-deleted). The three class groups cannot be left (membership
   follows the class). Not possible once the school year has ended.
+- **Teacher teams** (agreed by the lead 05/11/2026, e.g. a head of department with the department's teachers): a team
+  with no class (`class_id` NULL), created by a teacher (active role) who is in the teacher group. Members are
+  picked from the teachers of the teacher group, whatever their class; School Managers cannot be picked, cannot create
+  one and do not see it. Same size, name, leave and no-admin rules as above. It has no school year, so it never
+  becomes read only. A teacher whose account is locked later stays in it with the "Locked" label.
 - **Group moderator = the current homeroom teacher**, read from `classes.homeroom_teacher_id` (nothing stored per
   group), so the rights move at once when the homeroom teacher changes, posts waiting for approval included.
 - **Removing members** (UC-33): the homeroom teacher removes students and parents only; teachers are removed by the
@@ -232,7 +238,8 @@ Boundaries that are easy to get wrong:
     and PARENT, and also GENERAL and the class's teams unless they still teach a subject there. A teacher who is
     also the parent of a student of the class keeps the groups a parent belongs to.
   - Anyone who comes back to a group (teacher, student or parent) gets their old membership row back (`left_at`
-    cleared) and sees the group's whole history. Shared function in FE-04
+    cleared) and sees the group's whole history, feed and chat, except chat messages they deleted for themselves (§6).
+    Shared function in FE-04
     `classGroups.js`; nothing changes for classes of an ended school year.
 
 ## 5. Group feed (FE-05)
@@ -251,10 +258,31 @@ Boundaries that are easy to get wrong:
 - Group chats (GENERAL / STUDENT / PARENT / TEACHER_SCHOOL / TEAM_CHAT) and **1-1 chats**. A 1-1 chat is a group of
   type `DIRECT` with 2 members and `direct_key = "<smallerUserId>_<largerUserId>"` (unique → never two chats for the
   same pair). Every message has a `group_id`.
-- Private messages only with people in one's own classes (SM: within the teacher group). Phone and email are visible
-  only to teachers and SM.
-- Read receipts: `group_members.last_read_at`; "seen by" = members whose `last_read_at ≥ message.sent_at`.
+- Private messages only with people in one's own classes (SM: within the teacher group). Chat screens show nobody's
+  phone or email (Khanh 07/11/2026); teachers and SM see them on the group member list (§4, UC-31).
+- **Chat history starts at the first joining** (04/11/2026): in every chat (group, team, teacher group, 1-1) a
+  first-time member (e.g. a student who transfers in) sees only the messages sent since they joined. Someone who
+  comes back sees the whole history again, the time they were away included (§4): what counts is their earliest
+  `joined_at` in that group, whichever way they came back. The last message and the unread count of the conversation
+  list follow the same rule. **Chat only:** the group feed (FE-05) always shows its whole history.
+- Read receipts: `group_members.last_read_at`; "seen by" = members whose `last_read_at ≥ message.sent_at` (and
+  who had first joined by then, earliest `joined_at ≤ message.sent_at`).
 - Removing a member / transferring a student sets `group_members.left_at` (row is kept).
+- **Reply, reactions, emoji, delete** (agreed by the lead 07/11/2026; UC-110..UC-113):
+  - **Reply:** one level, to a message of the same chat the sender can see and that is not deleted for everyone. The
+    quote is read from the original when shown. Someone who joined after the original sees only "message from before
+    you joined", nothing of it. Clicking a quote goes to the original.
+  - **Reactions:** fixed set of 6 (like, love, haha, wow, sad, thanks; "Only Like" in §5 is for the feed); one per person
+    per message, another one replaces it, the same one removes it. They do not count as unread or move the chat up.
+  - **Emoji:** the system's own emoji in the text; no stickers.
+  - **Delete for everyone:** own message only, within `chat.delete_for_everyone_minutes` (default 15, from sending).
+    It stays as "Tin nhắn đã được xoá" with its reactions and attachments hidden, no longer counts as unread, and cannot
+    be answered or reacted to. The database keeps the content; the API never returns it and no screen shows it.
+  - **Delete for me:** any message one can see, no time limit; others see no change. It stays hidden after leaving a
+    group and coming back. The preview falls back to the last message still visible; a 1-1 chat with none left drops
+    off the list until a new message arrives.
+  - Neither can be undone. In an ended school year or a closed 1-1 chat only delete for me is possible. Group moderators
+    cannot delete other people's messages.
 
 ## 7. Extracurricular activities (FE-07)
 - The homeroom teacher posts an activity in the class feed (a `posts` row + `extracurricular_events` row) with a

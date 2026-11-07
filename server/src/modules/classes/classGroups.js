@@ -86,7 +86,7 @@ const CLASS_GROUP_TYPES = ['GENERAL', 'STUDENT', 'PARENT'];
 //     (current or future assignment) in GENERAL, a teacher who is also a parent of a studying student in GENERAL and
 //     PARENT – so the previous homeroom teacher leaves STUDENT and PARENT and keeps GENERAL while still teaching there;
 //   * teachers who must be in a group and are not are added, or get their old row back (left_at cleared – they see
-//     the whole history again); no duplicate rows;
+//     the whole history of the feed and the chat again); no duplicate rows;
 //   * a teacher in a class group for no reason any more leaves it (left_at, row kept), and leaves the class's teams
 //     when the class no longer explains them at all;
 //   * only teachers are touched: students and parents follow transfer / promotion (FE-02), so someone removed with

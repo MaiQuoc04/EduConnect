@@ -28,7 +28,7 @@ reactions, attachments) is merged into one place after both are on `develop`.
 
 ## Current status (read first; update after every merge, schema patch or new decision)
 
-Last updated: 04/11/2026 (FE-03 group sync wired and FE-03 screen numbers fixed on `fix/it1-follow-ups`; FE-02
+Last updated: 07/11/2026 (FE-06 message actions UC-110..UC-113, patch run on the shared DB; FE-06 decision changed: coming back shows the whole chat history again; FE-03 group sync wired and FE-03 screen numbers fixed on `fix/it1-follow-ups`; FE-02
 merged 03/11 – every It1 feature is on `develop`; It2: Anh FE-08 + FE-14, Khanh FE-05 + FE-06).
 
 - **Shared DB (Supabase):** schema v0.3 + `patch_v0.3_password_reset_requests.sql` (27/10) +
@@ -38,7 +38,8 @@ merged 03/11 – every It1 feature is on `develop`; It2: Anh FE-08 + FE-14, Khan
   `patch_v0.3_reset_request_delivery.sql` (01/11: `password_reset_requests.delivery`) +
   `patch_v0.3_departments.sql` (FE-03, already run before review; kept by the lead 02/11: table `departments`) +
   `patch_v0.3_class_track_grade.sql` (FE-04, run by Khanh 02/11 before approval; accepted 03/11:
-  `class_tracks.grade_level_id`). 48 tables.
+  `class_tracks.grade_level_id`) +
+  `patch_v0.3_message_actions.sql` (FE-06, run by Khanh 07/11 after the lead's OK: reply, delete, reactions). 50 tables.
 - **Sample data added to the shared DB (03/11, Anh, accepted by the lead 03/11), through the app API (UC-96, UC-14, UC-28),
   no SQL:** 90 student accounts `HS7001..HS7090` (no class yet), 90 parent accounts with phones
   `0977000001..0977000090` (all with `must_change_password`), 65 links (HS7001–7020 two parents, HS7021–7045 one,
@@ -79,6 +80,30 @@ merged 03/11 – every It1 feature is on `develop`; It2: Anh FE-08 + FE-14, Khan
   year, no "drop out" use case (lock the account), SM edits a student's address, Anh's assumptions accepted, anyone
   coming back to a group gets the old row back. Shared accent-insensitive search `server/src/utils/search.js` (from
   Dung's helpers; FE-13 account list and FE-03 teacher list use it, 03/11).
+- **FE-06 decision (04/11, changed the same day by Khanh; the lead to be told):** business rules §4 are back to
+  "anyone coming back sees the whole history", feed and chat; the earlier version (a member coming back sees only
+  new messages) is dropped. Still in §6: a first-time member sees the chat only from when they joined. The chat counts
+  from the earliest `joined_at` of all the person's rows in the group, because UC-32 adds someone back with a new
+  row while FE-02 / FE-04 reopen the old one. `joined_at` is no longer reset, so FE-02 `joinClassGroups` needs no
+  change. The group feed (FE-05) always shows its whole history.
+- **Teacher teams (lead OK 05/11, Khanh; UC-35, business rules §4):** a teacher creates a team with no class from the
+  teachers of the teacher group (filter by department). No schema change (`groups.class_id` is already nullable).
+  `POST /groups/teams` takes `source: 'TEACHER_SCHOOL'`; `GET /groups` adds `teacherTeams`. Listed under "Toàn trường".
+- **FE-06 message actions (lead OK 07/11, Khanh):** UC-110 Reply, UC-111 React, UC-112 Insert Emoji, UC-113 Delete
+  Message (for everyone within 15 minutes, or for me), business rules §4, §6, built on `feature/fe-06-messaging`.
+  Patch `database/patch_v0.3_message_actions.sql` (50 tables) ran on the shared DB 07/11.
+  113 use cases. Moderator removal of other people's messages: not built (Khanh 07/11). FE-13 (Linh): the settings
+  screen lists `chat.delete_for_everyone_minutes` by itself; add its range 1-1440 to `RULES` in `settings.service.js`.
+- **FE-06 assumptions waiting for the lead (Khanh, 04/11, "as proposed"; marked `// ASSUMPTION:` in
+  `server/src/modules/conversations/`):** Q1 two people no longer in reach (transfer, promotion, assignment ended):
+  the old 1-1 chat stays readable, sending is closed (`MSG_DIRECT_OUT_OF_SCOPE`); Q2 locked accounts are not listed
+  and cannot be written to (`MSG_DIRECT_LOCKED`), old chats stay readable; Q5 a message has at most 2000 characters;
+  Q6 1-1 chats show full names, never the class nickname; Q7 who one may write to follows the active role; Q9 a
+  teacher may also write to the teacher group members (teachers, School Managers); Q10 a 1-1 chat is listed under
+  every role of its two members (not System Admin), sending is checked with the active role. Also: a 1-1
+  chat is not listed for anyone until it has a message (Khanh, 05/11); Q3 (no `CHAT` notifications until FE-09) and Q4 (no edit /
+  delete of messages) stay as proposed. A student who transfers back to a class does not rejoin its teams
+  automatically (only GENERAL + STUDENT), so the old team's chat stays closed to them; they can create a new team.
 - **Numbering changes (01/11):** UC-104 View Activity Log and SCR-64 Activity Log removed; UC-105..UC-110 became
   UC-104..UC-109 and SCR-65..SCR-71 became SCR-64..SCR-70; then SCR-71 Password Reset Requests (FE-13) was added.
   109 use cases, 71 screens.
@@ -298,7 +323,7 @@ Built separately from FE-08; shared feed code is merged after both are on `devel
 | UC-45 | Hide Post / Delete Comment | Homeroom Teacher (class), School Manager (teacher group) |
 | UC-46 | Approve / Reject Post | Homeroom Teacher (class), School Manager (teacher group) |
 
-### Khanh: FE-06 Messaging (3 UC)
+### Khanh: FE-06 Messaging (7 UC)
 
 Moved from It2 to It3 on 20/10, back to It2 for Khanh on 03/11 (builds on the FE-04 groups, teams and chat shell).
 
@@ -307,6 +332,10 @@ Moved from It2 to It3 on 20/10, back to It2 for Khanh on 03/11 (builds on the FE
 | UC-47 | Chat in Group | Teacher, Student, Parent, School Manager (teacher group) |
 | UC-48 | View Conversation List | Teacher, Student, Parent, School Manager |
 | UC-49 | Send Private Message | Teacher, Student, Parent, School Manager (teacher group) |
+| UC-110 | Reply to Message | Teacher, Student, Parent, School Manager (teacher group) |
+| UC-111 | React to Message | Teacher, Student, Parent, School Manager (teacher group) |
+| UC-112 | Insert Emoji | Teacher, Student, Parent, School Manager (teacher group) |
+| UC-113 | Delete Message | Teacher, Student, Parent, School Manager (teacher group) |
 
 ### Dung: FE-10 Schedule Management (6 UC)
 
@@ -384,4 +413,4 @@ Class calendar (UC-76..80) + job: class event reminder 1 day before. Moved from 
 | UC-88 | View Grades | Teacher, Student, Parent, School Manager |
 | UC-89 | View Class Ranking | Teacher, Student, Parent, School Manager |
 
-Total: 109 use cases.
+Total: 113 use cases.

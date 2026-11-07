@@ -225,13 +225,13 @@ export default function App() {
           <Route path="feed" element={<GroupPendingTab kind="feed" />} />
           <Route path="members" element={<GroupMembersPage />} />
         </Route>
-        {/* Split chat view: shell from FE-04, messages by FE-06 (Khanh). */}
+        {/* Split chat view: shell from FE-04, messages by FE-06 (Khanh); School Manager: teacher group only. */}
         {['chat', 'chat/:groupId'].map((path) => (
           <Route
             key={path}
             path={path}
             element={
-              <ProtectedRoute roles={['TEACHER', 'STUDENT', 'PARENT']}>
+              <ProtectedRoute roles={['SCHOOL_MANAGER', 'TEACHER', 'STUDENT', 'PARENT']}>
                 <ChatPage />
               </ProtectedRoute>
             }

@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { useOutletContext } from 'react-router-dom';
+import { useNavigate, useOutletContext } from 'react-router-dom';
 import { api } from '../../api/client.js';
 import Avatar from '../../components/Avatar.jsx';
 import Icon from '../../components/Icon.jsx';
@@ -30,7 +30,8 @@ const plain = (text) =>
 
 // SCR-22 Group Member List – UC-31 View Group Members, with UC-32 Add Group Member, UC-33 Remove Group Member and
 // UC-34 Set Student Nickname for those allowed (the server checks again). Contacts and student codes only reach
-// teachers and the School Manager.
+// teachers and the School Manager. FE-06 UC-49: a "Nhắn tin" button opens the 1-1 chat with members the active role
+// may write to (canMessage from the server).
 export default function GroupMembersPage() {
   const group = useOutletContext();
   const { activeRole } = useAuth();
@@ -43,6 +44,8 @@ export default function GroupMembersPage() {
   const [adding, setAdding] = useState(false);
   const [removing, setRemoving] = useState(null); // member
   const [editing, setEditing] = useState(null); // { userId, value, saving, error }
+  const [opening, setOpening] = useState(null); // userId whose 1-1 chat is being opened
+  const navigate = useNavigate();
 
   useEffect(() => {
     let alive = true;
@@ -95,6 +98,20 @@ export default function GroupMembersPage() {
     }
   }
 
+  // FE-06 UC-49 shortcut: open (or create) the 1-1 chat with a member; "Quay lại" in the chat comes back here.
+  async function messageTo(m) {
+    const back = { backTo: `/groups/${group.groupId}/members`, backLabel: 'Thành viên nhóm' };
+    if (m.directGroupId) return navigate(`/chat/${m.directGroupId}`, { state: back });
+    setOpening(m.userId);
+    try {
+      const { data: chat } = await api.post('/conversations/direct', { userId: m.userId });
+      navigate(`/chat/${chat.groupId}`, { state: back });
+    } catch (err) {
+      toast(errorText(err));
+      setOpening(null);
+    }
+  }
+
   if (state.error) return <p className="form-error">{state.error}</p>;
   if (state.loading) return <p className="loading">Đang tải thành viên…</p>;
 
@@ -107,7 +124,8 @@ export default function GroupMembersPage() {
     !m.kinds.includes('HOMEROOM') &&
     (manager || !m.kinds.some((k) => k === 'SUBJECT_TEACHER' || k === 'TEACHER'));
   const canName = (m) => canSetNickname && m.kinds.includes('STUDENT');
-  const showActions = canManageMembers || canSetNickname;
+  // canMessage comes from the server (UC-49 reach of the active role, active accounts, never oneself).
+  const showActions = canManageMembers || canSetNickname || members.some((m) => m.canMessage);
   // SCR-22 stat tiles: one bordered card per figure, the label coloured by role.
   const stats = isClass
     ? [
@@ -265,6 +283,19 @@ export default function GroupMembersPage() {
                   {showActions && (
                     <td className="num">
                       <span className="group-row-actions">
+                        {m.canMessage && (
+                          <button
+                            type="button"
+                            className="btn btn-tertiary group-message"
+                            onClick={() => messageTo(m)}
+                            disabled={opening !== null}
+                            title={`Nhắn tin riêng với ${m.fullName}`}
+                            aria-label={`Nhắn tin riêng với ${m.fullName}`}
+                          >
+                            <Icon name="chat" size="sm" />
+                            <span>{opening === m.userId ? 'Đang mở…' : 'Nhắn tin'}</span>
+                          </button>
+                        )}
                         {canName(m) && editing?.userId !== m.userId && (
                           <button
                             type="button"

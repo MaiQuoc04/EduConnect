@@ -36,7 +36,7 @@ export const GROUP_TYPE_DESC = {
   STUDENT: 'Trò chuyện giữa giáo viên chủ nhiệm và học sinh của lớp.',
   PARENT: 'Trò chuyện giữa giáo viên chủ nhiệm và phụ huynh của lớp.',
   TEACHER_SCHOOL: 'Bảng tin và trò chuyện của toàn bộ giáo viên và quản lý trường.',
-  TEAM_CHAT: 'Trò chuyện riêng giữa các thành viên được chọn trong lớp.',
+  TEAM_CHAT: 'Trò chuyện riêng giữa các thành viên được chọn.',
 };
 
 export const GROUP_TYPE_ICONS ={ GENERAL: 'groups', STUDENT: 'school', PARENT: 'family_restroom', TEACHER_SCHOOL: 'co_present', TEAM_CHAT: 'forum' };

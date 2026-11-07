@@ -17,7 +17,7 @@ export const NAV_SECTIONS = [
     label: 'Cộng đồng',
     items: [
       { to: '/groups', label: 'Nhóm của tôi', icon: 'groups', roles: ['TEACHER', 'STUDENT', 'PARENT'] }, // FE-04 UC-29
-      { to: '/chat', label: 'Trò chuyện', icon: 'forum', roles: ['TEACHER', 'STUDENT', 'PARENT'] }, // FE-06 shell (FE-04)
+      { to: '/chat', label: 'Trò chuyện', icon: 'forum', roles: ['SCHOOL_MANAGER', 'TEACHER', 'STUDENT', 'PARENT'] }, // FE-06 UC-47 (SM: teacher group)
     ],
   },
   {

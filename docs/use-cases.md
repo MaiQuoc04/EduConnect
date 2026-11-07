@@ -58,7 +58,7 @@ Source: Report 3 section 4.2 (draft v1.3). Actor "User" = any signed-in account.
 | UC-32 | Add Group Member | School Manager, Homeroom Teacher | Class Groups | Add members of the same class to a group. |
 | UC-33 | Remove Group Member | School Manager, Homeroom Teacher | Class Groups | Remove a member from a group. |
 | UC-34 | Set Student Nickname | Homeroom Teacher | Class Groups | Set a nickname shown only inside that class. |
-| UC-35 | Create Team Chat | Teacher, Student, Parent | Teams | Create a chat-only team with members of one class. Members can leave it later (the last one leaving closes it); nobody adds or removes members after creation. |
+| UC-35 | Create Team Chat | Teacher, Student, Parent | Teams | Create a chat-only team with members of one class; a teacher can also create a teacher team with teachers of the school (no class). Members can leave it later (the last one leaving closes it); nobody adds or removes members after creation. |
 
 ## FE-05 Group Feed
 
@@ -83,6 +83,10 @@ Source: Report 3 section 4.2 (draft v1.3). Actor "User" = any signed-in account.
 | UC-47 | Chat in Group | Teacher, Student, Parent, School Manager (teacher group) | Group & Team Chat | Send and receive real-time messages in a group or team. |
 | UC-48 | View Conversation List | Teacher, Student, Parent, School Manager | Private Messaging | View group, team and private conversations. |
 | UC-49 | Send Private Message | Teacher, Student, Parent, School Manager (teacher group) | Private Messaging | Search a member within one's classes (School Manager: within the teacher group) and chat one-to-one. |
+| UC-110 | Reply to Message | Teacher, Student, Parent, School Manager (teacher group) | Message Actions | Answer a message with a quote of it; clicking the quote goes to the original (added 07/11/2026). |
+| UC-111 | React to Message | Teacher, Student, Parent, School Manager (teacher group) | Message Actions | Add, change or remove one's reaction from a fixed set of six; see who reacted (added 07/11/2026). |
+| UC-112 | Insert Emoji | Teacher, Student, Parent, School Manager (teacher group) | Message Actions | Choose an emoji from a list while writing a message (added 07/11/2026). |
+| UC-113 | Delete Message | Teacher, Student, Parent, School Manager (teacher group) | Message Actions | Delete one's own message for everyone within the time limit, or any visible message for oneself (added 07/11/2026). |
 
 ## FE-07 Extracurricular Event Management
 

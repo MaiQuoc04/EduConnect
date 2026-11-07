@@ -1,3 +1,5 @@
+import { pool } from '../../config/db.js';
+import { messageableUsers } from '../conversations/direct.service.js';
 import * as groupService from './groups.service.js';
 import * as memberService from './groupMembers.service.js';
 import * as teamService from './teams.service.js';
@@ -10,8 +12,23 @@ export async function detail(req, res) {
   res.json(await groupService.getGroup(req.user, req.params.id));
 }
 
+// UC-31 + FE-06 UC-49 shortcut: each member also carries canMessage (the active role may open a 1-1 chat with them:
+// in reach and active, never oneself) and directGroupId (their existing 1-1 chat, if any).
 export async function members(req, res) {
-  res.json(await groupService.listMembers(req.user, req.params.id));
+  const result = await groupService.listMembers(req.user, req.params.id);
+  const reach = await messageableUsers(
+    pool,
+    req.user,
+    result.members.map((m) => m.userId),
+  );
+  res.json({
+    ...result,
+    members: result.members.map((m) => ({
+      ...m,
+      canMessage: reach.has(m.userId),
+      directGroupId: reach.get(m.userId) ?? null,
+    })),
+  });
 }
 
 export async function candidates(req, res) {
@@ -35,8 +52,8 @@ export async function teamOptions(req, res) {
 }
 
 export async function createTeam(req, res) {
-  const { classId, teamName, memberIds } = req.body ?? {};
-  res.status(201).json(await teamService.createTeam(req.user, { classId, teamName, memberIds }));
+  const { source, classId, teamName, memberIds } = req.body ?? {};
+  res.status(201).json(await teamService.createTeam(req.user, { source, classId, teamName, memberIds }));
 }
 
 export async function leave(req, res) {

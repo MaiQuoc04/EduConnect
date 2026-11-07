@@ -7,6 +7,7 @@ import { byRankThenName } from './groups.service.js';
 // FE-04 Class & Group Management – teams (owner: Khanh). UC-35 Create Team Chat: a chat-only group (TEAM_CHAT) with
 // people of one class, created by a teacher, student or parent (business-rules §4; never SM or SA). The chat itself
 // is FE-06. Members are fixed at creation (no use case yet to rename a team or add people); a member can leave.
+// Teacher team (lead OK 05/11/2026): no class, created by a teacher from the teachers of the teacher group.
 
 const conflict = (code, message, details) => new AppError(409, code, message, details);
 
@@ -79,12 +80,54 @@ async function classPeople(db, user, classIds) {
   return rows;
 }
 
-// UC-35 form data: the classes the user can create a team in, each with the people they can pick.
+// Teachers of the school-wide group the user can pick for a teacher team, or null when the user cannot create one
+// (active role Teacher and a member of the teacher group). School Managers are never picked (business-rules §4).
+async function teacherTeamOptions(db, user) {
+  if (user.activeRole !== 'TEACHER') return null;
+  const { rows: groups } = await db.query(
+    `SELECT g.group_id AS "groupId", g.group_name AS "groupName"
+     FROM groups g JOIN group_members me ON me.group_id = g.group_id AND me.user_id = $1 AND me.left_at IS NULL
+     WHERE g.group_type = 'TEACHER_SCHOOL' AND g.deleted_at IS NULL
+     ORDER BY g.group_id LIMIT 1`,
+    [user.userId],
+  );
+  if (!groups.length) return null;
+  const { rows: people } = await db.query(
+    `SELECT DISTINCT u.user_id AS "userId", u.full_name AS "fullName", u.avatar_url AS "avatarUrl", u.status,
+            t.department, ARRAY['TEACHER']::text[] AS kinds, '[]'::jsonb AS children
+     FROM group_members m
+     JOIN teachers t ON t.user_id = m.user_id
+     JOIN users u ON u.user_id = m.user_id
+     WHERE m.group_id = $1 AND m.left_at IS NULL AND m.user_id <> $2`,
+    [groups[0].groupId, user.userId],
+  );
+  return { ...groups[0], people: people.sort(byRankThenName) };
+}
+
+// One new team and its members, inside the caller's transaction. classId is null for a teacher team.
+async function insertTeam(client, user, classId, teamName, memberIds) {
+  const { rows } = await client.query(
+    `INSERT INTO groups (class_id, group_name, group_type, require_approval, created_by)
+     VALUES ($1, $2, 'TEAM_CHAT', FALSE, $3)
+     RETURNING group_id AS "groupId"`,
+    [classId, teamName, user.userId],
+  );
+  const { groupId } = rows[0];
+  await client.query(`INSERT INTO group_members (group_id, user_id) SELECT $1, x FROM unnest($2::bigint[]) AS x`, [
+    groupId,
+    [user.userId, ...memberIds],
+  ]);
+  return { groupId, groupName: teamName, memberCount: memberIds.length + 1 };
+}
+
+// UC-35 form data: the classes the user can create a team in, each with the people they can pick; for a teacher also
+// the teachers they can pick for a teacher team (teacherGroup, null otherwise).
 export async function teamOptions(user) {
   const kinds = kindsFor(user);
   const classes = await teamClasses(pool, user, kinds);
   const people = classes.length ? await classPeople(pool, user, classes.map((c) => c.classId)) : [];
   return {
+    teacherGroup: await teacherTeamOptions(pool, user),
     limits: { minOthers: MIN_OTHERS, maxMembers: MAX_MEMBERS, nameMin: NAME_MIN, nameMax: NAME_MAX },
     classes: classes.map((c) => ({
       ...c,
@@ -132,10 +175,23 @@ function parseMemberIds(value, userId) {
 }
 
 // UC-35 Create Team Chat. The creator is always a member; the others must be people of the same class (teachers,
-// students, parents) with an active account.
+// students, parents) with an active account. input.source 'TEACHER_SCHOOL': a teacher team, see teacherTeamOptions.
 export async function createTeam(user, input) {
   const kinds = kindsFor(user);
   const teamName = parseName(input.teamName);
+  if (input.source === 'TEACHER_SCHOOL') {
+    const memberIds = parseMemberIds(input.memberIds, user.userId);
+    return withTransaction(async (client) => {
+      const options = await teacherTeamOptions(client, user);
+      if (!options) throw forbidden('MSG_TEAM_SCHOOL_NOT_ALLOWED', 'Only a teacher of the teacher group can do this.');
+      const eligible = new Set(options.people.filter((p) => p.status === 'ACTIVE').map((p) => p.userId));
+      const wrong = memberIds.filter((id) => !eligible.has(id));
+      if (wrong.length) {
+        throw badRequest('MSG_TEAM_MEMBER_NOT_ELIGIBLE', 'Some people cannot join this team.', { userIds: wrong });
+      }
+      return insertTeam(client, user, null, teamName, memberIds);
+    });
+  }
   const classId = Number(input.classId);
   if (!Number.isSafeInteger(classId) || classId <= 0) {
     throw badRequest('MSG_TEAM_CLASS_NOT_ALLOWED', 'Please choose one of your classes.');
@@ -163,19 +219,7 @@ export async function createTeam(user, input) {
     if (wrong.length) {
       throw badRequest('MSG_TEAM_MEMBER_NOT_ELIGIBLE', 'Some people cannot join this team.', { userIds: wrong });
     }
-    const { rows } = await client.query(
-      `INSERT INTO groups (class_id, group_name, group_type, require_approval, created_by)
-       VALUES ($1, $2, 'TEAM_CHAT', FALSE, $3)
-       RETURNING group_id AS "groupId"`,
-      [classId, teamName, user.userId],
-    );
-    const { groupId } = rows[0];
-    await client.query(
-      `INSERT INTO group_members (group_id, user_id) SELECT $1, x FROM unnest($2::bigint[]) AS x`,
-      [groupId, [user.userId, ...memberIds]],
-    );
-    // FE-06 (Messaging) should let the members' sockets join room `group:<groupId>` once it keeps group rooms.
-    return { groupId, groupName: teamName, memberCount: memberIds.length + 1 };
+    return insertTeam(client, user, classId, teamName, memberIds);
   });
 }
 
