@@ -21,4 +21,14 @@ router.delete('/:schoolPostId', ...manage, ctrl.remove); // UC-62
 // Pinning is its own action (one boolean, its own rule for NEWS), not a field of UC-61.
 router.patch('/:schoolPostId/pin', ...manage, ctrl.pin); // UC-63
 
+// permissions.md 'School post (announcement) – React / comment' and 'School post comment – Delete': School Manager
+// Full; Teacher / Student / Parent Restricted (15: within the audience, news view only; 17: own comments only) –
+// checked in the service. System Admin: No (§1) → 403. PUT / DELETE instead of a toggle: a double click cannot undo.
+const interact = [requireAuth, requireRole(...VIEW_ROLES)];
+router.put('/:schoolPostId/like', ...interact, ctrl.like); // UC-64
+router.delete('/:schoolPostId/like', ...interact, ctrl.unlike); // UC-64
+router.get('/:schoolPostId/comments', ...interact, ctrl.listComments); // UC-65
+router.post('/:schoolPostId/comments', ...interact, ctrl.createComment); // UC-65
+router.delete('/:schoolPostId/comments/:commentId', ...interact, ctrl.removeComment); // UC-66
+
 export default router;
