@@ -61,9 +61,9 @@ export async function detail(req, res) {
 
 const MAX_TITLE_LENGTH = 255; // school_posts.title VARCHAR(255)
 // Fields each write accepts. Any other key → 400 MSG_FIELD_NOT_EDITABLE with the refused names (as UC-09).
-// UC-61: postType, sendNotification and the audience are refused on purpose (see updateSchoolPost in the service).
+// UC-61: postType and sendNotification are refused on purpose (see updateSchoolPost in the service).
 const CREATE_FIELDS = ['title', 'content', 'postType', 'sendNotification', 'gradeLevelIds', 'classIds'];
-const UPDATE_FIELDS = ['title', 'content'];
+const UPDATE_FIELDS = ['title', 'content', 'gradeLevelIds', 'classIds'];
 const PIN_FIELDS = ['isPinned'];
 
 function jsonBody(req, allowed) {
@@ -131,6 +131,12 @@ export async function update(req, res) {
   const changes = {};
   if ('title' in body) changes.title = cleanTitle(body.title);
   if ('content' in body) changes.content = cleanContent(body.content);
+  // Lead OK 07/11/2026: the audience can be changed.
+  // ASSUMPTION: gradeLevelIds and classIds are ONE audience (one choice on SCR-06): sending either of them replaces
+  // all the targets, and the one left out counts as empty (null too). Sending neither keeps the audience.
+  if ('gradeLevelIds' in body || 'classIds' in body) {
+    changes.audience = { gradeLevelIds: idList(body, 'gradeLevelIds'), classIds: idList(body, 'classIds') };
+  }
   res.json(await service.updateSchoolPost(req.user, schoolPostId, changes));
 }
 
@@ -145,4 +151,53 @@ export async function pin(req, res) {
   const body = jsonBody(req, PIN_FIELDS);
   if (typeof body.isPinned !== 'boolean') throw invalid('isPinned');
   res.json(await service.pinSchoolPost(req.user, schoolPostId, body.isPinned));
+}
+
+// --- UC-64..UC-66 (SCR-05) ---------------------------------------------------------------------------------------
+
+const COMMENT_FIELDS = ['content', 'parentCommentId'];
+// ASSUMPTION: a comment has at most 2000 characters, the limit of a chat message (business-rules §6); comments.content is
+// TEXT and no rule sets a limit for the feed.
+const MAX_COMMENT_LENGTH = 2000;
+
+// UC-64 React to School Post: PUT likes, DELETE unlikes (both idempotent).
+export async function like(req, res) {
+  res.json(await service.setSchoolPostLike(req.user, parseId(req.params.schoolPostId, 'schoolPostId'), true));
+}
+
+export async function unlike(req, res) {
+  res.json(await service.setSchoolPostLike(req.user, parseId(req.params.schoolPostId, 'schoolPostId'), false));
+}
+
+// UC-65 (reading the comments of SCR-05)
+export async function listComments(req, res) {
+  const schoolPostId = parseId(req.params.schoolPostId, 'schoolPostId');
+  const query = req.query ?? {};
+  const paging = {
+    page: optionalInt(query, 'page', { fallback: 1 }),
+    pageSize: optionalInt(query, 'pageSize', { max: MAX_PAGE_SIZE, fallback: DEFAULT_PAGE_SIZE }),
+  };
+  res.json(await service.listSchoolPostComments(req.user, schoolPostId, paging));
+}
+
+// UC-65 Comment on School Post. Line breaks are kept, the ends trimmed; blank → 400 MSG_REQUIRED.
+export async function createComment(req, res) {
+  const schoolPostId = parseId(req.params.schoolPostId, 'schoolPostId');
+  const body = jsonBody(req, COMMENT_FIELDS);
+  if (body.content !== undefined && body.content !== null && typeof body.content !== 'string') throw invalid('content');
+  const content = (body.content ?? '').normalize('NFC').trim();
+  if (!content) throw badRequest('MSG_REQUIRED', 'Please write a comment.', { field: 'content' });
+  if ([...content].length > MAX_COMMENT_LENGTH) throw invalid('content');
+  const { parentCommentId = null } = body;
+  if (parentCommentId !== null && !(Number.isSafeInteger(parentCommentId) && parentCommentId >= 1)) {
+    throw invalid('parentCommentId');
+  }
+  res.status(201).json(await service.createSchoolPostComment(req.user, schoolPostId, { content, parentCommentId }));
+}
+
+// UC-66 Delete School Post Comment
+export async function removeComment(req, res) {
+  const schoolPostId = parseId(req.params.schoolPostId, 'schoolPostId');
+  const commentId = parseId(req.params.commentId, 'commentId');
+  res.json(await service.deleteSchoolPostComment(req.user, schoolPostId, commentId));
 }
