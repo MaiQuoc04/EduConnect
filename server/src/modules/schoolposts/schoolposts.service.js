@@ -1,4 +1,5 @@
 import { pool, withTransaction } from '../../config/db.js';
+import { emitToSchoolPost, emitToUsers } from '../../sockets/index.js';
 import { badRequest, forbidden, notFound } from '../../utils/AppError.js';
 import { containsPattern, VI_TRANSLATE } from '../../utils/search.js';
 // Likes / comments rows shared with FE-05 Group Feed: data only; who may do what in the school feed (§8) is here.
@@ -491,7 +492,7 @@ export async function createSchoolPost(user, input) {
   }
   const sendNotification = input.sendNotification ?? postType === 'ANNOUNCEMENT';
 
-  return withTransaction(async (client) => {
+  const result = await withTransaction(async (client) => {
     await checkTargets(client, { gradeLevelIds, classIds });
     const { rows } = await client.query(
       `INSERT INTO school_posts (author_id, title, content, post_type, send_notification, is_pinned, created_at)
@@ -504,6 +505,8 @@ export async function createSchoolPost(user, input) {
     if (sendNotification) await notifySchoolPost(client, { schoolPostId, title, createdBy: user.userId });
     return getSchoolPost(user, schoolPostId, client);
   });
+  publishSchoolPostChanged(result.post.schoolPostId, 'created'); // after COMMIT, not awaited
+  return result;
 }
 
 // Locks a post that is not deleted (two School Managers saving at once are applied one after the other), or 404.
@@ -557,7 +560,10 @@ const sameIds = (a, b) => {
  * already sent – the lead said no 07/11) and sendNotification (sent, or not, when the post was created).
  */
 export async function updateSchoolPost(user, schoolPostId, changes) {
-  return withTransaction(async (client) => {
+  // Real time: who could see the post BEFORE an audience change (they must hear that it left their screen).
+  let before = [];
+  let anythingChanged = false;
+  const result = await withTransaction(async (client) => {
     const post = await lockSchoolPost(client, schoolPostId);
     let changed = false;
 
@@ -570,6 +576,9 @@ export async function updateSchoolPost(user, schoolPostId, changes) {
       const now = await currentTargetIds(client, schoolPostId);
       if (!sameIds(now.gradeLevelIds, audience.gradeLevelIds) || !sameIds(now.classIds, audience.classIds)) {
         await checkTargets(client, audience);
+        // Read with the old audience, inside the lock (only when the audience really changes: rare, and the query is
+        // the heavy one of the notifications, so it is not run for a title fix).
+        before = await recipientsOfSchoolPost(schoolPostId, client);
         await client.query('DELETE FROM school_post_grade_targets WHERE school_post_id = $1', [schoolPostId]);
         await client.query('DELETE FROM school_post_class_targets WHERE school_post_id = $1', [schoolPostId]);
         await saveTargets(client, schoolPostId, audience);
@@ -589,14 +598,18 @@ export async function updateSchoolPost(user, schoolPostId, changes) {
     if (sets.length || changed) {
       // With an audience change updated_at moves even when title / content stay the same.
       const condition = changed ? 'TRUE' : differs.join(' OR ');
-      await client.query(
+      const { rowCount } = await client.query(
         `UPDATE school_posts SET ${[...sets, 'updated_at = NOW()'].join(', ')}
          WHERE school_post_id = $1 AND (${condition})`,
         params,
       );
+      anythingChanged = rowCount > 0;
     }
     return getSchoolPost(user, schoolPostId, client);
   });
+  // After COMMIT, not awaited; nothing really changed (same values) → no signal.
+  if (anythingChanged) publishSchoolPostChanged(result.post.schoolPostId, 'updated', { before });
+  return result;
 }
 
 /**
@@ -606,15 +619,20 @@ export async function updateSchoolPost(user, schoolPostId, changes) {
  * Returns the UC-59 object as it was just before the delete (read inside the transaction; afterwards UC-59 gives 404).
  */
 export async function deleteSchoolPost(user, schoolPostId) {
-  return withTransaction(async (client) => {
+  let before = [];
+  const result = await withTransaction(async (client) => {
     await lockSchoolPost(client, schoolPostId);
-    const result = await getSchoolPost(user, schoolPostId, client);
+    const current = await getSchoolPost(user, schoolPostId, client);
+    // Real time: recipientsSql only sees posts not deleted, so the readers are listed BEFORE the soft delete.
+    before = await recipientsOfSchoolPost(schoolPostId, client);
     await client.query(
       'UPDATE school_posts SET deleted_at = NOW(), deleted_by = $2 WHERE school_post_id = $1 AND deleted_at IS NULL',
       [schoolPostId, user.userId],
     );
-    return result;
+    return current;
   });
+  publishSchoolPostChanged(result.post.schoolPostId, 'deleted', { before, readNow: false }); // after COMMIT
+  return result;
 }
 
 /**
@@ -624,17 +642,22 @@ export async function deleteSchoolPost(user, schoolPostId) {
  * ASSUMPTION: pinning is not an edit of the post, so updated_at is not touched.
  */
 export async function pinSchoolPost(user, schoolPostId, isPinned) {
-  return withTransaction(async (client) => {
+  let changed = false;
+  const result = await withTransaction(async (client) => {
     const post = await lockSchoolPost(client, schoolPostId);
     if (isPinned && post.postType !== 'ANNOUNCEMENT') {
       throw badRequest('MSG_CANNOT_PIN_NEWS', 'Only announcements can be pinned.', { field: 'isPinned' });
     }
-    await client.query(
+    const { rowCount } = await client.query(
       'UPDATE school_posts SET is_pinned = $2 WHERE school_post_id = $1 AND is_pinned IS DISTINCT FROM $2',
       [schoolPostId, isPinned],
     );
+    changed = rowCount > 0;
     return getSchoolPost(user, schoolPostId, client);
   });
+  // After COMMIT, not awaited; pinning what is already pinned (or unpinning NEWS) changes nothing → no signal.
+  if (changed) publishSchoolPostChanged(result.post.schoolPostId, isPinned ? 'pinned' : 'unpinned');
+  return result;
 }
 
 // --- UC-64..UC-66 Like and comment (SCR-05) ----------------------------------------------------------------------
@@ -642,7 +665,7 @@ export async function pinSchoolPost(user, schoolPostId, isPinned) {
 // Restricted (15) = within the audience, news view only. "School post comment – Delete": School Manager Full (UC-66),
 // the others Restricted (17) = own comments only. System Admin: refused by the route and by resolveAudience (§1).
 // The rows are read and written by utils/feedInteractions.js; the checks of the school feed are made here, first.
-// Not logged (business-rules §13 does not list them). No real-time event (not asked for SCR-05 yet).
+// Not logged (business-rules §13 does not list them). Real time: comments only, see "Real-time signals" below.
 
 /**
  * The post the user wants to interact with, read with UC-59's visibility rule (visibleSchoolPostsSql): it does not
@@ -673,6 +696,39 @@ async function openSchoolPostForInteraction(client, user, schoolPostId, { lock =
  */
 export async function assertCanSeeSchoolPost(user, schoolPostId) {
   await openSchoolPostForInteraction(pool, user, schoolPostId);
+}
+
+// --- Real-time signals (FE-08, approved by Quoc 09/11/2026) ------------------------------------------------------
+// Ids only, never content: the client reloads through this API, which checks the active role again (the socket room
+// "user:<id>" follows the person, not the role). Always sent AFTER the transaction committed (a signal before COMMIT
+// could make the client read old data, or announce a write that is then rolled back), and fire-and-forget: an error
+// while sending is logged, it never turns a saved write into a 500. No event for likes (UC-64): a heavy recipient
+// query after every click would take the 3-connection pool the chat uses; the client keeps its optimistic count.
+//
+//   schoolpost:changed          → emitToUsers(every user who can see the post, any of their roles)
+//                                 { schoolPostId, change: 'created' | 'updated' | 'deleted' | 'pinned' | 'unpinned' }
+//   schoolpost:comment          → room "schoolpost:<id>"  { schoolPostId, commentId, parentCommentId, authorId }
+//   schoolpost:comment-deleted  → room "schoolpost:<id>"  { schoolPostId, commentId }
+
+function sendSafely(label, send) {
+  try {
+    Promise.resolve(send()).catch((err) => console.error(`[schoolposts] ${label} not sent:`, err?.message));
+  } catch (err) {
+    console.error(`[schoolposts] ${label} not sent:`, err?.message);
+  }
+}
+
+/**
+ * "schoolpost:changed" to everyone who can see the post now (recipientsOfSchoolPost, read after the commit) plus
+ * `before`: the people who could see it before the change (UC-61 audience change: those who lost it must hear too;
+ * UC-62: the post is deleted, so recipientsOfSchoolPost would find nobody – the list is read before the delete and
+ * `readNow` is false). The caller does not wait.
+ */
+function publishSchoolPostChanged(schoolPostId, change, { before = [], readNow = true } = {}) {
+  sendSafely(`schoolpost:changed ${change} #${schoolPostId}`, async () => {
+    const now = readNow ? await recipientsOfSchoolPost(schoolPostId) : [];
+    emitToUsers([...before, ...now], 'schoolpost:changed', { schoolPostId, change });
+  });
 }
 
 // Only announcements can be liked and commented on; NEWS is view only (business-rules §8). Checked on the server even
@@ -721,12 +777,22 @@ export async function listSchoolPostComments(user, schoolPostId, { page, pageSiz
  * NEWS → 400 MSG_CANNOT_COMMENT_NEWS. Returns the new comment (canDelete true: it is the user's own).
  */
 export async function createSchoolPostComment(user, schoolPostId, { content, parentCommentId }) {
-  return withTransaction(async (client) => {
+  const comment = await withTransaction(async (client) => {
     const post = await openSchoolPostForInteraction(client, user, schoolPostId, { lock: true });
     assertAnnouncement(post, 'MSG_CANNOT_COMMENT_NEWS', 'News posts cannot be commented on.');
-    const comment = await feed.insertComment(post.target, { authorId: user.userId, content, parentCommentId }, client);
-    return { ...comment, canDelete: true };
+    const row = await feed.insertComment(post.target, { authorId: user.userId, content, parentCommentId }, client);
+    return { ...row, canDelete: true };
   });
+  // After COMMIT; only ANNOUNCEMENT gets here (NEWS refused above). authorId lets the author's tab skip its own echo.
+  sendSafely(`schoolpost:comment #${schoolPostId}`, () =>
+    emitToSchoolPost(Number(schoolPostId), 'schoolpost:comment', {
+      schoolPostId: Number(schoolPostId),
+      commentId: comment.commentId,
+      parentCommentId: comment.parentCommentId,
+      authorId: comment.authorId,
+    }),
+  );
+  return comment;
 }
 
 // The post's commentCount exactly as UC-58 / UC-59 show it.
@@ -745,7 +811,7 @@ const commentNotFound = () => notFound('MSG_COMMENT_NOT_FOUND', 'The comment was
  * the post: 404). A School Manager still can.
  */
 export async function deleteSchoolPostComment(user, schoolPostId, commentId) {
-  return withTransaction(async (client) => {
+  const result = await withTransaction(async (client) => {
     const post = await openSchoolPostForInteraction(client, user, schoolPostId, { lock: true });
     if (post.postType !== 'ANNOUNCEMENT') throw commentNotFound();
     const comment = await feed.findComment(post.target, commentId, { forUpdate: true }, client);
@@ -756,4 +822,11 @@ export async function deleteSchoolPostComment(user, schoolPostId, commentId) {
     await feed.softDeleteComment(post.target, commentId, user.userId, client);
     return { commentId, isDeleted: true, commentCount: await commentCountOf(post.schoolPostId, client) };
   });
+  sendSafely(`schoolpost:comment-deleted #${schoolPostId}`, () =>
+    emitToSchoolPost(Number(schoolPostId), 'schoolpost:comment-deleted', {
+      schoolPostId: Number(schoolPostId),
+      commentId: result.commentId,
+    }),
+  );
+  return result;
 }
