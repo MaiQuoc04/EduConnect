@@ -665,6 +665,16 @@ async function openSchoolPostForInteraction(client, user, schoolPostId, { lock =
   return { ...rows[0], target: { column: SCHOOL_POST, id: rows[0].schoolPostId } };
 }
 
+/**
+ * Socket room check of "schoolpost:join" (sockets/index.js): may this user, under the active role of their token, see
+ * the post? Exactly UC-59's rule (openSchoolPostForInteraction: resolveAudience + visibleSchoolPostsSql, no lock, no
+ * transaction) – 2 short queries for a Teacher / Student / Parent (current year, their classes) plus the post row;
+ * 1 for a School Manager. Throws 404 MSG_SCHOOL_POST_NOT_FOUND / 403 like the API; returns nothing.
+ */
+export async function assertCanSeeSchoolPost(user, schoolPostId) {
+  await openSchoolPostForInteraction(pool, user, schoolPostId);
+}
+
 // Only announcements can be liked and commented on; NEWS is view only (business-rules §8). Checked on the server even
 // though UC-59 gives the client canInteract.
 function assertAnnouncement(post, code, message) {
