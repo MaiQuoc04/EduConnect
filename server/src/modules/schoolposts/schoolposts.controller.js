@@ -62,8 +62,8 @@ export async function detail(req, res) {
 const MAX_TITLE_LENGTH = 255; // school_posts.title VARCHAR(255)
 // Fields each write accepts. Any other key → 400 MSG_FIELD_NOT_EDITABLE with the refused names (as UC-09).
 // UC-61: postType and sendNotification are refused on purpose (see updateSchoolPost in the service).
-const CREATE_FIELDS = ['title', 'content', 'postType', 'sendNotification', 'gradeLevelIds', 'classIds'];
-const UPDATE_FIELDS = ['title', 'content', 'gradeLevelIds', 'classIds'];
+const CREATE_FIELDS = ['title', 'content', 'postType', 'sendNotification', 'gradeLevelIds', 'classIds', 'targetRoles'];
+const UPDATE_FIELDS = ['title', 'content', 'gradeLevelIds', 'classIds', 'targetRoles'];
 const PIN_FIELDS = ['isPinned'];
 
 function jsonBody(req, allowed) {
@@ -105,6 +105,23 @@ function idList(body, field) {
   return [...new Set(value)];
 }
 
+/**
+ * Optional targetRoles: an array of STUDENT / PARENT / TEACHER (any other value, or not an array → 400
+ * MSG_INVALID_PARAM). Returned de-duplicated in service.TARGETABLE_ROLES order; [] = every role (left out, null and
+ * [] alike).
+ * ASSUMPTION: all three roles chosen = every role too, so it is stored as NULL like the default: one value for one
+ * audience (the posts of before have NULL), and the summary does not list "Học sinh · Phụ huynh · Giáo viên".
+ */
+function roleList(body) {
+  const value = body.targetRoles;
+  if (value === undefined || value === null) return [];
+  if (!Array.isArray(value) || !value.every((role) => service.TARGETABLE_ROLES.includes(role))) {
+    throw invalid('targetRoles');
+  }
+  const roles = service.TARGETABLE_ROLES.filter((role) => value.includes(role));
+  return roles.length === service.TARGETABLE_ROLES.length ? [] : roles;
+}
+
 // UC-60 Create School Post
 export async function create(req, res) {
   const body = jsonBody(req, CREATE_FIELDS);
@@ -119,6 +136,7 @@ export async function create(req, res) {
     sendNotification: body.sendNotification, // undefined → default of the type (service)
     gradeLevelIds: idList(body, 'gradeLevelIds'),
     classIds: idList(body, 'classIds'),
+    targetRoles: roleList(body),
   };
   res.status(201).json(await service.createSchoolPost(req.user, input));
 }
@@ -137,6 +155,8 @@ export async function update(req, res) {
   if ('gradeLevelIds' in body || 'classIds' in body) {
     changes.audience = { gradeLevelIds: idList(body, 'gradeLevelIds'), classIds: idList(body, 'classIds') };
   }
+  // The role dimension is separate: sent → replaces the roles ([] / null = every role); left out → kept.
+  if ('targetRoles' in body) changes.targetRoles = roleList(body);
   res.json(await service.updateSchoolPost(req.user, schoolPostId, changes));
 }
 
