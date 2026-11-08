@@ -191,8 +191,16 @@ export async function softDeleteComment(target, commentId, deletedBy, db = pool)
 }
 
 /**
- * One page of the comments of a post, as a tree. Paged by TOP-LEVEL comment (oldest first); each comes with ALL its
- * replies, at every level, nested in `replies` (oldest first), so a thread is never cut in two pages.
+ * One page of the comments of a post, as a tree. Paged by TOP-LEVEL comment; each comes with ALL its replies, at
+ * every level, nested in `replies`, so a thread is never cut in two pages.
+ * Order (changed 09/11/2026, FE-08 stage 6 review; applies to BOTH feeds – FE-05 Group Feed uses this function too):
+ *   - top-level comments: NEWEST first (created_at DESC, then comment_id DESC), as in Facebook / Zalo, so the latest
+ *     conversation is on page 1. Page 2 continues with the next older threads; total and the offset count top-level
+ *     comments, and comment_id breaks ties, so the order is total and stable: no thread is skipped or repeated
+ *     between pages while nothing is added. A top-level comment posted meanwhile shifts the next page by one (the
+ *     client should de-duplicate by commentId).
+ *   - replies inside a thread, at every level: OLDEST first (created_at, then comment_id), so a conversation reads
+ *     in the order it was written; a new reply goes to the end of its thread.
  * Deleted comments:
  *   ASSUMPTION: a deleted comment that still has a reply not deleted (at any depth below it) stays in the tree as a
  *   placeholder – isDeleted true, content / author fields null – so the conversation under it still reads; the client
@@ -223,21 +231,23 @@ export async function listComments(target, { page, pageSize, canDelete }, db = p
   const { rows } = await db.query(
     `${tree},
      page_roots AS (
-       SELECT r.root_id FROM roots r JOIN comments c ON c.comment_id = r.root_id
-       ORDER BY c.created_at, c.comment_id
+       SELECT r.root_id, ROW_NUMBER() OVER (ORDER BY c.created_at DESC, c.comment_id DESC) AS position
+       FROM roots r JOIN comments c ON c.comment_id = r.root_id
+       ORDER BY position
        LIMIT $2 OFFSET $3)
      SELECT ${COMMENT_FIELDS}
      FROM tree t
      JOIN page_roots pr ON pr.root_id = t.root_id
      JOIN comments c ON c.comment_id = t.comment_id
      JOIN users u ON u.user_id = c.author_id
-     ORDER BY c.created_at, c.comment_id`,
+     ORDER BY pr.position, c.created_at, c.comment_id -- threads newest first; inside a thread oldest first`,
     [target.id, pageSize, (page - 1) * pageSize],
   );
   return { items: buildTree(rows, canDelete), page, pageSize, total: countRows[0].total };
 }
 
-// Nests the flat rows (sorted oldest first) and drops deleted comments with nothing visible below them.
+// Nests the flat rows and drops deleted comments with nothing visible below them. Keeps the row order: threads in
+// the order of their top-level comment (newest first), replies oldest first (see listComments).
 function buildTree(rows, canDelete) {
   const nodes = new Map(rows.map((row) => [row.commentId, { ...row, replies: [] }]));
   const roots = [];
