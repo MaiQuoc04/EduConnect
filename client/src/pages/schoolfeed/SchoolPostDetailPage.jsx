@@ -16,6 +16,7 @@ import { useSocket } from '../../context/SocketContext.jsx';
 import { useToast } from '../../context/ToastContext.jsx';
 import { useLiveRefresh } from './useLiveRefresh.js';
 import {
+  AudiencePills,
   clearHandedOverPost,
   CommentCount,
   feedErrorText,
@@ -418,11 +419,7 @@ export default function SchoolPostDetailPage() {
             </div>
             <div className="school-post-detail-audience">
               <span className="caption muted">Gửi tới:</span>
-              {targetLabels(post).map((t) => (
-                <span key={t.key} className="pill" title={t.title}>
-                  {t.text}
-                </span>
-              ))}
+              <AudiencePills labels={targetLabels(post)} />
             </div>
 
             {/* The server keeps the line breaks; pre-wrap shows them. */}

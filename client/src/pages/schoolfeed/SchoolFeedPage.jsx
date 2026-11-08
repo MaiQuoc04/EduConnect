@@ -8,8 +8,8 @@ import { useSocket } from '../../context/SocketContext.jsx';
 import { useToast } from '../../context/ToastContext.jsx';
 import { useLiveRefresh } from './useLiveRefresh.js';
 import {
-  audienceLabels,
   CommentCount,
+  feedAudienceText,
   feedErrorText,
   formatDateTime,
   LikeButton,
@@ -189,7 +189,7 @@ function PostCard({ post, canPin, pinBusy, onPin, listState, onLikeError }) {
             <span aria-hidden="true">·</span>
             <time dateTime={post.createdAt}>{formatDateTime(post.createdAt)}</time>
             <span aria-hidden="true">·</span>
-            <span>Gửi tới: {audienceLabels(post.audienceSummary).join(', ')}</span>
+            <span>Gửi tới: {feedAudienceText(post)}</span>
           </p>
         </div>
         <CardImage src={post.firstImageUrl} />
