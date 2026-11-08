@@ -12,7 +12,9 @@ import Avatar from '../../components/Avatar.jsx';
 import CommentThread from '../../components/CommentThread.jsx';
 import Icon from '../../components/Icon.jsx';
 import { useAuth } from '../../context/AuthContext.jsx';
+import { useSocket } from '../../context/SocketContext.jsx';
 import { useToast } from '../../context/ToastContext.jsx';
+import { useLiveRefresh } from './useLiveRefresh.js';
 import {
   clearHandedOverPost,
   CommentCount,
@@ -57,14 +59,19 @@ function fileIcon(mimeType = '') {
 }
 
 // 404 for a post that does not exist, was deleted OR is not addressed to the reader: the server answers the same on
-// purpose, so the page never talks about permissions.
-function NotFound({ backTo }) {
+// purpose, so the page never talks about permissions. `gone`: the post was open and disappeared meanwhile (deleted,
+// or the audience changed and the reader is no longer in it – real time "schoolpost:changed").
+function NotFound({ backTo, gone = false }) {
   return (
     <div className="school-post-detail">
-      <section className="card card-outline school-post-detail-missing">
-        <Icon name="article" />
-        <h1 className="title-md">Không tìm thấy bài viết</h1>
-        <p className="muted">Bài viết có thể đã bị gỡ hoặc đường dẫn không còn đúng.</p>
+      <section className="card card-outline school-post-detail-missing" role={gone ? 'status' : undefined}>
+        <Icon name={gone ? 'article_shortcut' : 'article'} />
+        <h1 className="title-md">{gone ? 'Bài viết không còn tồn tại' : 'Không tìm thấy bài viết'}</h1>
+        <p className="muted">
+          {gone
+            ? 'Bài viết vừa được gỡ hoặc không còn dành cho bạn.'
+            : 'Bài viết có thể đã bị gỡ hoặc đường dẫn không còn đúng.'}
+        </p>
         <Link to={backTo} className="btn btn-primary">
           <Icon name="arrow_back" size="sm" />
           Về bảng tin trường
@@ -237,7 +244,85 @@ export default function SchoolPostDetailPage() {
   const onLikeError = (err) =>
     toast(feedErrorText(err, 'Không cập nhật được lượt thích. Vui lòng thử lại.'), { type: 'error' });
 
-  if (state.notFound) return <NotFound backTo={backTo} />;
+  // --- Real time (FE-08 step 3). The socket is shared with the chat: only the listeners added here are removed, and
+  // it is never disconnected here. Events are signals; the data comes from the API.
+  const socket = useSocket();
+  const [gone, setGone] = useState(false);
+  useEffect(() => setGone(false), [schoolPostId]); // another post opened in the same page
+  const [commentsRefreshKey, setCommentsRefreshKey] = useState(0);
+  const deletingRef = useRef(deleting);
+  useEffect(() => {
+    deletingRef.current = deleting;
+  });
+
+  // The post again, quietly (no skeleton: what is shown stays until the answer). 404 → the post is gone for this
+  // reader (deleted, or no longer in its audience – also a reader with two roles acting as the other one).
+  const refreshPost = useCallback(() => {
+    if (!validId) return;
+    getSchoolPost(schoolPostId)
+      .then((data) => setState((s) => (s.data ? { ...s, data } : s)))
+      .catch((err) => {
+        if (err.status === 404 || err.code === 'MSG_SCHOOL_POST_NOT_FOUND') setGone(true);
+        // other errors: keep what is shown; the next signal / reconnect / poll tries again
+      });
+  }, [schoolPostId, validId]);
+
+  // "schoolpost:changed" arrives on the user's own room (user:<id>), no join needed.
+  useEffect(() => {
+    if (!socket || !validId) return undefined;
+    const id = Number(schoolPostId);
+    const onChanged = (signal) => {
+      if (signal?.schoolPostId !== id) return;
+      if (signal.change === 'deleted') {
+        if (deletingRef.current !== 'busy') setGone(true); // this tab deleting it navigates away by itself
+      } else {
+        refreshPost(); // updated (404 → gone), pinned / unpinned (the label comes with the post)
+      }
+    };
+    socket.on('schoolpost:changed', onChanged);
+    return () => socket.off('schoolpost:changed', onChanged);
+  }, [socket, schoolPostId, validId, refreshPost]);
+
+  // Room "schoolpost:<id>" for the comment signals: announcements only (NEWS has no comments, §8). The server does not
+  // put a socket back into it after a reconnect or a role switch (a new socket), so the join is sent on EVERY
+  // 'connect'. { ok: false } (not allowed, limit, unknown post) is ignored on purpose: the server never says why.
+  const roomPostId = state.data?.post?.canInteract && !gone ? state.data.post.schoolPostId : null;
+  useEffect(() => {
+    if (!socket || !roomPostId) return undefined;
+    const payload = { schoolPostId: roomPostId };
+    const join = () => socket.emit('schoolpost:join', payload, () => {});
+    if (socket.connected) join();
+    socket.on('connect', join);
+    return () => {
+      socket.off('connect', join);
+      if (socket.connected) socket.emit('schoolpost:leave', payload);
+    };
+  }, [socket, roomPostId]);
+
+  // Comment signals for CommentThread (it reads the comments itself and merges them in place).
+  const liveComments = useCallback(
+    (handlers) => {
+      if (!socket || !roomPostId) return () => {};
+      const onComment = (signal) => signal?.schoolPostId === roomPostId && handlers.comment(signal);
+      const onDeleted = (signal) => signal?.schoolPostId === roomPostId && handlers.commentDeleted(signal);
+      socket.on('schoolpost:comment', onComment);
+      socket.on('schoolpost:comment-deleted', onDeleted);
+      return () => {
+        socket.off('schoolpost:comment', onComment);
+        socket.off('schoolpost:comment-deleted', onDeleted);
+      };
+    },
+    [socket, roomPostId],
+  );
+
+  // Safety net: after a reconnect / new socket, when the tab is shown again, and every 60 s while the socket is down.
+  useLiveRefresh(socket, () => {
+    if (!state.data || gone) return;
+    refreshPost();
+    setCommentsRefreshKey((n) => n + 1);
+  });
+
+  if (state.notFound || gone) return <NotFound backTo={backTo} gone={gone} />;
 
   const post = state.data?.post;
   const attachments = state.data?.attachments ?? [];
@@ -378,6 +463,8 @@ export default function SchoolPostDetailPage() {
                     initialCount={post.commentCount}
                     onCountChange={onCommentCount}
                     messages={COMMENT_MESSAGES}
+                    live={liveComments}
+                    refreshKey={commentsRefreshKey}
                   />
                 </div>
               </>
