@@ -1,10 +1,12 @@
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { listSchoolPosts, setSchoolPostPinned } from '../../api/schoolPosts.js';
 import Avatar from '../../components/Avatar.jsx';
 import Icon from '../../components/Icon.jsx';
 import { useAuth } from '../../context/AuthContext.jsx';
+import { useSocket } from '../../context/SocketContext.jsx';
 import { useToast } from '../../context/ToastContext.jsx';
+import { useLiveRefresh } from './useLiveRefresh.js';
 import {
   audienceLabels,
   CommentCount,
@@ -49,6 +51,11 @@ function readParams(sp) {
  * The list of the open tab: cancels the previous request so a slow answer can never replace a newer one.
  * `reloadKey` forces a reload (after pinning).
  */
+// What the reader would notice on a page of the list: which posts, in which order, pinned or not, edited or not.
+// Like / comment counts are left out on purpose (they change often and the "new content" pill is not about them).
+const feedSignature = (result) =>
+  `${result.total}|${result.items.map((p) => `${p.schoolPostId}:${p.isPinned ? 1 : 0}:${p.updatedAt ?? ''}`).join(',')}`;
+
 function usePosts(tab, q, page, reloadKey) {
   const [state, setState] = useState({ result: null, loading: true, error: '' });
   const [retry, setRetry] = useState(0);
@@ -307,6 +314,64 @@ export default function SchoolFeedPage() {
   const onLikeError = (err) =>
     toast(feedErrorText(err, 'Không cập nhật được lượt thích. Vui lòng thử lại.'), { type: 'error' });
 
+  // --- Real time (FE-08 step 3): never insert into the list the reader is going through. A signal only leads to a
+  // quiet read of the SAME page / tab / search; when it differs from what is shown (posts, order, pin, edits – not the
+  // like / comment counts, which change all the time), one "Có nội dung mới — Tải lại" pill shows. Several signals in
+  // a row are read once (debounce), so they make one pill, never a count. A signal that changes nothing here (a post
+  // of the other tab, this tab's own pin already reloaded) shows nothing.
+  // ASSUMPTION: no automatic reload, not even at the top of page 1: the pill is cheap, and the list never moves under
+  // the reader's eyes or loses an optimistic like.
+  // "schoolpost:changed" comes on the user's own room (user:<id>): no join for this page.
+  const socket = useSocket();
+  const [hasNew, setHasNew] = useState(false);
+  const latest = useRef({ params, result: list.result, loading: list.loading });
+  useEffect(() => {
+    latest.current = { params, result: list.result, loading: list.loading };
+  });
+  useEffect(() => setHasNew(false), [list.result]); // a fresh list is shown: nothing new any more
+
+  const checkTimer = useRef(null);
+  const checkForNew = useCallback(async () => {
+    checkTimer.current = null;
+    const { params: p, result, loading } = latest.current;
+    if (!result || loading) return; // a load is on its way and will be fresh
+    try {
+      const fresh = await listSchoolPosts({ postType: p.tab.postType, q: p.q.trim(), page: p.page, pageSize: PAGE_SIZE });
+      if (latest.current.result === result && feedSignature(fresh) !== feedSignature(result)) setHasNew(true);
+    } catch {
+      // quiet: the next signal, reconnect or poll tries again
+    }
+  }, []);
+  // ASSUMPTION: a signal is read after 0.8–2 s (random), so a post sent to the whole school does not make every open
+  // feed call the API in the same instant; signals meanwhile join that one read.
+  const scheduleCheck = useCallback(
+    (delay = 800 + Math.random() * 1200) => {
+      if (checkTimer.current) return;
+      checkTimer.current = setTimeout(checkForNew, delay);
+    },
+    [checkForNew],
+  );
+  useEffect(() => () => clearTimeout(checkTimer.current), []);
+
+  useEffect(() => {
+    if (!socket) return undefined;
+    const onChanged = () => scheduleCheck();
+    socket.on('schoolpost:changed', onChanged);
+    return () => socket.off('schoolpost:changed', onChanged);
+  }, [socket, scheduleCheck]);
+
+  // Safety net: reconnect / new socket, tab shown again, every 60 s while the socket is down.
+  useLiveRefresh(socket, () => scheduleCheck(0));
+
+  const listTop = useRef(null);
+  function showNew() {
+    setHasNew(false);
+    setReloadKey((n) => n + 1);
+    if (listTop.current && listTop.current.getBoundingClientRect().top < 0) {
+      listTop.current.scrollIntoView({ block: 'start', behavior: 'smooth' });
+    }
+  }
+
   const { tab } = params;
   const items = list.result?.items ?? [];
   const emptyText = params.q.trim()
@@ -365,7 +430,16 @@ export default function SchoolFeedPage() {
       </div>
 
       <div className="school-feed-layout">
-        <section className="school-feed-main" aria-label={tab.label}>
+        <section className="school-feed-main" aria-label={tab.label} ref={listTop}>
+          {/* Always rendered with zero height and sticky: the pill floats over the list and never moves it. */}
+          <div className="school-feed-new-wrap" aria-live="polite">
+            {hasNew && (
+              <button type="button" className="school-feed-new" onClick={showNew}>
+                <Icon name="refresh" size="sm" />
+                Có nội dung mới — Tải lại
+              </button>
+            )}
+          </div>
           {list.result && !list.error && (
             <p className="school-feed-total caption muted">
               <span className="mono">{number(list.result.total)}</span> {tab.noun}
