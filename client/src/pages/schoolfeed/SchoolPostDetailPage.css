@@ -108,15 +108,8 @@
   padding-top: 12px;
   border-top: 1px solid var(--graphite-200);
 }
-.school-post-detail-comments { margin-top: 8px; }
-.school-post-detail-placeholder {
-  padding: 16px;
-  border-radius: var(--radius-control);
-  outline: 1px dashed var(--graphite-300);
-  background: var(--graphite-50);
-  color: var(--graphite-600);
-  text-align: center;
-}
+/* UC-65 / UC-66: the shared components/CommentThread (its own CommentThread.css). */
+.school-post-detail-comments { margin-top: 8px; min-width: 0; }
 
 /* ---------- states ---------- */
 .school-post-detail-error { display: grid; justify-items: start; gap: 8px; margin-bottom: 16px; }

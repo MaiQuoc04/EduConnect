@@ -1,7 +1,15 @@
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useLocation, useNavigate, useParams } from 'react-router-dom';
-import { deleteSchoolPost, getSchoolPost, setSchoolPostPinned } from '../../api/schoolPosts.js';
+import {
+  createSchoolPostComment,
+  deleteSchoolPost,
+  deleteSchoolPostComment,
+  getSchoolPost,
+  listSchoolPostComments,
+  setSchoolPostPinned,
+} from '../../api/schoolPosts.js';
 import Avatar from '../../components/Avatar.jsx';
+import CommentThread from '../../components/CommentThread.jsx';
 import Icon from '../../components/Icon.jsx';
 import { useAuth } from '../../context/AuthContext.jsx';
 import { useToast } from '../../context/ToastContext.jsx';
@@ -20,11 +28,18 @@ import {
 import './SchoolPostDetailPage.css';
 
 // SCR-05 School Post Detail (FE-08, owner Anh): UC-59 View, UC-63 Pin / Unpin, UC-64 Like, and the School Manager's
-// entry to UC-61 Update (SCR-06) and UC-62 Delete. Comments (UC-65 / UC-66) come in stage 6.
-// Design: Stitch "SCR-35 School Post Detail" (reading canvas with the notebook margin rule).
+// entry to UC-61 Update (SCR-06) and UC-62 Delete; UC-65 Comment / UC-66 Delete Comment through the shared
+// components/CommentThread (announcements only, §8).
+// Design: Stitch "SCR-35 School Post Detail" (reading canvas with the notebook margin rule; the design has no comment
+// area, so the comments follow the stage 4 like bar with the composer on top).
 
-const NOT_BUILT = 'Chức năng đang phát triển';
 const FEED_PATH = '/school-feed';
+
+// School-feed codes the shared CommentThread does not know. TODO FE-08: move to messages.js once approved.
+const COMMENT_MESSAGES = {
+  MSG_CANNOT_COMMENT_NEWS: 'Không thể bình luận tin tức.',
+  MSG_SCHOOL_POST_NOT_FOUND: 'Không tìm thấy bài viết.',
+};
 
 // "120000" bytes -> "117 KB"
 function fileSize(bytes) {
@@ -201,6 +216,24 @@ export default function SchoolPostDetailPage() {
     }
   }
 
+  // UC-65 / UC-66 calls of THIS post for the shared CommentThread (FE-05 passes its own /posts/:id/comments calls).
+  const commentApi = useMemo(
+    () => ({
+      list: (params, options) => listSchoolPostComments(schoolPostId, params, options),
+      create: (body) => createSchoolPostComment(schoolPostId, body),
+      remove: (commentId) => deleteSchoolPostComment(schoolPostId, commentId),
+    }),
+    [schoolPostId],
+  );
+  // Keeps the count of the like bar in step with the comment heading.
+  const onCommentCount = useCallback((commentCount) => {
+    setState((s) =>
+      s.data && s.data.post.commentCount !== commentCount
+        ? { ...s, data: { ...s.data, post: { ...s.data.post, commentCount } } }
+        : s,
+    );
+  }, []);
+
   const onLikeError = (err) =>
     toast(feedErrorText(err, 'Không cập nhật được lượt thích. Vui lòng thử lại.'), { type: 'error' });
 
@@ -338,14 +371,15 @@ export default function SchoolPostDetailPage() {
             {post.canInteract && (
               <>
                 <Interactions post={post} onLikeError={onLikeError} />
-                <section className="school-post-detail-comments" aria-labelledby="spd-comments-title">
-                  <h2 id="spd-comments-title" className="school-post-detail-section-title">
-                    <Icon name="forum" size="sm" />
-                    Bình luận
-                  </h2>
-                  {/* TODO UC-65 Comment on School Post / UC-66 Delete Comment: list and composer, stage 6. */}
-                  <p className="school-post-detail-placeholder caption">{NOT_BUILT}</p>
-                </section>
+                <div className="school-post-detail-comments">
+                  <CommentThread
+                    key={post.schoolPostId}
+                    api={commentApi}
+                    initialCount={post.commentCount}
+                    onCountChange={onCommentCount}
+                    messages={COMMENT_MESSAGES}
+                  />
+                </div>
               </>
             )}
           </div>
