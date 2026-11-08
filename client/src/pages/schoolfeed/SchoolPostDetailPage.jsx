@@ -1,0 +1,366 @@
+import { useEffect, useRef, useState } from 'react';
+import { Link, useLocation, useNavigate, useParams } from 'react-router-dom';
+import { deleteSchoolPost, getSchoolPost, setSchoolPostPinned } from '../../api/schoolPosts.js';
+import Avatar from '../../components/Avatar.jsx';
+import Icon from '../../components/Icon.jsx';
+import { useAuth } from '../../context/AuthContext.jsx';
+import { useToast } from '../../context/ToastContext.jsx';
+import {
+  clearHandedOverPost,
+  CommentCount,
+  feedErrorText,
+  formatDateTime,
+  isEdited,
+  LikeButton,
+  peekHandedOverPost,
+  POST_TYPE_LABELS,
+  targetLabels,
+  useLike,
+} from './schoolFeedShared.jsx';
+import './SchoolPostDetailPage.css';
+
+// SCR-05 School Post Detail (FE-08, owner Anh): UC-59 View, UC-63 Pin / Unpin, UC-64 Like, and the School Manager's
+// entry to UC-61 Update (SCR-06) and UC-62 Delete. Comments (UC-65 / UC-66) come in stage 6.
+// Design: Stitch "SCR-35 School Post Detail" (reading canvas with the notebook margin rule).
+
+const NOT_BUILT = 'Chức năng đang phát triển';
+const FEED_PATH = '/school-feed';
+
+// "120000" bytes -> "117 KB"
+function fileSize(bytes) {
+  const n = Number(bytes);
+  if (!Number.isFinite(n) || n <= 0) return '';
+  if (n < 1024 * 1024) return `${Math.max(1, Math.round(n / 1024)).toLocaleString('vi-VN')} KB`;
+  return `${(n / 1024 / 1024).toLocaleString('vi-VN', { maximumFractionDigits: 1 })} MB`;
+}
+
+function fileIcon(mimeType = '') {
+  if (mimeType.startsWith('image/')) return 'image';
+  if (mimeType.startsWith('video/')) return 'movie';
+  if (mimeType === 'application/pdf') return 'picture_as_pdf';
+  return 'description';
+}
+
+// 404 for a post that does not exist, was deleted OR is not addressed to the reader: the server answers the same on
+// purpose, so the page never talks about permissions.
+function NotFound({ backTo }) {
+  return (
+    <div className="school-post-detail">
+      <section className="card card-outline school-post-detail-missing">
+        <Icon name="article" />
+        <h1 className="title-md">Không tìm thấy bài viết</h1>
+        <p className="muted">Bài viết có thể đã bị gỡ hoặc đường dẫn không còn đúng.</p>
+        <Link to={backTo} className="btn btn-primary">
+          <Icon name="arrow_back" size="sm" />
+          Về bảng tin trường
+        </Link>
+      </section>
+    </div>
+  );
+}
+
+/**
+ * UC-62 confirmation. The server soft deletes (business-rules §14), but for every reader the post is gone, which is
+ * what the dialog says. The safe button gets the focus.
+ * ASSUMPTION: the dialog does not mention that likes and comments stay stored – a technical detail the School Manager
+ * cannot act on.
+ */
+function DeleteDialog({ open, post, busy, onCancel, onConfirm }) {
+  const ref = useRef(null);
+  useEffect(() => {
+    const dialog = ref.current;
+    if (open && !dialog.open) dialog.showModal();
+    if (!open && dialog.open) dialog.close();
+  }, [open]);
+  return (
+    <dialog
+      ref={ref}
+      className="sf-dialog"
+      aria-labelledby="spd-delete-title"
+      aria-describedby="spd-delete-desc"
+      onCancel={(e) => {
+        e.preventDefault();
+        if (!busy) onCancel();
+      }}
+    >
+      <div className="sf-dialog-head is-danger">
+        <Icon name="delete" />
+        <h2 id="spd-delete-title" className="title-sm">
+          Xoá bài viết?
+        </h2>
+      </div>
+      <div id="spd-delete-desc">
+        <p className="sf-dialog-quote">{post?.title}</p>
+        <div className="notice amber">
+          <Icon name="warning" size="sm" />
+          <p>Sau khi xoá, bài viết không còn hiển thị với bất kỳ ai trên bảng tin trường, kể cả người đã nhận thông báo.</p>
+        </div>
+      </div>
+      <div className="sf-dialog-actions">
+        <button type="button" className="btn btn-secondary" onClick={onCancel} disabled={busy} autoFocus>
+          Giữ lại
+        </button>
+        <button type="button" className="btn btn-primary sf-btn-danger" onClick={onConfirm} disabled={busy}>
+          <Icon name={busy ? 'progress_activity' : 'delete'} size="sm" className={busy ? 'sf-spin' : undefined} />
+          {busy ? 'Đang xoá…' : 'Xoá bài viết'}
+        </button>
+      </div>
+    </dialog>
+  );
+}
+
+function Interactions({ post, onLikeError }) {
+  const like = useLike(post.schoolPostId, post.likedByMe, post.likeCount, onLikeError);
+  return (
+    <div className="school-post-detail-interactions">
+      <LikeButton liked={like.likedByMe} count={like.likeCount} onClick={like.toggle} />
+      <CommentCount count={post.commentCount} />
+    </div>
+  );
+}
+
+export default function SchoolPostDetailPage() {
+  const { schoolPostId } = useParams();
+  const location = useLocation();
+  const navigate = useNavigate();
+  const { activeRole } = useAuth();
+  const toast = useToast();
+  const isManager = activeRole === 'SCHOOL_MANAGER';
+  // Back to the feed with the same search / pages / tab it was opened from (same pattern as FE-02).
+  const backTo = `${FEED_PATH}${location.state?.listSearch ?? ''}`;
+  const validId = /^\d+$/.test(schoolPostId ?? '');
+
+  // Just saved by SCR-31 / SCR-06: show the server's answer without a new request.
+  const handedOver = validId ? peekHandedOverPost(Number(schoolPostId)) : null;
+  const handedOverId = useRef(handedOver ? schoolPostId : null);
+  const [state, setState] = useState(() =>
+    handedOver
+      ? { data: handedOver, loading: false, error: '', notFound: false }
+      : { data: null, loading: validId, error: '', notFound: !validId },
+  );
+  const [retry, setRetry] = useState(0);
+  useEffect(() => {
+    if (!validId) {
+      setState({ data: null, loading: false, error: '', notFound: true });
+      return undefined;
+    }
+    if (retry === 0 && handedOverId.current === schoolPostId) {
+      clearHandedOverPost();
+      return undefined;
+    }
+    handedOverId.current = null;
+    const controller = new AbortController();
+    setState((s) => ({ ...s, loading: true }));
+    getSchoolPost(schoolPostId, { signal: controller.signal })
+      .then((data) => setState({ data, loading: false, error: '', notFound: false }))
+      .catch((err) => {
+        if (controller.signal.aborted) return;
+        if (err.status === 404) setState({ data: null, loading: false, error: '', notFound: true });
+        else {
+          const error = feedErrorText(err, 'Không tải được bài viết. Vui lòng thử lại.');
+          setState({ data: null, loading: false, error, notFound: false });
+        }
+      });
+    return () => controller.abort();
+  }, [schoolPostId, validId, retry]);
+
+  // UC-63 (announcements only, §8). The answer is the whole UC-59 object.
+  const [pinning, setPinning] = useState(false);
+  async function handlePin() {
+    const { post } = state.data;
+    if (pinning) return;
+    setPinning(true);
+    try {
+      const data = await setSchoolPostPinned(post.schoolPostId, !post.isPinned);
+      setState((s) => ({ ...s, data }));
+      toast(post.isPinned ? 'Đã bỏ ghim thông báo.' : 'Đã ghim thông báo lên đầu bảng tin.');
+    } catch (err) {
+      toast(feedErrorText(err, 'Không cập nhật được trạng thái ghim. Vui lòng thử lại.'), { type: 'error' });
+    } finally {
+      setPinning(false);
+    }
+  }
+
+  // UC-62: back to the feed afterwards (replace: the deleted post's page is not kept in the history).
+  const [deleting, setDeleting] = useState(null); // null | 'asking' | 'busy'
+  async function handleDelete() {
+    if (deleting === 'busy') return;
+    setDeleting('busy');
+    try {
+      await deleteSchoolPost(state.data.post.schoolPostId);
+      toast('Đã xoá bài viết.');
+      navigate(backTo, { replace: true });
+    } catch (err) {
+      setDeleting(null);
+      if (err.status === 404 || err.code === 'MSG_SCHOOL_POST_NOT_FOUND') {
+        toast('Bài viết đã bị xoá trước đó.');
+        navigate(backTo, { replace: true });
+        return;
+      }
+      toast(feedErrorText(err, 'Không xoá được bài viết. Vui lòng thử lại.'), { type: 'error' });
+    }
+  }
+
+  const onLikeError = (err) =>
+    toast(feedErrorText(err, 'Không cập nhật được lượt thích. Vui lòng thử lại.'), { type: 'error' });
+
+  if (state.notFound) return <NotFound backTo={backTo} />;
+
+  const post = state.data?.post;
+  const attachments = state.data?.attachments ?? [];
+  const typeLabel = post ? POST_TYPE_LABELS[post.postType] ?? post.postType : '';
+  const announcement = post?.postType === 'ANNOUNCEMENT';
+
+  return (
+    <div className="school-post-detail">
+      <div className="school-post-detail-top">
+        <div>
+          <Link to={backTo} className="back-link">
+            <Icon name="arrow_back" size="sm" />
+            Bảng tin trường
+          </Link>
+          <nav className="breadcrumb" aria-label="Breadcrumb">
+            <span>EduConnect</span>/<Link to={backTo}>Bảng tin trường</Link>/
+            {typeLabel && <span>{typeLabel}</span>}
+            {typeLabel && '/'}
+            <span className="current">Chi tiết</span>
+          </nav>
+        </div>
+        {isManager && post && (
+          <div className="actions-row school-post-detail-actions">
+            {announcement && (
+              <button type="button" className="btn btn-secondary" onClick={handlePin} disabled={pinning}>
+                <Icon name="push_pin" size="sm" filled={post.isPinned} />
+                {post.isPinned ? 'Bỏ ghim' : 'Ghim'}
+              </button>
+            )}
+            <Link
+              to={`${FEED_PATH}/${post.schoolPostId}/edit`}
+              state={{ fromDetail: true, listSearch: location.state?.listSearch ?? '' }}
+              className="btn btn-secondary"
+            >
+              <Icon name="edit" size="sm" />
+              Sửa
+            </Link>
+            <button type="button" className="btn btn-danger" onClick={() => setDeleting('asking')} disabled={Boolean(deleting)}>
+              <Icon name="delete" size="sm" />
+              Xoá
+            </button>
+          </div>
+        )}
+      </div>
+
+      {state.error && (
+        <div className="school-post-detail-error">
+          <p className="form-error" role="alert">
+            {state.error}
+          </p>
+          <button type="button" className="btn btn-secondary" onClick={() => setRetry((n) => n + 1)}>
+            Thử lại
+          </button>
+        </div>
+      )}
+
+      {!post && state.loading && (
+        <article className="school-post-detail-article is-loading" aria-busy="true">
+          <div className="school-post-detail-skeleton" aria-hidden="true">
+            <span />
+            <span />
+            <span />
+            <span />
+          </div>
+        </article>
+      )}
+
+      {post && (
+        <article className="school-post-detail-article">
+          <div className="school-post-detail-inner">
+            <p className={`label-upper school-post-detail-kind${announcement ? '' : ' is-news'}`}>
+              <Icon name={announcement ? 'campaign' : 'newspaper'} size="sm" />
+              {typeLabel}
+              {post.isPinned && (
+                <>
+                  <span aria-hidden="true">·</span>
+                  <Icon name="push_pin" size="sm" filled />
+                  Đã ghim
+                </>
+              )}
+            </p>
+            <h1 className="headline-xl school-post-detail-title">{post.title}</h1>
+            <div className="school-post-detail-meta caption">
+              <Avatar src={post.authorAvatarUrl} name={post.authorName} size={24} />
+              <span className="author">{post.authorName}</span>
+              <span aria-hidden="true">·</span>
+              <time dateTime={post.createdAt}>{formatDateTime(post.createdAt)}</time>
+              {isEdited(post) && (
+                <span className="chip" title={`Chỉnh sửa lúc ${formatDateTime(post.updatedAt)}`}>
+                  Đã chỉnh sửa
+                </span>
+              )}
+            </div>
+            <div className="school-post-detail-audience">
+              <span className="caption muted">Gửi tới:</span>
+              {targetLabels(post).map((t) => (
+                <span key={t.key} className="pill" title={t.title}>
+                  {t.text}
+                </span>
+              ))}
+            </div>
+
+            {/* The server keeps the line breaks; pre-wrap shows them. */}
+            <div className="school-post-detail-content">{post.content}</div>
+
+            {attachments.length > 0 && (
+              <section className="school-post-detail-files" aria-labelledby="spd-files-title">
+                <h2 id="spd-files-title" className="school-post-detail-section-title">
+                  <Icon name="attach_file" size="sm" />
+                  Tệp đính kèm ({attachments.length})
+                </h2>
+                {/* TODO FE-08 attachments: downloading waits for the storage provider (business-rules §15). */}
+                <ul>
+                  {attachments.map((file) => (
+                    <li key={file.attachmentId}>
+                      <span className="file-icon">
+                        <Icon name={fileIcon(file.mimeType)} />
+                      </span>
+                      <span className="file-text">
+                        <span className="file-name">{file.fileName}</span>
+                        <span className="caption muted">{fileSize(file.sizeBytes)}</span>
+                      </span>
+                      <span className="caption muted file-note">Chưa tải xuống được</span>
+                    </li>
+                  ))}
+                </ul>
+              </section>
+            )}
+
+            {/* Likes and comments: announcements only; news is view only (business-rules §8). */}
+            {post.canInteract && (
+              <>
+                <Interactions post={post} onLikeError={onLikeError} />
+                <section className="school-post-detail-comments" aria-labelledby="spd-comments-title">
+                  <h2 id="spd-comments-title" className="school-post-detail-section-title">
+                    <Icon name="forum" size="sm" />
+                    Bình luận
+                  </h2>
+                  {/* TODO UC-65 Comment on School Post / UC-66 Delete Comment: list and composer, stage 6. */}
+                  <p className="school-post-detail-placeholder caption">{NOT_BUILT}</p>
+                </section>
+              </>
+            )}
+          </div>
+        </article>
+      )}
+
+      {isManager && (
+        <DeleteDialog
+          open={Boolean(deleting)}
+          post={post}
+          busy={deleting === 'busy'}
+          onCancel={() => setDeleting(null)}
+          onConfirm={handleDelete}
+        />
+      )}
+    </div>
+  );
+}
