@@ -70,3 +70,34 @@ export async function getGradeLevelOptions({ signal } = {}) {
   const { data } = await api.get('/classes/grade-levels', { signal });
   return data;
 }
+
+// UC-65 GET /school-posts/:schoolPostId/comments?page=&pageSize= (pageSize at most 50)
+// -> { items, page, pageSize, total, commentCount }. items = a tree paged by TOP-LEVEL comment (oldest first), each with
+// all its replies at every level in `replies` (oldest first). total = top-level comments; commentCount = the post's
+// count as UC-58 / UC-59 show it. A deleted comment stays only while a reply below it is visible (content and author
+// null, isDeleted true). NEWS -> an empty page.
+export async function listSchoolPostComments(schoolPostId, params, { signal } = {}) {
+  const { data } = await api.get(`/school-posts/${encodeURIComponent(schoolPostId)}/comments`, {
+    params: compact(params),
+    signal,
+  });
+  return data;
+}
+
+// UC-65 POST /school-posts/:schoolPostId/comments { content, parentCommentId? } -> 201 the new comment (same fields as
+// a node of the list, replies: [], canDelete: true). No commentCount in this answer. Reply to a deleted comment ->
+// 409 MSG_PARENT_COMMENT_DELETED; parent of another post -> 400 MSG_INVALID_PARENT_COMMENT; NEWS -> 400
+// MSG_CANNOT_COMMENT_NEWS; blank -> 400 MSG_REQUIRED; over 2000 characters -> 400 MSG_INVALID_PARAM.
+export async function createSchoolPostComment(schoolPostId, body) {
+  const { data } = await api.post(`/school-posts/${encodeURIComponent(schoolPostId)}/comments`, body);
+  return data;
+}
+
+// UC-66 DELETE /school-posts/:schoolPostId/comments/:commentId -> { commentId, isDeleted: true, commentCount }.
+// Soft delete; replies stay. Not one's own (and not School Manager) -> 403 FORBIDDEN; gone -> 404 MSG_COMMENT_NOT_FOUND.
+export async function deleteSchoolPostComment(schoolPostId, commentId) {
+  const { data } = await api.delete(
+    `/school-posts/${encodeURIComponent(schoolPostId)}/comments/${encodeURIComponent(commentId)}`,
+  );
+  return data;
+}
