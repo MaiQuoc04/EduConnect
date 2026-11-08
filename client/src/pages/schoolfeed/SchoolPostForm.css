@@ -1,0 +1,270 @@
+/* FE-08 SCR-31 Create School Post and SCR-06 Update School Post. Only these screens' styles; every rule is scoped under
+   .school-post-form (the .spf-* pieces are only rendered inside it). Dialogs (.sf-dialog) are in styles.css.
+   Design: Stitch "SCR-36 Create School Post" / "SCR-37 Update School Post": the form card on the left with sections
+   split by hairlines and a footer bar, the live preview on the right. Rich text, cover image and the role checkboxes
+   of the design are not used (no editor library; attachments wait for §15; the audience is grades / classes, §8).
+   Breakpoints as the other screens: 1080px (preview under the form), 900px (app drawer, 44px controls), 640px. */
+
+.school-post-form { min-width: 0; max-width: 1200px; margin: 0 auto; }
+.school-post-form .page-header p { overflow-wrap: anywhere; }
+
+.spf-layout { display: grid; grid-template-columns: minmax(0, 1fr) minmax(280px, 360px); gap: 24px; align-items: start; }
+
+/* ---------- the sheet ---------- */
+.school-post-form .spf-sheet { padding: 0; min-width: 0; }
+.spf-section { display: grid; gap: 16px; padding: 24px; min-width: 0; }
+.spf-section + .spf-section { border-top: 1px solid var(--graphite-200); }
+.spf-section.is-readonly { background: var(--paper); }
+.spf-label { font-weight: 600; color: var(--graphite-900); }
+.spf-required { color: var(--red-pen); }
+.school-post-form .field-label.spf-label { align-items: center; flex-wrap: wrap; }
+.school-post-form .field.invalid .input { border-color: var(--red-pen); }
+.spf-counter { font-weight: 400; color: var(--graphite-600); }
+.spf-counter.is-over { color: var(--red-pen); font-weight: 600; }
+.school-post-form textarea.input.spf-content { min-height: 220px; line-height: 22px; }
+
+/* Type: segmented control. */
+.spf-type {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 4px;
+  padding: 4px;
+  border-radius: var(--radius-card);
+  background: var(--graphite-100);
+}
+.spf-type button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: 44px;
+  padding: 0 12px;
+  border: 0;
+  border-radius: var(--radius-control);
+  background: transparent;
+  font: 500 14px/20px var(--font-ui);
+  color: var(--graphite-700);
+  cursor: pointer;
+}
+.spf-type button:not(:disabled):hover { background: var(--graphite-50); }
+.spf-type button.is-on { background: var(--white); color: var(--ink-700); box-shadow: var(--shadow-menu); }
+.spf-type button:focus-visible { outline: 2px solid var(--ink-400); outline-offset: 2px; }
+.spf-type button:disabled { cursor: default; opacity: 0.55; }
+.spf-type.is-readonly button.is-on { opacity: 0.75; box-shadow: none; cursor: default; }
+.spf-type-help { margin-top: -4px; color: var(--graphite-700); font-size: 13px; line-height: 20px; }
+.spf-locked-note { display: flex; align-items: flex-start; gap: 6px; color: var(--graphite-600); }
+.spf-locked-note .icon { flex: none; color: var(--graphite-400); }
+
+/* Attachments: disabled until the storage provider is decided (§15). */
+.spf-attach-box {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 44px;
+  padding: 0 14px;
+  border: 1px dashed var(--graphite-300);
+  border-radius: var(--radius-control);
+  background: var(--graphite-50);
+  font: 500 14px/20px var(--font-ui);
+  color: var(--graphite-500);
+}
+.spf-attach-box:disabled { cursor: not-allowed; }
+
+/* ---------- audience ---------- */
+.spf-audience { display: grid; gap: 14px; min-width: 0; margin: 0; padding: 0; border: 0; }
+.spf-audience legend { float: left; width: 100%; padding: 0; margin-bottom: 4px; }
+.spf-audience legend + * { clear: both; }
+.spf-audience-help { margin-top: -10px; }
+.spf-audience-loaderror { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; }
+.spf-audience-row { display: flex; flex-wrap: wrap; gap: 8px; }
+.spf-audience-group { display: grid; gap: 8px; min-width: 0; }
+.spf-audience-group-head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px 16px; }
+.spf-filter { width: min(220px, 100%); }
+.school-post-form .spf-filter .input { padding-left: 34px; }
+.spf-filter-icon { position: absolute; left: 10px; top: 50%; transform: translateY(-50%); color: var(--graphite-500); pointer-events: none; }
+.spf-class-row { display: grid; grid-template-columns: 64px minmax(0, 1fr); gap: 8px; align-items: start; }
+.spf-class-grade { padding-top: 13px; color: var(--graphite-600); font-weight: 500; }
+.spf-chips { display: flex; flex-wrap: wrap; gap: 8px; min-width: 0; }
+
+.spf-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  min-height: 44px;
+  max-width: 100%;
+  padding: 0 14px 0 10px;
+  border: 1px solid var(--graphite-200);
+  border-radius: 999px;
+  background: var(--white);
+  font: 500 14px/20px var(--font-ui);
+  color: var(--graphite-700);
+  cursor: pointer;
+  transition: background-color 0.15s, border-color 0.15s, color 0.15s;
+}
+.spf-chip span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.spf-chip .icon { color: var(--graphite-400); }
+.spf-chip:not(:disabled):hover { border-color: var(--ink-200); background: var(--ink-50); }
+.spf-chip:focus-visible { outline: 2px solid var(--ink-400); outline-offset: 2px; }
+.spf-chip.is-on { border-color: var(--ink-600); background: var(--ink-50); color: var(--ink-800); }
+.spf-chip.is-on .icon { color: var(--ink-600); }
+.spf-chip.is-covered { border-style: dashed; background: var(--graphite-50); color: var(--graphite-500); cursor: default; }
+.spf-chip.is-covered .icon { color: var(--graphite-400); }
+.spf-chip.is-bad { border-color: var(--red-pen); color: var(--red-pen); }
+.spf-chip.is-stale { padding: 0 10px 0 14px; border-style: dashed; }
+.spf-chip:disabled:not(.is-covered) { opacity: 0.55; cursor: default; }
+
+.spf-audience-summary {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  padding: 10px 12px;
+  border-radius: var(--radius-control);
+  background: var(--paper);
+  outline: 1px solid var(--graphite-200);
+}
+.spf-audience.invalid .spf-audience-summary { outline-color: var(--red-pen); }
+.school-post-form .spf-audience-note { padding: 12px; }
+
+/* Notification switch (a checkbox styled as the design's toggle). */
+.spf-switch { display: flex; align-items: flex-start; gap: 12px; min-height: 44px; cursor: pointer; }
+.spf-switch input {
+  appearance: none;
+  flex: none;
+  position: relative;
+  width: 44px;
+  height: 24px;
+  margin: 2px 0 0;
+  border-radius: 999px;
+  background: var(--graphite-300);
+  cursor: pointer;
+  transition: background-color 0.15s;
+}
+.spf-switch input::after {
+  content: '';
+  position: absolute;
+  top: 3px;
+  left: 3px;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: var(--white);
+  box-shadow: 0 1px 2px rgba(28, 27, 25, 0.2);
+  transition: transform 0.15s;
+}
+.spf-switch input:checked { background: var(--ink-600); }
+.spf-switch input:checked::after { transform: translateX(20px); }
+.spf-switch input:focus-visible { outline: 2px solid var(--ink-400); outline-offset: 2px; }
+.spf-switch input:disabled { opacity: 0.55; cursor: default; }
+.spf-switch.is-locked { cursor: default; }
+.spf-switch-text { display: grid; gap: 2px; }
+.spf-switch-title { font-weight: 600; color: var(--graphite-900); }
+
+/* ---------- footer ---------- */
+.school-post-form .spf-form-error { margin: 0 24px 16px; }
+.spf-footer {
+  position: sticky;
+  bottom: 0;
+  z-index: 1;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px 16px;
+  padding: 16px 24px;
+  border-top: 1px solid var(--graphite-200);
+  border-radius: 0 0 var(--radius-card) var(--radius-card);
+  background: var(--white);
+}
+.spf-footer-note { display: inline-flex; align-items: flex-start; gap: 6px; min-width: 0; overflow-wrap: anywhere; }
+.spf-footer-note .icon { flex: none; color: var(--graphite-400); }
+.spf-footer-buttons { display: flex; gap: 8px; margin-left: auto; }
+
+/* ---------- preview ---------- */
+.spf-preview { position: sticky; top: 24px; display: grid; gap: 12px; min-width: 0; }
+.spf-preview-head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px; }
+.spf-preview-live { display: inline-flex; align-items: center; gap: 4px; }
+.spf-preview-card {
+  position: relative;
+  display: grid;
+  gap: 8px;
+  padding: 20px 20px 16px 44px;
+  border-radius: var(--radius-card);
+  background: var(--white);
+  outline: 1px solid var(--graphite-200);
+}
+/* Notebook margin rule, as SCR-05. */
+.spf-preview-card::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 24px;
+  width: 1px;
+  background: var(--ink-200);
+}
+.spf-preview-kind { display: inline-flex; align-items: center; gap: 4px; color: var(--ink-700); }
+.school-post-form .spf-preview-kind.is-news { color: var(--blue); }
+.spf-preview-title {
+  font-family: var(--font-serif);
+  font-size: 20px;
+  line-height: 28px;
+  font-weight: 600;
+  color: var(--graphite-900);
+  overflow-wrap: anywhere;
+}
+.spf-preview-title.is-empty,
+.spf-preview-text.is-empty { color: var(--graphite-400); }
+.spf-preview-meta { overflow-wrap: anywhere; }
+.spf-preview-text {
+  display: -webkit-box;
+  -webkit-line-clamp: 6;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  font-size: 14px;
+  line-height: 22px;
+  color: var(--graphite-700);
+}
+.spf-preview-foot {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding-top: 10px;
+  border-top: 1px solid var(--graphite-200);
+  color: var(--graphite-600);
+}
+
+/* ---------- loading / missing ---------- */
+.spf-skeleton { display: grid; gap: 16px; }
+.spf-skeleton span { display: block; height: 20px; border-radius: 4px; background: var(--graphite-100); }
+.spf-skeleton span:nth-child(2) { height: 160px; }
+.spf-skeleton span:nth-child(3) { width: 60%; }
+.spf-load-error { display: grid; gap: 12px; }
+.spf-missing { display: grid; justify-items: center; gap: 8px; padding: 48px 24px; text-align: center; }
+.spf-missing > .icon { font-size: 40px; color: var(--graphite-400); }
+.spf-missing .btn { margin-top: 8px; }
+
+@media (max-width: 1080px) {
+  .spf-layout { grid-template-columns: minmax(0, 1fr); }
+  .spf-preview { position: static; }
+}
+
+@media (max-width: 900px) {
+  .school-post-form .btn { height: 44px; }
+  .school-post-form .input { min-height: 44px; }
+}
+
+@media (max-width: 640px) {
+  .spf-section { padding: 20px 16px; }
+  .spf-class-row { grid-template-columns: minmax(0, 1fr); gap: 4px; }
+  .spf-class-grade { padding-top: 0; }
+  .spf-filter { width: 100%; }
+  .school-post-form .spf-form-error { margin: 0 16px 16px; }
+  .spf-footer { padding: 12px 16px; }
+  .spf-footer-buttons { width: 100%; }
+  .spf-footer-buttons .btn { flex: 1 1 0; }
+  .spf-preview-card { padding: 16px 16px 12px 40px; }
+  .spf-preview-card::before { left: 20px; }
+}
