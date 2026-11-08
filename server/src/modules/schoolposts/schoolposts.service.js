@@ -36,26 +36,28 @@ const READER_ROLES = ['SCHOOL_MANAGER', 'TEACHER', 'STUDENT', 'PARENT'];
  * ASSUMPTION: a teaching assignment counts while end_date >= CURRENT_DATE (current or future), the same rule FE-04
  * uses for class groups (classPeopleSql in classes/classGroups.js; not imported, FE-04 code is only read here).
  * Classes are per school year, so a student of 10A1 2026-2027 is not in the 10A1 of another year.
+ * `homeroom` is TRUE only on the homeroom teacher's row (a homeroom teacher who also teaches the class has both rows):
+ * the homeroom teacher always gets a post sent to their class, whatever roles it targets (see homeroomMatchSql).
  */
 function classAudienceSql(params) {
   const studying = () => enrollmentsOfYear(params, { status: 'STUDYING' });
   return `(
-    SELECT t.user_id, 'TEACHER'::text AS role_code, c.class_id, c.grade_level_id
+    SELECT t.user_id, 'TEACHER'::text AS role_code, c.class_id, c.grade_level_id, TRUE AS homeroom
     FROM classes c JOIN teachers t ON t.teacher_id = c.homeroom_teacher_id
     WHERE c.school_year_id = $1 AND c.deleted_at IS NULL
     UNION
-    SELECT t.user_id, 'TEACHER', c.class_id, c.grade_level_id
+    SELECT t.user_id, 'TEACHER', c.class_id, c.grade_level_id, FALSE
     FROM teaching_assignments ta
     JOIN teachers t ON t.teacher_id = ta.teacher_id
     JOIN classes c ON c.class_id = ta.class_id
     WHERE c.school_year_id = $1 AND c.deleted_at IS NULL AND ta.deleted_at IS NULL AND ta.end_date >= CURRENT_DATE
     UNION
-    SELECT s.user_id, 'STUDENT', c.class_id, c.grade_level_id
+    SELECT s.user_id, 'STUDENT', c.class_id, c.grade_level_id, FALSE
     FROM ${studying()}
     JOIN students s ON s.student_id = e.student_id
     JOIN classes c ON c.class_id = e.class_id
     UNION
-    SELECT p.user_id, 'PARENT', c.class_id, c.grade_level_id
+    SELECT p.user_id, 'PARENT', c.class_id, c.grade_level_id, FALSE
     FROM ${studying()}
     JOIN student_parents spa ON spa.student_id = e.student_id
     JOIN parents p ON p.parent_id = spa.parent_id
@@ -73,11 +75,33 @@ function audienceMatchSql(sp, matchGrade, matchClass) {
   return `(
        (NOT EXISTS (SELECT 1 FROM school_post_grade_targets vg WHERE vg.school_post_id = ${sp}.school_post_id)
         AND NOT EXISTS (SELECT 1 FROM school_post_class_targets vc WHERE vc.school_post_id = ${sp}.school_post_id))
-       OR EXISTS (SELECT 1 FROM school_post_grade_targets vg
+       OR ${targetMatchSql(sp, matchGrade, matchClass)})`;
+}
+
+// The targeted half of audienceMatchSql (a whole-school post never passes it): ANY grade or class target matches.
+function targetMatchSql(sp, matchGrade, matchClass) {
+  return `(EXISTS (SELECT 1 FROM school_post_grade_targets vg
                   WHERE vg.school_post_id = ${sp}.school_post_id AND ${matchGrade('vg.grade_level_id')})
        OR EXISTS (SELECT 1 FROM school_post_class_targets vc
                   WHERE vc.school_post_id = ${sp}.school_post_id AND ${matchClass('vc.class_id')}))`;
 }
+
+/**
+ * The role dimension (school_posts.target_roles, patch_v0.3_school_post_roles.sql), multiplied with the grade / class
+ * one: NULL or empty = every role; otherwise the reader's role must be in the list. `role` is a SQL text expression
+ * (the active role in UC-58 / UC-59, the role of each user_roles row in recipientsSql).
+ */
+const roleMatchSql = (sp, role) =>
+  `(${sp}.target_roles IS NULL OR cardinality(${sp}.target_roles) = 0 OR ${role} = ANY(${sp}.target_roles))`;
+
+/**
+ * Decision 2 (FE-08 role audience, 09/11/2026, precedent business-rules §10 "homeroom teacher and creator always see
+ * it"): the homeroom teacher of a class always gets a post TARGETED at that class or at its grade, even when the post
+ * is for parents or students only. matchGrade / matchClass test the homeroom teacher's classes.
+ * ASSUMPTION: only targeted posts. A whole-school post for some roles ("Toàn trường × Phụ huynh") is not "sent to
+ * their class", so homeroom teachers get it only when TEACHER is one of its roles.
+ */
+const homeroomMatchSql = (sp, matchGrade, matchClass) => targetMatchSql(sp, matchGrade, matchClass);
 
 // --- Who sees which post (business-rules §8, permissions.md "School post – View", note 8) ----------------------
 
@@ -89,14 +113,19 @@ function audienceMatchSql(sp, matchGrade, matchClass) {
  * System Admin sees no content (business-rules §1): the route refuses it; refused here too, so no caller can forget.
  * Nobody in a class (student not placed yet, parent with no linked child, no school year at all) → empty lists, which
  * still gives the whole-school posts. Not an error.
+ * `role` is the active role, for school_posts.target_roles; homeroom* are the classes (and their grades) the user is
+ * homeroom teacher of, under the TEACHER role only (decision 2, homeroomMatchSql).
  *
- * @returns {Promise<{ everyone: true } | { everyone: false, classIds: number[], gradeLevelIds: number[] }>}
+ * @returns {Promise<{ everyone: true } | { everyone: false, role: string, classIds: number[],
+ *   gradeLevelIds: number[], homeroomClassIds: number[], homeroomGradeLevelIds: number[] }>}
  */
 export async function resolveAudience({ userId, activeRole }, db = pool) {
   if (activeRole === 'SCHOOL_MANAGER') return { everyone: true };
   if (!READER_ROLES.includes(activeRole)) throw forbidden();
 
-  const none = { everyone: false, classIds: [], gradeLevelIds: [] };
+  const none = {
+    everyone: false, role: activeRole, classIds: [], gradeLevelIds: [], homeroomClassIds: [], homeroomGradeLevelIds: [],
+  };
   const yearId = await resolveSchoolYearId({}, db);
   if (!yearId) return none;
 
@@ -104,21 +133,28 @@ export async function resolveAudience({ userId, activeRole }, db = pool) {
   const ca = classAudienceSql(params);
   params.push(userId, activeRole);
   const { rows } = await db.query(
-    `SELECT DISTINCT ca.class_id AS "classId", ca.grade_level_id AS "gradeLevelId"
+    `SELECT DISTINCT ca.class_id AS "classId", ca.grade_level_id AS "gradeLevelId", ca.homeroom
      FROM ${ca} ca
      WHERE ca.user_id = $${params.length - 1} AND ca.role_code = $${params.length}`,
     params,
   );
+  const homeroom = rows.filter((r) => r.homeroom);
   return {
     everyone: false,
+    role: activeRole,
     classIds: [...new Set(rows.map((r) => r.classId))],
     gradeLevelIds: [...new Set(rows.map((r) => r.gradeLevelId))],
+    homeroomClassIds: [...new Set(homeroom.map((r) => r.classId))],
+    homeroomGradeLevelIds: [...new Set(homeroom.map((r) => r.gradeLevelId))],
   };
 }
 
 /**
  * THE visibility condition of school posts, used by UC-58 and UC-59 alike (one place, so the list and the detail
  * can never disagree). Includes "not deleted". Pushes its values onto params.
+ * A Teacher / Student / Parent sees a post when (grade / class dimension) AND (role dimension), or – homeroom teacher
+ * only – when it targets their homeroom class or its grade (decision 2). School Manager: every post not deleted.
+ * MUST stay the same rule as recipientsSql (the notification and socket recipients).
  *
  * @param {Awaited<ReturnType<typeof resolveAudience>>} audience
  * @param {unknown[]} params
@@ -127,11 +163,19 @@ export async function resolveAudience({ userId, activeRole }, db = pool) {
 export function visibleSchoolPostsSql(audience, params, sp = 'sp') {
   const notDeleted = `${sp}.deleted_at IS NULL`;
   if (audience.everyone) return notDeleted;
-  params.push(audience.gradeLevelIds);
-  const grades = `$${params.length}::bigint[]`;
-  params.push(audience.classIds);
-  const classes = `$${params.length}::bigint[]`;
-  return `${notDeleted} AND ${audienceMatchSql(sp, (col) => `${col} = ANY(${grades})`, (col) => `${col} = ANY(${classes})`)}`;
+  const value = (v, type) => {
+    params.push(v);
+    return `$${params.length}::${type}`;
+  };
+  const grades = value(audience.gradeLevelIds, 'bigint[]');
+  const classes = value(audience.classIds, 'bigint[]');
+  const role = value(audience.role, 'text');
+  const homeroomGrades = value(audience.homeroomGradeLevelIds, 'bigint[]');
+  const homeroomClasses = value(audience.homeroomClassIds, 'bigint[]');
+  return `${notDeleted} AND (
+       (${audienceMatchSql(sp, (col) => `${col} = ANY(${grades})`, (col) => `${col} = ANY(${classes})`)}
+        AND ${roleMatchSql(sp, role)})
+       OR ${homeroomMatchSql(sp, (col) => `${col} = ANY(${homeroomGrades})`, (col) => `${col} = ANY(${homeroomClasses})`)})`;
 }
 
 /**
@@ -141,7 +185,11 @@ export function visibleSchoolPostsSql(audience, params, sp = 'sp') {
  *   - every School Manager (they see every post);
  *   - every Teacher / Student / Parent when the post has no target (whole school);
  *   - otherwise a Teacher / Student / Parent whose role is in a target class or in a class of a target grade
- *     (classAudienceSql + audienceMatchSql: the very rule UC-58 uses).
+ *     (classAudienceSql + audienceMatchSql: the very rule UC-58 uses);
+ *   - in both cases only when that role is in school_posts.target_roles (NULL / empty = every role, roleMatchSql);
+ *   - and every homeroom teacher of a target class or of a class in a target grade, whatever the roles
+ *     (homeroomMatchSql, decision 2).
+ * The two branches are the two branches of visibleSchoolPostsSql, with the user's role instead of the active role.
  * System Admin is never in it (business-rules §1); SA is an exclusive role (§1), so an SA account has no other role.
  * ASSUMPTION: LOCKED accounts are included. Accounts are locked, never deleted (§3), so they find the notification
  * when they are unlocked; the bell is only read after signing in anyway.
@@ -151,6 +199,8 @@ function recipientsSql(params, postIdPlaceholder) {
   const ca = classAudienceSql(params);
   const inClassOf = (column) => (col) => `EXISTS (SELECT 1 FROM ca
                    WHERE ca.user_id = ur.user_id AND ca.role_code = r.role_code AND ca.${column} = ${col})`;
+  const homeroomOf = (column) => (col) => `EXISTS (SELECT 1 FROM ca
+                   WHERE ca.user_id = ur.user_id AND ca.role_code = r.role_code AND ca.homeroom AND ca.${column} = ${col})`;
   return `WITH ca AS ${ca}
      SELECT DISTINCT ur.user_id AS "userId"
      FROM user_roles ur
@@ -158,7 +208,10 @@ function recipientsSql(params, postIdPlaceholder) {
      JOIN school_posts sp ON sp.school_post_id = ${postIdPlaceholder} AND sp.deleted_at IS NULL
      WHERE r.role_code = 'SCHOOL_MANAGER'
         OR (r.role_code IN ('TEACHER', 'STUDENT', 'PARENT')
-            AND ${audienceMatchSql('sp', inClassOf('grade_level_id'), inClassOf('class_id'))})`;
+            AND ${audienceMatchSql('sp', inClassOf('grade_level_id'), inClassOf('class_id'))}
+            AND ${roleMatchSql('sp', 'r.role_code')})
+        OR (r.role_code = 'TEACHER'
+            AND ${homeroomMatchSql('sp', homeroomOf('grade_level_id'), homeroomOf('class_id'))})`;
 }
 
 /** The user ids who can see a school post (see recipientsSql), sorted. Used by UC-60 and by the checks. */
@@ -247,6 +300,16 @@ const AUDIENCE_TYPE = (sp) => `CASE WHEN EXISTS (SELECT 1 FROM school_post_grade
               OR EXISTS (SELECT 1 FROM school_post_class_targets ac WHERE ac.school_post_id = ${sp}.school_post_id)
             THEN 'TARGETED' ELSE 'SCHOOL' END`;
 
+// school_posts.target_roles for the API: always an array, [] = every role (NULL in the DB), in the order of
+// TARGETABLE_ROLES (the controller writes the column in that order). audienceType stays about grades / classes only.
+const TARGET_ROLES = (sp) => `COALESCE(${sp}.target_roles, '{}')::text[]`;
+
+/** Roles a school post can be sent to (school_posts.target_roles CHECK), in display order. */
+export const TARGETABLE_ROLES = ['STUDENT', 'PARENT', 'TEACHER'];
+// The value written to school_posts.target_roles: NULL for every role (the controller passes [] then).
+const rolesColumn = (roles) => (roles.length ? roles : null);
+const sameRoles = (a, b) => a.join() === b.join(); // both in TARGETABLE_ROLES order
+
 // Likes and comments only exist on announcements (business-rules §8); NEWS always shows 0 / 0 / false.
 async function interactionsOf(posts, userId, db = pool) {
   const ids = posts.filter((p) => p.postType === 'ANNOUNCEMENT').map((p) => p.schoolPostId);
@@ -300,7 +363,7 @@ export async function listSchoolPosts(user, { postType, q, page, pageSize }) {
             sp.post_type AS "postType", sp.is_pinned AS "isPinned",
             sp.created_at AS "createdAt", sp.updated_at AS "updatedAt",
             sp.author_id AS "authorId", u.full_name AS "authorName", u.avatar_url AS "authorAvatarUrl",
-            ${AUDIENCE_TYPE('sp')} AS "audienceType"
+            ${AUDIENCE_TYPE('sp')} AS "audienceType", ${TARGET_ROLES('sp')} AS "targetRoles"
      FROM school_posts sp
      JOIN users u ON u.user_id = sp.author_id
      CROSS JOIN LATERAL (SELECT regexp_replace(btrim(sp.content), '\\s+', ' ', 'g') AS flat) pv
@@ -314,16 +377,18 @@ export async function listSchoolPosts(user, { postType, q, page, pageSize }) {
   const interactions = await interactionsOf(posts, user.userId);
   const attachments = await summarizeAttachments(ids);
   const targets = await findTargets(ids);
-  const items = posts.map((post) => {
+  const items = posts.map(({ targetRoles, ...post }) => {
     const t = targets.get(post.schoolPostId);
     return {
       ...post,
       // ASSUMPTION: returned to every role, not only School Manager: grade and class names are not personal data
-      // and tell the reader why they get the post ("Khối 10", "11D1"). null for a whole-school post. The client
-      // writes the Vietnamese words ("Toàn trường", "Khối …").
-      audienceSummary: post.audienceType === 'SCHOOL' ? null : {
+      // and tell the reader why they get the post ("Khối 10", "11D1"). null for a whole-school post for every role
+      // (as before the role dimension); a whole-school post for some roles gets empty names and its targetRoles
+      // ("Toàn trường · Giáo viên"). targetRoles [] = every role. The client writes the Vietnamese words.
+      audienceSummary: post.audienceType === 'SCHOOL' && !targetRoles.length ? null : {
         gradeLevelNames: t?.gradeTargets.map((g) => g.gradeLevelName) ?? [],
         classNames: t?.classTargets.map((c) => c.className) ?? [],
+        targetRoles,
       },
       ...interactions(post),
       attachmentCount: attachments.get(post.schoolPostId)?.attachmentCount ?? 0,
@@ -349,7 +414,7 @@ export async function getSchoolPost(user, schoolPostId, db = pool) {
             sp.is_pinned AS "isPinned", sp.send_notification AS "sendNotification",
             sp.created_at AS "createdAt", sp.updated_at AS "updatedAt",
             sp.author_id AS "authorId", u.full_name AS "authorName", u.avatar_url AS "authorAvatarUrl",
-            ${AUDIENCE_TYPE('sp')} AS "audienceType"
+            ${AUDIENCE_TYPE('sp')} AS "audienceType", ${TARGET_ROLES('sp')} AS "targetRoles"
      FROM school_posts sp
      JOIN users u ON u.user_id = sp.author_id
      WHERE sp.school_post_id = $1 AND ${visibleSchoolPostsSql(audience, params)}`,
@@ -478,14 +543,16 @@ async function notifySchoolPost(client, { schoolPostId, title, createdBy }) {
 
 /**
  * UC-60 Create School Post (SCR-31). input is already validated by the controller:
- * { title, content, postType, sendNotification?, gradeLevelIds, classIds } (ids de-duplicated).
+ * { title, content, postType, sendNotification?, gradeLevelIds, classIds, targetRoles } (ids de-duplicated;
+ * targetRoles checked, de-duplicated and in TARGETABLE_ROLES order, [] = every role → stored as NULL).
  * - sendNotification left out → the default of the type (§8; schema comment): ANNOUNCEMENT true, NEWS false.
  * - ANNOUNCEMENT needs at least one grade or class (§8); NEWS may have targets or none (none = whole school).
+ *   Roles do not count for that rule: "Toàn trường × Giáo viên" is sent as NEWS, or as an ANNOUNCEMENT to every grade.
  * - Not pinned (UC-63 pins). Post, targets and notification are written together or not at all.
  * Attachments come later (§15): they will be one more step inside this same transaction.
  */
 export async function createSchoolPost(user, input) {
-  const { title, content, postType, gradeLevelIds, classIds } = input;
+  const { title, content, postType, gradeLevelIds, classIds, targetRoles = [] } = input;
   if (postType === 'ANNOUNCEMENT' && !gradeLevelIds.length && !classIds.length) {
     throw badRequest('MSG_AUDIENCE_REQUIRED', 'An announcement needs at least one grade level or class.',
       { fields: ['gradeLevelIds', 'classIds'] });
@@ -495,10 +562,11 @@ export async function createSchoolPost(user, input) {
   const result = await withTransaction(async (client) => {
     await checkTargets(client, { gradeLevelIds, classIds });
     const { rows } = await client.query(
-      `INSERT INTO school_posts (author_id, title, content, post_type, send_notification, is_pinned, created_at)
-       VALUES ($1, $2, $3, $4, $5, FALSE, NOW())
+      `INSERT INTO school_posts (author_id, title, content, post_type, send_notification, is_pinned, target_roles,
+                                 created_at)
+       VALUES ($1, $2, $3, $4, $5, FALSE, $6::varchar(20)[], NOW())
        RETURNING school_post_id AS "schoolPostId"`,
-      [user.userId, title, content, postType, sendNotification],
+      [user.userId, title, content, postType, sendNotification, rolesColumn(targetRoles)],
     );
     const { schoolPostId } = rows[0];
     await saveTargets(client, schoolPostId, { gradeLevelIds, classIds });
@@ -512,7 +580,7 @@ export async function createSchoolPost(user, input) {
 // Locks a post that is not deleted (two School Managers saving at once are applied one after the other), or 404.
 async function lockSchoolPost(client, schoolPostId) {
   const { rows } = await client.query(
-    `SELECT school_post_id AS "schoolPostId", post_type AS "postType"
+    `SELECT school_post_id AS "schoolPostId", post_type AS "postType", ${TARGET_ROLES('school_posts')} AS "targetRoles"
      FROM school_posts WHERE school_post_id = $1 AND deleted_at IS NULL
      FOR UPDATE`,
     [schoolPostId],
@@ -544,8 +612,11 @@ const sameIds = (a, b) => {
 };
 
 /**
- * UC-61 Update School Post (SCR-06). changes = { title?, content?, audience? } (validated by the controller;
- * audience = { gradeLevelIds, classIds }, de-duplicated).
+ * UC-61 Update School Post (SCR-06). changes = { title?, content?, audience?, targetRoles? } (validated by the
+ * controller; audience = { gradeLevelIds, classIds }, de-duplicated; targetRoles as in UC-60, [] = every role).
+ * - targetRoles: the role dimension of the audience, changed on its own (left out = kept). A real change is treated
+ *   like a target change: recipients before (in the lock) and after (after COMMIT) both get "schoolpost:changed",
+ *   updated_at moves, no new notification.
  * - title / content: written only when a value really differs (IS DISTINCT FROM, as UC-09).
  * - audience (lead OK 07/11/2026): replaces ALL the targets of the post. The target rows are HARD deleted and written
  *   again in this transaction (school_post_grade_targets / school_post_class_targets are join tables, like
@@ -567,23 +638,30 @@ export async function updateSchoolPost(user, schoolPostId, changes) {
     const post = await lockSchoolPost(client, schoolPostId);
     let changed = false;
 
-    const { audience } = changes;
+    const { audience, targetRoles } = changes;
+    let targetsChanged = false;
     if (audience) {
       if (post.postType === 'ANNOUNCEMENT' && !audience.gradeLevelIds.length && !audience.classIds.length) {
         throw badRequest('MSG_AUDIENCE_REQUIRED', 'An announcement needs at least one grade level or class.',
           { fields: ['gradeLevelIds', 'classIds'] });
       }
       const now = await currentTargetIds(client, schoolPostId);
-      if (!sameIds(now.gradeLevelIds, audience.gradeLevelIds) || !sameIds(now.classIds, audience.classIds)) {
-        await checkTargets(client, audience);
-        // Read with the old audience, inside the lock (only when the audience really changes: rare, and the query is
-        // the heavy one of the notifications, so it is not run for a title fix).
-        before = await recipientsOfSchoolPost(schoolPostId, client);
+      targetsChanged = !sameIds(now.gradeLevelIds, audience.gradeLevelIds) || !sameIds(now.classIds, audience.classIds);
+      if (targetsChanged) await checkTargets(client, audience);
+    }
+    // The roles are the other dimension of the same audience: a change is handled exactly like a target change.
+    const rolesChanged = targetRoles !== undefined && !sameRoles(post.targetRoles, targetRoles);
+
+    if (targetsChanged || rolesChanged) {
+      // Read with the old audience, inside the lock (only when the audience really changes: rare, and the query is
+      // the heavy one of the notifications, so it is not run for a title fix).
+      before = await recipientsOfSchoolPost(schoolPostId, client);
+      if (targetsChanged) {
         await client.query('DELETE FROM school_post_grade_targets WHERE school_post_id = $1', [schoolPostId]);
         await client.query('DELETE FROM school_post_class_targets WHERE school_post_id = $1', [schoolPostId]);
         await saveTargets(client, schoolPostId, audience);
-        changed = true;
       }
+      changed = true;
     }
 
     const params = [schoolPostId];
@@ -594,6 +672,10 @@ export async function updateSchoolPost(user, schoolPostId, changes) {
       params.push(changes[field]);
       sets.push(`${column} = $${params.length}`);
       differs.push(`${column} IS DISTINCT FROM $${params.length}`);
+    }
+    if (rolesChanged) {
+      params.push(rolesColumn(targetRoles));
+      sets.push(`target_roles = $${params.length}::varchar(20)[]`);
     }
     if (sets.length || changed) {
       // With an audience change updated_at moves even when title / content stay the same.
