@@ -2,7 +2,16 @@ import { useEffect, useId, useMemo, useRef, useState } from 'react';
 import { getGradeLevelOptions } from '../../api/schoolPosts.js';
 import { getClassOptions } from '../../api/students.js';
 import Icon from '../../components/Icon.jsx';
-import { feedErrorText, POST_TYPE_LABELS } from './schoolFeedShared.jsx';
+import {
+  AudiencePills,
+  audienceText,
+  feedErrorText,
+  narrowingRoles,
+  POST_TYPE_LABELS,
+  ROLE_LABELS,
+  roleLabels,
+  TARGETABLE_ROLES,
+} from './schoolFeedShared.jsx';
 import './SchoolPostForm.css';
 
 // FE-08 pieces shared by SCR-31 Create School Post (UC-60) and SCR-06 Update School Post (UC-61).
@@ -43,6 +52,15 @@ const sortedIds = (ids) => [...new Set(ids)].sort((x, y) => x - y);
 export const sameAudience = (a, b) =>
   sortedIds(a.gradeLevelIds).join() === sortedIds(b.gradeLevelIds).join() &&
   sortedIds(a.classIds).join() === sortedIds(b.classIds).join();
+
+// Roles (school_posts.target_roles): the form keeps the ticked roles, all three by default (= every role, the
+// behaviour of every post of before). None ticked is every role too (said on screen). What is sent is the roles that
+// narrow the audience: [] = every role (UC-60 / UC-61 store NULL).
+export const allRoles = () => [...TARGETABLE_ROLES];
+// UC-59 targetRoles ([] = every role) → the ticked boxes of SCR-06.
+export const tickedRolesOf = (targetRoles) => (narrowingRoles(targetRoles).length ? narrowingRoles(targetRoles) : allRoles());
+export const rolesToSend = (ticked) => narrowingRoles(ticked);
+export const sameRoles = (a, b) => narrowingRoles(a).join() === narrowingRoles(b).join();
 
 // --- Grades and classes ----------------------------------------------------------------------------------------
 
@@ -116,13 +134,56 @@ const fold = (text) =>
     .toLowerCase();
 
 /**
+ * The role dimension, above the grades and classes (a different choice, never mixed with their chips): three
+ * checkboxes "Học sinh · Phụ huynh · Giáo viên", all ticked by default. Unticking all = every role, said in the help.
+ * The help also says that the homeroom teacher of a chosen class always gets the post (decision 2, server rule).
+ */
+function RoleRow({ id, roles, onChange, disabled }) {
+  const none = roles.length === 0;
+  const toggle = (role) =>
+    onChange(roles.includes(role) ? roles.filter((r) => r !== role) : TARGETABLE_ROLES.filter((r) => r === role || roles.includes(r)));
+  return (
+    <div className="spf-audience-group spf-roles" role="group" aria-labelledby={`${id}-roles`} aria-describedby={`${id}-roles-help`}>
+      <span id={`${id}-roles`} className="label-upper">
+        Vai trò nhận bài
+      </span>
+      <div className="spf-chips">
+        {TARGETABLE_ROLES.map((role) => (
+          <label key={role} className={`spf-chip spf-role${roles.includes(role) ? ' is-on' : ''}${disabled ? ' is-disabled' : ''}`}>
+            <input type="checkbox" checked={roles.includes(role)} onChange={() => toggle(role)} disabled={disabled} />
+            <span>{ROLE_LABELS[role]}</span>
+          </label>
+        ))}
+      </div>
+      <p id={`${id}-roles-help`} className={`field-help spf-roles-help${none ? ' is-all' : ''}`} aria-live="polite">
+        {none
+          ? 'Chưa chọn vai trò nào, nên học sinh, phụ huynh và giáo viên trong phạm vi bên dưới đều nhận bài.'
+          : 'Chọn vai trò để thu hẹp người nhận trong phạm vi khối và lớp đã chọn. Giáo viên chủ nhiệm của lớp được chọn luôn nhận bài.'}
+      </p>
+    </div>
+  );
+}
+
+/**
  * Multi-select of grades and classes as toggle chips (wrapping rows, so nothing overflows on a narrow screen).
  * - Choosing a grade removes its classes from the selection (the grade already covers them); their chips show as
  *   covered. ASSUMPTION: a class inside a chosen grade adds nobody, so keeping both is pointless.
- * - "Toàn trường" (NEWS) / "Bỏ chọn tất cả" (ANNOUNCEMENT) clears the selection.
+ * - "Toàn trường" (NEWS) / "Bỏ chọn khối và lớp" (ANNOUNCEMENT) clears the selection (not the roles).
  * - staleClasses: targets of an edited post outside the current year; they can only be removed (UC-61 refuses them).
  */
-export function AudiencePicker({ postType, options, value, onChange, disabled, error, bad, staleClasses = [], note }) {
+export function AudiencePicker({
+  postType,
+  options,
+  value,
+  onChange,
+  roles,
+  onRolesChange,
+  disabled,
+  error,
+  bad,
+  staleClasses = [],
+  note,
+}) {
   const id = useId();
   const [filter, setFilter] = useState('');
   const announcement = postType === 'ANNOUNCEMENT';
@@ -161,7 +222,10 @@ export function AudiencePicker({ postType, options, value, onChange, disabled, e
     onChange({ ...value, classIds });
   }
 
-  const labels = audienceLabels(value, options, staleClasses);
+  const labels = [
+    ...audienceLabels(value, options, staleClasses).map((text) => ({ key: `s${text}`, text })),
+    ...roleLabels(roles).map((text) => ({ key: `r${text}`, text, role: true })),
+  ];
   const describedBy = `${id}-summary${error ? ` ${id}-error` : ''}`;
 
   return (
@@ -174,6 +238,8 @@ export function AudiencePicker({ postType, options, value, onChange, disabled, e
           ? 'Chọn ít nhất một khối hoặc một lớp. Chọn cả khối thì mọi lớp trong khối đều nhận.'
           : 'Không chọn khối hay lớp nào thì tin tức dành cho toàn trường.'}
       </p>
+
+      <RoleRow id={id} roles={roles} onChange={onRolesChange} disabled={disabled} />
 
       {options.loading && <p className="caption muted spf-audience-loading">Đang tải danh sách khối và lớp…</p>}
       {!options.loading && options.error && (
@@ -199,7 +265,7 @@ export function AudiencePicker({ postType, options, value, onChange, disabled, e
                 disabled={disabled || empty}
               >
                 <Icon name="clear_all" size="sm" />
-                Bỏ chọn tất cả
+                Bỏ chọn khối và lớp
               </button>
             ) : (
               <button
@@ -321,11 +387,7 @@ export function AudiencePicker({ postType, options, value, onChange, disabled, e
 
       <div className="spf-audience-summary" id={`${id}-summary`} aria-live="polite">
         <span className="caption muted">Gửi tới:</span>
-        {labels.map((label) => (
-          <span key={label} className="pill">
-            {label}
-          </span>
-        ))}
+        <AudiencePills labels={labels} />
       </div>
       {note}
       {error && (
@@ -458,7 +520,7 @@ export function saveErrorOf(err, fallback) {
 // --- Preview and confirmation ----------------------------------------------------------------------------------
 
 // Live preview as the post will look in the feed (Stitch "Xem trước trên Bảng tin").
-export function PostPreview({ postType, title, content, labels, authorName }) {
+export function PostPreview({ postType, title, content, labels, roles, authorName }) {
   const announcement = postType === 'ANNOUNCEMENT';
   const cleanTitle = normalizeTitle(title);
   const text = normalizeContent(content);
@@ -480,7 +542,7 @@ export function PostPreview({ postType, title, content, labels, authorName }) {
         <p className="caption muted spf-preview-meta">
           {authorName && <span>{authorName}</span>}
           {authorName && <span aria-hidden="true"> · </span>}
-          <span>Gửi tới: {labels.join(', ')}</span>
+          <span>Gửi tới: {audienceText(labels, roles)}</span>
         </p>
         <p className={`spf-preview-text${text ? '' : ' is-empty'}`}>{text || 'Nội dung bài viết sẽ hiện ở đây.'}</p>
         <p className="caption spf-preview-foot">
@@ -497,7 +559,7 @@ export function PostPreview({ postType, title, content, labels, authorName }) {
  * edit does not send it again). Native <dialog> as FE-02 SCR-11; the safe button "Quay lại" gets the focus, never
  * the confirm button.
  */
-export function ConfirmPostDialog({ open, title, postType, labels, sendNotification, busy, onCancel, onConfirm }) {
+export function ConfirmPostDialog({ open, title, postType, labels, roles, sendNotification, busy, onCancel, onConfirm }) {
   const ref = useRef(null);
   useEffect(() => {
     const dialog = ref.current;
@@ -534,6 +596,8 @@ export function ConfirmPostDialog({ open, title, postType, labels, sendNotificat
               </span>
             ))}
           </dd>
+          <dt>Vai trò</dt>
+          <dd>{roleLabels(roles).join(', ') || 'Học sinh, phụ huynh và giáo viên'}</dd>
           <dt>Thông báo</dt>
           <dd>{sendNotification ? 'Có gửi, người nhận sẽ thấy trong chuông' : 'Không gửi thông báo'}</dd>
         </dl>
