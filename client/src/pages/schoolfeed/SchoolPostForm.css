@@ -268,3 +268,12 @@
   .spf-preview-card { padding: 16px 16px 12px 40px; }
   .spf-preview-card::before { left: 20px; }
 }
+
+/* Role dimension (school_posts.target_roles): real checkboxes in the chip shape, above the grades and classes. */
+.spf-roles { padding-bottom: 12px; border-bottom: 1px solid var(--graphite-100); }
+.spf-chip.spf-role { gap: 8px; padding: 0 16px 0 12px; }
+.spf-chip.spf-role input { width: 18px; height: 18px; margin: 0; accent-color: var(--ink-600); cursor: inherit; }
+.spf-chip.spf-role:focus-within { outline: 2px solid var(--ink-400); outline-offset: 2px; }
+.spf-chip.spf-role.is-disabled { opacity: 0.55; cursor: default; }
+.spf-roles-help { margin: 0; }
+.spf-roles-help.is-all { color: var(--ink-700); }
