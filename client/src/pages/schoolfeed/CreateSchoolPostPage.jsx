@@ -5,8 +5,9 @@ import Icon from '../../components/Icon.jsx';
 import { useAuth } from '../../context/AuthContext.jsx';
 import { useToast } from '../../context/ToastContext.jsx';
 import { LeaveDialog, useLeaveGuard } from './leaveGuard.jsx';
-import { handOverPost } from './schoolFeedShared.jsx';
+import { audienceText, handOverPost } from './schoolFeedShared.jsx';
 import {
+  allRoles,
   audienceLabels,
   AudiencePicker,
   ConfirmPostDialog,
@@ -18,6 +19,8 @@ import {
   POST_TYPE_INFO,
   PostPreview,
   PostTypeSwitch,
+  rolesToSend,
+  sameRoles,
   saveErrorOf,
   TitleCounter,
   useAudienceOptions,
@@ -35,7 +38,14 @@ const SAVE_ERROR = 'Không đăng được bài viết. Vui lòng thử lại.';
 const FIELD_ORDER = ['title', 'content', 'audience'];
 const FIELD_FOCUS = { title: 'spf-title', content: 'spf-content', audience: 'spf-audience' };
 
-const INITIAL = { postType: 'ANNOUNCEMENT', title: '', content: '', sendNotification: true, audience: emptyAudience() };
+const INITIAL = {
+  postType: 'ANNOUNCEMENT',
+  title: '',
+  content: '',
+  sendNotification: true,
+  audience: emptyAudience(),
+  targetRoles: allRoles(),
+};
 
 export default function CreateSchoolPostPage() {
   const location = useLocation();
@@ -57,6 +67,7 @@ export default function CreateSchoolPostPage() {
   // Stays true while saving: leave() then removes the guard's extra history entry itself before navigating.
   const dirty =
     normalizeTitle(form.title) !== '' || normalizeContent(form.content) !== '' || !isAudienceEmpty(form.audience) ||
+    !sameRoles(form.targetRoles, INITIAL.targetRoles) ||
     form.postType !== INITIAL.postType || form.sendNotification !== DEFAULT_SEND_NOTIFICATION[form.postType];
   const { asking, setAsking, stay, leave } = useLeaveGuard(dirty);
 
@@ -102,6 +113,7 @@ export default function CreateSchoolPostPage() {
         sendNotification: form.sendNotification,
         gradeLevelIds: form.audience.gradeLevelIds,
         classIds: form.audience.classIds,
+        targetRoles: rolesToSend(form.targetRoles),
       });
       toast(announcement ? 'Đã đăng thông báo.' : 'Đã đăng tin tức.');
       handOverPost(data);
@@ -230,6 +242,8 @@ export default function CreateSchoolPostPage() {
               options={options}
               value={form.audience}
               onChange={(audience) => change({ audience }, 'audience')}
+              roles={form.targetRoles}
+              onRolesChange={(targetRoles) => change({ targetRoles })}
               disabled={saving}
               error={audienceError}
               bad={serverError?.bad}
@@ -265,7 +279,7 @@ export default function CreateSchoolPostPage() {
           <div className="spf-footer">
             <span className="caption muted spf-footer-note">
               <Icon name="info" size="sm" />
-              Bài đăng hiển thị ngay với: {labels.join(', ')}.
+              Bài đăng hiển thị ngay với: {audienceText(labels, form.targetRoles)}.
             </span>
             <div className="spf-footer-buttons">
               <button type="button" className="btn btn-secondary" onClick={cancel} disabled={saving}>
@@ -284,6 +298,7 @@ export default function CreateSchoolPostPage() {
           title={form.title}
           content={form.content}
           labels={labels}
+          roles={form.targetRoles}
           authorName={user?.fullName}
         />
       </div>
@@ -293,6 +308,7 @@ export default function CreateSchoolPostPage() {
         title={form.title}
         postType={form.postType}
         labels={labels}
+        roles={form.targetRoles}
         sendNotification={form.sendNotification}
         busy={saving}
         onCancel={() => setConfirming(false)}

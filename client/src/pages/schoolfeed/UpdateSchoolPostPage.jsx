@@ -5,7 +5,7 @@ import Icon from '../../components/Icon.jsx';
 import { useAuth } from '../../context/AuthContext.jsx';
 import { useToast } from '../../context/ToastContext.jsx';
 import { LeaveDialog, useLeaveGuard } from './leaveGuard.jsx';
-import { feedErrorText, formatDateTime, handOverPost } from './schoolFeedShared.jsx';
+import { feedErrorText, formatDateTime, handOverPost, narrowingRoles } from './schoolFeedShared.jsx';
 import {
   audienceLabels,
   AudiencePicker,
@@ -14,8 +14,11 @@ import {
   POST_TYPE_INFO,
   PostPreview,
   PostTypeSwitch,
+  rolesToSend,
   sameAudience,
+  sameRoles,
   saveErrorOf,
+  tickedRolesOf,
   TitleCounter,
   useAudienceOptions,
   validatePost,
@@ -39,9 +42,15 @@ const audienceOf = (post) => ({
   gradeLevelIds: post.gradeTargets.map((g) => g.gradeLevelId),
   classIds: post.classTargets.map((c) => c.classId),
 });
-const formOf = (post) => ({ title: post.title, content: post.content, audience: audienceOf(post) });
+const formOf = (post) => ({
+  title: post.title,
+  content: post.content,
+  audience: audienceOf(post),
+  targetRoles: tickedRolesOf(post.targetRoles),
+});
 
-// The whitelist of UC-61: title, content, gradeLevelIds + classIds (one audience, sent together) – only when changed.
+// The whitelist of UC-61: title, content, gradeLevelIds + classIds (one audience, sent together), targetRoles (the
+// other dimension of the audience, sent on its own) – only when changed.
 function changedFields(form, post) {
   const changes = {};
   const title = normalizeTitle(form.title);
@@ -52,6 +61,7 @@ function changedFields(form, post) {
     changes.gradeLevelIds = form.audience.gradeLevelIds;
     changes.classIds = form.audience.classIds;
   }
+  if (!sameRoles(form.targetRoles, narrowingRoles(post.targetRoles))) changes.targetRoles = rolesToSend(form.targetRoles);
   return changes;
 }
 
@@ -186,10 +196,11 @@ export default function UpdateSchoolPostPage() {
   const offered = new Set(options.classes.map((c) => c.classId));
   // Targets outside the current school year (known only once the options are loaded).
   const staleClasses = options.loading || options.error ? [] : post.classTargets.filter((c) => !offered.has(c.classId));
-  const audienceChanged = 'gradeLevelIds' in changes;
+  const audienceChanged = 'gradeLevelIds' in changes || 'targetRoles' in changes;
+  const targetsChanged = 'gradeLevelIds' in changes;
 
   const errors = validatePost({ ...form, postType: post.postType });
-  if (!errors.audience && audienceChanged && staleClasses.some((c) => form.audience.classIds.includes(c.classId))) {
+  if (!errors.audience && targetsChanged && staleClasses.some((c) => form.audience.classIds.includes(c.classId))) {
     errors.audience = STALE_CLASSES;
   }
   const shown = (field) =>
@@ -341,6 +352,8 @@ export default function UpdateSchoolPostPage() {
               options={options}
               value={form.audience}
               onChange={(audience) => change({ audience }, 'audience')}
+              roles={form.targetRoles}
+              onRolesChange={(targetRoles) => change({ targetRoles })}
               disabled={saving}
               error={audienceError}
               bad={serverError?.bad}
@@ -400,6 +413,7 @@ export default function UpdateSchoolPostPage() {
           title={form.title}
           content={form.content}
           labels={labels}
+          roles={form.targetRoles}
           authorName={post.authorName ?? user?.fullName}
         />
       </div>
