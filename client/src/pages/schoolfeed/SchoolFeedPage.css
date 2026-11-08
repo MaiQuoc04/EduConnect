@@ -212,3 +212,33 @@
   .school-feed-image { flex: none; width: 100%; height: auto; aspect-ratio: 16 / 9; }
   .school-feed-title { font-size: 18px; line-height: 24px; }
 }
+
+/* ---------- real time (FE-08 step 3): "Có nội dung mới — Tải lại" ----------
+   Zero-height sticky wrapper, always in the DOM: the pill floats over the top of the list while the reader scrolls and
+   showing it never moves a card. */
+.school-feed-new-wrap {
+  position: sticky;
+  top: 12px;
+  z-index: 3;
+  height: 0;
+  display: flex;
+  justify-content: center;
+  overflow: visible;
+}
+.school-feed-new {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 44px;
+  padding: 0 18px;
+  border: 0;
+  border-radius: 999px;
+  background: var(--ink-700);
+  color: #fff;
+  font: 500 14px/20px var(--font-ui);
+  box-shadow: var(--shadow-menu);
+  cursor: pointer;
+  white-space: nowrap;
+}
+.school-feed-new:hover { background: var(--ink-800); }
+.school-feed-new:focus-visible { outline: 2px solid var(--ink-400); outline-offset: 2px; }
