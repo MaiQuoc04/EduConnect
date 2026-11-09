@@ -67,9 +67,50 @@ export function narrowingRoles(roles = []) {
 }
 export const roleLabels = (roles) => narrowingRoles(roles).map((role) => ROLE_LABELS[role]);
 
-// One line for both dimensions: "Khối 10, Lớp 11D1 · Phụ huynh", "Toàn trường · Giáo viên", "Khối 10".
-export const audienceText = (scopeLabels, roles) =>
-  [scopeLabels.join(', '), roleLabels(roles).join(', ')].filter(Boolean).join(' · ');
+// The role half of "Gửi tới": "Học sinh, Phụ huynh", or "Tất cả" when every role gets the post ([] or all three).
+export const ALL_ROLES_TEXT = 'Tất cả';
+export const rolesText = (roles) => roleLabels(roles).join(', ') || ALL_ROLES_TEXT;
+
+// An announcement with no grade / class yet (business-rules §8: it needs one); never shown as "Toàn trường".
+export const NO_AUDIENCE_TEXT = 'Chưa chọn đối tượng nhận';
+
+/**
+ * The scope half: "Khối 10, Lớp 11D1". With `max`, a long list keeps its first `max` names and counts the rest:
+ * "Khối 10, Lớp 11D1 và 3 lớp khác" (or "khối khác" / "mục khác" when the rest are grades / mixed). One name more
+ * than `max` is written out (never "và 1 lớp khác").
+ */
+export function scopeText(scopeLabels, max = Infinity) {
+  if (scopeLabels.length <= max + 1) return scopeLabels.join(', ');
+  const rest = scopeLabels.slice(max);
+  const kind = rest.every((t) => t.startsWith('Lớp ')) ? 'lớp' : rest.every((t) => t.startsWith('Khối ')) ? 'khối' : 'mục';
+  return `${scopeLabels.slice(0, max).join(', ')} và ${rest.length} ${kind} khác`;
+}
+
+// How many grade / class names the short "Gửi tới" lines (feed card, form summary, preview) keep; the confirmation
+// dialog and the detail page list them all.
+export const SHORT_SCOPE = 2;
+
+// One line for both dimensions, "<phạm vi> · <vai trò>": "Khối 10, Lớp 11D1 · Phụ huynh", "Toàn trường · Tất cả".
+// scopeLabels null = an announcement with nothing chosen yet → NO_AUDIENCE_TEXT.
+export const audienceText = (scopeLabels, roles, max = Infinity) =>
+  scopeLabels ? `${scopeText(scopeLabels, max)} · ${rolesText(roles)}` : NO_AUDIENCE_TEXT;
+
+/**
+ * The same line as markup, for the feed card, the detail page and the form: the scope, a "·", the roles; the empty
+ * state of an announcement in grey. A shortened line carries the full one in its title (hover).
+ */
+export function AudienceLine({ scopeLabels, roles, max = Infinity, className = '' }) {
+  if (!scopeLabels) return <span className={`sf-audience-line is-pending ${className}`.trim()}>{NO_AUDIENCE_TEXT}</span>;
+  const full = audienceText(scopeLabels, roles);
+  const short = scopeText(scopeLabels, max);
+  return (
+    <span className={`sf-audience-line ${className}`.trim()} title={short !== scopeLabels.join(', ') ? full : undefined}>
+      <span className="sf-audience-scope">{short}</span>
+      <span className="sf-audience-sep">{' · '}</span>
+      <span className="sf-audience-roles">{rolesText(roles)}</span>
+    </span>
+  );
+}
 
 // Who the post was sent to, from UC-58 audienceSummary (null = whole school for every role, business-rules §8; a
 // whole-school post for some roles has empty names and its targetRoles).
@@ -84,39 +125,25 @@ export function audienceLabels(summary, audienceType) {
   return labels.length ? labels : ['Lớp đã chọn'];
 }
 
-// "Gửi tới" of a UC-58 feed item, both dimensions.
-export const feedAudienceText = (post) =>
-  audienceText(audienceLabels(post.audienceSummary, post.audienceType), post.audienceSummary?.targetRoles);
-
-// Same, from the UC-59 targets of the detail page: grade / class pills, then the role pills (role: true).
-export function targetLabels(post) {
-  const roles = roleLabels(post.targetRoles).map((text) => ({ key: `r${text}`, text, role: true }));
-  if (post.audienceType === 'SCHOOL') return [{ key: 'school', text: 'Toàn trường' }, ...roles];
-  const labels = [
-    ...post.gradeTargets.map((g) => ({ key: `g${g.gradeLevelId}`, text: `Khối ${g.gradeLevelName}` })),
-    ...post.classTargets.map((c) => ({
-      key: `c${c.classId}`,
-      text: `Lớp ${c.className}`,
-      title: `Năm học ${String(c.schoolYearName ?? '').replace('-', ' – ')}`,
-    })),
-  ];
-  return [...(labels.length ? labels : [{ key: 'none', text: 'Lớp đã chọn' }]), ...roles];
+// "Gửi tới" of a UC-58 feed item, both dimensions, shortened as the form summary.
+export function FeedAudience({ post }) {
+  return (
+    <AudienceLine
+      scopeLabels={audienceLabels(post.audienceSummary, post.audienceType)}
+      roles={post.audienceSummary?.targetRoles}
+      max={SHORT_SCOPE}
+    />
+  );
 }
 
-// The pills of targetLabels / the form summary, with a "·" between the grades / classes and the roles.
-export function AudiencePills({ labels }) {
-  return labels.map((t, i) => (
-    <span key={t.key} className="sf-audience-pill">
-      {t.role && !labels[i - 1]?.role && (
-        <span className="sf-audience-sep" aria-hidden="true">
-          ·
-        </span>
-      )}
-      <span className={`pill${t.role ? ' sf-role-pill' : ''}`} title={t.title}>
-        {t.text}
-      </span>
-    </span>
-  ));
+// Scope labels of the UC-59 targets of the detail page, all of them (the roles are post.targetRoles).
+export function targetScopeLabels(post) {
+  if (post.audienceType === 'SCHOOL') return ['Toàn trường'];
+  const labels = [
+    ...post.gradeTargets.map((g) => `Khối ${g.gradeLevelName}`),
+    ...post.classTargets.map((c) => `Lớp ${c.className}`),
+  ];
+  return labels.length ? labels : ['Lớp đã chọn'];
 }
 
 /**
