@@ -3,13 +3,12 @@ import { getGradeLevelOptions } from '../../api/schoolPosts.js';
 import { getClassOptions } from '../../api/students.js';
 import Icon from '../../components/Icon.jsx';
 import {
-  AudiencePills,
-  audienceText,
+  AudienceLine,
   feedErrorText,
   narrowingRoles,
   POST_TYPE_LABELS,
   ROLE_LABELS,
-  roleLabels,
+  SHORT_SCOPE,
   TARGETABLE_ROLES,
 } from './schoolFeedShared.jsx';
 import './SchoolPostForm.css';
@@ -91,11 +90,17 @@ export function useAudienceOptions() {
   return { ...state, reload: () => setAttempt((n) => n + 1) };
 }
 
+// §8: an announcement needs a grade or a class; until then it cannot be posted / saved (button locked).
+export const audienceMissing = (postType, audience) => postType === 'ANNOUNCEMENT' && isAudienceEmpty(audience);
+
 /**
- * "Gửi tới" labels of a selection, in the picker's order: grades, then classes. `extraClasses` are targets of an
- * edited post that are not offered (classes of another school year). Empty selection = whole school (§8).
+ * Scope labels of a selection ("Gửi tới", with the roles: AudienceLine / audienceText), in the picker's order:
+ * grades, then classes. `extraClasses` are targets of an edited post that are not offered (classes of another school
+ * year). Empty selection = whole school for NEWS (§8); null for an ANNOUNCEMENT = nothing chosen yet, never
+ * "Toàn trường" (the server would refuse it with MSG_AUDIENCE_REQUIRED).
  */
-export function audienceLabels(audience, options, extraClasses = []) {
+export function audienceLabels(postType, audience, options, extraClasses = []) {
+  if (audienceMissing(postType, audience)) return null;
   if (isAudienceEmpty(audience)) return ['Toàn trường'];
   const grades = new Set(audience.gradeLevelIds);
   const classes = new Set(audience.classIds);
@@ -109,18 +114,27 @@ export function audienceLabels(audience, options, extraClasses = []) {
   return labels.length ? labels : ['Lớp đã chọn'];
 }
 
-function OptionChip({ on, covered, bad, disabled, onClick, children, title }) {
+/**
+ * One toggle chip for every on / off choice of the audience (grades, classes, roles): a small check box at the start,
+ * empty when off; on = solid ink chip with a white tick. `covered` = a class already inside a chosen grade (ticked,
+ * dashed, not clickable). `hint` = a short muted note after the name ("chưa có lớp").
+ */
+function OptionChip({ on, covered, bad, disabled, onClick, children, hint, title, describedBy }) {
   return (
     <button
       type="button"
       className={`spf-chip${on ? ' is-on' : ''}${covered ? ' is-covered' : ''}${bad ? ' is-bad' : ''}`}
-      aria-pressed={on || covered}
+      aria-pressed={Boolean(on || covered)}
       disabled={disabled || covered}
       onClick={onClick}
       title={title}
+      aria-describedby={describedBy}
     >
-      <Icon name={on || covered ? 'check' : 'add'} size="sm" />
-      <span>{children}</span>
+      <span className="spf-chip-box" aria-hidden="true">
+        {(on || covered) && <Icon name="check" size="sm" />}
+      </span>
+      <span className="spf-chip-text">{children}</span>
+      {hint && <span className="spf-chip-hint">{hint}</span>}
     </button>
   );
 }
@@ -134,9 +148,10 @@ const fold = (text) =>
     .toLowerCase();
 
 /**
- * The role dimension, above the grades and classes (a different choice, never mixed with their chips): three
- * checkboxes "Học sinh · Phụ huynh · Giáo viên", all ticked by default. Unticking all = every role, said in the help.
- * The help also says that the homeroom teacher of a chosen class always gets the post (decision 2, server rule).
+ * The role dimension, AFTER the grades and classes: the scope is chosen first ("khối 10"), the roles only narrow it
+ * ("chỉ phụ huynh"). Three toggle chips "Học sinh · Phụ huynh · Giáo viên", all on by default. None on = every role,
+ * said in the help. The help also says that the homeroom teacher of a chosen class always gets the post (decision 2,
+ * server rule).
  */
 function RoleRow({ id, roles, onChange, disabled }) {
   const none = roles.length === 0;
@@ -149,22 +164,23 @@ function RoleRow({ id, roles, onChange, disabled }) {
       </span>
       <div className="spf-chips">
         {TARGETABLE_ROLES.map((role) => (
-          <label key={role} className={`spf-chip spf-role${roles.includes(role) ? ' is-on' : ''}${disabled ? ' is-disabled' : ''}`}>
-            <input type="checkbox" checked={roles.includes(role)} onChange={() => toggle(role)} disabled={disabled} />
-            <span>{ROLE_LABELS[role]}</span>
-          </label>
+          <OptionChip key={role} on={roles.includes(role)} disabled={disabled} onClick={() => toggle(role)}>
+            {ROLE_LABELS[role]}
+          </OptionChip>
         ))}
       </div>
       <p id={`${id}-roles-help`} className={`field-help spf-roles-help${none ? ' is-all' : ''}`} aria-live="polite">
         {none
-          ? 'Chưa chọn vai trò nào, nên học sinh, phụ huynh và giáo viên trong phạm vi bên dưới đều nhận bài.'
-          : 'Chọn vai trò để thu hẹp người nhận trong phạm vi khối và lớp đã chọn. Giáo viên chủ nhiệm của lớp được chọn luôn nhận bài.'}
+          ? 'Chưa chọn vai trò nào, nên học sinh, phụ huynh và giáo viên trong phạm vi đã chọn ở trên đều nhận bài.'
+          : 'Chọn vai trò để thu hẹp người nhận trong phạm vi khối và lớp đã chọn ở trên. Giáo viên chủ nhiệm của lớp được chọn luôn nhận bài.'}
       </p>
     </div>
   );
 }
 
 /**
+ * The whole audience, top to bottom as a school office thinks it: grades, classes of the current year, "Bỏ chọn khối
+ * và lớp", then the roles that narrow it, then one "Gửi tới" line for both dimensions.
  * Multi-select of grades and classes as toggle chips (wrapping rows, so nothing overflows on a narrow screen).
  * - Choosing a grade removes its classes from the selection (the grade already covers them); their chips show as
  *   covered. ASSUMPTION: a class inside a chosen grade adds nobody, so keeping both is pointless.
@@ -201,10 +217,16 @@ export function AudiencePicker({
     return others.classes.length ? [...groups, others] : groups;
   }, [options.grades, options.classes]);
 
+  // Grades with no class in the current year: a post to such a grade reaches nobody through a class for now. Still
+  // allowed (§8 does not forbid it; classes may be created later), so they are only marked and warned about.
+  const emptyGradeIds = new Set(byGrade.filter((g) => g.gradeLevelId !== null && !g.classes.length).map((g) => g.gradeLevelId));
+  const chosenEmptyGrades = options.grades.filter((g) => emptyGradeIds.has(g.gradeLevelId) && chosenGrades.has(g.gradeLevelId));
+
   const needle = fold(filter);
+  // While filtering, only the grades with a matching class; otherwise every grade, the empty ones with their note.
   const visible = byGrade
     .map((g) => ({ ...g, classes: needle ? g.classes.filter((c) => fold(c.className).includes(needle)) : g.classes }))
-    .filter((g) => g.classes.length);
+    .filter((g) => g.classes.length || (!needle && g.gradeLevelId !== null && options.classes.length > 0));
 
   function toggleGrade(grade) {
     if (chosenGrades.has(grade.gradeLevelId)) {
@@ -222,10 +244,7 @@ export function AudiencePicker({
     onChange({ ...value, classIds });
   }
 
-  const labels = [
-    ...audienceLabels(value, options, staleClasses).map((text) => ({ key: `s${text}`, text })),
-    ...roleLabels(roles).map((text) => ({ key: `r${text}`, text, role: true })),
-  ];
+  const scopeLabels = audienceLabels(postType, value, options, staleClasses);
   const describedBy = `${id}-summary${error ? ` ${id}-error` : ''}`;
 
   return (
@@ -235,11 +254,9 @@ export function AudiencePicker({
       </legend>
       <p className="field-help spf-audience-help">
         {announcement
-          ? 'Chọn ít nhất một khối hoặc một lớp. Chọn cả khối thì mọi lớp trong khối đều nhận.'
-          : 'Không chọn khối hay lớp nào thì tin tức dành cho toàn trường.'}
+          ? 'Thông báo cần ít nhất một khối hoặc một lớp. Chọn cả khối thì mọi lớp trong khối đều nhận. Sau đó có thể thu hẹp theo vai trò.'
+          : 'Không chọn khối hay lớp nào thì tin tức dành cho toàn trường. Chọn cả khối thì mọi lớp trong khối đều nhận. Sau đó có thể thu hẹp theo vai trò.'}
       </p>
-
-      <RoleRow id={id} roles={roles} onChange={onRolesChange} disabled={disabled} />
 
       {options.loading && <p className="caption muted spf-audience-loading">Đang tải danh sách khối và lớp…</p>}
       {!options.loading && options.error && (
@@ -256,36 +273,18 @@ export function AudiencePicker({
 
       {!options.loading && !options.error && (
         <>
-          <div className="spf-audience-row">
-            {announcement ? (
-              <button
-                type="button"
-                className="btn btn-tertiary spf-clear"
-                onClick={() => onChange(emptyAudience())}
-                disabled={disabled || empty}
-              >
-                <Icon name="clear_all" size="sm" />
-                Bỏ chọn khối và lớp
-              </button>
-            ) : (
-              <button
-                type="button"
-                className={`spf-chip spf-chip-school${empty ? ' is-on' : ''}`}
-                aria-pressed={empty}
-                onClick={() => onChange(emptyAudience())}
-                disabled={disabled}
-              >
-                <Icon name={empty ? 'check' : 'domain'} size="sm" />
-                <span>Toàn trường</span>
-              </button>
-            )}
-          </div>
-
           <div className="spf-audience-group" role="group" aria-labelledby={`${id}-grades`}>
             <span id={`${id}-grades`} className="label-upper">
               Khối
             </span>
             <div className="spf-chips">
+              {!announcement && (
+                // NEWS: "Toàn trường" is the empty selection, first of the scope choices; choosing it clears the
+                // grades and classes (not the roles).
+                <OptionChip on={empty} disabled={disabled} onClick={() => onChange(emptyAudience())}>
+                  Toàn trường
+                </OptionChip>
+              )}
               {options.grades.map((g) => (
                 <OptionChip
                   key={g.gradeLevelId}
@@ -293,11 +292,23 @@ export function AudiencePicker({
                   bad={badGrades.has(g.gradeLevelId)}
                   disabled={disabled}
                   onClick={() => toggleGrade(g)}
+                  hint={emptyGradeIds.has(g.gradeLevelId) ? 'chưa có lớp' : undefined}
                 >
                   Khối {g.gradeLevelName}
                 </OptionChip>
               ))}
             </div>
+            {chosenEmptyGrades.length > 0 && (
+              <div className="notice amber spf-empty-grade" role="status">
+                <Icon name="warning" size="sm" />
+                <p>
+                  {chosenEmptyGrades.map((g) => `Khối ${g.gradeLevelName}`).join(', ')} chưa có lớp nào trong năm học
+                  hiện tại, nên lúc này chưa ai nhận bài qua{' '}
+                  {chosenEmptyGrades.length > 1 ? 'các khối này' : 'khối này'}. Bài vẫn đăng được; khi có lớp, người
+                  trong lớp sẽ thấy bài trên bảng tin nhưng không nhận thông báo.
+                </p>
+              </div>
+            )}
           </div>
 
           <div className="spf-audience-group" role="group" aria-labelledby={`${id}-classes`}>
@@ -330,24 +341,28 @@ export function AudiencePicker({
               return (
                 <div key={g.gradeLevelId ?? 'other'} className="spf-class-row">
                   <span className="spf-class-grade caption">{g.gradeLevelName ? `Khối ${g.gradeLevelName}` : 'Khác'}</span>
-                  <div className="spf-chips">
-                    {g.classes.map((c) => {
-                      const on = chosenClasses.has(c.classId);
-                      return (
-                        <OptionChip
-                          key={c.classId}
-                          on={on}
-                          covered={gradeOn && !on}
-                          bad={badClasses.has(c.classId)}
-                          disabled={disabled}
-                          onClick={() => toggleClass(c.classId)}
-                          title={gradeOn && !on ? `Đã gồm trong Khối ${g.gradeLevelName}` : undefined}
-                        >
-                          {c.className}
-                        </OptionChip>
-                      );
-                    })}
-                  </div>
+                  {g.classes.length === 0 ? (
+                    <span className="caption spf-class-none">Chưa có lớp nào trong năm học hiện tại.</span>
+                  ) : (
+                    <div className="spf-chips">
+                      {g.classes.map((c) => {
+                        const on = chosenClasses.has(c.classId);
+                        return (
+                          <OptionChip
+                            key={c.classId}
+                            on={on}
+                            covered={gradeOn && !on}
+                            bad={badClasses.has(c.classId)}
+                            disabled={disabled}
+                            onClick={() => toggleClass(c.classId)}
+                            title={gradeOn && !on ? `Đã gồm trong Khối ${g.gradeLevelName}` : undefined}
+                          >
+                            {c.className}
+                          </OptionChip>
+                        );
+                      })}
+                    </div>
+                  )}
                 </div>
               );
             })}
@@ -382,12 +397,29 @@ export function AudiencePicker({
               </p>
             </div>
           )}
+
+          {announcement && (
+            // After the grades and classes, so it clearly clears only them (the roles below are kept).
+            <div className="spf-audience-row">
+              <button
+                type="button"
+                className="btn btn-tertiary spf-clear"
+                onClick={() => onChange(emptyAudience())}
+                disabled={disabled || empty}
+              >
+                <Icon name="clear_all" size="sm" />
+                Bỏ chọn khối và lớp
+              </button>
+            </div>
+          )}
         </>
       )}
 
-      <div className="spf-audience-summary" id={`${id}-summary`} aria-live="polite">
-        <span className="caption muted">Gửi tới:</span>
-        <AudiencePills labels={labels} />
+      <RoleRow id={id} roles={roles} onChange={onRolesChange} disabled={disabled} />
+
+      <div className={`spf-audience-summary${scopeLabels ? '' : ' is-pending'}`} id={`${id}-summary`} aria-live="polite">
+        <span className="caption muted spf-audience-summary-label">Gửi tới:</span>
+        <AudienceLine scopeLabels={scopeLabels} roles={roles} max={SHORT_SCOPE} />
       </div>
       {note}
       {error && (
@@ -458,6 +490,8 @@ export function TitleCounter({ value, id }) {
 // --- Checks and server errors ----------------------------------------------------------------------------------
 
 export const AUDIENCE_REQUIRED = 'Thông báo phải chọn ít nhất một khối hoặc một lớp.';
+// Why "Đăng bài" / "Lưu thay đổi" is locked (footer line and button title).
+export const AUDIENCE_REQUIRED_HINT = 'Thông báo phải gửi tới ít nhất một khối hoặc một lớp. Hãy chọn ở mục Đối tượng nhận.';
 
 // Same limits as the server, so a request that would be refused is never sent.
 export function validatePost({ title, content, postType, audience }) {
@@ -542,7 +576,9 @@ export function PostPreview({ postType, title, content, labels, roles, authorNam
         <p className="caption muted spf-preview-meta">
           {authorName && <span>{authorName}</span>}
           {authorName && <span aria-hidden="true"> · </span>}
-          <span>Gửi tới: {audienceText(labels, roles)}</span>
+          <span>
+            Gửi tới: <AudienceLine scopeLabels={labels} roles={roles} max={SHORT_SCOPE} />
+          </span>
         </p>
         <p className={`spf-preview-text${text ? '' : ' is-empty'}`}>{text || 'Nội dung bài viết sẽ hiện ở đây.'}</p>
         <p className="caption spf-preview-foot">
@@ -589,15 +625,10 @@ export function ConfirmPostDialog({ open, title, postType, labels, roles, sendNo
           <dt>Loại bài</dt>
           <dd>{POST_TYPE_LABELS[postType]}</dd>
           <dt>Gửi tới</dt>
-          <dd className="chips">
-            {labels.map((label) => (
-              <span key={label} className="chip ink">
-                {label}
-              </span>
-            ))}
+          {/* Every grade and class, never shortened: the last check before it reaches everyone. */}
+          <dd>
+            <AudienceLine scopeLabels={labels} roles={roles} />
           </dd>
-          <dt>Vai trò</dt>
-          <dd>{roleLabels(roles).join(', ') || 'Học sinh, phụ huynh và giáo viên'}</dd>
           <dt>Thông báo</dt>
           <dd>{sendNotification ? 'Có gửi, người nhận sẽ thấy trong chuông' : 'Không gửi thông báo'}</dd>
         </dl>
