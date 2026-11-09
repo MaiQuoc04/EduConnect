@@ -17,6 +17,7 @@ export const TEACHER_LIMITS = Object.freeze({
   SUBJECTS_PER_TEACHER_MAX: 30,
   DEPARTMENT_NAME_MAX: 100, // departments.department_name
   SUBJECTS_PER_DEPARTMENT_MAX: 50,
+  EXPORT_MAX_ROWS: 5000, // SCR-14 export (.xlsx)
 });
 
 // POST / PATCH /departments accept only these fields (UC-114).

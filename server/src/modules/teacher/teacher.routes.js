@@ -8,8 +8,10 @@ const router = Router();
 const sm = [requireAuth, requireRole(ROLES.SCHOOL_MANAGER)];
 
 router.get('/', ...sm, teacherController.listTeachers); // SCR-14 / UC-15
-router.get('/subject-options', ...sm, teacherController.listSubjectOptions); // SCR-17 – keep above '/:id'
-router.get('/department-options', ...sm, teacherController.listDepartmentOptions); // SCR-17 – keep above '/:id'
+// Fixed paths stay above '/:id'.
+router.get('/export', ...sm, teacherController.exportTeachers); // SCR-14 / UC-115
+router.get('/subject-options', ...sm, teacherController.listSubjectOptions); // SCR-17
+router.get('/department-options', ...sm, teacherController.listDepartmentOptions); // SCR-17
 router.get('/:id', ...sm, teacherController.getTeacher); // SCR-15 / UC-16
 router.patch('/:id', ...sm, teacherController.updateTeacher); // SCR-17 / UC-17
 

@@ -1,6 +1,9 @@
 import { useEffect, useRef, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
+import { exportTeachers } from '../../api/teachers.js';
 import Icon from '../../components/Icon.jsx';
+import { useToast } from '../../context/ToastContext.jsx';
+import { errorText } from '../../messages.js';
 import { formatPhone, LIMITS } from '../../utils/teacherValidation.js';
 import { useTeachers } from './useTeachers.js';
 import './TeacherListPage.css';
@@ -196,7 +199,7 @@ function StatsCards({ total, loading }) {
 // ── Main page ─────────────────────────────────────────────────────────────────
 export default function TeacherListPage() {
   const {
-    teachers, total, totalPages, page, setPage,
+    teachers, total, totalPages, page, setPage, filters,
     loading, error,
     search, setSearch,
     filterSubject, setFilterSubject,
@@ -206,6 +209,20 @@ export default function TeacherListPage() {
   } = useTeachers();
 
   const searchRef = useRef(null);
+  const toast = useToast();
+  const [exporting, setExporting] = useState(false);
+
+  // UC-115: every teacher matching the current filters (all pages) as an .xlsx file.
+  async function handleExport() {
+    setExporting(true);
+    try {
+      await exportTeachers(filters);
+    } catch (err) {
+      toast(errorText(err), { type: 'error' });
+    } finally {
+      setExporting(false);
+    }
+  }
 
   // ⌘K / Ctrl+K focus search
   useEffect(() => {
@@ -251,9 +268,18 @@ export default function TeacherListPage() {
             Danh sách cán bộ giáo viên niên khoá 2026–2027 · Quản lý hồ sơ chuyên môn và phân công giảng dạy
           </p>
         </div>
-        <button type="button" className="btn btn-secondary tc-export-btn">
-          <Icon name="download" size="sm" /> Xuất danh sách (.xlsx)
-        </button>
+        <div className="tc-title-actions">
+          <Link to="/departments" className="btn btn-secondary tc-export-btn">
+            <Icon name="account_tree" size="sm" /> Tổ chuyên môn
+          </Link>
+          <Link to="/teachers/import" className="btn btn-secondary tc-export-btn">
+            <Icon name="upload_file" size="sm" /> Nhập từ Excel
+          </Link>
+          <button type="button" className="btn btn-primary tc-export-btn" onClick={handleExport} disabled={exporting || loading || total === 0}
+            title={total === 0 ? 'Không có giáo viên nào để xuất' : 'Xuất các giáo viên đang khớp bộ lọc (mọi trang)'}>
+            <Icon name="download" size="sm" /> {exporting ? 'Đang xuất…' : 'Xuất danh sách (.xlsx)'}
+          </button>
+        </div>
       </div>
 
       {/* ── Stats ── */}

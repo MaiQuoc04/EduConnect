@@ -169,7 +169,11 @@ const ERROR_MESSAGES = {
     'Hãy phân công lại giảng dạy trước.',
   MSG_INVALID_INPUT: 'Dữ liệu gửi lên không hợp lệ. Vui lòng tải lại trang.',
   MSG_TOO_MANY: ({ field, max } = {}) =>
-    field === 'subjectIds' ? `Chỉ chọn tối đa ${max} môn.` : 'Quá nhiều thay đổi trong một lần lưu.',
+    field === 'subjectIds'
+      ? `Chỉ chọn tối đa ${max} môn.`
+      : max && !field
+        ? `Danh sách quá dài để xuất (tối đa ${max} giáo viên). Hãy lọc bớt rồi xuất lại.`
+        : 'Quá nhiều thay đổi trong một lần lưu.',
   MSG_INVALID_NAME: ({ reason } = {}) => NAME_REASON_TEXT[reason] ?? 'Họ và tên không hợp lệ.',
   MSG_INVALID_DEPARTMENT: ({ reason } = {}) => DEPARTMENT_REASON_TEXT[reason] ?? 'Tên tổ chuyên môn không hợp lệ.',
   MSG_DEPARTMENT_INVALID: 'Tổ chuyên môn không còn trong danh sách. Vui lòng tải lại trang và chọn lại.',

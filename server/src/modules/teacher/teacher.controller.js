@@ -8,6 +8,17 @@ export async function listTeachers(req, res) {
   res.json(await teacherService.listTeachers(listTeachersQuery(req)));
 }
 
+// GET /api/v1/teachers/export  (SCR-14, UC-115) – same filters as the list, every page, .xlsx
+export async function exportTeachers(req, res) {
+  const { page, limit, ...filters } = listTeachersQuery(req);
+  const { fileName, contentType, buffer } = await teacherService.exportTeachers(filters);
+  res
+    .set('Content-Type', contentType)
+    .set('Content-Disposition', `attachment; filename="${fileName}"`)
+    .set('Cache-Control', 'no-store')
+    .send(buffer);
+}
+
 // GET /api/v1/teachers/subject-options  (SCR-17 subject picker)
 export async function listSubjectOptions(_req, res) {
   res.json(await teacherService.listSubjectOptions());

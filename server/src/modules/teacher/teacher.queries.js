@@ -76,6 +76,7 @@ export async function findTeachersPage(filters, { limit, offset }, db = pool) {
        t.teacher_id    AS "teacherId",
        t.teacher_code  AS "teacherCode",
        u.full_name     AS "fullName",
+       t.department,
        u.email,
        u.phone,
        u.status,

@@ -61,8 +61,11 @@ export function useTeachers() {
     setPage(1);
   }
 
+  // Filters as sent to the API – the export (UC-115) uses the same ones.
+  const filters = { search: debouncedSearch, subject: filterSubject, homeroom: filterHomeroom, status: filterStatus };
+
   return {
-    teachers, total, totalPages, page, setPage,
+    teachers, total, totalPages, page, setPage, filters,
     loading, error,
     search, setSearch,
     filterSubject, setFilterSubject,
