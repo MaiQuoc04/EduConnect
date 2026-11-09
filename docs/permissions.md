@@ -4,7 +4,7 @@ Source: Report 3 section 4.4 (draft v1.3). Full = all records; Restricted (n) = 
 
 | Entity | Action | System Admin | School Manager | Homeroom Teacher | Teacher | Student | Parent |
 |---|---|---|---|---|---|---|---|
-| User account | Create / import / export | Full | No | No | No | No | No |
+| User account | Create / import / export | Full | Restricted (20) | No | No | No | No |
 | User account | Change login identifiers | Full | No | No | No | No | No |
 | User account | Reset password, lock / unlock | Full | Restricted (1) | No | No | No | No |
 | Password reset request | Send (Forgot Password screen, not signed in) | Full | Full | Full | Full | Full | Full |
@@ -17,6 +17,8 @@ Source: Report 3 section 4.4 (draft v1.3). Full = all records; Restricted (n) = 
 | Parent–student link | Link / unlink / import | No | Full | No | No | No | No |
 | Enrollment | Transfer / promote | No | Full | No | No | No | No |
 | Teaching / homeroom assignment | Assign | No | Full | No | No | No | No |
+| Department (tổ chuyên môn) and its subjects | Create / rename / delete (UC-114) | No | Full | No | No | No | No |
+| Teacher list | Export to Excel (UC-115) | No | Full | No | No | No | No |
 | School year, semester, subject, class type | Create / update / close (reopen a semester) | No | Full | No | No | No | No |
 | Class group | Create / import | No | Full | No | No | No | No |
 | Class group | View list, detail, members | No | Full (3) | Restricted (4) | Restricted (4) | Restricted (4) | Restricted (4) |
@@ -77,3 +79,4 @@ Notes:
 17. Own comments only.
 18. Personal notifications about items they created (class events, extracurricular events, school announcements).
 19. Own messages only, within the time limit (`chat.delete_for_everyone_minutes`), in chats the user may send in (notes 4 and 6).
+20. Import teacher accounts only (UC-116, FE-03, agreed 07/11/2026): same file and checks as UC-96, type fixed to Teacher.
