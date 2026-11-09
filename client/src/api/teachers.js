@@ -62,3 +62,24 @@ async function download(url, params, fallback) {
 export function exportTeachers(params = {}) {
   return download('/teachers/export', params, 'danh-sach-giao-vien.xlsx');
 }
+
+// UC-116 Import Teachers (School Manager): same file and checks as UC-96 with the type fixed to Teacher.
+export function downloadTeacherImportTemplate() {
+  return download('/teachers/import/template', {}, 'mau-nhap-tai-khoan-giao-vien.xlsx');
+}
+
+function fileForm(file) {
+  const form = new FormData();
+  form.append('file', file);
+  return form;
+}
+
+export async function previewTeacherImport(_type, file) {
+  const { data } = await api.post('/teachers/import/preview', fileForm(file));
+  return data;
+}
+
+export async function importTeachers(_type, file) {
+  const { data } = await api.post('/teachers/import', fileForm(file));
+  return data;
+}

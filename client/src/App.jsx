@@ -31,6 +31,7 @@ import HomeroomAssignmentPage from './pages/teachers/HomeroomAssignmentPage.jsx'
 import DepartmentsPage from './pages/teachers/DepartmentsPage.jsx';
 import TeacherDetailPage from './pages/teachers/TeacherDetailPage.jsx';
 import TeacherEditPage from './pages/teachers/TeacherEditPage.jsx';
+import TeacherImportPage from './pages/teachers/TeacherImportPage.jsx';
 import TeacherListPage from './pages/teachers/TeacherListPage.jsx';
 import TeachingAssignmentPage from './pages/teachers/TeachingAssignmentPage.jsx';
 import CreateAccountPage from './pages/admin/CreateAccountPage.jsx';
@@ -244,6 +245,15 @@ export default function App() {
           element={
             <ProtectedRoute roles={['SCHOOL_MANAGER']}>
               <TeacherListPage />
+            </ProtectedRoute>
+          }
+        />
+        {/* UC-116 Import Teachers (above teachers/:teacherId) */}
+        <Route
+          path="teachers/import"
+          element={
+            <ProtectedRoute roles={['SCHOOL_MANAGER']}>
+              <TeacherImportPage />
             </ProtectedRoute>
           }
         />
