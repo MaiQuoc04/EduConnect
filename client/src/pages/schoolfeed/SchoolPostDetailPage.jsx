@@ -16,7 +16,7 @@ import { useSocket } from '../../context/SocketContext.jsx';
 import { useToast } from '../../context/ToastContext.jsx';
 import { useLiveRefresh } from './useLiveRefresh.js';
 import {
-  AudiencePills,
+  AudienceLine,
   clearHandedOverPost,
   CommentCount,
   feedErrorText,
@@ -25,7 +25,7 @@ import {
   LikeButton,
   peekHandedOverPost,
   POST_TYPE_LABELS,
-  targetLabels,
+  targetScopeLabels,
   useLike,
 } from './schoolFeedShared.jsx';
 import './SchoolPostDetailPage.css';
@@ -419,7 +419,7 @@ export default function SchoolPostDetailPage() {
             </div>
             <div className="school-post-detail-audience">
               <span className="caption muted">Gửi tới:</span>
-              <AudiencePills labels={targetLabels(post)} />
+              <AudienceLine scopeLabels={targetScopeLabels(post)} roles={post.targetRoles} />
             </div>
 
             {/* The server keeps the line breaks; pre-wrap shows them. */}

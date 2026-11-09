@@ -1243,7 +1243,8 @@ textarea.input.chat-input { display: block; height: 36px; min-height: 36px; max-
   .sf-dialog-actions .btn { flex: 1 1 100%; height: 44px; }
 }
 
-/* ---------- FE-08 School Feed (SCR-05, SCR-31, SCR-06): "Gửi tới" pills, grades / classes then roles ---------- */
-.sf-audience-pill { display: inline-flex; align-items: center; gap: 6px; }
+/* ---------- FE-08 School Feed (SCR-02, SCR-05, SCR-31, SCR-06): one "Gửi tới" line, "<phạm vi> · <vai trò>" ---------- */
+.sf-audience-line { overflow-wrap: anywhere; }
 .sf-audience-sep { color: var(--graphite-400); font-weight: 600; }
-.pill.sf-role-pill { background: var(--ink-50); color: var(--ink-700); }
+.sf-audience-roles { color: var(--ink-700); font-weight: 500; }
+.sf-audience-line.is-pending { color: var(--graphite-500); font-style: italic; }

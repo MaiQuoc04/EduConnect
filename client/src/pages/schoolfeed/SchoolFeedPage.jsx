@@ -9,7 +9,7 @@ import { useToast } from '../../context/ToastContext.jsx';
 import { useLiveRefresh } from './useLiveRefresh.js';
 import {
   CommentCount,
-  feedAudienceText,
+  FeedAudience,
   feedErrorText,
   formatDateTime,
   LikeButton,
@@ -189,7 +189,9 @@ function PostCard({ post, canPin, pinBusy, onPin, listState, onLikeError }) {
             <span aria-hidden="true">·</span>
             <time dateTime={post.createdAt}>{formatDateTime(post.createdAt)}</time>
             <span aria-hidden="true">·</span>
-            <span>Gửi tới: {feedAudienceText(post)}</span>
+            <span>
+              Gửi tới: <FeedAudience post={post} />
+            </span>
           </p>
         </div>
         <CardImage src={post.firstImageUrl} />
