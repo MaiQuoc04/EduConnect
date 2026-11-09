@@ -1,8 +1,9 @@
 /* FE-08 SCR-31 Create School Post and SCR-06 Update School Post. Only these screens' styles; every rule is scoped under
    .school-post-form (the .spf-* pieces are only rendered inside it). Dialogs (.sf-dialog) are in styles.css.
    Design: Stitch "SCR-36 Create School Post" / "SCR-37 Update School Post": the form card on the left with sections
-   split by hairlines and a footer bar, the live preview on the right. Rich text, cover image and the role checkboxes
-   of the design are not used (no editor library; attachments wait for §15; the audience is grades / classes, §8).
+   split by hairlines and a footer bar, the live preview on the right. Rich text and cover image of the design are not
+   used (no editor library; attachments wait for §15). The audience is grades / classes first, then the roles that
+   narrow them (target_roles), all as the same toggle chips, summed up in one "Gửi tới" line.
    Breakpoints as the other screens: 1080px (preview under the form), 900px (app drawer, 44px controls), 640px. */
 
 .school-post-form { min-width: 0; max-width: 1200px; margin: 0 auto; }
@@ -86,14 +87,16 @@
 .spf-class-grade { padding-top: 13px; color: var(--graphite-600); font-weight: 500; }
 .spf-chips { display: flex; flex-wrap: wrap; gap: 8px; min-width: 0; }
 
+/* One toggle chip for grades, classes and roles: a check box at the start (empty = off); on = solid ink chip with a
+   white box and an ink tick, so "chosen" never depends on a thin border alone. */
 .spf-chip {
   display: inline-flex;
   align-items: center;
-  gap: 4px;
+  gap: 8px;
   min-height: 44px;
   max-width: 100%;
-  padding: 0 14px 0 10px;
-  border: 1px solid var(--graphite-200);
+  padding: 0 16px 0 12px;
+  border: 1px solid var(--graphite-300);
   border-radius: 999px;
   background: var(--white);
   font: 500 14px/20px var(--font-ui);
@@ -101,16 +104,34 @@
   cursor: pointer;
   transition: background-color 0.15s, border-color 0.15s, color 0.15s;
 }
-.spf-chip span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.spf-chip .icon { color: var(--graphite-400); }
-.spf-chip:not(:disabled):hover { border-color: var(--ink-200); background: var(--ink-50); }
+.spf-chip > span { min-width: 0; }
+.spf-chip-text { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.spf-chip-box {
+  flex: none;
+  display: inline-grid;
+  place-items: center;
+  width: 18px;
+  height: 18px;
+  border: 1.5px solid var(--graphite-400);
+  border-radius: 4px;
+  background: var(--white);
+}
+.spf-chip-box .icon { font-size: 16px; font-weight: 700; color: var(--ink-700); }
+.spf-chip-hint { flex: none; font-size: 12px; font-weight: 400; color: var(--graphite-500); }
+.spf-chip:not(:disabled):hover { border-color: var(--ink-400); background: var(--ink-50); }
 .spf-chip:focus-visible { outline: 2px solid var(--ink-400); outline-offset: 2px; }
-.spf-chip.is-on { border-color: var(--ink-600); background: var(--ink-50); color: var(--ink-800); }
-.spf-chip.is-on .icon { color: var(--ink-600); }
+.spf-chip.is-on { border-color: var(--ink-600); background: var(--ink-600); color: var(--white); }
+.spf-chip.is-on:not(:disabled):hover { border-color: var(--ink-700); background: var(--ink-700); }
+.spf-chip.is-on .spf-chip-box { border-color: var(--white); }
+.spf-chip.is-on .spf-chip-hint { color: var(--ink-100); }
 .spf-chip.is-covered { border-style: dashed; background: var(--graphite-50); color: var(--graphite-500); cursor: default; }
-.spf-chip.is-covered .icon { color: var(--graphite-400); }
-.spf-chip.is-bad { border-color: var(--red-pen); color: var(--red-pen); }
-.spf-chip.is-stale { padding: 0 10px 0 14px; border-style: dashed; }
+.spf-chip.is-covered .spf-chip-box { border-color: var(--graphite-300); background: var(--graphite-300); }
+.spf-chip.is-covered .spf-chip-box .icon { color: var(--white); }
+.spf-chip.is-bad { border-color: var(--red-pen); color: var(--red-pen); background: var(--red-bg); }
+.spf-chip.is-bad .spf-chip-box { border-color: var(--red-pen); }
+/* Class of another school year on SCR-06: on, removable only (close icon at the end). */
+.spf-chip.is-stale { padding: 0 10px 0 16px; border-style: dashed; }
+.spf-chip.is-stale .icon { color: var(--white); }
 .spf-chip:disabled:not(.is-covered) { opacity: 0.55; cursor: default; }
 
 .spf-audience-summary {
@@ -259,7 +280,8 @@
 @media (max-width: 640px) {
   .spf-section { padding: 20px 16px; }
   .spf-class-row { grid-template-columns: minmax(0, 1fr); gap: 4px; }
-  .spf-class-grade { padding-top: 0; }
+  .spf-class-grade,
+  .spf-class-none { padding-top: 0; }
   .spf-filter { width: 100%; }
   .school-post-form .spf-form-error { margin: 0 16px 16px; }
   .spf-footer { padding: 12px 16px; }
@@ -269,11 +291,21 @@
   .spf-preview-card::before { left: 20px; }
 }
 
-/* Role dimension (school_posts.target_roles): real checkboxes in the chip shape, above the grades and classes. */
-.spf-roles { padding-bottom: 12px; border-bottom: 1px solid var(--graphite-100); }
-.spf-chip.spf-role { gap: 8px; padding: 0 16px 0 12px; }
-.spf-chip.spf-role input { width: 18px; height: 18px; margin: 0; accent-color: var(--ink-600); cursor: inherit; }
-.spf-chip.spf-role:focus-within { outline: 2px solid var(--ink-400); outline-offset: 2px; }
-.spf-chip.spf-role.is-disabled { opacity: 0.55; cursor: default; }
+/* Role dimension (school_posts.target_roles): after the grades and classes (it narrows them), same chips. */
+.spf-roles { padding-top: 14px; border-top: 1px solid var(--graphite-100); }
 .spf-roles-help { margin: 0; }
 .spf-roles-help.is-all { color: var(--ink-700); }
+
+/* Grades with no class in the current year: note in the class list, warning when chosen (allowed, not blocked). */
+.spf-class-none { padding-top: 13px; color: var(--graphite-500); font-style: italic; }
+.school-post-form .spf-empty-grade { padding: 10px 12px; }
+.spf-empty-grade p { overflow-wrap: anywhere; }
+
+/* "Gửi tới" of an announcement with nothing chosen yet: grey, dashed, never "Toàn trường". */
+.spf-audience-summary-label { flex: none; }
+.spf-audience-summary .sf-audience-line { min-width: 0; }
+.spf-audience-summary.is-pending { outline-style: dashed; outline-color: var(--graphite-300); background: var(--white); }
+
+/* Footer line telling why "Đăng bài" / "Lưu thay đổi" is locked. */
+.spf-footer-note.is-blocked { color: var(--amber); }
+.spf-footer-note.is-blocked .icon { color: var(--amber); }
