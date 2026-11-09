@@ -7,7 +7,9 @@ import { useToast } from '../../context/ToastContext.jsx';
 import { LeaveDialog, useLeaveGuard } from './leaveGuard.jsx';
 import { feedErrorText, formatDateTime, handOverPost, narrowingRoles } from './schoolFeedShared.jsx';
 import {
+  AUDIENCE_REQUIRED_HINT,
   audienceLabels,
+  audienceMissing,
   AudiencePicker,
   normalizeContent,
   normalizeTitle,
@@ -205,7 +207,8 @@ export default function UpdateSchoolPostPage() {
   }
   const shown = (field) =>
     (serverError?.field === field ? serverError.text : null) ?? ((touched[field] || submitted) && errors[field]) ?? null;
-  const labels = audienceLabels(form.audience, options, post.classTargets);
+  const labels = audienceLabels(post.postType, form.audience, options, post.classTargets);
+  const noAudience = audienceMissing(post.postType, form.audience);
 
   function change(next, field) {
     setForm((f) => ({ ...f, ...next }));
@@ -392,15 +395,28 @@ export default function UpdateSchoolPostPage() {
           )}
 
           <div className="spf-footer">
-            <span className="caption muted spf-footer-note" aria-live="polite">
-              <Icon name={changedCount ? 'edit_note' : 'check'} size="sm" />
-              {changedCount ? `Có ${changedCount} mục đã thay đổi, chưa lưu.` : 'Chưa có thay đổi nào.'}
-            </span>
+            {noAudience ? (
+              <span id="spf-footer-note" className="caption spf-footer-note is-blocked" aria-live="polite">
+                <Icon name="block" size="sm" />
+                {AUDIENCE_REQUIRED_HINT}
+              </span>
+            ) : (
+              <span id="spf-footer-note" className="caption muted spf-footer-note" aria-live="polite">
+                <Icon name={changedCount ? 'edit_note' : 'check'} size="sm" />
+                {changedCount ? `Có ${changedCount} mục đã thay đổi, chưa lưu.` : 'Chưa có thay đổi nào.'}
+              </span>
+            )}
             <div className="spf-footer-buttons">
               <button type="button" className="btn btn-secondary" onClick={cancel} disabled={saving}>
                 Huỷ
               </button>
-              <button type="submit" className="btn btn-primary" disabled={saving || !dirty}>
+              <button
+                type="submit"
+                className="btn btn-primary"
+                disabled={saving || !dirty || noAudience}
+                title={noAudience ? AUDIENCE_REQUIRED_HINT : undefined}
+                aria-describedby="spf-footer-note"
+              >
                 <Icon name={saving ? 'progress_activity' : 'save'} size="sm" className={saving ? 'sf-spin' : undefined} />
                 {saving ? 'Đang lưu…' : 'Lưu thay đổi'}
               </button>

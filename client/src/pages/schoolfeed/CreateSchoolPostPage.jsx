@@ -5,10 +5,12 @@ import Icon from '../../components/Icon.jsx';
 import { useAuth } from '../../context/AuthContext.jsx';
 import { useToast } from '../../context/ToastContext.jsx';
 import { LeaveDialog, useLeaveGuard } from './leaveGuard.jsx';
-import { audienceText, handOverPost } from './schoolFeedShared.jsx';
+import { AudienceLine, handOverPost, SHORT_SCOPE } from './schoolFeedShared.jsx';
 import {
   allRoles,
+  AUDIENCE_REQUIRED_HINT,
   audienceLabels,
+  audienceMissing,
   AudiencePicker,
   ConfirmPostDialog,
   DEFAULT_SEND_NOTIFICATION,
@@ -74,7 +76,8 @@ export default function CreateSchoolPostPage() {
   const errors = validatePost(form);
   const shown = (field) =>
     (serverError?.field === field ? serverError.text : null) ?? ((touched[field] || submitted) && errors[field]) ?? null;
-  const labels = audienceLabels(form.audience, options);
+  const labels = audienceLabels(form.postType, form.audience, options); // null = announcement with no audience yet
+  const noAudience = audienceMissing(form.postType, form.audience);
   const announcement = form.postType === 'ANNOUNCEMENT';
 
   function change(changes, field) {
@@ -277,15 +280,30 @@ export default function CreateSchoolPostPage() {
           )}
 
           <div className="spf-footer">
-            <span className="caption muted spf-footer-note">
-              <Icon name="info" size="sm" />
-              Bài đăng hiển thị ngay với: {audienceText(labels, form.targetRoles)}.
-            </span>
+            {noAudience ? (
+              <span id="spf-footer-note" className="caption spf-footer-note is-blocked" aria-live="polite">
+                <Icon name="block" size="sm" />
+                {AUDIENCE_REQUIRED_HINT}
+              </span>
+            ) : (
+              <span id="spf-footer-note" className="caption muted spf-footer-note" aria-live="polite">
+                <Icon name="info" size="sm" />
+                <span>
+                  Bài đăng hiển thị ngay với: <AudienceLine scopeLabels={labels} roles={form.targetRoles} max={SHORT_SCOPE} />
+                </span>
+              </span>
+            )}
             <div className="spf-footer-buttons">
               <button type="button" className="btn btn-secondary" onClick={cancel} disabled={saving}>
                 Huỷ
               </button>
-              <button type="submit" className="btn btn-primary" disabled={saving || options.loading}>
+              <button
+                type="submit"
+                className="btn btn-primary"
+                disabled={saving || options.loading || noAudience}
+                title={noAudience ? AUDIENCE_REQUIRED_HINT : undefined}
+                aria-describedby="spf-footer-note"
+              >
                 <Icon name={saving ? 'progress_activity' : 'send'} size="sm" className={saving ? 'sf-spin' : undefined} />
                 {saving ? 'Đang đăng…' : 'Đăng bài'}
               </button>
