@@ -123,8 +123,9 @@ export function toHomeroomBoard({ schoolYears, schoolYear, classes = [], teacher
 
 // ══ teachingAssignment ══════════════════════════════════════════════════════════════
 
-// SCR-19 matrix: { schoolYears, schoolYear, date, today, subjects, classes, assignments, teachers, rules }
-export function toTeachingBoard({ schoolYears, schoolYear, date, today, classRows = [], cellRows = [], assignments = [], teacherRows = [], teacherSubjectRows = [] }) {
+// SCR-19 matrix: { schoolYears, schoolYear, from, to, date (= from), today, subjects, classes, assignments, teachers,
+// rules }. `assignments` = every row overlapping [from, to], oldest first per cell, with teacher name and dates.
+export function toTeachingBoard({ schoolYears, schoolYear, from, to, today, classRows = [], cellRows = [], assignments = [], teacherRows = [], teacherSubjectRows = [] }) {
   // Columns = every subject studied by at least one class of the year.
   const subjectMap = new Map();
   const classSubjects = {};
@@ -142,7 +143,9 @@ export function toTeachingBoard({ schoolYears, schoolYear, date, today, classRow
   return {
     schoolYears,
     schoolYear,
-    date,
+    from,
+    to,
+    date: from,
     today,
     subjects,
     classes: classRows.map(({ homeroomTeacherId, ...c }) => ({ ...c, studentCount: Number(c.studentCount), subjects: classSubjects[c.classId] ?? {} })),

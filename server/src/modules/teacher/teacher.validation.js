@@ -185,22 +185,33 @@ export function saveHomeroomRequest(req) {
 
 // ── Teaching assignment (SCR-19, UC-18) ────────────────────────────────────
 
-// GET /teaching-assignments?schoolYearId=&date=YYYY-MM-DD  (SCR-19, UC-18)
+// GET /teaching-assignments?schoolYearId=&from=YYYY-MM-DD&to=YYYY-MM-DD  (SCR-19, UC-18)
+// `date` (older clients) is read as `from`.
 export function teachingBoardQuery(req) {
-  const date = req.query?.date;
-  if (!isQueryValue(date) || (date && !isIsoDate(date))) throw badRequest(ERROR_CODES.INVALID_DATE, 'date must be a real date YYYY-MM-DD.');
-  return { schoolYearId: optionalSchoolYearId(req.query?.schoolYearId), date: date || undefined };
+  const read = (name) => {
+    const v = req.query?.[name];
+    if (!isQueryValue(v) || (v && !isIsoDate(v))) throw badRequest(ERROR_CODES.INVALID_DATE, `${name} must be a real date YYYY-MM-DD.`, { field: name });
+    return v || undefined;
+  };
+  const from = read('from') ?? read('date');
+  const to = read('to');
+  if (from && to && to < from) throw badRequest(ERROR_CODES.INVALID_DATE, 'to must not be before from.', { field: 'to' });
+  return { schoolYearId: optionalSchoolYearId(req.query?.schoolYearId), from, to };
 }
 
-
 // PUT /teaching-assignments
-// body { schoolYearId, date, changes: [{ classId, subjectId, teacherId|null, previousTeacherId|null }] }
+// body { schoolYearId, startDate, endDate?, changes: [{ classId, subjectId, teacherId|null, previousTeacherId|null }] }
+// previousTeacherId = the teacher running on startDate (stale check). `date` (older clients) is read as startDate.
 export function saveTeachingRequest(req) {
   const body = req.body;
   if (!isPlainObject(body)) throw badRequest(ERROR_CODES.INVALID_INPUT, 'Body must be a JSON object.');
-  const { schoolYearId, date, changes } = body;
+  const { schoolYearId, changes } = body;
+  const startDate = body.startDate ?? body.date;
+  const endDate = body.endDate ?? null;
   if (!isId(schoolYearId)) throw badRequest(ERROR_CODES.REQUIRED, 'schoolYearId is required.', { field: 'schoolYearId' });
-  if (!isIsoDate(date)) throw badRequest(ERROR_CODES.INVALID_DATE, 'date must be a real date YYYY-MM-DD.');
+  if (!isIsoDate(startDate)) throw badRequest(ERROR_CODES.INVALID_DATE, 'startDate must be a real date YYYY-MM-DD.', { field: 'startDate' });
+  if (endDate !== null && !isIsoDate(endDate)) throw badRequest(ERROR_CODES.INVALID_DATE, 'endDate must be a real date YYYY-MM-DD.', { field: 'endDate' });
+  if (endDate !== null && endDate < startDate) throw badRequest(ERROR_CODES.INVALID_DATE, 'endDate must not be before startDate.', { field: 'endDate' });
   if (!Array.isArray(changes) || !changes.length) throw badRequest(ERROR_CODES.REQUIRED, 'No changes to save.', { field: 'changes' });
   if (changes.length > TEACHING_RULES.MAX_CHANGES_PER_SAVE) throw badRequest(ERROR_CODES.TOO_MANY, 'Too many changes.');
 
@@ -219,7 +230,7 @@ export function saveTeachingRequest(req) {
       previousTeacherId: toNullableId(ch.previousTeacherId),
     };
   });
-  return { schoolYearId: String(schoolYearId), date, changes: items };
+  return { schoolYearId: String(schoolYearId), startDate, endDate, changes: items };
 }
 
 // ── Departments (UC-114) ───────────────────────────────────────────────────

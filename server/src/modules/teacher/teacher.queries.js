@@ -640,36 +640,55 @@ export async function findClassSubjectsOfYear(schoolYearId, db = pool) {
 
 // Assignments of the year that run on `date` (start_date <= date <= end_date).
 export async function findActiveOnDate(schoolYearId, date, db = pool) {
+  return findOverlapping(schoolYearId, date, date, db);
+}
+
+// Assignments of the year that overlap [from, to] (history included), with the teacher's name, oldest first.
+export async function findOverlapping(schoolYearId, from, to, db = pool) {
   const { rows } = await db.query(
     `SELECT ta.assignment_id AS "assignmentId", ta.class_id AS "classId", ta.subject_id AS "subjectId",
-            ta.teacher_id AS "teacherId",
+            ta.teacher_id AS "teacherId", u.full_name AS "teacherName", t.teacher_code AS "teacherCode",
             to_char(ta.start_date, 'YYYY-MM-DD') AS "startDate", to_char(ta.end_date, 'YYYY-MM-DD') AS "endDate"
      FROM teaching_assignments ta
-     JOIN classes c ON c.class_id = ta.class_id AND c.deleted_at IS NULL
+     JOIN classes c  ON c.class_id = ta.class_id AND c.deleted_at IS NULL
+     JOIN teachers t ON t.teacher_id = ta.teacher_id
+     JOIN users u    ON u.user_id = t.user_id
      WHERE c.school_year_id = $1 AND ta.deleted_at IS NULL
-       AND $2::date BETWEEN ta.start_date AND ta.end_date
-     ORDER BY ta.start_date`,
-    [schoolYearId, date],
+       AND ta.start_date <= $3::date AND ta.end_date >= $2::date
+     ORDER BY ta.class_id, ta.subject_id, ta.start_date`,
+    [schoolYearId, from, to],
   );
   return rows;
 }
 
-// Rows planned to start on/after `date` are replaced → soft delete (business-rules §14).
-export async function softDeleteStartingFrom(classId, subjectId, date, db) {
+/**
+ * Frees [start, end] of one (class, subject) and keeps everything outside it (history is never deleted):
+ * a row covering the whole range is split (its part after `end` becomes a new row), a row that starts before
+ * ends the day before `start`, a row inside the range is soft-deleted (it starts today or later, so it is a plan,
+ * not history), and a row that starts inside and runs past `end` starts the day after `end`.
+ */
+export async function clearRange(classId, subjectId, start, end, db) {
+  const pair = 'class_id = $1 AND subject_id = $2 AND deleted_at IS NULL';
+  await db.query(
+    `INSERT INTO teaching_assignments (class_id, subject_id, teacher_id, start_date, end_date)
+     SELECT class_id, subject_id, teacher_id, $4::date + 1, end_date FROM teaching_assignments
+     WHERE ${pair} AND start_date < $3::date AND end_date > $4::date`,
+    [classId, subjectId, start, end],
+  );
+  await db.query(
+    `UPDATE teaching_assignments SET end_date = $3::date - 1
+     WHERE ${pair} AND start_date < $3::date AND end_date >= $3::date`,
+    [classId, subjectId, start],
+  );
   await db.query(
     `UPDATE teaching_assignments SET deleted_at = NOW()
-     WHERE class_id = $1 AND subject_id = $2 AND deleted_at IS NULL AND start_date >= $3::date`,
-    [classId, subjectId, date],
+     WHERE ${pair} AND start_date >= $3::date AND end_date <= $4::date`,
+    [classId, subjectId, start, end],
   );
-}
-
-// The row running on `date` ends the day before.
-export async function endRunningBefore(classId, subjectId, date, db) {
   await db.query(
-    `UPDATE teaching_assignments SET end_date = $1::date - 1
-     WHERE class_id = $2 AND subject_id = $3 AND deleted_at IS NULL
-       AND start_date < $4::date AND end_date >= $5::date`,
-    [date, classId, subjectId, date, date],
+    `UPDATE teaching_assignments SET start_date = $4::date + 1
+     WHERE ${pair} AND start_date >= $3::date AND start_date <= $4::date AND end_date > $4::date`,
+    [classId, subjectId, start, end],
   );
 }
 
@@ -681,23 +700,47 @@ export async function insertAssignment({ classId, subjectId, teacherId, startDat
   );
 }
 
+// Two rows of the same teacher that touch (next starts the day after the previous ends) become one row, so
+// "A, then B for two weeks, then A again – B cancelled" does not leave A in pieces.
+export async function mergeTouchingRows(classId, subjectId, db) {
+  for (;;) {
+    const { rows } = await db.query(
+      `SELECT prev_id AS "prevId", assignment_id AS "nextId", to_char(end_date, 'YYYY-MM-DD') AS "endDate"
+       FROM (SELECT assignment_id, teacher_id, start_date, end_date,
+                    LAG(assignment_id) OVER w AS prev_id, LAG(teacher_id) OVER w AS prev_teacher,
+                    LAG(end_date) OVER w AS prev_end
+             FROM teaching_assignments
+             WHERE class_id = $1 AND subject_id = $2 AND deleted_at IS NULL
+             WINDOW w AS (ORDER BY start_date)) x
+       WHERE prev_teacher = teacher_id AND start_date = prev_end + 1
+       LIMIT 1`,
+      [classId, subjectId],
+    );
+    if (!rows.length) return;
+    const { prevId, nextId, endDate } = rows[0];
+    await db.query('UPDATE teaching_assignments SET end_date = $1::date WHERE assignment_id = $2', [endDate, prevId]);
+    await db.query('UPDATE teaching_assignments SET deleted_at = NOW() WHERE assignment_id = $1', [nextId]);
+  }
+}
+
 // ══ timetable ══════════════════════════════════════════════════════════════
 
-// Timetable rows of one (class, subject) from a date that have no attendance yet.
+// Timetable rows of one (class, subject) between two dates that have no attendance yet.
 // business-rules §10: rows that already have attendance are kept as they are.
-// `first` = number of the first placeholder used here (class $first, subject $first+1, date $first+2).
+// `first` = number of the first placeholder used here (class $first, subject +1, start +2, end +3).
 const freeSlots = (first) => `
   FROM timetable_slots ts
-  WHERE ts.class_id = $${first} AND ts.subject_id = $${first + 1} AND ts."date" >= $${first + 2}::date
+  WHERE ts.class_id = $${first} AND ts.subject_id = $${first + 1}
+    AND ts."date" BETWEEN $${first + 2}::date AND $${first + 3}::date
     AND NOT EXISTS (SELECT 1 FROM attendances a WHERE a.timetable_slot_id = ts.timetable_slot_id)`;
 
-export async function countFreeSlotsFrom(classId, subjectId, date, db) {
-  const { rows } = await db.query(`SELECT COUNT(*)::int AS "n" ${freeSlots(1)}`, [classId, subjectId, date]);
+export async function countFreeSlots(classId, subjectId, start, end, db) {
+  const { rows } = await db.query(`SELECT COUNT(*)::int AS "n" ${freeSlots(1)}`, [classId, subjectId, start, end]);
   return Number(rows[0].n);
 }
 
-// Periods where `teacherId` already teaches another lesson at the same date + period (first 5).
-export async function findTeacherClashes(teacherId, classId, subjectId, date, db) {
+// Periods between start and end where `teacherId` already teaches another lesson at the same date + period (first 5).
+export async function findTeacherClashes(teacherId, classId, subjectId, start, end, db) {
   const { rows } = await db.query(
     `SELECT to_char(ts."date", 'YYYY-MM-DD') AS "date", sl.period_number AS "period", c2.class_name AS "otherClass"
      FROM timetable_slots ts
@@ -706,21 +749,22 @@ export async function findTeacherClashes(teacherId, classId, subjectId, date, db
        ON other.teacher_id = $1 AND other."date" = ts."date" AND other.slot_id = ts.slot_id
       AND other.timetable_slot_id <> ts.timetable_slot_id
      JOIN classes c2 ON c2.class_id = other.class_id
-     WHERE ts.class_id = $2 AND ts.subject_id = $3 AND ts."date" >= $4::date
+     WHERE ts.class_id = $2 AND ts.subject_id = $3 AND ts."date" BETWEEN $4::date AND $5::date
        AND NOT EXISTS (SELECT 1 FROM attendances a WHERE a.timetable_slot_id = ts.timetable_slot_id)
      ORDER BY ts."date", sl.period_number
      LIMIT 5`,
-    [teacherId, classId, subjectId, date],
+    [teacherId, classId, subjectId, start, end],
   );
   return rows;
 }
 
 // No substitute teaching: the timetable teacher must match the assignment.
-export async function moveFreeSlotsToTeacher(teacherId, classId, subjectId, date, db) {
+export async function moveFreeSlotsToTeacher(teacherId, classId, subjectId, start, end, db) {
   await db.query(`UPDATE timetable_slots SET teacher_id = $1 WHERE timetable_slot_id IN (SELECT ts.timetable_slot_id ${freeSlots(2)})`, [
     teacherId,
     classId,
     subjectId,
-    date,
+    start,
+    end,
   ]);
 }

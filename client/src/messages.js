@@ -204,7 +204,7 @@ const ERROR_MESSAGES = {
     `Mỗi giáo viên chủ nhiệm tối đa ${max} lớp: ` +
     conflicts.map((c) => `${c.teacher} (${c.classes.join(', ')})`).join('; ') + '.',
   MSG_EFFECTIVE_DATE: ({ min, max } = {}) =>
-    `Ngày áp dụng phải từ ${formatVnDate(min)} đến ${formatVnDate(max)} (không sửa phân công trong quá khứ).`,
+    `Khoảng phân công phải bắt đầu từ ${formatVnDate(min)} trở đi và kết thúc trước ${formatVnDate(max)} (không sửa phân công trong quá khứ).`,
   MSG_SUBJECT_NOT_IN_CLASS: 'Lớp này không học môn đã chọn trong năm học.',
   MSG_ASSIGNMENT_STALE: ({ cells = [] } = {}) =>
     `Ô ${cells.join(', ')} vừa được người khác thay đổi. Hãy tải lại dữ liệu rồi phân công lại.`,
