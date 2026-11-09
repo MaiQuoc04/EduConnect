@@ -1,13 +1,14 @@
-import { foldVietnamese } from '../../utils/search.js';
 import { findActiveDepartments } from '../teacher/teacher.queries.js';
+import { departmentKey } from '../teacher/teacher.text.js';
 
 // FE-13 (owner: Linh) – teacher departments on account create (UC-95) and import (UC-96), It1 closing item #2
 // (iteration plan, 04/11/2026). The list is FE-03's `departments` table (read with FE-03's findActiveDepartments, no
 // copied SQL); teachers.department keeps the list's NAME, so FE-03's Update Teacher (UC-17) finds it again.
 // A department is optional; one that is not in the list is refused, never stored as typed.
 
-// "Tổ  toán – khoa học TỰ NHIÊN" and "to toan – khoa hoc tu nhien" give the same key.
-const nameKey = (value) => foldVietnamese(String(value)).replace(/\s+/g, ' ').trim();
+// "Tổ  toán – khoa học TỰ NHIÊN", "to toan - khoa hoc tu nhien" give the same key (FE-03 departmentKey: any dash
+// counts as "-", since a file typed in Excel usually has "-" where the list has "–").
+const nameKey = (value) => departmentKey(value);
 
 export const listDepartments = (db) => findActiveDepartments(db);
 

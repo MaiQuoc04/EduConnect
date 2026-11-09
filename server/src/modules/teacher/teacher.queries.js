@@ -251,7 +251,7 @@ export async function findWeekSchedule(teacherId, week, db = pool) {
 
 export async function lockTeacherForUpdate(teacherId, db) {
   const { rows } = await db.query(
-    'SELECT teacher_id AS "teacherId", user_id AS "userId" FROM teachers WHERE teacher_id = $1 FOR UPDATE',
+    'SELECT teacher_id AS "teacherId", user_id AS "userId", department FROM teachers WHERE teacher_id = $1 FOR UPDATE',
     [teacherId],
   );
   return rows[0] ?? null;
@@ -399,14 +399,141 @@ export async function findActiveDepartmentById(departmentId, db = pool) {
   }
 }
 
-// ══ subject ══════════════════════════════════════════════════════════════
+// ── Departments screen (UC-114) and subjects of a department (department_subjects, patch 07/11) ─────────────
 
-export async function findActiveSubjects(db = pool) {
+// Every active department with its subjects and number of teachers (teachers.department stores the name).
+export async function findDepartmentsWithSubjects(db = pool) {
+  try {
+    const { rows } = await db.query(
+      `SELECT d.department_id AS "departmentId", d.department_name AS "name",
+              (SELECT COUNT(*) FROM teachers t WHERE t.department = d.department_name)::int AS "teacherCount",
+              COALESCE(json_agg(json_build_object('subjectId', s.subject_id, 'code', s.subject_code, 'name', s.subject_name)
+                                ORDER BY s.subject_name) FILTER (WHERE s.subject_id IS NOT NULL), '[]') AS "subjects"
+       FROM departments d
+       LEFT JOIN department_subjects ds ON ds.department_id = d.department_id
+       LEFT JOIN subjects s ON s.subject_id = ds.subject_id AND s.deleted_at IS NULL
+       WHERE d.deleted_at IS NULL
+       GROUP BY d.department_id
+       ORDER BY d.department_name`,
+    );
+    return rows;
+  } catch (err) {
+    throw notReady(err);
+  }
+}
+
+// Every department row (deleted ones too) – used to check names; few rows.
+export async function findAllDepartmentNames(db) {
   const { rows } = await db.query(
-    `SELECT subject_id AS "subjectId", subject_code AS "code", subject_name AS "name"
-     FROM subjects WHERE deleted_at IS NULL ORDER BY subject_name`,
+    `SELECT department_id AS "departmentId", department_name AS "name", (deleted_at IS NOT NULL) AS "deleted"
+     FROM departments FOR UPDATE`,
   );
   return rows;
+}
+
+export async function insertDepartment(name, db) {
+  const { rows } = await db.query('INSERT INTO departments (department_name) VALUES ($1) RETURNING department_id AS "departmentId"', [name]);
+  return rows[0].departmentId;
+}
+
+// A deleted department with the same name comes back (department_name is UNIQUE, deleted rows included).
+export async function restoreDepartment(departmentId, db) {
+  await db.query('UPDATE departments SET deleted_at = NULL WHERE department_id = $1', [departmentId]);
+}
+
+export async function renameDepartment(departmentId, name, db) {
+  await db.query('UPDATE departments SET department_name = $1 WHERE department_id = $2', [name, departmentId]);
+}
+
+// teachers.department keeps the name: a rename is copied to the teachers of the department.
+export async function renameTeachersDepartment(oldName, newName, db) {
+  await db.query('UPDATE teachers SET department = $1 WHERE department = $2', [newName, oldName]);
+}
+
+export async function countTeachersInDepartment(name, db) {
+  const { rows } = await db.query('SELECT COUNT(*)::int AS n FROM teachers WHERE department = $1', [name]);
+  return Number(rows[0].n);
+}
+
+export async function softDeleteDepartment(departmentId, db) {
+  await db.query('UPDATE departments SET deleted_at = NOW() WHERE department_id = $1', [departmentId]);
+}
+
+// Subjects (of `subjectIds`) that already belong to ANOTHER department.
+export async function findSubjectsInOtherDepartments(departmentId, subjectIds, db) {
+  const { rows } = await db.query(
+    `SELECT s.subject_name AS "subject", d.department_name AS "department"
+     FROM department_subjects ds
+     JOIN subjects s    ON s.subject_id = ds.subject_id
+     JOIN departments d ON d.department_id = ds.department_id
+     WHERE ds.subject_id = ANY($1::bigint[]) AND ds.department_id IS DISTINCT FROM $2::bigint
+     ORDER BY s.subject_name`,
+    [subjectIds, departmentId],
+  );
+  return rows;
+}
+
+// department_subjects is a link table: hard delete is allowed (like teacher_subjects).
+export async function replaceDepartmentSubjects(departmentId, subjectIds, db) {
+  await db.query('DELETE FROM department_subjects WHERE department_id = $1 AND NOT (subject_id = ANY($2::bigint[]))', [
+    departmentId,
+    subjectIds,
+  ]);
+  await db.query(
+    `INSERT INTO department_subjects (department_id, subject_id)
+     SELECT $1, s FROM unnest($2::bigint[]) AS s
+     ON CONFLICT DO NOTHING`,
+    [departmentId, subjectIds],
+  );
+}
+
+// False until patch_v0.3_department_subjects.sql has run on this database.
+export async function hasDepartmentSubjects(db = pool) {
+  const { rows } = await db.query(`SELECT to_regclass('public.department_subjects') IS NOT NULL AS "ok"`);
+  return Boolean(rows[0].ok);
+}
+
+// subject id -> department id (null = no department) for the given subjects.
+export async function findDepartmentOfSubjects(subjectIds, db = pool) {
+  const { rows } = await db.query(
+    `SELECT s.subject_id AS "subjectId", s.subject_name AS "name", ds.department_id AS "departmentId"
+     FROM subjects s LEFT JOIN department_subjects ds ON ds.subject_id = s.subject_id
+     WHERE s.subject_id = ANY($1::bigint[])`,
+    [subjectIds],
+  );
+  return rows;
+}
+
+export async function findActiveDepartmentByName(name, db = pool) {
+  const { rows } = await db.query(
+    `SELECT department_id AS "departmentId", department_name AS "name"
+     FROM departments WHERE department_name = $1 AND deleted_at IS NULL`,
+    [name],
+  );
+  return rows[0] ?? null;
+}
+
+// ══ subject ══════════════════════════════════════════════════════════════
+
+// With the department each subject belongs to (null = none). Before patch_v0.3_department_subjects.sql has run, every
+// subject is listed without a department.
+export async function findActiveSubjects(db = pool) {
+  try {
+    const { rows } = await db.query(
+      `SELECT s.subject_id AS "subjectId", s.subject_code AS "code", s.subject_name AS "name",
+              ds.department_id AS "departmentId"
+       FROM subjects s LEFT JOIN department_subjects ds ON ds.subject_id = s.subject_id
+       WHERE s.deleted_at IS NULL ORDER BY s.subject_name`,
+    );
+    return rows;
+  } catch (err) {
+    if (err?.code !== '42P01') throw err;
+    const { rows } = await db.query(
+      `SELECT subject_id AS "subjectId", subject_code AS "code", subject_name AS "name", NULL AS "departmentId"
+       FROM subjects WHERE deleted_at IS NULL ORDER BY subject_name`,
+    );
+    return rows;
+  }
 }
 
 // How many of the given ids are existing, not deleted subjects.

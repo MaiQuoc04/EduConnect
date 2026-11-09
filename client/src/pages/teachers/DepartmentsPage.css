@@ -1,0 +1,49 @@
+/* ── DepartmentsPage.css ── UC-114 Manage Departments ── */
+
+.dp-page { max-width: 1120px; margin: 0 auto; width: 100%; padding-bottom: 3rem; }
+.dp-notice { display: flex; align-items: center; gap: 12px; margin-bottom: 16px; }
+.dp-notice .btn { margin-left: auto; }
+
+.dp-layout { display: grid; grid-template-columns: minmax(0, 1fr); gap: 20px; align-items: start; }
+.dp-layout.has-editor { grid-template-columns: minmax(0, 1fr) minmax(320px, 420px); }
+
+.dp-list { display: grid; gap: 12px; }
+.dp-card { padding: 18px 20px; display: grid; gap: 12px; }
+.dp-card.is-editing { outline: 2px solid var(--ink-400); }
+.dp-card-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
+.dp-card-name { margin: 0 0 2px; color: var(--graphite-900); }
+.dp-card-actions { display: flex; gap: 4px; flex-shrink: 0; }
+
+.dp-free { padding: 16px 4px 0; display: grid; gap: 8px; border-top: 1px dashed var(--graphite-200); margin-top: 4px; }
+.dp-free h2 { margin: 0; }
+
+.dp-empty { display: flex; align-items: center; gap: 12px; color: var(--graphite-600); }
+.dp-skeleton { height: 220px; background: linear-gradient(90deg, var(--graphite-50), var(--graphite-100), var(--graphite-50)); background-size: 200% 100%; animation: dp-shimmer 1.4s infinite; }
+@keyframes dp-shimmer { from { background-position: 200% 0; } to { background-position: -200% 0; } }
+@media (prefers-reduced-motion: reduce) { .dp-skeleton { animation: none; } }
+
+/* Editor */
+.dp-editor { position: sticky; top: 16px; display: grid; gap: 18px; }
+.dp-editor .card-title { margin-bottom: 0; }
+.dp-subjects-field { gap: 8px; }
+.dp-subject-list { display: grid; gap: 4px; max-height: 360px; overflow-y: auto; padding: 4px; border: 1px solid var(--graphite-200); border-radius: var(--radius-control); }
+.dp-subject {
+  display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: 10px;
+  padding: 7px 10px; border-radius: 4px; cursor: pointer; color: var(--graphite-800);
+}
+.dp-subject:hover { background: var(--graphite-50); }
+.dp-subject.is-on { background: var(--ink-50); color: var(--ink-800); }
+.dp-subject.is-taken { cursor: not-allowed; color: var(--graphite-400); }
+.dp-subject.is-taken:hover { background: none; }
+.dp-subject input { accent-color: var(--ink-600); margin: 0; }
+.dp-subject-name { font-weight: 500; }
+.dp-subject-meta { font-size: 11px; color: var(--graphite-500); text-align: right; max-width: 180px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.dp-subject.is-taken .dp-subject-meta { font-style: italic; }
+
+@media (max-width: 900px) {
+  .dp-layout.has-editor { grid-template-columns: minmax(0, 1fr); }
+  .dp-editor { position: static; order: -1; }
+}
+@media (max-width: 560px) {
+  .dp-card-head { flex-direction: column; }
+}

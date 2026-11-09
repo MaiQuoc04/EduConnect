@@ -28,6 +28,7 @@ import SubjectDetailPage from './pages/subjects/SubjectDetailPage.jsx';
 import SubjectFormPage from './pages/subjects/SubjectFormPage.jsx';
 import SubjectListPage from './pages/subjects/SubjectListPage.jsx';
 import HomeroomAssignmentPage from './pages/teachers/HomeroomAssignmentPage.jsx';
+import DepartmentsPage from './pages/teachers/DepartmentsPage.jsx';
 import TeacherDetailPage from './pages/teachers/TeacherDetailPage.jsx';
 import TeacherEditPage from './pages/teachers/TeacherEditPage.jsx';
 import TeacherListPage from './pages/teachers/TeacherListPage.jsx';
@@ -243,6 +244,15 @@ export default function App() {
           element={
             <ProtectedRoute roles={['SCHOOL_MANAGER']}>
               <TeacherListPage />
+            </ProtectedRoute>
+          }
+        />
+        {/* UC-114 Manage Departments */}
+        <Route
+          path="departments"
+          element={
+            <ProtectedRoute roles={['SCHOOL_MANAGER']}>
+              <DepartmentsPage />
             </ProtectedRoute>
           }
         />

@@ -2,6 +2,7 @@
 // or throws AppError (400 / 403 / 404). Controllers call them before the service (no DB access here).
 import { badRequest, AppError, notFound } from '../../utils/AppError.js';
 import {
+  DEPARTMENT_EDITABLE_FIELDS,
   ERROR_CODES,
   HOMEROOM_FILTER,
   HOMEROOM_RULES,
@@ -11,7 +12,7 @@ import {
   TEACHING_RULES,
   USER_STATUS,
 } from './teacher.constants.js';
-import { checkPersonName, cleanText } from './teacher.text.js';
+import { checkDepartmentName, checkPersonName, cleanText } from './teacher.text.js';
 
 // ── Small helpers ───────────────────────────────────────────────────────────
 
@@ -219,4 +220,37 @@ export function saveTeachingRequest(req) {
     };
   });
   return { schoolYearId: String(schoolYearId), date, changes: items };
+}
+
+// ── Departments (UC-114) ───────────────────────────────────────────────────
+
+export function departmentIdParam(req) {
+  const id = req.params?.id;
+  if (!isId(id)) throw notFound(ERROR_CODES.DEPARTMENT_NOT_FOUND, 'Department not found.');
+  return String(id);
+}
+
+// POST /departments { name, subjectIds } and PATCH /departments/:id { name?, subjectIds? }.
+// Returns { name?, subjectIds? } – a field left out of a PATCH stays as it is.
+export function departmentBody(req, { partial }) {
+  const body = req.body;
+  if (!isPlainObject(body)) throw badRequest(ERROR_CODES.INVALID_INPUT, 'Body must be a JSON object.');
+  const unknown = Object.keys(body).filter((k) => !DEPARTMENT_EDITABLE_FIELDS.includes(k));
+  if (unknown.length) throw badRequest(ERROR_CODES.UNKNOWN_FIELD, 'Unknown fields.', { fields: unknown });
+
+  const out = {};
+  if (!partial || body.name !== undefined) {
+    const name = checkDepartmentName(body.name, { max: TEACHER_LIMITS.DEPARTMENT_NAME_MAX });
+    if (name.reason) throw badRequest(ERROR_CODES.DEPARTMENT_NAME_INVALID, 'Invalid department name.', { field: 'name', reason: name.reason });
+    out.name = name.value;
+  }
+  if (!partial || body.subjectIds !== undefined) {
+    const list = body.subjectIds ?? [];
+    if (!Array.isArray(list) || list.length > TEACHER_LIMITS.SUBJECTS_PER_DEPARTMENT_MAX || !list.every(isId)) {
+      throw badRequest(ERROR_CODES.SUBJECT_INVALID, 'subjectIds must be a list of subject ids.', { field: 'subjectIds' });
+    }
+    out.subjectIds = [...new Set(list.map(String))];
+  }
+  if (partial && !Object.keys(out).length) throw badRequest(ERROR_CODES.REQUIRED, 'Nothing to change.');
+  return out;
 }

@@ -174,7 +174,25 @@ const ERROR_MESSAGES = {
   MSG_INVALID_DEPARTMENT: ({ reason } = {}) => DEPARTMENT_REASON_TEXT[reason] ?? 'Tên tổ chuyên môn không hợp lệ.',
   MSG_DEPARTMENT_INVALID: 'Tổ chuyên môn không còn trong danh sách. Vui lòng tải lại trang và chọn lại.',
   MSG_DEPARTMENTS_NOT_READY:
-    'Danh sách tổ chuyên môn chưa được tạo trong cơ sở dữ liệu (cần chạy database/patch_v0.3_departments.sql).',
+    'Danh sách tổ chuyên môn chưa được tạo đủ trong cơ sở dữ liệu (cần chạy database/patch_v0.3_departments.sql và patch_v0.3_department_subjects.sql).',
+  // UC-114 Manage Departments
+  MSG_DEPARTMENT_NOT_FOUND: 'Tổ chuyên môn này không còn tồn tại. Vui lòng tải lại trang.',
+  MSG_DEPARTMENT_NAME_INVALID: ({ reason } = {}) =>
+    ({
+      REQUIRED: 'Vui lòng nhập tên tổ chuyên môn.',
+      TOO_SHORT: 'Tên tổ cần ít nhất 2 chữ cái hoặc chữ số.',
+      TOO_LONG: 'Tên tổ tối đa 100 ký tự.',
+      INVALID_CHAR: "Tên tổ chỉ gồm chữ, số, khoảng trắng và các dấu . , - – ( ) & / '.",
+      NO_LETTER: 'Tên tổ phải có chữ cái.',
+    })[reason] ?? 'Tên tổ chuyên môn không hợp lệ.',
+  MSG_DEPARTMENT_NAME_TAKEN: ({ name } = {}) => `Đã có tổ “${name ?? ''}”. Tên tổ không được trùng (không phân biệt hoa thường và dấu).`,
+  MSG_DEPARTMENT_IN_USE: ({ teachers } = {}) =>
+    `Tổ còn ${teachers ?? 'một số'} giáo viên. Hãy chuyển các giáo viên này sang tổ khác trước khi xoá.`,
+  MSG_SUBJECT_IN_OTHER_DEPARTMENT: ({ items = [] } = {}) =>
+    `Môn ${items.map((i) => `${i.subject} (đang thuộc ${i.department})`).join(', ')} đã thuộc tổ khác. Hãy bỏ môn khỏi tổ đó trước.`,
+  MSG_SUBJECT_NOT_IN_DEPARTMENT: ({ subjects = [], department } = {}) =>
+    `Môn ${subjects.join(', ')} thuộc tổ khác nên không thêm được cho giáo viên ${department ? `của ${department}` : 'chưa thuộc tổ nào'}. ` +
+    'Chỉ thêm được môn của tổ đã chọn hoặc môn chưa thuộc tổ nào.',
   MSG_LOGIN_IDENTIFIER_READONLY: 'Chỉ Quản trị hệ thống mới được đổi tên đăng nhập, email và số điện thoại.',
   MSG_UNKNOWN_FIELD: 'Dữ liệu gửi lên có trường không được phép. Vui lòng tải lại trang.',
   SCHOOL_YEAR_NOT_FOUND: 'Không tìm thấy năm học.',

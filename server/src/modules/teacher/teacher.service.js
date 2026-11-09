@@ -69,16 +69,38 @@ export async function updateTeacher({ id, fullName, departmentId, subjectIds }) 
       });
     }
 
-    await queries.updateUserFullName(teacher.userId, fullName, conn);
+    // Department after this save: departmentId undefined = keep the current one.
+    let department = teacher.department ? await queries.findActiveDepartmentByName(teacher.department, conn) : null;
     if (departmentId !== undefined) {
-      let name = null;
+      department = null;
       if (departmentId !== null) {
-        const dept = await queries.findActiveDepartmentById(departmentId, conn);
-        if (!dept) throw badRequest(ERROR_CODES.DEPARTMENT_INVALID, 'Unknown department.', { field: 'departmentId' });
-        name = dept.name; // teachers.department keeps the name, spelled exactly as in the list
+        department = await queries.findActiveDepartmentById(departmentId, conn);
+        if (!department) throw badRequest(ERROR_CODES.DEPARTMENT_INVALID, 'Unknown department.', { field: 'departmentId' });
       }
-      await queries.updateDepartment(id, name, conn);
     }
+
+    // business-rules §4 (07/11/2026): a subject ADDED to a teacher must belong to the teacher's department or to no
+    // department. ASSUMPTION: subjects the teacher already has are kept even when they are outside the department
+    // (data from before the rule, or a department change) – the School Manager removes them when needed.
+    const current = new Set((await queries.findSubjectsOfTeacher(id, conn)).map((s) => String(s.subjectId)));
+    const added = subjectIds.filter((sid) => !current.has(String(sid)));
+    if (added.length && (await queries.hasDepartmentSubjects(conn))) {
+      const deptId = department ? String(department.departmentId) : null;
+      const outside = (await queries.findDepartmentOfSubjects(added, conn))
+        .filter((s) => s.departmentId != null && String(s.departmentId) !== deptId)
+        .map((s) => s.name);
+      if (outside.length) {
+        throw badRequest(ERROR_CODES.SUBJECT_NOT_IN_DEPARTMENT, 'Some subjects belong to another department.', {
+          field: 'subjectIds',
+          subjects: outside,
+          department: department?.name ?? null,
+        });
+      }
+    }
+
+    await queries.updateUserFullName(teacher.userId, fullName, conn);
+    // teachers.department keeps the name, spelled exactly as in the list
+    if (departmentId !== undefined) await queries.updateDepartment(id, department?.name ?? null, conn);
     await queries.replaceTeacherSubjects(id, subjectIds, conn);
     return { teacherId: Number(id) };
   });
