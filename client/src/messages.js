@@ -181,6 +181,17 @@ const ERROR_MESSAGES = {
     'Danh sách tổ chuyên môn chưa được tạo đủ trong cơ sở dữ liệu (cần chạy database/patch_v0.3_departments.sql và patch_v0.3_department_subjects.sql).',
   // FE-10 timetable (UC-70..UC-75)
   MSG_TIMETABLES_NOT_READY: 'Bảng thời khoá biểu chưa được tạo trong cơ sở dữ liệu (cần chạy database/patch_v0.3_timetables.sql).',
+  MSG_TIMETABLE_STALE: 'Thời khoá biểu lớp này vừa được người khác thay đổi. Vui lòng tải lại trước khi lưu.',
+  MSG_TIMETABLE_RANGE: ({ min, max } = {}) =>
+    `Thời khoá biểu phải áp dụng từ ${formatVnDate(min)} trở đi và kết thúc trước ${formatVnDate(max)} (không sửa các ngày đã qua).`,
+  MSG_TIMETABLE_ENTRY_INVALID: ({ field } = {}) =>
+    field === 'weekday' ? 'Chỉ xếp tiết từ thứ Hai đến thứ Bảy.' : field === 'room' ? 'Tên phòng tối đa 50 ký tự.' : 'Có ô thời khoá biểu không hợp lệ. Vui lòng tải lại trang.',
+  MSG_TIMETABLE_DUPLICATE_PERIOD: 'Một tiết chỉ xếp được một môn.',
+  MSG_TIMETABLE_SUBJECT_NOT_IN_CLASS: ({ subjects = [] } = {}) => `Môn ${subjects.join(', ')} không thuộc loại lớp này.`,
+  MSG_TIMETABLE_NO_TEACHER: ({ className } = {}) =>
+    `Một số môn${className ? ` của lớp ${className}` : ''} chưa có giáo viên được phân công trong khoảng ngày này. Hãy phân công giảng dạy trước.`,
+  MSG_TIMETABLE_TEACHER_CLASH: ({ className } = {}) =>
+    `Trùng giờ: giáo viên đã có tiết ở lớp khác cùng giờ${className ? ` (khi xếp lớp ${className})` : ''}.`,
   // UC-114 Manage Departments
   MSG_DEPARTMENT_NOT_FOUND: 'Tổ chuyên môn này không còn tồn tại. Vui lòng tải lại trang.',
   MSG_DEPARTMENT_NAME_INVALID: ({ reason } = {}) =>

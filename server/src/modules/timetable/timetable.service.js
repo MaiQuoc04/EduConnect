@@ -4,9 +4,11 @@
 // (timetables: class, start_date, end_date). Saving a version generates one timetable_slots row per period per day
 // in its range; the teacher of each row is the one whose teaching assignment covers that date (no substitute
 // teaching). Saving from date X never touches days before X, and rows that already have attendance are kept.
-import { pool } from '../../config/db.js';
-import { AppError, notFound } from '../../utils/AppError.js';
-import { ERROR_CODES } from './timetable.constants.js';
+import { pool, withTransaction } from '../../config/db.js';
+import { AppError, badRequest, notFound } from '../../utils/AppError.js';
+import { ERROR_CODES, TIMETABLE_LIMITS } from './timetable.constants.js';
+
+const conflict = (code, message, details) => new AppError(409, code, message, details);
 
 // The tables of patch_v0.3_timetables.sql are missing on this database.
 function notReady(err) {
@@ -28,6 +30,15 @@ async function today(db = pool) {
   return rows[0].d;
 }
 
+async function timeSlots(db = pool) {
+  const { rows } = await db.query(
+    `SELECT slot_id AS "slotId", period_number AS "period",
+            to_char(start_time, 'HH24:MI') AS "start", to_char(end_time, 'HH24:MI') AS "end"
+     FROM time_slots ORDER BY period_number`,
+  );
+  return rows;
+}
+
 const YEAR_COLUMNS = `sy.school_year_id AS "id", sy.year_name AS "name",
   to_char(sy.start_date, 'YYYY-MM-DD') AS "startDate", to_char(sy.end_date, 'YYYY-MM-DD') AS "endDate"`;
 
@@ -44,6 +55,85 @@ function currentYear(years, day) {
     years[0] ??
     null
   );
+}
+
+async function classInfo(classId, db = pool, { lock = false } = {}) {
+  const { rows } = await db.query(
+    `SELECT c.class_id AS "classId", c.class_name AS "className", c.track_id AS "trackId",
+            gl.grade_level_name AS "gradeName", ct.track_name AS "trackName",
+            ${YEAR_COLUMNS}
+     FROM classes c
+     JOIN school_years sy ON sy.school_year_id = c.school_year_id
+     JOIN grade_levels gl ON gl.grade_level_id = c.grade_level_id
+     JOIN class_tracks ct ON ct.track_id = c.track_id
+     WHERE c.class_id = $1 AND c.deleted_at IS NULL ${lock ? 'FOR UPDATE OF c' : ''}`,
+    [classId],
+  );
+  if (!rows.length) throw notFound(ERROR_CODES.CLASS_NOT_FOUND, 'Class not found.');
+  const { id, name, startDate, endDate, ...cls } = rows[0];
+  return { ...cls, schoolYear: { id, name, startDate, endDate } };
+}
+
+// Subjects of the class type for the year (track_subjects) with periods per week.
+async function classSubjects(cls, db = pool) {
+  const { rows } = await db.query(
+    `SELECT s.subject_id AS "subjectId", s.subject_code AS "code", s.subject_name AS "name",
+            ts.periods_per_week AS "periodsPerWeek"
+     FROM track_subjects ts JOIN subjects s ON s.subject_id = ts.subject_id AND s.deleted_at IS NULL
+     WHERE ts.track_id = $1 AND ts.school_year_id = $2
+     ORDER BY s.subject_name`,
+    [cls.trackId, cls.schoolYear.id],
+  );
+  return rows;
+}
+
+// Teacher of each subject of the class on `date` (teaching assignment covering it), plus the next change after it.
+async function teachersOn(classId, date, db = pool) {
+  const { rows } = await db.query(
+    `SELECT ta.subject_id AS "subjectId", ta.teacher_id AS "teacherId", u.full_name AS "teacherName",
+            to_char(ta.start_date, 'YYYY-MM-DD') AS "startDate", to_char(ta.end_date, 'YYYY-MM-DD') AS "endDate"
+     FROM teaching_assignments ta
+     JOIN teachers t ON t.teacher_id = ta.teacher_id
+     JOIN users u ON u.user_id = t.user_id
+     WHERE ta.class_id = $1 AND ta.deleted_at IS NULL AND $2::date BETWEEN ta.start_date AND ta.end_date`,
+    [classId, date],
+  );
+  return Object.fromEntries(rows.map((r) => [String(r.subjectId), r]));
+}
+
+async function homeroomOf(classId, db = pool) {
+  const { rows } = await db.query(
+    `SELECT u.full_name AS "name" FROM classes c JOIN teachers t ON t.teacher_id = c.homeroom_teacher_id
+     JOIN users u ON u.user_id = t.user_id WHERE c.class_id = $1`,
+    [classId],
+  );
+  return rows[0]?.name ?? null;
+}
+
+// Fingerprint of a class's versions: the editor sends it back so a save over someone else's newer save is refused.
+const stampOf = (versions) => versions.map((v) => `${v.timetableId}:${v.startDate}:${v.endDate}`).join('|') || 'none';
+
+async function versionsOf(classId, db = pool) {
+  const { rows } = await db.query(
+    `SELECT t.timetable_id AS "timetableId", to_char(t.start_date, 'YYYY-MM-DD') AS "startDate",
+            to_char(t.end_date, 'YYYY-MM-DD') AS "endDate", to_char(t.created_at, 'YYYY-MM-DD HH24:MI') AS "createdAt",
+            u.full_name AS "createdBy",
+            (SELECT COUNT(*)::int FROM timetable_entries e WHERE e.timetable_id = t.timetable_id) AS "periodsPerWeek"
+     FROM timetables t LEFT JOIN users u ON u.user_id = t.created_by
+     WHERE t.class_id = $1 AND t.deleted_at IS NULL
+     ORDER BY t.start_date`,
+    [classId],
+  );
+  return rows;
+}
+
+async function entriesOf(timetableId, db = pool) {
+  const { rows } = await db.query(
+    `SELECT weekday, slot_id AS "slotId", subject_id AS "subjectId", room
+     FROM timetable_entries WHERE timetable_id = $1 ORDER BY weekday, slot_id`,
+    [timetableId],
+  );
+  return rows;
 }
 
 // ── UC-70 View Timetable Management (School Manager) ────────────────────────
@@ -91,4 +181,217 @@ export function listClasses({ schoolYearId }) {
     }));
     return { schoolYears: years, schoolYear: year, today: day, classes };
   });
+}
+
+// ── UC-71 / UC-73 editor data (School Manager) ──────────────────────────────
+
+// Everything the editor needs. `date` picks the version to show (default: the one running today, else the next).
+export function getEditor({ classId, date }) {
+  return guard(async () => {
+    const [cls, day, slots] = await Promise.all([classInfo(classId), today(), timeSlots()]);
+    const [subjects, versions, homeroomTeacher] = await Promise.all([classSubjects(cls), versionsOf(classId), homeroomOf(classId)]);
+    const at = date ?? day;
+    const shown =
+      versions.find((v) => v.startDate <= at && v.endDate >= at) ?? versions.find((v) => v.startDate > at) ?? versions.at(-1) ?? null;
+    const entries = shown ? await entriesOf(shown.timetableId) : [];
+    // Teachers on the first day a save could start (today, or the year's first day if it has not started).
+    const teacherDate = day < cls.schoolYear.startDate ? cls.schoolYear.startDate : day;
+    const teachers = await teachersOn(classId, teacherDate);
+    return {
+      class: { ...cls, homeroomTeacher },
+      today: day,
+      ended: day > cls.schoolYear.endDate,
+      timeSlots: slots,
+      subjects: subjects.map((s) => ({ ...s, teacher: teachers[String(s.subjectId)] ?? null })),
+      teacherDate,
+      versions,
+      stamp: stampOf(versions),
+      shown: shown ? { ...shown, entries } : null,
+    };
+  });
+}
+
+// ── UC-71 Create / UC-73 Update: save a version and generate the periods ───
+
+// Ends, trims, splits or removes other versions of the class so [start, end] is free (history before `start` kept).
+async function freeRange(classId, start, end, db) {
+  const { rows } = await db.query(
+    `SELECT timetable_id AS "id", to_char(start_date, 'YYYY-MM-DD') AS "startDate", to_char(end_date, 'YYYY-MM-DD') AS "endDate"
+     FROM timetables WHERE class_id = $1 AND deleted_at IS NULL AND start_date <= $3::date AND end_date >= $2::date`,
+    [classId, start, end],
+  );
+  for (const v of rows) {
+    if (v.startDate < start && v.endDate > end) {
+      // Split: the part after `end` becomes a new version with the same pattern.
+      const { rows: tail } = await db.query(
+        `INSERT INTO timetables (class_id, start_date, end_date, created_by)
+         SELECT class_id, $2::date + 1, end_date, created_by FROM timetables WHERE timetable_id = $1
+         RETURNING timetable_id AS "id"`,
+        [v.id, end],
+      );
+      await db.query(
+        `INSERT INTO timetable_entries (timetable_id, weekday, slot_id, subject_id, room)
+         SELECT $2, weekday, slot_id, subject_id, room FROM timetable_entries WHERE timetable_id = $1`,
+        [v.id, tail[0].id],
+      );
+      await db.query('UPDATE timetables SET end_date = $2::date - 1 WHERE timetable_id = $1', [v.id, start]);
+    } else if (v.startDate < start) {
+      await db.query('UPDATE timetables SET end_date = $2::date - 1 WHERE timetable_id = $1', [v.id, start]);
+    } else if (v.endDate <= end) {
+      await db.query('UPDATE timetables SET deleted_at = NOW() WHERE timetable_id = $1', [v.id]);
+    } else {
+      await db.query('UPDATE timetables SET start_date = $2::date + 1 WHERE timetable_id = $1', [v.id, end]);
+    }
+  }
+}
+
+// Periods of [start, end] for the pattern of `timetableId`, with the assigned teacher of each date (NULL = none).
+// Days that already have a kept period (with attendance) in the same slot are skipped.
+const PLANNED = `
+  WITH planned AS (
+    SELECT d::date AS "date", e.slot_id, e.subject_id, e.room, ta.teacher_id
+    FROM generate_series($2::date, $3::date, INTERVAL '1 day') AS d
+    JOIN timetable_entries e ON e.timetable_id = $4 AND e.weekday = EXTRACT(ISODOW FROM d)
+    LEFT JOIN teaching_assignments ta
+      ON ta.class_id = $1 AND ta.subject_id = e.subject_id AND ta.deleted_at IS NULL
+     AND d::date BETWEEN ta.start_date AND ta.end_date
+    WHERE NOT EXISTS (SELECT 1 FROM timetable_slots x WHERE x.class_id = $1 AND x."date" = d::date AND x.slot_id = e.slot_id)
+  )`;
+
+// Saves the pattern for [start, end] inside an open transaction and generates the periods. Throws 409 with the
+// problems (no teacher assigned / teacher busy in another class) – the caller's transaction is then rolled back.
+async function saveVersion(db, { cls, start, end, entries, userId }) {
+  await freeRange(cls.classId, start, end, db);
+  const { rows: created } = await db.query(
+    `INSERT INTO timetables (class_id, start_date, end_date, created_by) VALUES ($1, $2::date, $3::date, $4)
+     RETURNING timetable_id AS "id"`,
+    [cls.classId, start, end, userId ?? null],
+  );
+  const timetableId = created[0].id;
+  if (entries.length) {
+    await db.query(
+      `INSERT INTO timetable_entries (timetable_id, weekday, slot_id, subject_id, room)
+       SELECT $1, w, s, sub, NULLIF(r, '')
+       FROM unnest($2::smallint[], $3::bigint[], $4::bigint[], $5::text[]) AS x(w, s, sub, r)`,
+      [timetableId, entries.map((e) => e.weekday), entries.map((e) => e.slotId), entries.map((e) => e.subjectId), entries.map((e) => e.room ?? '')],
+    );
+  }
+
+  // business rules §10: periods of the range are generated again; periods that already have attendance stay.
+  const { rows: removed } = await db.query(
+    `WITH gone AS (
+       DELETE FROM timetable_slots ts
+       WHERE ts.class_id = $1 AND ts."date" BETWEEN $2::date AND $3::date
+         AND NOT EXISTS (SELECT 1 FROM attendances a WHERE a.timetable_slot_id = ts.timetable_slot_id)
+       RETURNING 1)
+     SELECT COUNT(*)::int AS n FROM gone`,
+    [cls.classId, start, end],
+  );
+  const params = [cls.classId, start, end, timetableId];
+
+  // A subject without an assigned teacher on some dates cannot be placed (no substitute teaching, §10).
+  const { rows: missing } = await db.query(
+    `${PLANNED}
+     SELECT s.subject_name AS "subject", to_char(MIN(p."date"), 'YYYY-MM-DD') AS "from",
+            to_char(MAX(p."date"), 'YYYY-MM-DD') AS "to", COUNT(*)::int AS "periods"
+     FROM planned p JOIN subjects s ON s.subject_id = p.subject_id
+     WHERE p.teacher_id IS NULL
+     GROUP BY s.subject_name ORDER BY MIN(p."date"), s.subject_name`,
+    params,
+  );
+  if (missing.length) {
+    throw conflict(ERROR_CODES.TIMETABLE_NO_TEACHER, 'Some subjects have no teaching assignment on some dates.', {
+      className: cls.className,
+      items: missing.slice(0, TIMETABLE_LIMITS.REPORT_ITEMS),
+    });
+  }
+
+  // A teacher cannot teach two classes in the same period (the DB also blocks it).
+  const { rows: clashes } = await db.query(
+    `${PLANNED}
+     SELECT to_char(p."date", 'YYYY-MM-DD') AS "date", sl.period_number AS "period", u.full_name AS "teacher",
+            c2.class_name AS "otherClass"
+     FROM planned p
+     JOIN timetable_slots o ON o.teacher_id = p.teacher_id AND o."date" = p."date" AND o.slot_id = p.slot_id AND o.class_id <> $1
+     JOIN classes c2 ON c2.class_id = o.class_id
+     JOIN time_slots sl ON sl.slot_id = p.slot_id
+     JOIN teachers t ON t.teacher_id = p.teacher_id
+     JOIN users u ON u.user_id = t.user_id
+     ORDER BY p."date", sl.period_number
+     LIMIT ${TIMETABLE_LIMITS.REPORT_ITEMS + 1}`,
+    params,
+  );
+  if (clashes.length) {
+    throw conflict(ERROR_CODES.TIMETABLE_TEACHER_CLASH, 'A teacher already teaches another class in some periods.', {
+      className: cls.className,
+      items: clashes.slice(0, TIMETABLE_LIMITS.REPORT_ITEMS),
+      more: clashes.length > TIMETABLE_LIMITS.REPORT_ITEMS,
+    });
+  }
+
+  const { rows: inserted } = await db.query(
+    `${PLANNED},
+     ins AS (
+       INSERT INTO timetable_slots (class_id, subject_id, teacher_id, slot_id, "date", room)
+       SELECT $1, subject_id, teacher_id, slot_id, "date", room FROM planned
+       RETURNING 1)
+     SELECT COUNT(*)::int AS n FROM ins`,
+    params,
+  );
+  const { rows: kept } = await db.query(
+    `SELECT COUNT(*)::int AS n FROM timetable_slots ts
+     WHERE ts.class_id = $1 AND ts."date" BETWEEN $2::date AND $3::date
+       AND EXISTS (SELECT 1 FROM attendances a WHERE a.timetable_slot_id = ts.timetable_slot_id)`,
+    [cls.classId, start, end],
+  );
+  return { timetableId, generated: inserted[0].n, removed: removed[0].n, kept: kept[0].n };
+}
+
+// Checks the range against today and the class's school year. Returns { start, end }.
+function checkRange(cls, day, startDate, endDate) {
+  if (day > cls.schoolYear.endDate) throw conflict(ERROR_CODES.SCHOOL_YEAR_ENDED, 'The school year has ended.');
+  const min = day > cls.schoolYear.startDate ? day : cls.schoolYear.startDate;
+  const start = startDate;
+  const end = endDate ?? cls.schoolYear.endDate;
+  // Never back-dated: past lessons, attendance and the teachers of past days stay as they were.
+  if (start < min || start > cls.schoolYear.endDate || end < start || end > cls.schoolYear.endDate) {
+    throw badRequest(ERROR_CODES.TIMETABLE_RANGE, 'The range must start today or later and stay inside the school year.', {
+      min,
+      max: cls.schoolYear.endDate,
+    });
+  }
+  return { start, end };
+}
+
+// Entries must use subjects of the class type and existing periods (checked after the shape in the validator).
+async function checkEntries(cls, entries, db) {
+  const subjects = await classSubjects(cls, db);
+  const allowed = new Set(subjects.map((s) => String(s.subjectId)));
+  const bad = [...new Set(entries.filter((e) => !allowed.has(String(e.subjectId))).map((e) => String(e.subjectId)))];
+  if (bad.length) {
+    const { rows } = await db.query('SELECT subject_name AS "name" FROM subjects WHERE subject_id = ANY($1::bigint[])', [bad]);
+    throw badRequest(ERROR_CODES.TIMETABLE_SUBJECT_NOT_IN_CLASS, 'Some subjects are not taught in this class type.', {
+      subjects: rows.length ? rows.map((r) => r.name) : bad,
+    });
+  }
+  const slots = new Set((await timeSlots(db)).map((s) => String(s.slotId)));
+  const index = entries.findIndex((e) => !slots.has(String(e.slotId)));
+  if (index >= 0) throw badRequest(ERROR_CODES.TIMETABLE_ENTRY_INVALID, 'Unknown period.', { index, field: 'slotId' });
+}
+
+export function saveClassTimetable({ classId, startDate, endDate, entries, stamp }, user) {
+  return guard(() =>
+    withTransaction(async (db) => {
+      const cls = await classInfo(classId, db, { lock: true }); // one save per class at a time
+      // Two School Managers on the same class: the later save must not silently undo the earlier one.
+      if (stamp !== undefined && stamp !== stampOf(await versionsOf(classId, db))) {
+        throw conflict(ERROR_CODES.TIMETABLE_STALE, 'This timetable was changed by someone else. Reload it.');
+      }
+      const day = await today(db);
+      const { start, end } = checkRange(cls, day, startDate, endDate);
+      await checkEntries(cls, entries, db);
+      const result = await saveVersion(db, { cls, start, end, entries, userId: user.userId });
+      return { ...result, startDate: start, endDate: end };
+    }),
+  );
 }

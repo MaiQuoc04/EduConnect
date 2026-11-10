@@ -10,5 +10,7 @@ const router = Router();
 const sm = [requireAuth, requireRole(ROLES.SCHOOL_MANAGER)];
 
 router.get('/', ...sm, ctrl.list); // SCR-27 / UC-70
+router.get('/classes/:classId/edit', ...sm, ctrl.editor); // SCR-28 / SCR-30
+router.put('/classes/:classId', ...sm, ctrl.save); // UC-71 / UC-73
 
 export default router;
