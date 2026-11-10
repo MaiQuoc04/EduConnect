@@ -90,7 +90,7 @@ export default function CalendarEventPage() {
   const weekNo = weekNumber(day, ev.yearStart);
   const audience = audienceText(ev);
   const reminder = ev.remindedAt ? { tone: 'green', title: 'Đã gửi nhắc', text: `Lúc ${hm(ev.remindedAt)} · ${dmy(ev.remindedAt)}` }
-    : !ev.willRemind ? { tone: 'grey', title: 'Không nhắc', text: 'Sự kiện được tạo hoặc dời chưa đủ 1 ngày trước giờ bắt đầu.' }
+    : !ev.willRemind ? { tone: 'grey', title: 'Không nhắc', text: 'Sự kiện được tạo chưa đủ 1 ngày trước giờ bắt đầu.' }
       : ev.started ? { tone: 'grey', title: 'Không còn nhắc', text: 'Sự kiện đã diễn ra.' }
         : { tone: 'ink', title: 'Sẽ nhắc trước 1 ngày', text: `Khoảng ${hm(ev.startAt)} · ${dmy(addDays(day, -1))}` };
 
@@ -175,7 +175,7 @@ export default function CalendarEventPage() {
               <h3 className="cal-panel-title"><Icon name="notifications_active" />Nhắc lịch tự động</h3>
               <span className={`cal-state tone-${reminder.tone}`}><i />{reminder.title}</span>
             </div>
-            <p className="cal-muted cal-small">Người được xem nhận một thông báo nhắc trước giờ bắt đầu 1 ngày. Khi đổi giờ, hệ thống nhắc lại theo giờ mới.</p>
+            <p className="cal-muted cal-small">Người được xem nhận một thông báo nhắc trước giờ bắt đầu 1 ngày. Khi đổi giờ, hệ thống nhắc lại theo giờ mới (dời sát giờ hơn 1 ngày thì nhắc ngay).</p>
             <div className="cal-remind">
               <span className={`cal-remind-dot tone-${reminder.tone}`}><Icon name={ev.remindedAt ? 'check' : 'schedule'} size="sm" /></span>
               <div><strong>Trước 1 ngày</strong><span>{reminder.text}</span></div>

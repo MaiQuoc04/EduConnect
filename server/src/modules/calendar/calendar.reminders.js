@@ -6,18 +6,21 @@ import { withTransaction } from '../../config/db.js';
 import { TIME_ZONE } from './calendar.constants.js';
 import { notifyAudience } from './calendar.service.js';
 
+const LOCAL_DAY = (col) => `(${col} AT TIME ZONE '${TIME_ZONE}')::date`;
 const LOCAL_TEXT = (col) => `to_char(${col} AT TIME ZONE '${TIME_ZONE}', 'YYYY-MM-DD"T"HH24:MI')`;
 const vnTime = (local) => `${local.slice(11, 16)} ngày ${local.slice(8, 10)}/${local.slice(5, 7)}/${local.slice(0, 4)}`;
 
 // Due = starts within the next 24 hours, not reminded yet, not deleted, and created at least one day before it
-// starts ("events created less than a day ahead get no reminder"). Moving an event clears reminded_at (UC-79).
+// starts ("events created less than a day ahead get no reminder"). Moving an event clears reminded_at (UC-79), so a
+// moved event is reminded again – right away when it was moved to less than a day ahead.
 // Returns { events, recipients } for the job's log.
 export async function sendClassEventReminders() {
   return withTransaction(async (db) => {
     const { rows: due } = await db.query(
       `SELECT e.event_id AS "eventId", e.title, e.description, e.created_by AS "createdBy", c.class_name AS "className",
               ec.name AS "categoryName", s.subject_name AS "subjectName", ${LOCAL_TEXT('e.start_at')} AS "startAt",
-              ${LOCAL_TEXT('e.end_at')} AS "endAt"
+              ${LOCAL_TEXT('e.end_at')} AS "endAt",
+              (${LOCAL_DAY('e.start_at')} = ${LOCAL_DAY('NOW()')}) AS "today"
        FROM class_events e
        JOIN classes c ON c.class_id = e.class_id AND c.deleted_at IS NULL
        JOIN event_categories ec ON ec.category_id = e.category_id
@@ -33,7 +36,7 @@ export async function sendClassEventReminders() {
       const what = [ev.categoryName, ev.subjectName].filter(Boolean).join(' · ');
       recipients += await notifyAudience(db, {
         eventId: String(ev.eventId),
-        title: `Ngày mai – lớp ${ev.className}: ${ev.title}`,
+        title: `${ev.today ? 'Hôm nay' : 'Ngày mai'} – lớp ${ev.className}: ${ev.title}`,
         detail: [
           `${what} lúc ${vnTime(ev.startAt)}${ev.endAt ? `, kết thúc ${vnTime(ev.endAt)}` : ''}.`,
           ev.description ? ev.description.slice(0, 500) : null,
