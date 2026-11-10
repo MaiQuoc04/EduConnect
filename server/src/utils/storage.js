@@ -110,6 +110,107 @@ export async function signedUploadUrl(bucket, key) {
   return `${env.storage.supabaseUrl}/storage/v1${res.data.url}`;
 }
 
+// ---- added 11/11/2026 for attachments (stage 5): check, move and list objects ---------------------------------
+
+export const isDirectUploadAvailable = () => isSupabase();
+
+// URL kept in attachments.file_url (NOT NULL) for reference. For the private attachments bucket it is the unsigned
+// object URL: it opens nothing without the server key, so it is never handed to a browser (listAttachments signs).
+export function objectUrl(bucket, key) {
+  if (!isSupabase() || !bucket) return `/uploads/${encodeKey(key)}`;
+  return `${env.storage.supabaseUrl}/storage/v1/object/${bucket}/${encodeKey(key)}`;
+}
+
+// What is REALLY stored (not what the client said): { size, mimeType, createdAt }, or null when there is no object.
+// mimeType is the Content-Type the uploader sent, so it is a claim too – check the first bytes (readObjectStart).
+export async function objectInfo(bucket, key) {
+  if (!isSupabase()) {
+    const stat = await fs.stat(localPath(key)).catch((err) => (err.code === 'ENOENT' ? null : Promise.reject(err)));
+    if (!stat?.isFile()) return null;
+    return { size: stat.size, mimeType: mimeTypeOf(path.extname(key)), createdAt: stat.mtime.toISOString() };
+  }
+  const res = await storageRequest('GET', `object/info/${bucket}/${encodeKey(key)}`);
+  if (isNotFound(res)) return null;
+  if (!res.ok || !res.data) throw storageUnavailable(res, `info ${bucket}/${key}`);
+  return { size: Number(res.data.size), mimeType: res.data.content_type ?? null, createdAt: res.data.created_at ?? null };
+}
+
+// The first `length` bytes of an object (to recognise its real type), or null when there is no object.
+export async function readObjectStart(bucket, key, length = 4100) {
+  if (!isSupabase()) {
+    const handle = await fs.open(localPath(key), 'r').catch((err) => (err.code === 'ENOENT' ? null : Promise.reject(err)));
+    if (!handle) return null;
+    try {
+      const buffer = Buffer.alloc(length);
+      const { bytesRead } = await handle.read(buffer, 0, length, 0);
+      return buffer.subarray(0, bytesRead);
+    } finally {
+      await handle.close();
+    }
+  }
+  const res = await storageRequest('GET', `object/authenticated/${bucket}/${encodeKey(key)}`, {
+    headers: { Range: `bytes=0-${length - 1}` },
+    binary: true,
+  });
+  if (isNotFound(res)) return null;
+  if (!res.ok) throw storageUnavailable(res, `read ${bucket}/${key}`);
+  return res.data.subarray(0, length);
+}
+
+// Moves an object inside one bucket (Supabase: POST /object/move, no copy + delete needed). Returns false when the
+// source does not exist; never overwrites an existing destination.
+export async function moveFile(bucket, fromKey, toKey) {
+  if (!isSupabase()) {
+    const to = localPath(toKey);
+    await fs.mkdir(path.dirname(to), { recursive: true });
+    try {
+      await fs.access(to);
+      throw new Error(`moveFile: ${toKey} already exists`);
+    } catch (err) {
+      if (err.code !== 'ENOENT') throw err;
+    }
+    return fs.rename(localPath(fromKey), to).then(
+      () => true,
+      (err) => (err.code === 'ENOENT' ? false : Promise.reject(err)),
+    );
+  }
+  const res = await storageRequest('POST', 'object/move', {
+    body: JSON.stringify({ bucketId: bucket, sourceKey: fromKey, destinationKey: toKey }),
+    headers: { 'Content-Type': 'application/json' },
+  });
+  if (isNotFound(res)) return false;
+  if (!res.ok) throw storageUnavailable(res, `move ${bucket}/${fromKey}`);
+  return true;
+}
+
+// One level of a folder: [{ key, name, isFolder, size, createdAt }] (createdAt: ISO string, null for folders).
+// Used by scripts/clean-orphan-uploads.js.
+export async function listFolder(bucket, folder) {
+  if (!isSupabase()) {
+    const dir = path.resolve(uploadRoot, folder);
+    if (!isSafeKey(folder) || !dir.startsWith(uploadRoot + path.sep)) throw new Error(`Invalid folder: ${folder}`);
+    const entries = await fs.readdir(dir, { withFileTypes: true }).catch((err) => (err.code === 'ENOENT' ? [] : Promise.reject(err)));
+    return Promise.all(
+      entries.map(async (e) => {
+        const stat = e.isDirectory() ? null : await fs.stat(path.join(dir, e.name));
+        return { key: `${folder}/${e.name}`, name: e.name, isFolder: e.isDirectory(), size: stat?.size ?? null, createdAt: stat?.mtime.toISOString() ?? null };
+      }),
+    );
+  }
+  const out = [];
+  for (let offset = 0; ; offset += 1000) {
+    const res = await storageRequest('POST', `object/list/${bucket}`, {
+      body: JSON.stringify({ prefix: folder, limit: 1000, offset, sortBy: { column: 'name', order: 'asc' } }),
+      headers: { 'Content-Type': 'application/json' },
+    });
+    if (!res.ok || !Array.isArray(res.data)) throw storageUnavailable(res, `list ${bucket}/${folder}`);
+    for (const o of res.data) {
+      out.push({ key: `${folder}/${o.name}`, name: o.name, isFolder: o.id === null, size: o.metadata?.size ?? null, createdAt: o.created_at ?? null });
+    }
+    if (res.data.length < 1000) return out;
+  }
+}
+
 // Finds bucket + key from a URL this module returned (users.avatar_url), so the file can be deleted:
 //   /uploads/<key>                                              -> { bucket: null, key }  (file on disk)
 //   <SUPABASE_URL>/storage/v1/object/public/<bucket>/<key>      -> { bucket, key }
@@ -161,7 +262,8 @@ function publicUrl(bucket, key) {
 
 // One call to the Storage REST API. Never throws: an HTTP or network error comes back as { ok: false } and the
 // caller decides. The key is sent in both the apikey and Authorization headers, like supabase-js does.
-async function storageRequest(method, apiPath, { body, headers = {} } = {}) {
+// binary: true returns the body of a successful answer as a Buffer (data) instead of parsed JSON.
+async function storageRequest(method, apiPath, { body, headers = {}, binary = false } = {}) {
   const key = env.storage.serviceRoleKey;
   let response;
   try {
@@ -174,7 +276,9 @@ async function storageRequest(method, apiPath, { body, headers = {} } = {}) {
   } catch (err) {
     return { ok: false, httpStatus: 0, status: 0, data: { error: 'unreachable', message: `${err.name}: ${err.message}` } };
   }
-  const text = await response.text();
+  const raw = Buffer.from(await response.arrayBuffer());
+  if (binary && response.ok) return { ok: true, httpStatus: response.status, status: response.status, data: raw };
+  const text = raw.toString('utf8');
   let data = null;
   try {
     data = text ? JSON.parse(text) : null;
