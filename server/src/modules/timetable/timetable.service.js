@@ -310,8 +310,9 @@ async function saveVersion(db, { cls, start, end, entries, userId }) {
   const { rows: clashes } = await db.query(
     `${PLANNED}
      SELECT to_char(p."date", 'YYYY-MM-DD') AS "date", sl.period_number AS "period", u.full_name AS "teacher",
-            c2.class_name AS "otherClass"
+            c2.class_name AS "otherClass", s.subject_name AS "subject"
      FROM planned p
+     JOIN subjects s ON s.subject_id = p.subject_id
      JOIN timetable_slots o ON o.teacher_id = p.teacher_id AND o."date" = p."date" AND o.slot_id = p.slot_id AND o.class_id <> $1
      JOIN classes c2 ON c2.class_id = o.class_id
      JOIN time_slots sl ON sl.slot_id = p.slot_id

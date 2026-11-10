@@ -36,7 +36,7 @@ function checkRows(result) {
     if (c.error?.code === 'MSG_TIMETABLE_TEACHER_CLASH') {
       groupClashes(items).forEach((p, i) => out.push({
         key: `c${c.classId}-${i}`, className: c.className, when: clashWhen(p),
-        subject: '—', teacher: p.teacher, notes: [`Trùng lịch: ${p.teacher} đang dạy ${p.otherClass} tiết này`], label: 'Lỗi trùng',
+        subject: p.subject ?? '—', teacher: p.teacher, notes: [`Trùng lịch: ${p.teacher} đang dạy ${p.otherClass} tiết này`], label: 'Lỗi trùng',
       }));
     } else if (c.error?.code === 'MSG_TIMETABLE_NO_TEACHER') {
       items.forEach((p, i) => out.push({

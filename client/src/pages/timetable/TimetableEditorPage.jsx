@@ -366,7 +366,7 @@ export default function TimetableEditorPage() {
                     {problems.map((p, i) => (
                       <li key={i}>
                         {p.teacher
-                          ? `${clashWhen(p)}: ${p.teacher} đang dạy lớp ${p.otherClass}`
+                          ? `${clashWhen(p)}${p.subject ? ` – ${p.subject}` : ''}: ${p.teacher} đang dạy lớp ${p.otherClass}`
                           : `${p.subject}: chưa có giáo viên từ ${dmy(p.from)} đến ${dmy(p.to)} (${p.periods} tiết)`}
                       </li>
                     ))}
