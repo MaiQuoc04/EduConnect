@@ -15,11 +15,13 @@ import departmentRoutes from './modules/teacher/department.routes.js';
 import homeroomRoutes from './modules/teacher/homeroom.routes.js';
 import teacherRoutes from './modules/teacher/teacher.routes.js';
 import teachingRoutes from './modules/teacher/teaching.routes.js';
+import timetableRoutes from './modules/timetable/timetable.routes.js';
 
 // Each feature gets its own folder in src/modules and is mounted here, e.g.
 //   FE-01 account   -> /auth, /account (Quoc)
 //   FE-02 students  -> /students      (Anh)
 //   FE-03 teachers  -> /teachers, /departments, /homeroom-assignments, /teaching-assignments (Dung)
+//   FE-10 timetable -> /timetables (Dung)
 //   FE-04 classes   -> /school-years, /classes, /groups, /subjects, /class-tracks (Khanh)
 //   FE-05 feed      -> /posts         (Khanh)
 //   FE-06 chat      -> /conversations (Khanh, + src/sockets)
@@ -47,6 +49,7 @@ router.use('/teachers', teacherRoutes);
 router.use('/departments', departmentRoutes);
 router.use('/homeroom-assignments', homeroomRoutes);
 router.use('/teaching-assignments', teachingRoutes);
+router.use('/timetables', timetableRoutes);
 router.use('/admin', adminRoutes);
 router.use('/maintenance', maintenanceRoutes);
 

@@ -179,6 +179,8 @@ const ERROR_MESSAGES = {
   MSG_DEPARTMENT_INVALID: 'Tổ chuyên môn không còn trong danh sách. Vui lòng tải lại trang và chọn lại.',
   MSG_DEPARTMENTS_NOT_READY:
     'Danh sách tổ chuyên môn chưa được tạo đủ trong cơ sở dữ liệu (cần chạy database/patch_v0.3_departments.sql và patch_v0.3_department_subjects.sql).',
+  // FE-10 timetable (UC-70..UC-75)
+  MSG_TIMETABLES_NOT_READY: 'Bảng thời khoá biểu chưa được tạo trong cơ sở dữ liệu (cần chạy database/patch_v0.3_timetables.sql).',
   // UC-114 Manage Departments
   MSG_DEPARTMENT_NOT_FOUND: 'Tổ chuyên môn này không còn tồn tại. Vui lòng tải lại trang.',
   MSG_DEPARTMENT_NAME_INVALID: ({ reason } = {}) =>
