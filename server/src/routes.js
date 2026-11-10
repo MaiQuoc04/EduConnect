@@ -14,6 +14,7 @@ import conversationRoutes from './modules/conversations/conversations.routes.js'
 import homeroomRoutes from './modules/teacher/homeroom.routes.js';
 import teacherRoutes from './modules/teacher/teacher.routes.js';
 import teachingRoutes from './modules/teacher/teaching.routes.js';
+import gradeRoutes from './modules/grades/grades.routes.js';
 
 // Each feature gets its own folder in src/modules and is mounted here, e.g.
 //   FE-01 account   -> /auth, /account (Quoc)
@@ -45,6 +46,7 @@ router.use('/conversations', conversationRoutes);
 router.use('/teachers', teacherRoutes);
 router.use('/homeroom-assignments', homeroomRoutes);
 router.use('/teaching-assignments', teachingRoutes);
+router.use('/grades', gradeRoutes);
 router.use('/admin', adminRoutes);
 router.use('/maintenance', maintenanceRoutes);
 
