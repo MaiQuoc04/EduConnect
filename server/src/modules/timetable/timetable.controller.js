@@ -34,3 +34,13 @@ export async function importPreview(req, res) {
 export async function importRun(req, res) {
   res.status(201).json(await timetableImport.importTimetables(importRequest(req), req.user));
 }
+
+// GET /api/v1/timetables/viewable-classes  (UC-74 picker: own class / children / taught classes)
+export async function viewable(req, res) {
+  res.json(await timetableService.viewableClasses(req.user));
+}
+
+// GET /api/v1/timetables/classes/:classId/week?date=  (SCR-29 / SCR-45 / SCR-46, UC-74)
+export async function classWeek(req, res) {
+  res.json(await timetableService.classWeek({ classId: classIdParam(req), ...dateQuery(req) }, req.user));
+}

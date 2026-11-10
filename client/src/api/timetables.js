@@ -20,6 +20,18 @@ export async function saveClassTimetable(classId, { startDate, endDate, entries,
   return data;
 }
 
+// UC-74 – classes this user may view (own class, children's classes, taught classes)
+export async function getViewableClasses() {
+  const { data } = await api.get('/timetables/viewable-classes');
+  return data;
+}
+
+// UC-74 – one week (Monday..Sunday of `date`) of a class
+export async function getClassWeek(classId, date) {
+  const { data } = await api.get(`/timetables/classes/${classId}/week`, { params: date ? { date } : {} });
+  return data;
+}
+
 // UC-72 – template (.xlsx) with the classes and subjects of the year in its guide sheet
 export async function downloadTimetableTemplate(schoolYearId) {
   const res = await api.get('/timetables/import/template', { params: { schoolYearId }, responseType: 'blob', validateStatus: () => true });

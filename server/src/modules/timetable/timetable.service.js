@@ -6,7 +6,7 @@
 // teaching). Saving from date X never touches days before X, and rows that already have attendance are kept.
 import { pool, withTransaction } from '../../config/db.js';
 import { AppError, badRequest, notFound } from '../../utils/AppError.js';
-import { ERROR_CODES, TIMETABLE_LIMITS } from './timetable.constants.js';
+import { ERROR_CODES, ROLES, TIMETABLE_LIMITS } from './timetable.constants.js';
 
 const conflict = (code, message, details) => new AppError(409, code, message, details);
 
@@ -395,5 +395,119 @@ export function saveClassTimetable({ classId, startDate, endDate, entries, stamp
     }),
   );
 }
+
+// ── UC-74 View Class Timetable / UC-75 View Teaching Schedule ───────────────
+
+// Classes the user may open (data scope, CLAUDE.md): SM all; teacher: homeroom class or a class they are assigned
+// to teach; student: their classes; parent: the classes of their linked children. Returns ids as strings.
+async function canViewClass(user, classId) {
+  const role = user.activeRole;
+  if (role === ROLES.SCHOOL_MANAGER) return true;
+  let sql;
+  if (role === ROLES.TEACHER) {
+    sql = `SELECT 1 FROM classes c JOIN teachers t ON t.user_id = $1
+           WHERE c.class_id = $2 AND (c.homeroom_teacher_id = t.teacher_id OR EXISTS (
+             SELECT 1 FROM teaching_assignments ta WHERE ta.class_id = c.class_id AND ta.teacher_id = t.teacher_id AND ta.deleted_at IS NULL))`;
+  } else if (role === ROLES.STUDENT) {
+    sql = `SELECT 1 FROM class_enrollments e JOIN students s ON s.student_id = e.student_id
+           WHERE s.user_id = $1 AND e.class_id = $2`;
+  } else if (role === ROLES.PARENT) {
+    sql = `SELECT 1 FROM student_parents sp JOIN parents p ON p.parent_id = sp.parent_id
+           JOIN class_enrollments e ON e.student_id = sp.student_id
+           WHERE p.user_id = $1 AND e.class_id = $2`;
+  } else return false;
+  const { rows } = await pool.query(sql, [user.userId, classId]);
+  return rows.length > 0;
+}
+
+// Picker of UC-74: the classes this user can see in the current school year (parent: one entry per child).
+export async function viewableClasses(user) {
+  const day = await today();
+  const year = currentYear(await schoolYears(), day);
+  if (!year) return { schoolYear: null, items: [] };
+  const role = user.activeRole;
+  let rows = [];
+  if (role === ROLES.SCHOOL_MANAGER) {
+    ({ rows } = await pool.query(
+      `SELECT c.class_id AS "classId", c.class_name AS "className", NULL AS "studentName", NULL AS "relation"
+       FROM classes c JOIN grade_levels gl ON gl.grade_level_id = c.grade_level_id
+       WHERE c.school_year_id = $1 AND c.deleted_at IS NULL ORDER BY gl.grade_level_name, c.class_name`,
+      [year.id],
+    ));
+  } else if (role === ROLES.TEACHER) {
+    ({ rows } = await pool.query(
+      `SELECT c.class_id AS "classId", c.class_name AS "className", NULL AS "studentName",
+              CASE WHEN c.homeroom_teacher_id = t.teacher_id THEN 'HOMEROOM' ELSE 'TEACHING' END AS "relation"
+       FROM classes c JOIN teachers t ON t.user_id = $2
+       WHERE c.school_year_id = $1 AND c.deleted_at IS NULL
+         AND (c.homeroom_teacher_id = t.teacher_id OR EXISTS (
+           SELECT 1 FROM teaching_assignments ta WHERE ta.class_id = c.class_id AND ta.teacher_id = t.teacher_id AND ta.deleted_at IS NULL))
+       ORDER BY (c.homeroom_teacher_id = t.teacher_id) DESC, c.class_name`,
+      [year.id, user.userId],
+    ));
+  } else if (role === ROLES.STUDENT) {
+    ({ rows } = await pool.query(
+      `SELECT c.class_id AS "classId", c.class_name AS "className", NULL AS "studentName", 'STUDENT' AS "relation"
+       FROM class_enrollments e JOIN students s ON s.student_id = e.student_id
+       JOIN classes c ON c.class_id = e.class_id AND c.deleted_at IS NULL
+       WHERE s.user_id = $2 AND c.school_year_id = $1 AND e.status = 'STUDYING'`,
+      [year.id, user.userId],
+    ));
+  } else if (role === ROLES.PARENT) {
+    ({ rows } = await pool.query(
+      `SELECT c.class_id AS "classId", c.class_name AS "className", u.full_name AS "studentName", 'CHILD' AS "relation"
+       FROM parents p JOIN student_parents sp ON sp.parent_id = p.parent_id
+       JOIN students s ON s.student_id = sp.student_id JOIN users u ON u.user_id = s.user_id
+       JOIN class_enrollments e ON e.student_id = s.student_id AND e.status = 'STUDYING'
+       JOIN classes c ON c.class_id = e.class_id AND c.deleted_at IS NULL AND c.school_year_id = $1
+       WHERE p.user_id = $2 ORDER BY u.full_name`,
+      [year.id, user.userId],
+    ));
+  }
+  return { schoolYear: year, today: day, items: rows };
+}
+
+// Monday..Sunday of the week of `date`, with the days and the periods of the school day.
+async function weekFrame(date) {
+  const { rows } = await pool.query(
+    `SELECT to_char(w, 'YYYY-MM-DD') AS "start", to_char(w + 6, 'YYYY-MM-DD') AS "end",
+            to_char(w - 7, 'YYYY-MM-DD') AS "prev", to_char(w + 7, 'YYYY-MM-DD') AS "next",
+            to_char(CURRENT_DATE, 'YYYY-MM-DD') AS "today",
+            ARRAY(SELECT to_char(w + i, 'YYYY-MM-DD') FROM generate_series(0, 6) AS i) AS "days"
+     FROM (SELECT date_trunc('week', COALESCE($1::date, CURRENT_DATE))::date AS w) x`,
+    [date ?? null],
+  );
+  const f = rows[0];
+  return { weekStart: f.start, weekEnd: f.end, prevWeek: f.prev, nextWeek: f.next, today: f.today, days: f.days, timeSlots: await timeSlots() };
+}
+
+const LESSON_COLUMNS = `ts.timetable_slot_id AS "lessonId", to_char(ts."date", 'YYYY-MM-DD') AS "date", ts.slot_id AS "slotId",
+  sl.period_number AS "period", to_char(sl.start_time, 'HH24:MI') AS "start", to_char(sl.end_time, 'HH24:MI') AS "end",
+  ts.subject_id AS "subjectId", s.subject_name AS "subjectName", s.subject_code AS "subjectCode",
+  ts.teacher_id AS "teacherId", u.full_name AS "teacherName", ts.room,
+  ts.class_id AS "classId", c.class_name AS "className",
+  EXISTS (SELECT 1 FROM attendances a WHERE a.timetable_slot_id = ts.timetable_slot_id) AS "attendanceTaken"`;
+const LESSON_JOINS = `JOIN time_slots sl ON sl.slot_id = ts.slot_id
+  JOIN subjects s ON s.subject_id = ts.subject_id
+  JOIN teachers t ON t.teacher_id = ts.teacher_id JOIN users u ON u.user_id = t.user_id
+  JOIN classes c ON c.class_id = ts.class_id`;
+
+// GET /timetables/classes/:classId/week?date= (SCR-29 / SCR-45, detail SCR-46 is built from the same rows)
+export async function classWeek({ classId, date }, user) {
+  // Not allowed and not found look the same, so other classes stay hidden.
+  if (!(await canViewClass(user, classId))) throw notFound(ERROR_CODES.CLASS_NOT_FOUND, 'Class not found.');
+  const cls = await classInfo(classId);
+  const frame = await weekFrame(date);
+  const { rows: lessons } = await pool.query(
+    `SELECT ${LESSON_COLUMNS} FROM timetable_slots ts ${LESSON_JOINS}
+     WHERE ts.class_id = $1 AND ts."date" BETWEEN $2::date AND $3::date
+     ORDER BY ts."date", sl.period_number`,
+    [classId, frame.weekStart, frame.weekEnd],
+  );
+  const { trackId, ...publicClass } = cls;
+  return { class: { ...publicClass, homeroomTeacher: await homeroomOf(classId) }, ...frame, lessons };
+}
+
+// Used by the import (same transaction rules as the editor).
 
 export const internals = { classInfo, today, checkRange, checkEntries, saveVersion, timeSlots, classSubjects, guard, schoolYears };

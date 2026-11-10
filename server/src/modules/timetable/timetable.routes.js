@@ -9,12 +9,15 @@ import { ROLES } from './timetable.constants.js';
 // teaching schedule.
 const router = Router();
 const sm = [requireAuth, requireRole(ROLES.SCHOOL_MANAGER)];
+const viewers = [requireAuth, requireRole(ROLES.SCHOOL_MANAGER, ROLES.TEACHER, ROLES.STUDENT, ROLES.PARENT)];
 
 router.get('/', ...sm, ctrl.list); // SCR-27 / UC-70
 router.get('/import/template', ...sm, ctrl.importTemplate); // UC-72
 router.post('/import/preview', ...sm, uploadSingle('file'), ctrl.importPreview); // UC-72
 router.post('/import', ...sm, uploadSingle('file'), ctrl.importRun); // UC-72
+router.get('/viewable-classes', ...viewers, ctrl.viewable); // UC-74
 router.get('/classes/:classId/edit', ...sm, ctrl.editor); // SCR-28 / SCR-30
 router.put('/classes/:classId', ...sm, ctrl.save); // UC-71 / UC-73
+router.get('/classes/:classId/week', ...viewers, ctrl.classWeek); // SCR-29 / SCR-45 / UC-74
 
 export default router;
