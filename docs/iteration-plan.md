@@ -45,6 +45,9 @@ It2: Anh FE-08 + FE-14, Khanh FE-05 + FE-06).
 - **Waiting for the lead (FE-03, 07/11):** `patch_v0.3_department_subjects.sql` – table `department_subjects` (subjects
   of each department) with the starting list (business rules §4). Not run on the shared DB yet; after it: 51 tables.
   Until it runs, the Departments screen answers MSG_DEPARTMENTS_NOT_READY and Update Teacher does not limit subjects.
+- **FE-10 (Dung, 10/11, lead OK for new tables):** `patch_v0.3_timetables.sql` – tables `timetables` (version of a class
+  timetable with its date range) and `timetable_entries` (weekly pattern). Run after `patch_v0.3_department_subjects.sql`;
+  after both: 53 tables. Until it runs, the timetable screens answer MSG_TIMETABLES_NOT_READY.
 - **Sample data added to the shared DB (03/11, Anh, accepted by the lead 03/11), through the app API (UC-96, UC-14, UC-28),
   no SQL:** 90 student accounts `HS7001..HS7090` (no class yet), 90 parent accounts with phones
   `0977000001..0977000090` (all with `must_change_password`), 65 links (HS7001–7020 two parents, HS7021–7045 one,

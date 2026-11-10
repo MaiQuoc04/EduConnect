@@ -356,6 +356,29 @@ Boundaries that are easy to get wrong:
 - The DB blocks clashes: one class or one teacher cannot have two lessons in the same period of the same day.
 - **No substitute teaching**: the timetable teacher must match the teaching assignment.
 - Teachers' teaching schedules are built automatically; parents pick a child to view a timetable.
+- **How it is stored (10/11/2026, FE-10, agreed with the lead):** a class timetable is a **version** (`timetables`:
+  class, start date, end date) holding a **weekly pattern** (`timetable_entries`: weekday + period → subject + room).
+  The teacher is not stored in the pattern: each generated period takes the teacher whose teaching assignment covers
+  that date (§4), so a teaching change automatically changes the teacher of later periods.
+  - Create / update (UC-71, UC-73): SM chooses the range [start, end] (start **today or later**, end defaults to the
+    end of the school year). Only the range changes: a version running before it ends the day before, one inside it
+    is replaced, one running past it keeps its part after `end` (split). Periods of the range **without attendance**
+    are deleted and generated again; periods with attendance stay (a new period is not placed on top of them).
+  - Saving is refused (nothing changes) when a subject has **no assigned teacher** on some dates of the range, or a
+    teacher would teach **two classes in the same period**; the answer lists the dates / periods.
+  - Two School Managers on the same class: a save made from an editor opened before someone else's save is refused
+    (`MSG_TIMETABLE_STALE`, reload first). An empty pattern is allowed and removes the periods without attendance of
+    the range (the screen asks first). A school year that has ended is read only (no create / update / import).
+  - Subjects must be subjects of the class type for that year (`track_subjects`); one subject per period. The number
+    of periods per subject is shown against `track_subjects.periods_per_week` but not enforced (ASSUMPTION).
+  - ASSUMPTION: lessons are Monday–Saturday (no Sunday); periods come from `time_slots`; no holiday calendar yet –
+    SM shortens the range or changes the pattern for a holiday week.
+  - Import (UC-72): one .xlsx, one row per lesson (class, weekday 2–7, period, subject code or name, room) for one or
+    more classes, with one range chosen on the screen. Checked row by row and class by class (same rules as above,
+    clashes between classes of the same file included); **all classes are saved or none**.
+  - Viewing (UC-74): SM any class; teacher the homeroom class and classes they are assigned to; student own class;
+    parent the classes of linked children (picks a child first). Teaching schedule (UC-75): the teacher's own
+    periods. Week view, one day at a time on phones; a period opens its detail (time, room, teacher, attendance).
 - **Class events** (e.g. 15-minute test, parent meeting): a subject teacher creates events for their own subject;
   the homeroom teacher can also create general events (`subject_id` NULL). Category from a fixed list
   (`event_categories`: Test, Assignment deadline, Parent meeting, Class meeting, Other – no UI to edit it).
@@ -405,7 +428,8 @@ Boundaries that are easy to get wrong:
 ## 14. Deleting data
 - **Every delete in the system is a soft delete** (`deleted_at`, often `deleted_by`): never `DELETE` business rows,
   always filter `deleted_at IS NULL`.
-- Hard delete is allowed only for technical / configuration rows: `department_subjects` (07/11/2026), `post_likes` (unlike), `message_reactions`
+- Hard delete is allowed only for technical / configuration rows: `department_subjects` (07/11/2026), `timetable_slots`
+  without attendance when a timetable range is generated again (§10, 10/11/2026), `post_likes` (unlike), `message_reactions`
   (reaction removed, §6), `class_event_viewers`,
   `teacher_subjects`, `user_roles`, `student_parents` (unlink), expired OTPs, `track_subjects` (a subject removed
   from a class type while the year has no grades, §4).
