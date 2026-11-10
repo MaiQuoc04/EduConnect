@@ -130,11 +130,11 @@ It2: Anh FE-08 + FE-14, Khanh FE-05 + FE-06).
   | 2 | FE-13 departments: create / import pick from the `departments` list (details below) | Linh | **done**, merged 07/11 (the follow-up patch is still open) |
   | 3 | Replace the temporary `GET /students/parents/lookup` with FE-14 UC-104 | Anh | with FE-14 (It2) |
   | 4 | Shared Excel reading `utils/excel.js` for UC-96 / UC-14 / UC-27 (It2 clean-up, after the features merge) | Linh | It2 clean-up |
-  | 5 | Decide: who adds a new department (SQL only today, or a screen for SM / SA) | Quoc | **decided 07/11**: School Manager, Departments screen (UC-114, FE-03, branch `feature/fe-03-departments-assignments`) |
+  | 5 | Decide: who adds a new department (SQL only today, or a screen for SM / SA) | Quoc | **decided 07/11**: School Manager, Departments screen (UC-114, FE-03, branch `feature/fe-03-teacher-management`) |
   | 6 | Decide: the empty test school years on the shared DB (2025-2026, 2028-2029, 2030-2031; no classes; `school_years` has no `deleted_at`) – keep or remove | Quoc | 07/11 |
   | 7 | Decide: daily job to sync class groups when an assignment ends later (see "Open" below; proposal: FE-09, It3) | Quoc | before It3 |
 
-- **FE-03 additions (Dung, 07/11, agreed with the lead; branch `feature/fe-03-departments-assignments`, PR into
+- **FE-03 additions (Dung, 07/11, agreed with the lead; branch `feature/fe-03-teacher-management`, PR into
   `develop`):** UC-114 Manage Departments (`/departments`, SCR-72), UC-115 Export Teacher List
   (`GET /teachers/export`), UC-116 Import Teachers (`/teachers/import…`, SCR-73, reuses FE-13's
   `accountImport.service.js`), teaching assignments with start and end dates and history by range (UC-18,
