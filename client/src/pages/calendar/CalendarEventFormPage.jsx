@@ -29,6 +29,8 @@ function PeoplePicker({ classId, selected, onChange, onClose }) {
   useEffect(() => {
     getClassPeople(classId).then(setPeople).catch((err) => setError(errorText(err)));
   }, [classId]);
+  // People saved on the event earlier who are no longer in the class (left, moved, locked): the server drops them on save.
+  const gone = people ? [...selected].filter((id) => !['students', 'parents', 'teachers'].some((k) => people[k].some((p) => String(p.userId) === id))) : [];
   const list = (people?.[tab] ?? []).filter((p) => !q.trim() || foldVietnamese(`${p.name} ${p.children ?? ''} ${p.code ?? ''}`).includes(foldVietnamese(q.trim())));
   const toggle = (id) => {
     const n = new Set(selected);
@@ -51,6 +53,10 @@ function PeoplePicker({ classId, selected, onChange, onClose }) {
         <input type="search" value={q} maxLength={50} placeholder="Tìm theo tên…" onChange={(e) => setQ(e.target.value)} aria-label="Tìm người" />
       </label>
       {error && <p className="field-error">{error}</p>}
+      {gone.length > 0 && (
+        <p className="cal-warn cal-small"><Icon name="person_off" size="sm" />{gone.length} người đã chọn trước đây không còn thuộc lớp; khi lưu sẽ tự bỏ khỏi danh sách.
+          <button type="button" className="cal-link" onClick={() => { const n = new Set(selected); gone.forEach((id) => n.delete(id)); onChange(n); }}>Bỏ ngay</button></p>
+      )}
       {!people && !error && <p className="cal-muted cal-small">Đang tải…</p>}
       <ul className="cal-picker-list">
         {people && list.length === 0 && <li className="cal-muted cal-small">Không có ai phù hợp.</li>}
@@ -65,6 +71,31 @@ function PeoplePicker({ classId, selected, onChange, onClose }) {
           </li>
         ))}
       </ul>
+    </div>
+  );
+}
+
+function LeaveDialog({ onStay, onLeave }) {
+  useEffect(() => {
+    const onKey = (e) => e.key === 'Escape' && onStay();
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [onStay]);
+  return (
+    <div className="cal-overlay" onClick={onStay}>
+      <div className="cal-dialog" role="alertdialog" aria-modal="true" aria-labelledby="cal-leave-title" onClick={(e) => e.stopPropagation()}>
+        <div className="cal-dialog-row">
+          <span className="cal-dialog-icon is-ink"><Icon name="edit_note" /></span>
+          <div>
+            <h2 id="cal-leave-title">Bỏ các thay đổi chưa lưu?</h2>
+            <p>Nội dung bạn vừa nhập trong biểu mẫu sẽ mất nếu rời trang.</p>
+          </div>
+        </div>
+        <div className="cal-dialog-actions">
+          <button type="button" className="btn btn-secondary" onClick={onStay}>Ở lại</button>
+          <button type="button" className="btn btn-primary" onClick={onLeave}>Rời trang</button>
+        </div>
+      </div>
     </div>
   );
 }
@@ -86,11 +117,15 @@ export default function CalendarEventFormPage() {
   const [lesson, setLesson] = useState(null);
   const [asking, setAsking] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  const [leaveTo, setLeaveTo] = useState(null); // path the user tried to open while the form had unsaved changes
+  const [reloadKey, setReloadKey] = useState(0);
 
   // Load the form data (and the event when editing).
   useEffect(() => {
     (async () => {
       try {
+        setLoadError('');
+        setSaveError(null);
         const o = await getClassEventOptions();
         setOptions(o);
         let f;
@@ -120,7 +155,7 @@ export default function CalendarEventFormPage() {
         setLoadError(errorText(err));
       }
     })();
-  }, [editing, eventId]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [editing, eventId, reloadKey]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const cls = options?.classes.find((c) => String(c.classId) === form?.classId);
   // Subjects of the teacher in this class on the chosen day (+ "general" for the homeroom teacher).
@@ -167,6 +202,22 @@ export default function CalendarEventFormPage() {
     window.addEventListener('beforeunload', warn);
     return () => window.removeEventListener('beforeunload', warn);
   }, [dirty]);
+  // In-app links (sidebar, breadcrumb, Huỷ) while the form has unsaved changes: ask first. (BrowserRouter has no
+  // useBlocker; the browser Back button is not caught.)
+  useEffect(() => {
+    if (!dirty) return undefined;
+    const onClick = (e) => {
+      const a = e.target.closest?.('a[href]');
+      if (!a || a.target === '_blank' || e.metaKey || e.ctrlKey || e.shiftKey || e.button !== 0) return;
+      const url = new URL(a.href, window.location.href);
+      if (url.origin !== window.location.origin) return;
+      e.preventDefault();
+      e.stopPropagation();
+      setLeaveTo(url.pathname + url.search);
+    };
+    document.addEventListener('click', onClick, true);
+    return () => document.removeEventListener('click', onClick, true);
+  }, [dirty]);
 
   if (loadError) {
     return <div className="cal-page"><div className="notice amber"><Icon name="error_outline" /><div><p>{loadError}</p><Link to="/calendar" className="btn btn-secondary">Về lịch lớp</Link></div></div></div>;
@@ -193,7 +244,7 @@ export default function CalendarEventFormPage() {
     title: !form.title.trim() ? 'Vui lòng nhập tiêu đề sự kiện.' : '',
     time: !form.date || !form.start ? 'Chọn ngày và giờ bắt đầu.'
       : startAt <= now ? 'Thời gian bắt đầu phải sau thời điểm hiện tại.'
-        : cls && form.date > cls.yearEnd ? `Sự kiện phải nằm trong năm học (đến ${dmy(cls.yearEnd)}).`
+        : cls && (form.date > cls.yearEnd || form.date < cls.yearStart) ? `Sự kiện phải nằm trong năm học (${dmy(cls.yearStart)} – ${dmy(cls.yearEnd)}).`
           : form.end && form.end <= form.start ? 'Giờ kết thúc phải sau giờ bắt đầu.' : '',
     subject: !form.subjectId ? 'Bạn không có môn nào được phân công ở lớp này vào ngày đã chọn.'
       : form.subjectId !== GENERAL && !subjects.find((s) => String(s.subjectId) === form.subjectId)?.covers
@@ -220,6 +271,7 @@ export default function CalendarEventFormPage() {
       forParents: form.forParents,
       forSubjectTeachers: form.forSubjectTeachers,
       viewerIds: [...form.viewerIds].map(Number),
+      ...(editing ? { stamp: original.stamp } : {}),
     };
     try {
       const saved = editing ? await updateClassEvent(eventId, body) : await createClassEvent({ ...body, classId: Number(form.classId) });
@@ -326,7 +378,7 @@ export default function CalendarEventFormPage() {
           <div className="cal-form-row is-three">
             <div className="cal-field">
               <label htmlFor="ev-date">Ngày diễn ra <span className="cal-req">*</span></label>
-              <input id="ev-date" type="date" className="cal-input" value={form.date} min={now.slice(0, 10)} max={cls?.yearEnd} onChange={(e) => set({ date: e.target.value })} />
+              <input id="ev-date" type="date" className="cal-input" value={form.date} min={cls?.yearStart > now.slice(0, 10) ? cls.yearStart : now.slice(0, 10)} max={cls?.yearEnd} onChange={(e) => set({ date: e.target.value })} />
             </div>
             <div className="cal-field">
               <label htmlFor="ev-start">Giờ bắt đầu <span className="cal-req">*</span></label>
@@ -379,12 +431,21 @@ export default function CalendarEventFormPage() {
           <Icon name="notifications_active" />
           <div>
             <strong>Thông báo tự động</strong>
-            <p>Người được xem nhận thông báo khi sự kiện được tạo, và một lần nhắc trước giờ bắt đầu 1 ngày (sự kiện tạo hoặc dời sát giờ hơn 1 ngày thì không nhắc). Đổi giờ thì nhắc lại theo giờ mới.</p>
+            <p>Người được xem nhận thông báo khi sự kiện được tạo, và một lần nhắc trước giờ bắt đầu 1 ngày (sự kiện tạo sát giờ hơn 1 ngày thì không nhắc). Đổi giờ thì nhắc lại theo giờ mới; dời sát giờ hơn 1 ngày thì nhắc ngay.</p>
           </div>
         </div>
 
         {saveError && !['MSG_EVENT_TITLE', 'MSG_EVENT_TIME', 'MSG_EVENT_VIEWERS', 'MSG_EVENT_SUBJECT_NOT_TAUGHT'].includes(saveError.code) && (
-          <div className="notice amber" role="alert"><Icon name="error_outline" /><p>{errorText(saveError)}</p></div>
+          <div className="notice amber" role="alert"><Icon name="error_outline" />
+            <div>
+              <p>{errorText(saveError)}</p>
+              {saveError.code === 'MSG_EVENT_CHANGED' && (
+                <button type="button" className="btn btn-secondary" onClick={() => { setForm(null); setPicking(false); setReloadKey((k) => k + 1); }}>
+                  <Icon name="refresh" size="sm" /> Tải lại
+                </button>
+              )}
+            </div>
+          </div>
         )}
 
         <div className={`cal-form-actions${editing ? ' is-sticky' : ''}`}>
@@ -401,6 +462,7 @@ export default function CalendarEventFormPage() {
         </div>
       </form>
 
+      {leaveTo && <LeaveDialog onStay={() => setLeaveTo(null)} onLeave={() => { const to = leaveTo; setLeaveTo(null); setInitial(snapshot); navigate(to); }} />}
       {asking && original && <DeleteDialog ev={original} busy={deleting} onCancel={() => setAsking(false)} onConfirm={remove} />}
     </div>
   );

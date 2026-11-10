@@ -30,8 +30,9 @@ export const ERROR_CODES = Object.freeze({
   CATEGORY: 'MSG_EVENT_CATEGORY', // unknown category
   TITLE: 'MSG_EVENT_TITLE', // details: { reason: REQUIRED | TOO_LONG, max }
   DESCRIPTION: 'MSG_EVENT_DESCRIPTION', // details: { max }
-  TIME: 'MSG_EVENT_TIME', // details: { reason: PAST | END_BEFORE_START | OUTSIDE_YEAR, min?, max? }
+  TIME: 'MSG_EVENT_TIME', // details: { reason: PAST | END_BEFORE_START | END_OTHER_DAY | OUTSIDE_YEAR, min?, max? }
   VIEWERS: 'MSG_EVENT_VIEWERS', // details: { reason: TOO_MANY | NOT_IN_CLASS, max?, userIds? }
+  CHANGED: 'MSG_EVENT_CHANGED', // 409 – someone saved the event after this form was opened (stamp differs)
   SCHOOL_YEAR_ENDED: 'MSG_SCHOOL_YEAR_ENDED',
   NOT_READY: 'MSG_CALENDAR_NOT_READY', // tables missing on this database
 });

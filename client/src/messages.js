@@ -205,10 +205,12 @@ const ERROR_MESSAGES = {
   MSG_EVENT_CATEGORY: 'Vui lòng chọn loại sự kiện.',
   MSG_EVENT_TITLE: ({ reason, max } = {}) => (reason === 'TOO_LONG' ? `Tiêu đề tối đa ${max ?? 255} ký tự.` : 'Vui lòng nhập tiêu đề sự kiện.'),
   MSG_EVENT_DESCRIPTION: ({ max } = {}) => `Mô tả tối đa ${max ?? 2000} ký tự.`,
-  MSG_EVENT_TIME: ({ reason, max } = {}) =>
+  MSG_EVENT_TIME: ({ reason, min, max } = {}) =>
     reason === 'PAST' ? 'Thời gian bắt đầu phải sau thời điểm hiện tại.'
       : reason === 'END_BEFORE_START' ? 'Thời gian kết thúc phải sau thời gian bắt đầu.'
-        : `Sự kiện phải nằm trong năm học (đến ${formatVnDate(max)}).`,
+        : reason === 'END_OTHER_DAY' ? 'Sự kiện diễn ra trong một ngày; giờ kết thúc phải cùng ngày với giờ bắt đầu.'
+          : `Sự kiện phải nằm trong năm học (${formatVnDate(min)} – ${formatVnDate(max)}).`,
+  MSG_EVENT_CHANGED: 'Sự kiện vừa được lưu ở nơi khác sau khi bạn mở trang. Hãy tải lại để xem bản mới rồi sửa tiếp.',
   MSG_EVENT_VIEWERS: ({ reason, max } = {}) =>
     reason === 'TOO_MANY' ? `Chỉ chọn tối đa ${max ?? 100} người; hãy dùng các ô "Tất cả học sinh / phụ huynh / giáo viên".`
       : 'Có người được chọn không còn thuộc lớp này. Vui lòng tải lại danh sách.',

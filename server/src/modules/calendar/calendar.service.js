@@ -79,6 +79,12 @@ const EVENT_JOINS = `FROM class_events e
   JOIN event_categories ec ON ec.category_id = e.category_id
   LEFT JOIN subjects s ON s.subject_id = e.subject_id
   JOIN users cu ON cu.user_id = e.created_by`;
+// Version of what the creator can edit (UC-79 stale-save check). Built from the content, not updated_at: the
+// set_updated_at trigger also fires when the reminder job sets reminded_at, which is not an edit.
+// updatedAt above is hidden when it only comes from that reminder write.
+const STAMP = `md5(row(e.subject_id, e.category_id, e.title, e.description, e.start_at, e.end_at, e.for_students,
+  e.for_parents, e.for_subject_teachers, (SELECT string_agg(v.user_id::text, ',' ORDER BY v.user_id)
+  FROM class_event_viewers v WHERE v.event_id = e.event_id))::text)`;
 // Parent view: names of the user's children studying in the event's class.
 const CHILDREN = `(SELECT string_agg(u2.full_name, ', ' ORDER BY u2.full_name) FROM parents p2
   JOIN student_parents sp2 ON sp2.parent_id = p2.parent_id
@@ -121,8 +127,10 @@ export function listEvents({ from, to, classId, childId }, user) {
 async function findVisible(eventId, user, db = pool, { lock = false } = {}) {
   const { rows } = await db.query(
     `SELECT ${EVENT_COLUMNS}, e.description, c.homeroom_teacher_id AS "homeroomTeacherId",
-            ${LOCAL_TEXT('e.created_at')} AS "createdAt", ${LOCAL_TEXT('e.updated_at')} AS "updatedAt",
+            ${LOCAL_TEXT('e.created_at')} AS "createdAt",
+            ${LOCAL_TEXT("CASE WHEN e.reminded_at IS NOT NULL AND e.updated_at <= e.reminded_at + INTERVAL '1 second' THEN NULL ELSE e.updated_at END")} AS "updatedAt",
             ${LOCAL_TEXT('e.reminded_at')} AS "remindedAt", (e.created_at <= e.start_at - INTERVAL '1 day') AS "willRemind",
+            ${STAMP} AS "stamp",
             to_char(sy.start_date, 'YYYY-MM-DD') AS "yearStart"
      ${EVENT_JOINS} JOIN school_years sy ON sy.school_year_id = c.school_year_id
      WHERE e.event_id = $2 AND e.deleted_at IS NULL AND c.deleted_at IS NULL AND ${visibleSql(user.activeRole)}
@@ -173,7 +181,7 @@ export function formOptions(user) {
     if (!teacherId) return { now: now[0].now, categories, classes: [] };
     const { rows } = await pool.query(
       `SELECT c.class_id AS "classId", c.class_name AS "className", (c.homeroom_teacher_id = $1) AS "isHomeroom",
-              to_char(sy.end_date, 'YYYY-MM-DD') AS "yearEnd",
+              to_char(sy.start_date, 'YYYY-MM-DD') AS "yearStart", to_char(sy.end_date, 'YYYY-MM-DD') AS "yearEnd",
               COALESCE(json_agg(json_build_object('subjectId', ta.subject_id, 'name', s.subject_name,
                 'from', to_char(ta.start_date, 'YYYY-MM-DD'), 'to', to_char(ta.end_date, 'YYYY-MM-DD'))
                 ORDER BY s.subject_name, ta.start_date) FILTER (WHERE ta.assignment_id IS NOT NULL), '[]') AS "subjects"
@@ -184,7 +192,7 @@ export function formOptions(user) {
        LEFT JOIN subjects s ON s.subject_id = ta.subject_id
        WHERE c.deleted_at IS NULL AND sy.end_date >= ${LOCAL_DAY('NOW()')}
          AND (c.homeroom_teacher_id = $1 OR ta.assignment_id IS NOT NULL)
-       GROUP BY c.class_id, c.class_name, c.homeroom_teacher_id, sy.end_date
+       GROUP BY c.class_id, c.class_name, c.homeroom_teacher_id, sy.start_date, sy.end_date
        ORDER BY (c.homeroom_teacher_id = $1) DESC, c.class_name`,
       [teacherId],
     );
@@ -193,11 +201,12 @@ export function formOptions(user) {
 }
 
 // Students studying in the class, their parents, and the class's teachers (homeroom + any assignment this year).
+// Locked accounts are left out: they cannot sign in and get no notification (AUDIENCE_SQL).
 async function classPeople(classId, db = pool) {
   const { rows: students } = await db.query(
     `SELECT u.user_id AS "userId", u.full_name AS "name", s.student_code AS "code", s.student_id AS "studentId"
      FROM class_enrollments ce JOIN students s ON s.student_id = ce.student_id JOIN users u ON u.user_id = s.user_id
-     WHERE ce.class_id = $1 AND ce.status = 'STUDYING' ORDER BY u.full_name`,
+     WHERE ce.class_id = $1 AND ce.status = 'STUDYING' AND u.status = 'ACTIVE' ORDER BY u.full_name`,
     [classId],
   );
   const { rows: parents } = await db.query(
@@ -206,7 +215,7 @@ async function classPeople(classId, db = pool) {
      FROM class_enrollments ce JOIN student_parents sp ON sp.student_id = ce.student_id
      JOIN parents p ON p.parent_id = sp.parent_id JOIN users u ON u.user_id = p.user_id
      JOIN students st ON st.student_id = ce.student_id JOIN users su ON su.user_id = st.user_id
-     WHERE ce.class_id = $1 AND ce.status = 'STUDYING'
+     WHERE ce.class_id = $1 AND ce.status = 'STUDYING' AND u.status = 'ACTIVE'
      GROUP BY u.user_id, u.full_name ORDER BY u.full_name`,
     [classId],
   );
@@ -219,7 +228,7 @@ async function classPeople(classId, db = pool) {
      JOIN users u ON u.user_id = t.user_id
      LEFT JOIN teaching_assignments ta ON ta.class_id = c.class_id AND ta.teacher_id = t.teacher_id AND ta.deleted_at IS NULL
      LEFT JOIN subjects s ON s.subject_id = ta.subject_id
-     WHERE c.class_id = $1
+     WHERE c.class_id = $1 AND u.status = 'ACTIVE'
      GROUP BY u.user_id, u.full_name, c.homeroom_teacher_id, t.teacher_id ORDER BY u.full_name`,
     [classId],
   );
@@ -256,7 +265,7 @@ export function people(classId, user) {
 
 // ── UC-78 / UC-79 checks shared by create and update ───────────────────────────────────────────────────────
 
-async function checkEvent(db, { cls, teacherId, input, userId }) {
+async function checkEvent(db, { cls, teacherId, input, userId, savedViewerIds = [] }) {
   if (cls.today > cls.yearEnd) throw conflict(ERROR_CODES.SCHOOL_YEAR_ENDED, 'The school year has ended.');
 
   // Times: in the future and inside the class's school year (compared in SQL, Vietnam time).
@@ -287,15 +296,20 @@ async function checkEvent(db, { cls, teacherId, input, userId }) {
     if (!rows.length) throw forbidden(ERROR_CODES.SUBJECT_NOT_TAUGHT, 'You do not teach this subject in this class on that day.');
   }
 
-  // People picked one by one must belong to the class (students studying, their parents, the class's teachers).
-  if (input.viewerIds.length) {
+  // People picked one by one must belong to the class (students studying, their parents, the class's teachers, active
+  // accounts). On update, people saved earlier who have since left the class (or were locked) are dropped quietly –
+  // the form cannot show them any more; a newly picked person outside the class is an error.
+  let viewerIds = input.viewerIds;
+  if (viewerIds.length) {
     const p = await classPeople(cls.classId, db);
     const allowed = new Set([...p.students, ...p.parents, ...p.teachers].map((x) => String(x.userId)));
-    const bad = input.viewerIds.filter((id) => !allowed.has(id));
+    const saved = new Set(savedViewerIds.map(String));
+    const bad = viewerIds.filter((id) => !allowed.has(id) && !saved.has(id));
     if (bad.length) throw badRequest(ERROR_CODES.VIEWERS, 'Some people are not in this class.', { reason: 'NOT_IN_CLASS', userIds: bad });
+    viewerIds = viewerIds.filter((id) => allowed.has(id));
   }
   // The creator always sees the event: no row needed for them.
-  return input.viewerIds.filter((id) => id !== String(userId));
+  return viewerIds.filter((id) => id !== String(userId));
 }
 
 async function saveViewers(db, eventId, viewerIds) {
@@ -395,9 +409,14 @@ export function updateEvent(eventId, input, user) {
     await withTransaction(async (db) => {
       const teacherId = await teacherIdOf(user.userId, db);
       const ev = await ownEvent(db, eventId, user);
+      // Two tabs / two saves: the form sends the stamp it was loaded with; a newer save wins only after a reload.
+      if (input.stamp && input.stamp !== ev.stamp) {
+        throw conflict(ERROR_CODES.CHANGED, 'The event was changed after you opened it.', { stamp: ev.stamp });
+      }
       if (!teacherId) throw forbidden(ERROR_CODES.CLASS_NOT_ALLOWED, 'You are not a teacher of this class.');
       const cls = await classInfo(ev.classId, db);
-      const viewerIds = await checkEvent(db, { cls, teacherId, input, userId: user.userId });
+      const { rows: saved } = await db.query('SELECT user_id AS "id" FROM class_event_viewers WHERE event_id = $1', [eventId]);
+      const viewerIds = await checkEvent(db, { cls, teacherId, input, userId: user.userId, savedViewerIds: saved.map((r) => r.id) });
       // Business rules §10: the 1-day reminder is sent again when the time changes.
       await db.query(
         `UPDATE class_events SET subject_id = $2, category_id = $3, title = $4, description = $5,

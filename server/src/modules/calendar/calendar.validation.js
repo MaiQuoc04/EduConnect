@@ -59,7 +59,7 @@ export function listQuery(req) {
   return { from: q.from, to: q.to, classId: q.classId ? String(q.classId) : null, childId: q.childId ? String(q.childId) : null };
 }
 
-const FIELDS = ['classId', 'subjectId', 'categoryId', 'title', 'description', 'startAt', 'endAt', 'forStudents', 'forParents', 'forSubjectTeachers', 'viewerIds'];
+const FIELDS = ['stamp', 'classId', 'subjectId', 'categoryId', 'title', 'description', 'startAt', 'endAt', 'forStudents', 'forParents', 'forSubjectTeachers', 'viewerIds'];
 
 // POST /class-events and PUT /class-events/:eventId (the class of an event never changes).
 export function eventBody(req, { create }) {
@@ -90,11 +90,21 @@ export function eventBody(req, { create }) {
   const startAt = dateTimeField(b.startAt, 'startAt', { required: true });
   const endAt = dateTimeField(b.endAt, 'endAt');
   if (endAt && endAt <= startAt) throw badRequest(ERROR_CODES.TIME, 'endAt must be after startAt.', { reason: 'END_BEFORE_START' });
+  // ASSUMPTION: an event happens within one day (the Stitch form has one date + start / end time); several days =
+  // several events.
+  if (endAt && endAt.slice(0, 10) !== startAt.slice(0, 10)) {
+    throw badRequest(ERROR_CODES.TIME, 'endAt must be on the same day as startAt.', { reason: 'END_OTHER_DAY' });
+  }
 
   const flags = {};
   for (const f of ['forStudents', 'forParents', 'forSubjectTeachers']) {
     if (b[f] !== undefined && typeof b[f] !== 'boolean') throw badRequest(ERROR_CODES.INVALID_INPUT, `${f} must be true or false.`, { field: f });
     flags[f] = b[f] === true;
+  }
+
+  // Update only: the stamp the form was loaded with (detail.stamp); another save in between → 409.
+  if (b.stamp !== undefined && (typeof b.stamp !== 'string' || b.stamp.length > 64)) {
+    throw badRequest(ERROR_CODES.INVALID_INPUT, 'Invalid stamp.', { field: 'stamp' });
   }
 
   const raw = b.viewerIds ?? [];
@@ -106,6 +116,7 @@ export function eventBody(req, { create }) {
 
   return {
     classId: create ? String(b.classId) : undefined,
+    stamp: create ? undefined : (b.stamp ?? null),
     subjectId: b.subjectId ? String(b.subjectId) : null,
     categoryId: String(b.categoryId),
     title,
