@@ -97,7 +97,9 @@ export default function ClassCalendarPage() {
     }
     return [...m.values()];
   }, [thisWeek]);
-  const shown = thisWeek.filter((e) => !hidden.has(e.categoryCode));
+  // Only categories present this week count as hidden (a filter left from another week must not stick).
+  const hiddenNow = new Set(categories.filter((c) => hidden.has(c.code)).map((c) => c.code));
+  const shown = thisWeek.filter((e) => !hiddenNow.has(e.categoryCode));
   const byDay = (d) => shown.filter((e) => e.startAt.slice(0, 10) === d);
   const listDays = view === 'day' ? [date] : days.filter((d) => byDay(d).length);
   const weekNo = weekNumber(weekStart, options?.schoolYear?.startDate);
@@ -202,17 +204,17 @@ export default function ClassCalendarPage() {
           <div className="cal-box">
             <div className="cal-box-head">
               <h3>Bộ lọc sự kiện</h3>
-              {hidden.size > 0 && <button type="button" className="cal-link" onClick={() => setHidden(new Set())}>Mặc định</button>}
+              {hiddenNow.size > 0 && <button type="button" className="cal-link" onClick={() => setHidden(new Set())}>Mặc định</button>}
             </div>
             {categories.length === 0 ? <p className="cal-muted cal-small">Tuần này chưa có sự kiện để lọc.</p> : (
               <div className="cal-filters">
                 <label>
-                  <input type="checkbox" checked={hidden.size === 0} onChange={() => setHidden(hidden.size ? new Set() : new Set(categories.map((c) => c.code)))} />
+                  <input type="checkbox" checked={hiddenNow.size === 0} onChange={() => setHidden(hiddenNow.size ? new Set() : new Set(categories.map((c) => c.code)))} />
                   <span>Tất cả sự kiện</span><em>{thisWeek.length}</em>
                 </label>
                 {categories.map((c) => (
                   <label key={c.code}>
-                    <input type="checkbox" checked={!hidden.has(c.code)} onChange={() => toggle(c.code)} />
+                    <input type="checkbox" checked={!hiddenNow.has(c.code)} onChange={() => toggle(c.code)} />
                     <span><i className={`cal-dot tone-${styleOf(c.code).tone}`} />{c.name}</span><em>{c.n}</em>
                   </label>
                 ))}
