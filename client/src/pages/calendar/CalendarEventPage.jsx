@@ -1,19 +1,55 @@
 import { useCallback, useEffect, useState } from 'react';
-import { Link, useParams } from 'react-router-dom';
-import { getClassEvent } from '../../api/classEvents.js';
+import { Link, useNavigate, useParams } from 'react-router-dom';
+import { deleteClassEvent, getClassEvent } from '../../api/classEvents.js';
 import Icon from '../../components/Icon.jsx';
+import { useToast } from '../../context/ToastContext.jsx';
 import { errorText } from '../../messages.js';
 import { addDays, audienceText, dmy, hm, longDate, styleOf, timeRange, weekNumber } from './calendarUtils.js';
 import './calendar.css';
 
-// SCR-41 Calendar Event Detail – UC-77, Stitch design.
+// SCR-41 Calendar Event Detail – UC-77 (+ UC-80 Delete for the creator), Stitch design.
 
 const KIND = { STUDENT: 'Học sinh', PARENT: 'Phụ huynh', TEACHER: 'Giáo viên' };
 
+export function DeleteDialog({ ev, busy, onCancel, onConfirm }) {
+  useEffect(() => {
+    const onKey = (e) => e.key === 'Escape' && !busy && onCancel();
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [busy, onCancel]);
+  return (
+    <div className="cal-overlay" onClick={() => !busy && onCancel()}>
+      <div className="cal-dialog" role="alertdialog" aria-modal="true" aria-labelledby="cal-del-title" onClick={(e) => e.stopPropagation()}>
+        <div className="cal-dialog-row">
+          <span className="cal-dialog-icon"><Icon name="warning" /></span>
+          <div>
+            <h2 id="cal-del-title">Xoá sự kiện này?</h2>
+            <p>Người được xem sẽ không còn thấy sự kiện trên lịch lớp và không nhận nhắc lịch nữa.</p>
+          </div>
+        </div>
+        <dl className="cal-dialog-facts">
+          <div><dt>Sự kiện:</dt><dd>{ev.title}</dd></div>
+          <div><dt>Thời gian:</dt><dd>{hm(ev.startAt)} · {dmy(ev.startAt)}</dd></div>
+        </dl>
+        <div className="cal-dialog-actions">
+          <button type="button" className="btn btn-secondary" onClick={onCancel} disabled={busy}>Huỷ</button>
+          <button type="button" className="btn cal-btn-danger" onClick={onConfirm} disabled={busy}>
+            <Icon name="delete" size="sm" /> {busy ? 'Đang xoá…' : 'Xoá sự kiện'}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function CalendarEventPage() {
   const { eventId } = useParams();
+  const navigate = useNavigate();
+  const toast = useToast();
   const [ev, setEv] = useState(null);
   const [error, setError] = useState('');
+  const [asking, setAsking] = useState(false);
+  const [busy, setBusy] = useState(false);
 
   const load = useCallback(async () => {
     setError('');
@@ -24,6 +60,21 @@ export default function CalendarEventPage() {
     }
   }, [eventId]);
   useEffect(() => { load(); }, [load]);
+
+  async function remove() {
+    setBusy(true);
+    try {
+      await deleteClassEvent(eventId);
+      toast('Đã xoá sự kiện.');
+      navigate(`/calendar?date=${ev.startAt.slice(0, 10)}`);
+    } catch (err) {
+      toast(errorText(err), { type: 'error' });
+      setAsking(false);
+      load();
+    } finally {
+      setBusy(false);
+    }
+  }
 
   if (error) {
     return (
@@ -62,6 +113,7 @@ export default function CalendarEventPage() {
         </div>
         {ev.canEdit && (
           <div className="cal-head-actions">
+            <button type="button" className="btn cal-btn-text-danger" onClick={() => setAsking(true)}><Icon name="delete" size="sm" /> Xoá sự kiện</button>
             <Link to={`/calendar/events/${ev.eventId}/edit`} className="btn btn-primary"><Icon name="edit_calendar" size="sm" /> Sửa sự kiện</Link>
           </div>
         )}
@@ -133,6 +185,7 @@ export default function CalendarEventPage() {
         </aside>
       </div>
 
+      {asking && <DeleteDialog ev={ev} busy={busy} onCancel={() => setAsking(false)} onConfirm={remove} />}
     </div>
   );
 }

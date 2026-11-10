@@ -1,13 +1,14 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import {
-  createClassEvent, getClassEvent, getClassEventOptions, getClassPeople, updateClassEvent,
+  createClassEvent, deleteClassEvent, getClassEvent, getClassEventOptions, getClassPeople, updateClassEvent,
 } from '../../api/classEvents.js';
 import { getClassWeek } from '../../api/timetables.js';
 import Icon from '../../components/Icon.jsx';
 import { useToast } from '../../context/ToastContext.jsx';
 import { errorText } from '../../messages.js';
 import { foldVietnamese } from '../../utils/teacherValidation.js';
+import { DeleteDialog } from './CalendarEventPage.jsx';
 import { dmy, hm, isoDate, styleOf } from './calendarUtils.js';
 import './calendar.css';
 
@@ -83,6 +84,8 @@ export default function CalendarEventFormPage() {
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState(null);
   const [lesson, setLesson] = useState(null);
+  const [asking, setAsking] = useState(false);
+  const [deleting, setDeleting] = useState(false);
 
   // Load the form data (and the event when editing).
   useEffect(() => {
@@ -230,6 +233,21 @@ export default function CalendarEventFormPage() {
     }
   }
 
+  async function remove() {
+    setDeleting(true);
+    try {
+      await deleteClassEvent(eventId);
+      setInitial(snapshot);
+      toast('Đã xoá sự kiện.');
+      navigate(`/calendar?date=${original.startAt.slice(0, 10)}`);
+    } catch (err) {
+      setSaveError(err);
+      setAsking(false);
+    } finally {
+      setDeleting(false);
+    }
+  }
+
   const back = editing ? `/calendar/events/${eventId}` : `/calendar?date=${form.date}`;
 
   return (
@@ -370,7 +388,9 @@ export default function CalendarEventFormPage() {
         )}
 
         <div className={`cal-form-actions${editing ? ' is-sticky' : ''}`}>
-          <span />
+          {editing ? (
+            <button type="button" className="btn cal-btn-text-danger" onClick={() => setAsking(true)}><Icon name="delete" size="sm" /> Xoá sự kiện</button>
+          ) : <span />}
           <div>
             <Link to={back} className="btn btn-secondary">Huỷ</Link>
             <button type="submit" className="btn btn-primary" disabled={invalid || saving || (editing && !dirty)}
@@ -381,6 +401,7 @@ export default function CalendarEventFormPage() {
         </div>
       </form>
 
+      {asking && original && <DeleteDialog ev={original} busy={deleting} onCancel={() => setAsking(false)} onConfirm={remove} />}
     </div>
   );
 }

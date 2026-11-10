@@ -17,5 +17,6 @@ router.get('/classes/:classId/people', ...teacher, ctrl.people); // SCR-40 / SCR
 router.get('/:eventId', ...viewers, ctrl.detail); // SCR-41 / UC-77
 router.post('/', ...teacher, ctrl.create); // SCR-40 / UC-78
 router.put('/:eventId', ...teacher, ctrl.update); // SCR-42 / UC-79
+router.delete('/:eventId', ...teacher, ctrl.remove); // UC-80
 
 export default router;

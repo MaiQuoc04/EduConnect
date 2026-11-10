@@ -33,3 +33,8 @@ export async function update(req, res) {
   const eventId = eventIdParam(req);
   res.json(await calendarService.updateEvent(eventId, eventBody(req, { create: false }), req.user));
 }
+
+// DELETE /api/v1/class-events/:eventId  (UC-80, soft delete)
+export async function remove(req, res) {
+  res.json(await calendarService.deleteEvent(eventIdParam(req), req.user));
+}

@@ -38,3 +38,9 @@ export async function updateClassEvent(eventId, body) {
   const { data } = await api.put(`/class-events/${eventId}`, body);
   return data;
 }
+
+// UC-80
+export async function deleteClassEvent(eventId) {
+  const { data } = await api.delete(`/class-events/${eventId}`);
+  return data;
+}

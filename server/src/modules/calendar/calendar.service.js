@@ -414,3 +414,13 @@ export function updateEvent(eventId, input, user) {
     return getEvent(eventId, user);
   });
 }
+
+export function deleteEvent(eventId, user) {
+  return guard(() =>
+    withTransaction(async (db) => {
+      await ownEvent(db, eventId, user);
+      await db.query('UPDATE class_events SET deleted_at = NOW() WHERE event_id = $1', [eventId]); // soft delete
+      return { eventId, deleted: true };
+    }),
+  );
+}
