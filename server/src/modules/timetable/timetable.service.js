@@ -398,6 +398,11 @@ export function saveClassTimetable({ classId, startDate, endDate, entries, stamp
 
 // ── UC-74 View Class Timetable / UC-75 View Teaching Schedule ───────────────
 
+async function teacherIdOf(userId, db = pool) {
+  const { rows } = await db.query('SELECT teacher_id AS "id" FROM teachers WHERE user_id = $1', [userId]);
+  return rows[0]?.id ?? null;
+}
+
 // Classes the user may open (data scope, CLAUDE.md): SM all; teacher: homeroom class or a class they are assigned
 // to teach; student: their classes; parent: the classes of their linked children. Returns ids as strings.
 async function canViewClass(user, classId) {
@@ -508,6 +513,20 @@ export async function classWeek({ classId, date }, user) {
   return { class: { ...publicClass, homeroomTeacher: await homeroomOf(classId) }, ...frame, lessons };
 }
 
-// Used by the import (same transaction rules as the editor).
+// GET /timetables/teaching-schedule/week?date= (SCR-57, detail SCR-58) – the teacher's own lessons, built from the
+// timetable (which follows the teaching assignments).
+export async function teachingWeek({ date }, user) {
+  const teacherId = await teacherIdOf(user.userId);
+  if (!teacherId) throw notFound('TEACHER_NOT_FOUND', 'Teacher not found.');
+  const frame = await weekFrame(date);
+  const { rows: lessons } = await pool.query(
+    `SELECT ${LESSON_COLUMNS} FROM timetable_slots ts ${LESSON_JOINS}
+     WHERE ts.teacher_id = $1 AND ts."date" BETWEEN $2::date AND $3::date
+     ORDER BY ts."date", sl.period_number`,
+    [teacherId, frame.weekStart, frame.weekEnd],
+  );
+  return { ...frame, lessons, periodsThisWeek: lessons.length };
+}
 
+// Used by the import (same transaction rules as the editor).
 export const internals = { classInfo, today, checkRange, checkEntries, saveVersion, timeSlots, classSubjects, guard, schoolYears };

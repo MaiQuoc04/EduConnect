@@ -29,6 +29,7 @@ export const NAV_SECTIONS = [
       { to: '/classes', label: 'Lớp & nhóm', icon: 'groups', roles: ['SCHOOL_MANAGER'] }, // FE-04 UC-27..UC-29
       { to: '/timetables', label: 'Thời khoá biểu', icon: 'calendar_view_week', roles: ['SCHOOL_MANAGER'] }, // FE-10 SCR-27, UC-70..73
       { to: '/timetable', label: 'Thời khoá biểu', icon: 'calendar_view_week', roles: ['TEACHER', 'STUDENT', 'PARENT'] }, // FE-10 SCR-45, UC-74
+      { to: '/teaching-schedule', label: 'Lịch dạy', icon: 'event_note', roles: ['TEACHER'] }, // FE-10 SCR-57, UC-75
     ],
   },
   {

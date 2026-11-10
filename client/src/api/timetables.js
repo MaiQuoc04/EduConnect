@@ -32,6 +32,12 @@ export async function getClassWeek(classId, date) {
   return data;
 }
 
+// UC-75 – the signed-in teacher's lessons of one week
+export async function getTeachingWeek(date) {
+  const { data } = await api.get('/timetables/teaching-schedule/week', { params: date ? { date } : {} });
+  return data;
+}
+
 // UC-72 – template (.xlsx) with the classes and subjects of the year in its guide sheet
 export async function downloadTimetableTemplate(schoolYearId) {
   const res = await api.get('/timetables/import/template', { params: { schoolYearId }, responseType: 'blob', validateStatus: () => true });

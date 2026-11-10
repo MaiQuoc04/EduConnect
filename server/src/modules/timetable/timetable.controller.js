@@ -44,3 +44,8 @@ export async function viewable(req, res) {
 export async function classWeek(req, res) {
   res.json(await timetableService.classWeek({ classId: classIdParam(req), ...dateQuery(req) }, req.user));
 }
+
+// GET /api/v1/timetables/teaching-schedule/week?date=  (SCR-57 / SCR-58, UC-75)
+export async function teachingWeek(req, res) {
+  res.json(await timetableService.teachingWeek(dateQuery(req), req.user));
+}

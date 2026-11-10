@@ -29,6 +29,7 @@ import SubjectFormPage from './pages/subjects/SubjectFormPage.jsx';
 import SubjectListPage from './pages/subjects/SubjectListPage.jsx';
 import HomeroomAssignmentPage from './pages/teachers/HomeroomAssignmentPage.jsx';
 import DepartmentsPage from './pages/teachers/DepartmentsPage.jsx';
+import TeachingSchedulePage from './pages/timetable/TeachingSchedulePage.jsx';
 import TimetableEditorPage from './pages/timetable/TimetableEditorPage.jsx';
 import TimetableImportPage from './pages/timetable/TimetableImportPage.jsx';
 import TimetableManagementPage from './pages/timetable/TimetableManagementPage.jsx';
@@ -257,6 +258,7 @@ export default function App() {
         <Route path="timetables/import" element={<ProtectedRoute roles={['SCHOOL_MANAGER']}><TimetableImportPage /></ProtectedRoute>} />
         <Route path="timetables/classes/:classId/edit" element={<ProtectedRoute roles={['SCHOOL_MANAGER']}><TimetableEditorPage /></ProtectedRoute>} />
         <Route path="timetable" element={<ProtectedRoute roles={['SCHOOL_MANAGER', 'TEACHER', 'STUDENT', 'PARENT']}><TimetableViewPage /></ProtectedRoute>} />
+        <Route path="teaching-schedule" element={<ProtectedRoute roles={['TEACHER']}><TeachingSchedulePage /></ProtectedRoute>} />
         {/* UC-116 Import Teachers (above teachers/:teacherId) */}
         <Route
           path="teachers/import"
