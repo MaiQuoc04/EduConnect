@@ -1,0 +1,16 @@
+import { Router } from 'express';
+import { requireAuth, requireRole } from '../../middlewares/auth.js';
+import * as ctrl from './calendar.controller.js';
+import { ROLES } from './calendar.constants.js';
+
+// FE-10 class calendar (Dung, It3) – mounted at /api/v1/class-events. permissions.md "Class calendar event":
+// teachers create / update / delete (own subject; homeroom teacher also general events; only the creator changes
+// an event); teachers, students and parents view the events of their audience (checked in the service).
+// School Manager and System Admin have no access.
+const router = Router();
+const teacher = [requireAuth, requireRole(ROLES.TEACHER)];
+const viewers = [requireAuth, requireRole(ROLES.TEACHER, ROLES.STUDENT, ROLES.PARENT)];
+
+router.get('/', ...viewers, ctrl.list); // SCR-39 / UC-76
+
+export default router;

@@ -193,6 +193,25 @@ const ERROR_MESSAGES = {
   MSG_TIMETABLE_TEACHER_CLASH: ({ className } = {}) =>
     `Trùng giờ: giáo viên đã có tiết ở lớp khác cùng giờ${className ? ` (khi xếp lớp ${className})` : ''}.`,
   MSG_TIMETABLE_IMPORT_HAS_ERRORS: 'File còn lỗi nên chưa lưu lớp nào. Hãy sửa theo kết quả kiểm tra rồi nhập lại.',
+  // FE-10 class calendar (UC-76..UC-80)
+  MSG_CALENDAR_NOT_READY: 'Bảng lịch lớp chưa có trong cơ sở dữ liệu.',
+  MSG_EVENT_RANGE: 'Chỉ xem được tối đa 62 ngày một lần.',
+  MSG_EVENT_NOT_FOUND: 'Không tìm thấy sự kiện này hoặc bạn không thuộc người được xem.',
+  MSG_EVENT_NOT_OWNER: 'Chỉ người tạo mới được sửa hoặc xoá sự kiện.',
+  MSG_EVENT_STARTED: 'Sự kiện đã bắt đầu nên không sửa hoặc xoá được nữa.',
+  MSG_EVENT_CLASS_NOT_ALLOWED: 'Bạn không chủ nhiệm hoặc giảng dạy lớp này.',
+  MSG_EVENT_GENERAL_HOMEROOM_ONLY: 'Chỉ giáo viên chủ nhiệm được tạo sự kiện chung của lớp. Hãy chọn môn bạn dạy.',
+  MSG_EVENT_SUBJECT_NOT_TAUGHT: 'Bạn không được phân công dạy môn này ở lớp này vào ngày diễn ra sự kiện.',
+  MSG_EVENT_CATEGORY: 'Vui lòng chọn loại sự kiện.',
+  MSG_EVENT_TITLE: ({ reason, max } = {}) => (reason === 'TOO_LONG' ? `Tiêu đề tối đa ${max ?? 255} ký tự.` : 'Vui lòng nhập tiêu đề sự kiện.'),
+  MSG_EVENT_DESCRIPTION: ({ max } = {}) => `Mô tả tối đa ${max ?? 2000} ký tự.`,
+  MSG_EVENT_TIME: ({ reason, max } = {}) =>
+    reason === 'PAST' ? 'Thời gian bắt đầu phải sau thời điểm hiện tại.'
+      : reason === 'END_BEFORE_START' ? 'Thời gian kết thúc phải sau thời gian bắt đầu.'
+        : `Sự kiện phải nằm trong năm học (đến ${formatVnDate(max)}).`,
+  MSG_EVENT_VIEWERS: ({ reason, max } = {}) =>
+    reason === 'TOO_MANY' ? `Chỉ chọn tối đa ${max ?? 100} người; hãy dùng các ô "Tất cả học sinh / phụ huynh / giáo viên".`
+      : 'Có người được chọn không còn thuộc lớp này. Vui lòng tải lại danh sách.',
   // UC-114 Manage Departments
   MSG_DEPARTMENT_NOT_FOUND: 'Tổ chuyên môn này không còn tồn tại. Vui lòng tải lại trang.',
   MSG_DEPARTMENT_NAME_INVALID: ({ reason } = {}) =>
