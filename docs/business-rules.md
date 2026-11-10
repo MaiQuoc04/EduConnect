@@ -387,6 +387,24 @@ Boundaries that are easy to get wrong:
 - Events appear automatically in the viewers' day calendar – there is **no "add to timetable" button**.
 - One reminder **1 day before** the event (`class_events.reminded_at`; cleared when the time changes; events created
   less than a day ahead get no reminder). Only the creator updates / deletes an event.
+- **Class calendar as built (FE-10, Dung, 10/11/2026 – the ASSUMPTION items wait for the lead):**
+  - Who sees an event, by active role: teacher – creator, homeroom teacher of the class, subject teachers of the class
+    when "all subject teachers" is ticked (a teaching assignment in the class on the event's day), people picked one
+    by one; student – students **studying** in the class when "all students" is ticked, or picked; parent – parents of
+    a child studying in the class when "all parents" is ticked, or picked. School Manager / System Admin: no access.
+    Not allowed = not found. People picked one by one must belong to the class (students studying, their parents,
+    the class's teachers); at most 100 (ASSUMPTION).
+  - "Own subject" = a teaching assignment of the teacher for that class and subject covering the event's day
+    (ASSUMPTION). General events (no subject): homeroom teacher only.
+  - Times are Vietnam time; an event starts later than now, ends after it starts (end optional), and stays inside the
+    class's school year; an ended school year is read only. Title 1–255 characters, description up to 2000
+    (ASSUMPTION).
+  - An event that has started can no longer be updated or deleted (ASSUMPTION: it is class history). Delete = soft.
+  - Notifications: a general bell notification to the audience when an event is created (ASSUMPTION: none on update /
+    delete); the reminder is a **personal** notification (`CLASS_EVENT`, `created_by` NULL) sent by
+    `sendClassEventReminders()` in `server/src/modules/calendar/calendar.reminders.js` – the FE-09 job (UC-69) calls it
+    (hourly or daily; it never sends twice). Recipients: the audience except the creator; locked accounts are skipped;
+    a parent gets one row with `student_id` = the child concerned.
 
 ## 11. Grades (FE-11)
 - SM configures the grade structure per **subject × grade level × semester**: components with a weight and a number

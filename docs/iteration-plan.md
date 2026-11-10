@@ -145,6 +145,11 @@ It2: Anh FE-08 + FE-14, Khanh FE-05 + FE-06).
   Rules in business rules §4 "Teachers". Touches FE-13 files (Linh, please review): `admin/departments.js`
   (department names compared with FE-03's `departmentKey`, so "Tổ Toán - Tin" typed with "-" matches "Tổ Toán – Tin")
   and `pages/admin/ImportAccountsPage.jsx` (optional `config` prop; System Admin page unchanged).
+- **FE-10 class calendar (Dung, It3, started 10/11):** server done in `server/src/modules/calendar/` (`/class-events`:
+  list by range, detail, options, people of a class, create / update / delete; rules and ASSUMPTIONS in business rules
+  §10). No schema change (tables already in v0.3). Screens SCR-39..42 built from the Stitch export 11/11 (`/calendar`, `/calendar/events/new`, `/calendar/events/:id`, `…/edit`, menu "Lịch lớp"). The 1-day reminder
+  is `sendClassEventReminders()` (`calendar.reminders.js`): **FE-09 (Quoc) – please call it from the UC-69 job**.
+  FE-07 starts after FE-05 (posts in the class feed) is on `develop`.
 - **Follow-ups owed:**
   - FE-10 (Dung, It2): the timetable uses the date ranges of `teaching_assignments` – a period's teacher is the one
     whose assignment covers that date (no substitute teaching outside an assignment).
