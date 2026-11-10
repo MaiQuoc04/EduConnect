@@ -14,6 +14,7 @@ import conversationRoutes from './modules/conversations/conversations.routes.js'
 import homeroomRoutes from './modules/teacher/homeroom.routes.js';
 import teacherRoutes from './modules/teacher/teacher.routes.js';
 import teachingRoutes from './modules/teacher/teaching.routes.js';
+import uploadRoutes from './modules/uploads/uploads.routes.js';
 
 // Each feature gets its own folder in src/modules and is mounted here, e.g.
 //   FE-01 account   -> /auth, /account (Quoc)
@@ -30,6 +31,7 @@ import teachingRoutes from './modules/teacher/teaching.routes.js';
 //   FE-12 attendance-> /attendances   (Quoc)
 //   FE-13 admin     -> /admin         (Linh)
 //   FE-14 parents   -> /parents       (Anh)
+//   shared storage  -> /uploads       (Anh; attachments of FE-05, FE-06, FE-08)
 const router = Router();
 
 router.use('/health', healthRoutes);
@@ -47,5 +49,6 @@ router.use('/homeroom-assignments', homeroomRoutes);
 router.use('/teaching-assignments', teachingRoutes);
 router.use('/admin', adminRoutes);
 router.use('/maintenance', maintenanceRoutes);
+router.use('/uploads', uploadRoutes);
 
 export default router;
