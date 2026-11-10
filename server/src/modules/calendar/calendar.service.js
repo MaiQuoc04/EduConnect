@@ -158,3 +158,224 @@ export function getEvent(eventId, user) {
     };
   });
 }
+
+// ── Form data: classes / subjects a teacher may use, categories, people of a class ─────────────────────────
+
+// GET /class-events/options – classes of the current school year where the teacher is homeroom teacher or has a
+// current / future teaching assignment, with the subjects and the dates of each assignment.
+export function formOptions(user) {
+  return guard(async () => {
+    const teacherId = await teacherIdOf(user.userId);
+    const { rows: categories } = await pool.query(
+      'SELECT category_id AS "categoryId", code, name FROM event_categories ORDER BY category_id',
+    );
+    const { rows: now } = await pool.query(`SELECT ${LOCAL_TEXT('NOW()')} AS "now"`);
+    if (!teacherId) return { now: now[0].now, categories, classes: [] };
+    const { rows } = await pool.query(
+      `SELECT c.class_id AS "classId", c.class_name AS "className", (c.homeroom_teacher_id = $1) AS "isHomeroom",
+              to_char(sy.end_date, 'YYYY-MM-DD') AS "yearEnd",
+              COALESCE(json_agg(json_build_object('subjectId', ta.subject_id, 'name', s.subject_name,
+                'from', to_char(ta.start_date, 'YYYY-MM-DD'), 'to', to_char(ta.end_date, 'YYYY-MM-DD'))
+                ORDER BY s.subject_name, ta.start_date) FILTER (WHERE ta.assignment_id IS NOT NULL), '[]') AS "subjects"
+       FROM classes c
+       JOIN school_years sy ON sy.school_year_id = c.school_year_id
+       LEFT JOIN teaching_assignments ta ON ta.class_id = c.class_id AND ta.teacher_id = $1 AND ta.deleted_at IS NULL
+            AND ta.end_date >= ${LOCAL_DAY('NOW()')}
+       LEFT JOIN subjects s ON s.subject_id = ta.subject_id
+       WHERE c.deleted_at IS NULL AND sy.end_date >= ${LOCAL_DAY('NOW()')}
+         AND (c.homeroom_teacher_id = $1 OR ta.assignment_id IS NOT NULL)
+       GROUP BY c.class_id, c.class_name, c.homeroom_teacher_id, sy.end_date
+       ORDER BY (c.homeroom_teacher_id = $1) DESC, c.class_name`,
+      [teacherId],
+    );
+    return { now: now[0].now, categories, classes: rows };
+  });
+}
+
+// Students studying in the class, their parents, and the class's teachers (homeroom + any assignment this year).
+async function classPeople(classId, db = pool) {
+  const { rows: students } = await db.query(
+    `SELECT u.user_id AS "userId", u.full_name AS "name", s.student_code AS "code", s.student_id AS "studentId"
+     FROM class_enrollments ce JOIN students s ON s.student_id = ce.student_id JOIN users u ON u.user_id = s.user_id
+     WHERE ce.class_id = $1 AND ce.status = 'STUDYING' ORDER BY u.full_name`,
+    [classId],
+  );
+  const { rows: parents } = await db.query(
+    `SELECT u.user_id AS "userId", u.full_name AS "name",
+            string_agg(su.full_name, ', ' ORDER BY su.full_name) AS "children"
+     FROM class_enrollments ce JOIN student_parents sp ON sp.student_id = ce.student_id
+     JOIN parents p ON p.parent_id = sp.parent_id JOIN users u ON u.user_id = p.user_id
+     JOIN students st ON st.student_id = ce.student_id JOIN users su ON su.user_id = st.user_id
+     WHERE ce.class_id = $1 AND ce.status = 'STUDYING'
+     GROUP BY u.user_id, u.full_name ORDER BY u.full_name`,
+    [classId],
+  );
+  const { rows: teachers } = await db.query(
+    `SELECT u.user_id AS "userId", u.full_name AS "name", (c.homeroom_teacher_id = t.teacher_id) AS "isHomeroom",
+            COALESCE(string_agg(DISTINCT s.subject_name, ', '), '') AS "subjects"
+     FROM classes c
+     JOIN teachers t ON t.teacher_id = c.homeroom_teacher_id OR EXISTS (
+       SELECT 1 FROM teaching_assignments ta0 WHERE ta0.class_id = c.class_id AND ta0.teacher_id = t.teacher_id AND ta0.deleted_at IS NULL)
+     JOIN users u ON u.user_id = t.user_id
+     LEFT JOIN teaching_assignments ta ON ta.class_id = c.class_id AND ta.teacher_id = t.teacher_id AND ta.deleted_at IS NULL
+     LEFT JOIN subjects s ON s.subject_id = ta.subject_id
+     WHERE c.class_id = $1
+     GROUP BY u.user_id, u.full_name, c.homeroom_teacher_id, t.teacher_id ORDER BY u.full_name`,
+    [classId],
+  );
+  return { students, parents, teachers };
+}
+
+// The teacher must be homeroom teacher of the class or teach in it.
+async function assertTeacherOfClass(cls, teacherId, db = pool) {
+  if (cls.homeroomTeacherId === teacherId) return;
+  const { rows } = await db.query(
+    'SELECT 1 FROM teaching_assignments WHERE class_id = $1 AND teacher_id = $2 AND deleted_at IS NULL LIMIT 1',
+    [cls.classId, teacherId],
+  );
+  if (!rows.length) throw forbidden(ERROR_CODES.CLASS_NOT_ALLOWED, 'You are not a teacher of this class.');
+}
+
+// GET /class-events/classes/:classId/people – for "pick people one by one".
+export function people(classId, user) {
+  return guard(async () => {
+    const teacherId = await teacherIdOf(user.userId);
+    if (!teacherId) throw forbidden(ERROR_CODES.CLASS_NOT_ALLOWED, 'You are not a teacher of this class.');
+    const cls = await classInfo(classId);
+    await assertTeacherOfClass(cls, teacherId);
+    const p = await classPeople(classId);
+    return {
+      classId: cls.classId,
+      className: cls.className,
+      students: p.students.map(({ studentId, ...s }) => s),
+      parents: p.parents,
+      teachers: p.teachers.filter((t) => String(t.userId) !== String(user.userId)),
+    };
+  });
+}
+
+// ── UC-78 / UC-79 checks shared by create and update ───────────────────────────────────────────────────────
+
+async function checkEvent(db, { cls, teacherId, input, userId }) {
+  if (cls.today > cls.yearEnd) throw conflict(ERROR_CODES.SCHOOL_YEAR_ENDED, 'The school year has ended.');
+
+  // Times: in the future and inside the class's school year (compared in SQL, Vietnam time).
+  const { rows: t } = await db.query(
+    `SELECT ${FROM_LOCAL('$1')} > NOW() AS "future", ${LOCAL_TEXT('NOW()')} AS "now"`,
+    [input.startAt],
+  );
+  if (!t[0].future) throw badRequest(ERROR_CODES.TIME, 'The event must start later than now.', { reason: 'PAST', min: t[0].now });
+  const lastDay = (input.endAt ?? input.startAt).slice(0, 10);
+  if (input.startAt.slice(0, 10) < cls.yearStart || lastDay > cls.yearEnd) {
+    throw badRequest(ERROR_CODES.TIME, 'The event must be inside the school year.', { reason: 'OUTSIDE_YEAR', min: cls.yearStart, max: cls.yearEnd });
+  }
+
+  const { rows: cat } = await db.query('SELECT 1 FROM event_categories WHERE category_id = $1', [input.categoryId]);
+  if (!cat.length) throw badRequest(ERROR_CODES.CATEGORY, 'Unknown category.');
+
+  // Business rules §10: a subject teacher creates events for their own subject; the homeroom teacher can also create
+  // general events (no subject).
+  // ASSUMPTION: "own subject" = a teaching assignment of this teacher for (class, subject) covering the event's day.
+  if (!input.subjectId) {
+    if (cls.homeroomTeacherId !== teacherId) throw forbidden(ERROR_CODES.GENERAL_HOMEROOM_ONLY, 'Only the homeroom teacher creates general events.');
+  } else {
+    const { rows } = await db.query(
+      `SELECT 1 FROM teaching_assignments WHERE class_id = $1 AND subject_id = $2 AND teacher_id = $3 AND deleted_at IS NULL
+         AND $4::date BETWEEN start_date AND end_date LIMIT 1`,
+      [cls.classId, input.subjectId, teacherId, input.startAt.slice(0, 10)],
+    );
+    if (!rows.length) throw forbidden(ERROR_CODES.SUBJECT_NOT_TAUGHT, 'You do not teach this subject in this class on that day.');
+  }
+
+  // People picked one by one must belong to the class (students studying, their parents, the class's teachers).
+  if (input.viewerIds.length) {
+    const p = await classPeople(cls.classId, db);
+    const allowed = new Set([...p.students, ...p.parents, ...p.teachers].map((x) => String(x.userId)));
+    const bad = input.viewerIds.filter((id) => !allowed.has(id));
+    if (bad.length) throw badRequest(ERROR_CODES.VIEWERS, 'Some people are not in this class.', { reason: 'NOT_IN_CLASS', userIds: bad });
+  }
+  // The creator always sees the event: no row needed for them.
+  return input.viewerIds.filter((id) => id !== String(userId));
+}
+
+async function saveViewers(db, eventId, viewerIds) {
+  // class_event_viewers is a hard-delete table (business rules §14).
+  await db.query('DELETE FROM class_event_viewers WHERE event_id = $1', [eventId]);
+  if (viewerIds.length) {
+    await db.query('INSERT INTO class_event_viewers (event_id, user_id) SELECT $1, unnest($2::bigint[])', [eventId, viewerIds]);
+  }
+}
+
+// Everyone who sees the event except its creator (user id + the child concerned for parents).
+export const AUDIENCE_SQL = `
+  WITH ev AS (SELECT * FROM class_events WHERE event_id = $1)
+  SELECT DISTINCT ON (x.user_id) x.user_id, x.student_id
+  FROM (
+    SELECT s.user_id, s.student_id FROM ev JOIN class_enrollments ce ON ce.class_id = ev.class_id AND ce.status = 'STUDYING'
+      JOIN students s ON s.student_id = ce.student_id WHERE ev.for_students
+    UNION ALL
+    SELECT p.user_id, sp.student_id FROM ev JOIN class_enrollments ce ON ce.class_id = ev.class_id AND ce.status = 'STUDYING'
+      JOIN student_parents sp ON sp.student_id = ce.student_id JOIN parents p ON p.parent_id = sp.parent_id WHERE ev.for_parents
+    UNION ALL
+    SELECT t.user_id, NULL FROM ev JOIN teaching_assignments ta ON ta.class_id = ev.class_id AND ta.deleted_at IS NULL
+      AND ${LOCAL_DAY('ev.start_at')} BETWEEN ta.start_date AND ta.end_date
+      JOIN teachers t ON t.teacher_id = ta.teacher_id WHERE ev.for_subject_teachers
+    UNION ALL
+    SELECT t.user_id, NULL FROM ev JOIN classes c ON c.class_id = ev.class_id JOIN teachers t ON t.teacher_id = c.homeroom_teacher_id
+    UNION ALL
+    SELECT v.user_id, NULL FROM ev JOIN class_event_viewers v ON v.event_id = ev.event_id
+  ) x JOIN users u ON u.user_id = x.user_id AND u.status = 'ACTIVE'
+  WHERE x.user_id <> (SELECT created_by FROM ev)
+  ORDER BY x.user_id, x.student_id NULLS LAST`;
+
+// One notification + one recipient row per person of the audience (business rules §9).
+export async function notifyAudience(db, { eventId, title, detail, personal, createdBy }) {
+  const { rows } = await db.query(
+    `INSERT INTO notifications (type, title, detail, is_personal, target_type, target_id, created_by)
+     VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING notification_id AS "id"`,
+    [NOTIFICATION.TYPE, title.slice(0, 255), detail, personal, NOTIFICATION.TARGET, eventId, createdBy],
+  );
+  const { rowCount } = await db.query(
+    `INSERT INTO notification_recipients (notification_id, user_id, student_id)
+     SELECT $2, a.user_id, a.student_id FROM (${AUDIENCE_SQL}) a`,
+    [eventId, rows[0].id],
+  );
+  return rowCount;
+}
+
+const vnTime = (local) => `${local.slice(11, 16)} ${local.slice(8, 10)}/${local.slice(5, 7)}/${local.slice(0, 4)}`;
+
+// ── UC-78 Create ────────────────────────────────────────────────────────────────────────────────────────────
+
+export function createEvent(input, user) {
+  return guard(async () => {
+    const eventId = await withTransaction(async (db) => {
+      const teacherId = await teacherIdOf(user.userId, db);
+      if (!teacherId) throw forbidden(ERROR_CODES.CLASS_NOT_ALLOWED, 'You are not a teacher of this class.');
+      const cls = await classInfo(input.classId, db);
+      await assertTeacherOfClass(cls, teacherId, db);
+      const viewerIds = await checkEvent(db, { cls, teacherId, input, userId: user.userId });
+      const { rows } = await db.query(
+        `INSERT INTO class_events (class_id, subject_id, category_id, title, description, start_at, end_at,
+                                   for_students, for_parents, for_subject_teachers, created_by)
+         VALUES ($1, $2, $3, $4, $5, ${FROM_LOCAL('$6')}, ${FROM_LOCAL('$7')}, $8, $9, $10, $11)
+         RETURNING event_id AS "id"`,
+        [cls.classId, input.subjectId, input.categoryId, input.title, input.description, input.startAt, input.endAt,
+          input.forStudents, input.forParents, input.forSubjectTeachers, user.userId],
+      );
+      const id = String(rows[0].id);
+      await saveViewers(db, id, viewerIds);
+      // Business rules §9: the bell covers new events.
+      // ASSUMPTION: a general (not personal) notification when the event is created; none on update or delete.
+      await notifyAudience(db, {
+        eventId: id,
+        title: `Lớp ${cls.className}: ${input.title}`,
+        detail: `Sự kiện mới lúc ${vnTime(input.startAt)}.`,
+        personal: false,
+        createdBy: user.userId,
+      });
+      return id;
+    });
+    return getEvent(eventId, user);
+  });
+}

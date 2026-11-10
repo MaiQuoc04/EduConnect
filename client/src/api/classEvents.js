@@ -13,3 +13,22 @@ export async function getClassEvent(eventId) {
   const { data } = await api.get(`/class-events/${eventId}`);
   return data;
 }
+
+// SCR-40 / SCR-42 form – classes and subjects the teacher may use, categories
+export async function getClassEventOptions() {
+  const { data } = await api.get('/class-events/options');
+  return data;
+}
+
+// SCR-40 / SCR-42 – students, parents and teachers of a class (pick people one by one)
+export async function getClassPeople(classId) {
+  const { data } = await api.get(`/class-events/classes/${classId}/people`);
+  return data;
+}
+
+// UC-78 – { classId, subjectId|null, categoryId, title, description, startAt, endAt, forStudents, forParents,
+// forSubjectTeachers, viewerIds }
+export async function createClassEvent(body) {
+  const { data } = await api.post('/class-events', body);
+  return data;
+}
