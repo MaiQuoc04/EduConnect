@@ -220,6 +220,25 @@ const ERROR_MESSAGES = {
   MSG_IMPORT_TOO_MANY_ROWS: ({ max, maxRows } = {}) => `Mỗi file chỉ được tối đa ${max ?? maxRows ?? 2000} dòng. Vui lòng chia nhỏ file.`,
   MSG_IMPORT_NO_VALID_ROWS: 'File không có dòng hợp lệ nào để nhập.',
   MSG_IMPORT_CONFLICT: 'Dữ liệu vừa thay đổi trong lúc nhập nên chưa có tài khoản nào được lưu. Kết quả kiểm tra đã được cập nhật, vui lòng xem lại.',
+  // FE-11 Grade Management
+  MSG_SEMESTER_NOT_FOUND: 'Không tìm thấy học kỳ.',
+  MSG_SUBJECT_NOT_FOUND: 'Không tìm thấy môn học.',
+  MSG_SEMESTER_CLASS_MISMATCH: 'Học kỳ này không thuộc năm học của lớp.',
+  MSG_YEAR_ENDED: 'Năm học đã kết thúc, không thể thay đổi.',
+  MSG_STRUCTURE_INVALID: 'Một số thành phần điểm chưa hợp lệ. Vui lòng kiểm tra lại.',
+  MSG_STRUCTURE_LOCKED: 'Cấu trúc điểm này đã có điểm nên không thể sửa.',
+  MSG_STRUCTURE_EMPTY: 'Môn này chưa có cấu trúc điểm.',
+  MSG_COPY_SAME: 'Hãy chọn học kỳ, khối hoặc môn khác với bản gốc.',
+  MSG_GRADES_NOT_ASSIGNED: 'Bạn không được phân công dạy môn này ở lớp này.',
+  MSG_GRADES_FINALIZED: 'Sổ điểm đã chốt. Hãy đề nghị quản lý nhà trường mở khoá.',
+  MSG_GRADES_NOT_FINALIZED: 'Sổ điểm này chưa được chốt.',
+  MSG_GRADES_NO_CHANGE: 'Không có điểm nào thay đổi.',
+  MSG_GRADES_TOO_MANY: 'Quá nhiều thay đổi trong một lần lưu.',
+  MSG_GRADES_CELL_INVALID: 'Có ô điểm không thuộc sổ điểm này. Vui lòng tải lại trang.',
+  MSG_GRADES_STUDENT_LEFT: 'Học sinh đã rời lớp, điểm chỉ được xem.',
+  MSG_SCORE_INVALID: 'Điểm phải từ 0 đến 10, tối đa 2 chữ số thập phân.',
+  MSG_GRADES_INCOMPLETE: ({ count } = {}) => `Chưa chốt được: ${count ?? 'một số'} học sinh đang học còn thiếu điểm.`,
+  MSG_IMPORT_HAS_ERRORS: 'File còn dòng bị lỗi. Sửa file rồi thử lại; chưa có điểm nào được lưu.',
 };
 
 // 'YYYY-MM-DD' -> 'DD/MM/YYYY' (kept local so messages.js has no imports)
