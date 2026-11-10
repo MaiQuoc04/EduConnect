@@ -4,6 +4,7 @@ import { getTimetableClasses } from '../../api/timetables.js';
 import Icon from '../../components/Icon.jsx';
 import { errorText } from '../../messages.js';
 import { foldVietnamese } from '../../utils/teacherValidation.js';
+import { ImportDialog } from './TimetableImportPage.jsx';
 import { dm, dmy } from './WeekTimetable.jsx';
 import './timetable.css';
 
@@ -57,7 +58,7 @@ function CreateDialog({ classes, onClose }) {
 }
 
 export default function TimetableManagementPage() {
-  const [params] = useSearchParams();
+  const [params, setParams] = useSearchParams();
   const [data, setData] = useState(null);
   const [yearId, setYearId] = useState('');
   const [grade, setGrade] = useState('');
@@ -67,6 +68,7 @@ export default function TimetableManagementPage() {
   const [creating, setCreating] = useState(false);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(true);
+  const importing = params.get('import') === '1';
 
   const load = useCallback(async (id) => {
     setLoading(true);
@@ -86,6 +88,7 @@ export default function TimetableManagementPage() {
   const all = data?.classes ?? [];
   // An ended school year is read only (the server refuses saves and imports too).
   const yearEnded = !!data?.schoolYear && data.today > data.schoolYear.endDate;
+  const openYears = (data?.schoolYears ?? []).filter((y) => y.endDate >= (data?.today ?? ''));
   const grades = useMemo(() => [...new Set(all.map((c) => c.gradeName))], [all]);
   const counts = useMemo(() => {
     const n = { running: 0, upcoming: 0, missing: 0 };
@@ -101,6 +104,13 @@ export default function TimetableManagementPage() {
   const pages = Math.max(1, Math.ceil(classes.length / PAGE_SIZE));
   const shown = classes.slice(page * PAGE_SIZE, page * PAGE_SIZE + PAGE_SIZE);
 
+  const setImport = (on) =>
+    setParams((p) => {
+      const n = new URLSearchParams(p);
+      if (on) n.set('import', '1'); else n.delete('import');
+      return n;
+    });
+
   return (
     <div className="tt-page">
       <nav className="tt-crumb" aria-label="Breadcrumb">
@@ -112,6 +122,9 @@ export default function TimetableManagementPage() {
           <p>Quản lý thời khoá biểu từng lớp theo năm học. Giáo viên từng tiết lấy theo phân công giảng dạy của ngày học.</p>
         </div>
         <div className="tt-head-actions">
+          <button type="button" className="btn btn-secondary" onClick={() => setImport(true)} disabled={!openYears.length}>
+            <Icon name="upload_file" size="sm" /> Nhập TKB từ file
+          </button>
           <button type="button" className="btn btn-primary" onClick={() => setCreating(true)} disabled={!all.length || yearEnded}
             title={yearEnded ? 'Năm học đã kết thúc' : !all.length ? 'Năm học này chưa có lớp' : undefined}>
             <Icon name="add" size="sm" /> Tạo TKB lớp
@@ -219,6 +232,14 @@ export default function TimetableManagementPage() {
       </div>
 
       {creating && <CreateDialog classes={all} onClose={() => setCreating(false)} />}
+      <ImportDialog
+        open={importing && !!data}
+        onClose={() => setImport(false)}
+        onDone={() => load(yearId)}
+        years={openYears}
+        today={data?.today ?? ''}
+        initialYearId={params.get('schoolYearId') || yearId}
+      />
     </div>
   );
 }

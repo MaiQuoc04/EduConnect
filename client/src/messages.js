@@ -192,6 +192,7 @@ const ERROR_MESSAGES = {
     `Một số môn${className ? ` của lớp ${className}` : ''} chưa có giáo viên được phân công trong khoảng ngày này. Hãy phân công giảng dạy trước.`,
   MSG_TIMETABLE_TEACHER_CLASH: ({ className } = {}) =>
     `Trùng giờ: giáo viên đã có tiết ở lớp khác cùng giờ${className ? ` (khi xếp lớp ${className})` : ''}.`,
+  MSG_TIMETABLE_IMPORT_HAS_ERRORS: 'File còn lỗi nên chưa lưu lớp nào. Hãy sửa theo kết quả kiểm tra rồi nhập lại.',
   // UC-114 Manage Departments
   MSG_DEPARTMENT_NOT_FOUND: 'Tổ chuyên môn này không còn tồn tại. Vui lòng tải lại trang.',
   MSG_DEPARTMENT_NAME_INVALID: ({ reason } = {}) =>

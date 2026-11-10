@@ -81,3 +81,15 @@ export function saveRequest(req) {
   }
   return { classId: classIdParam(req), startDate, endDate, entries: readEntries(body.entries), stamp: body.stamp };
 }
+
+// Multipart form fields of the import: schoolYearId, startDate, endDate (+ the file).
+export function importRequest(req) {
+  const b = req.body ?? {};
+  if (!isId(b.schoolYearId)) throw badRequest(ERROR_CODES.INVALID_INPUT, 'schoolYearId is required.', { field: 'schoolYearId' });
+  const startDate = dateParam(b.startDate, 'startDate', { required: true });
+  const endDate = dateParam(b.endDate, 'endDate');
+  if (endDate && endDate < startDate) throw badRequest(ERROR_CODES.INVALID_DATE, 'endDate must not be before startDate.', { field: 'endDate' });
+  if (!req.file) throw badRequest(ERROR_CODES.IMPORT_FILE, 'Please choose a file.');
+  const file = { ...req.file, originalname: Buffer.from(req.file.originalname ?? '', 'latin1').toString('utf8') };
+  return { schoolYearId: String(b.schoolYearId), startDate, endDate, file };
+}

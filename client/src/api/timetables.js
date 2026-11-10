@@ -19,3 +19,46 @@ export async function saveClassTimetable(classId, { startDate, endDate, entries,
   const { data } = await api.put(`/timetables/classes/${classId}`, { startDate, endDate: endDate || undefined, entries, stamp });
   return data;
 }
+
+// UC-72 – template (.xlsx) with the classes and subjects of the year in its guide sheet
+export async function downloadTimetableTemplate(schoolYearId) {
+  const res = await api.get('/timetables/import/template', { params: { schoolYearId }, responseType: 'blob', validateStatus: () => true });
+  if (res.status !== 200) {
+    let body = {};
+    try {
+      body = JSON.parse(await res.data.text());
+    } catch {
+      // not JSON
+    }
+    throw { status: res.status, code: body.code ?? 'NETWORK_ERROR', message: body.message ?? '', details: body.details };
+  }
+  const url = URL.createObjectURL(res.data);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = 'mau-thoi-khoa-bieu.xlsx';
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
+function importForm({ schoolYearId, startDate, endDate, file }) {
+  const form = new FormData();
+  form.append('schoolYearId', schoolYearId);
+  form.append('startDate', startDate);
+  if (endDate) form.append('endDate', endDate);
+  form.append('file', file);
+  return form;
+}
+
+// UC-72 – check the file (nothing is saved)
+export async function previewTimetableImport(input) {
+  const { data } = await api.post('/timetables/import/preview', importForm(input));
+  return data;
+}
+
+// UC-72 – save every class of the file, or none
+export async function importTimetables(input) {
+  const { data } = await api.post('/timetables/import', importForm(input));
+  return data;
+}

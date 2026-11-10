@@ -395,3 +395,5 @@ export function saveClassTimetable({ classId, startDate, endDate, entries, stamp
     }),
   );
 }
+
+export const internals = { classInfo, today, checkRange, checkEntries, saveVersion, timeSlots, classSubjects, guard, schoolYears };

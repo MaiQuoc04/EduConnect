@@ -30,6 +30,7 @@ import SubjectListPage from './pages/subjects/SubjectListPage.jsx';
 import HomeroomAssignmentPage from './pages/teachers/HomeroomAssignmentPage.jsx';
 import DepartmentsPage from './pages/teachers/DepartmentsPage.jsx';
 import TimetableEditorPage from './pages/timetable/TimetableEditorPage.jsx';
+import TimetableImportPage from './pages/timetable/TimetableImportPage.jsx';
 import TimetableManagementPage from './pages/timetable/TimetableManagementPage.jsx';
 import TeacherDetailPage from './pages/teachers/TeacherDetailPage.jsx';
 import TeacherEditPage from './pages/teachers/TeacherEditPage.jsx';
@@ -252,6 +253,7 @@ export default function App() {
         />
         {/* FE-10 timetable (Dung): SCR-27 management, UC-72 import, SCR-28/30 editor, SCR-29/45 view, SCR-57 teaching schedule */}
         <Route path="timetables" element={<ProtectedRoute roles={['SCHOOL_MANAGER']}><TimetableManagementPage /></ProtectedRoute>} />
+        <Route path="timetables/import" element={<ProtectedRoute roles={['SCHOOL_MANAGER']}><TimetableImportPage /></ProtectedRoute>} />
         <Route path="timetables/classes/:classId/edit" element={<ProtectedRoute roles={['SCHOOL_MANAGER']}><TimetableEditorPage /></ProtectedRoute>} />
         {/* UC-116 Import Teachers (above teachers/:teacherId) */}
         <Route
