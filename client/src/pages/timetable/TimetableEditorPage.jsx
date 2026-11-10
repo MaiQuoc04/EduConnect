@@ -372,6 +372,9 @@ export default function TimetableEditorPage() {
                     ))}
                   </ul>
                 )}
+                {problems?.some((p) => !p.teacher) && (
+                  <Link to="/teaching-assignments" className="tt-link"><Icon name="co_present" size="sm" /> Phân công giáo viên cho các môn còn thiếu</Link>
+                )}
               </div>
             </div>
           )}

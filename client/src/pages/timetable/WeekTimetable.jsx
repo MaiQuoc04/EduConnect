@@ -113,7 +113,8 @@ export function ViewSwitch({ view, onChange }) {
 }
 
 // SCR-46 / SCR-58 – lesson detail (dialog; bottom sheet on phones).
-export function LessonDetail({ lesson, onClose, teacherView }) {
+// actions(lesson): extra links in the footer, from the page (e.g. the class timetable, the class calendar).
+export function LessonDetail({ lesson, onClose, teacherView, actions }) {
   useEffect(() => {
     if (!lesson) return undefined;
     const onKey = (e) => e.key === 'Escape' && onClose();
@@ -168,6 +169,7 @@ export function LessonDetail({ lesson, onClose, teacherView }) {
             </div>
           </section>
         </div>
+        {actions && <nav className="tt-detail-links" aria-label="Liên quan">{actions(lesson)}</nav>}
         <footer className="tt-detail-foot">
           <button type="button" className="btn btn-secondary" onClick={onClose}>Đóng</button>
         </footer>
@@ -385,7 +387,7 @@ function DayTabs({ week, days, day, onDay }) {
 }
 
 // week = { days, timeSlots, lessons, today, weekStart }; secondLine(lesson) = teacher (class) or class (teaching).
-export default function WeekTimetable({ week, view, secondLine, emptyText, aside, teacherView = false }) {
+export default function WeekTimetable({ week, view, secondLine, emptyText, aside, teacherView = false, lessonActions }) {
   const now = useNow();
   const [picked, setPicked] = useState(null);
   const showSunday = week.lessons.some((l) => l.date === week.days[6]);
@@ -436,7 +438,7 @@ export default function WeekTimetable({ week, view, secondLine, emptyText, aside
         </div>
       )}
       {dayView}
-      <LessonDetail lesson={picked} onClose={() => setPicked(null)} teacherView={teacherView} />
+      <LessonDetail lesson={picked} onClose={() => setPicked(null)} teacherView={teacherView} actions={lessonActions} />
     </>
   );
 }

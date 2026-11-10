@@ -478,3 +478,5 @@
   .tt-drop { flex-wrap: wrap; }
   .tt-legend-hint { margin-left: 0; }
 }
+.tt-detail-links { display: grid; gap: 8px; padding: 12px 24px 16px; }
+.tt-detail-links .btn { justify-content: flex-start; width: 100%; }
