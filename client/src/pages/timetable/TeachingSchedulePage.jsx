@@ -3,6 +3,7 @@ import { Link, useSearchParams } from 'react-router-dom';
 import { getTeachingWeek } from '../../api/timetables.js';
 import Icon from '../../components/Icon.jsx';
 import { errorText } from '../../messages.js';
+import LessonCalendarLinks from '../calendar/LessonCalendarLinks.jsx';
 import WeekTimetable, { ViewSwitch, WeekNav } from './WeekTimetable.jsx';
 import './timetable.css';
 
@@ -71,7 +72,10 @@ export default function TeachingSchedulePage() {
         <div aria-busy={loading}>
           <WeekTimetable week={week} view={view} teacherView secondLine={(l) => `Lớp ${l.className}`} emptyText="Tuần này bạn không có tiết dạy nào."
             lessonActions={(l) => (
-              <Link to={`/timetable?classId=${l.classId}&date=${l.date}`} className="btn btn-secondary"><Icon name="calendar_view_week" size="sm" /> TKB lớp {l.className}</Link>
+              <>
+                <LessonCalendarLinks lesson={l} canCreate />
+                <Link to={`/timetable?classId=${l.classId}&date=${l.date}`} className="btn btn-secondary"><Icon name="calendar_view_week" size="sm" /> TKB lớp {l.className}</Link>
+              </>
             )} />
         </div>
       )}

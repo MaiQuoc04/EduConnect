@@ -124,6 +124,9 @@ export default function ClassCalendarPage() {
             <button type="button" role="tab" aria-selected={view === 'day'} onClick={() => setParam({ view: 'day' })}>Ngày</button>
             <button type="button" role="tab" aria-selected={view === 'week'} onClick={() => setParam({ view: '' })}>Tuần</button>
           </div>
+          <Link to={`/timetable${classId ? `?classId=${classId}${date ? `&date=${date}` : ''}` : ''}`} className="btn btn-secondary">
+            <Icon name="calendar_view_week" size="sm" /> Thời khoá biểu
+          </Link>
           {isTeacher && (
             <Link to={`/calendar/events/new${classId ? `?classId=${classId}` : ''}${date ? `${classId ? '&' : '?'}date=${date}` : ''}`} className="btn btn-primary">
               <Icon name="add" size="sm" /> Tạo sự kiện

@@ -181,6 +181,7 @@ export default function CalendarEventPage() {
               <div><strong>Trước 1 ngày</strong><span>{reminder.text}</span></div>
             </div>
           </section>
+          <Link to={`/timetable?classId=${ev.classId}&date=${day}`} className="btn btn-secondary cal-back"><Icon name="calendar_view_week" size="sm" /> Thời khoá biểu ngày này</Link>
           <Link to={`/calendar?date=${day}`} className="btn btn-secondary cal-back"><Icon name="arrow_back" size="sm" /> Về lịch tuần này</Link>
         </aside>
       </div>

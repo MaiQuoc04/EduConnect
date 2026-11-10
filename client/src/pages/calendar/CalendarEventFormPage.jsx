@@ -119,6 +119,7 @@ export default function CalendarEventFormPage() {
   const [deleting, setDeleting] = useState(false);
   const [leaveTo, setLeaveTo] = useState(null); // path the user tried to open while the form had unsaved changes
   const [reloadKey, setReloadKey] = useState(0);
+  const [prefillNote, setPrefillNote] = useState(''); // a link asked for a class / date the form could not use
 
   // Load the form data (and the event when editing).
   useEffect(() => {
@@ -143,9 +144,18 @@ export default function CalendarEventFormPage() {
           const cls = o.classes.find((c) => String(c.classId) === params.get('classId')) ?? o.classes[0];
           const today = o.now.slice(0, 10);
           const date = isoDate(params.get('date')) && params.get('date') >= today ? params.get('date') : today;
+          const notes = [];
+          if (params.get('classId') && cls && String(cls.classId) !== params.get('classId')) {
+            notes.push(`Bạn không chủ nhiệm hoặc dạy lớp đã chọn nên biểu mẫu chuyển sang lớp ${cls.className}.`);
+          }
+          if (isoDate(params.get('date')) && params.get('date') < today) notes.push(`Ngày ${dmy(params.get('date'))} đã qua nên biểu mẫu chọn hôm nay.`);
+          setPrefillNote(notes.join(' '));
+          // From a timetable lesson (LessonCalendarLinks): ?start=HH:MM&end=HH:MM&subjectId= prefill the period.
+          const time = (k) => (/^([01]\d|2[0-3]):[0-5]\d$/.test(params.get(k) ?? '') ? params.get(k) : '');
+          const askedSubject = cls?.subjects.some((s) => String(s.subjectId) === params.get('subjectId')) ? params.get('subjectId') : '';
           f = {
-            classId: cls ? String(cls.classId) : '', subjectId: '', categoryId: String(o.categories[0]?.categoryId ?? ''),
-            title: '', description: '', date, start: '', end: '',
+            classId: cls ? String(cls.classId) : '', subjectId: askedSubject, categoryId: String(o.categories[0]?.categoryId ?? ''),
+            title: '', description: '', date, start: time('start'), end: time('end') > time('start') ? time('end') : '',
             forStudents: true, forParents: false, forSubjectTeachers: false, viewerIds: new Set(),
           };
         }
@@ -322,6 +332,7 @@ export default function CalendarEventFormPage() {
         </div>
       </div>
 
+      {prefillNote && <div className="notice"><Icon name="info" /><p>{prefillNote}</p></div>}
       <form className="cal-form" onSubmit={submit} noValidate>
         <div className="cal-form-row">
           <div className="cal-field">

@@ -4,6 +4,7 @@ import { getClassWeek, getViewableClasses } from '../../api/timetables.js';
 import Icon from '../../components/Icon.jsx';
 import { useAuth } from '../../context/AuthContext.jsx';
 import { errorText } from '../../messages.js';
+import LessonCalendarLinks from '../calendar/LessonCalendarLinks.jsx';
 import WeekTimetable, { ViewSwitch, WeekNav, weekNumber } from './WeekTimetable.jsx';
 import './timetable.css';
 
@@ -156,6 +157,7 @@ export default function TimetableViewPage() {
             view={view}
             secondLine={(l) => l.teacherName}
             emptyText="Tuần này lớp chưa có tiết học nào trên thời khoá biểu."
+            lessonActions={isManager ? undefined : (l) => <LessonCalendarLinks lesson={l} canCreate={activeRole === 'TEACHER'} />}
             aside={cls?.homeroomTeacher ? (
               <div className="card tt-side-note">
                 <span className="label-upper">Chủ nhiệm</span>
