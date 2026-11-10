@@ -41,10 +41,10 @@ It2: Anh FE-08 + FE-14, Khanh FE-05 + FE-06).
   `patch_v0.3_departments.sql` (FE-03, already run before review; kept by the lead 02/11: table `departments`) +
   `patch_v0.3_class_track_grade.sql` (FE-04, run by Khanh 02/11 before approval; accepted 03/11:
   `class_tracks.grade_level_id`) +
-  `patch_v0.3_message_actions.sql` (FE-06, run by Khanh 07/11 after the lead's OK: reply, delete, reactions). 50 tables.
-- **Waiting for the lead (FE-03, 07/11):** `patch_v0.3_department_subjects.sql` – table `department_subjects` (subjects
-  of each department) with the starting list (business rules §4). Not run on the shared DB yet; after it: 51 tables.
-  Until it runs, the Departments screen answers MSG_DEPARTMENTS_NOT_READY and Update Teacher does not limit subjects.
+  `patch_v0.3_message_actions.sql` (FE-06, run by Khanh 07/11 after the lead's OK: reply, delete, reactions) +
+  `patch_v0.3_department_subjects.sql` (FE-03, run by Dung 11/11 after the lead's OK). 51 tables.
+- **FE-03 (11/11, approved by the lead):** `patch_v0.3_department_subjects.sql` ran on the shared DB 11/11 (Dung) –
+  table `department_subjects` (subjects of each department) with the starting list (business rules §4). 51 tables.
 - **Sample data added to the shared DB (03/11, Anh, accepted by the lead 03/11), through the app API (UC-96, UC-14, UC-28),
   no SQL:** 90 student accounts `HS7001..HS7090` (no class yet), 90 parent accounts with phones
   `0977000001..0977000090` (all with `must_change_password`), 65 links (HS7001–7020 two parents, HS7021–7045 one,
