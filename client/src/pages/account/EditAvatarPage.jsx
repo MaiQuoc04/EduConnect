@@ -6,9 +6,12 @@ import Icon from '../../components/Icon.jsx';
 import { useAuth } from '../../context/AuthContext.jsx';
 import { useToast } from '../../context/ToastContext.jsx';
 import { errorText } from '../../messages.js';
+import { formatFileSize } from '../../utils/format.js';
+import { AVATAR_IMAGE, MAX_SOURCE_MB, compressImageDetailed } from '../../utils/imageCompress.js';
 import { useProfile } from './useProfile.js';
 
 const ACCEPTED = ['image/jpeg', 'image/png', 'image/webp'];
+const MB = 1024 * 1024;
 const ADDRESS_MAX = 500;
 const OCCUPATION_MAX = 100;
 
@@ -42,6 +45,9 @@ export default function EditAvatarPage() {
   const [occupation, setOccupation] = useState(null);
   const [error, setError] = useState('');
   const [saving, setSaving] = useState(false);
+  const [processing, setProcessing] = useState(false); // compressing the chosen image
+  const [sizes, setSizes] = useState(null); // { before, after, status } of the chosen image
+  const processingRef = useRef(false);
 
   useEffect(() => () => preview && URL.revokeObjectURL(preview), [preview]);
 
@@ -57,14 +63,38 @@ export default function EditAvatarPage() {
   const occupationValue = occupation ?? parent?.occupation ?? '';
   const occupationChanged = canEditOccupation && occupationValue.trim() !== (parent.occupation ?? '');
 
-  function pick(chosen) {
+  // The image is shrunk in the browser first (Supabase Free cannot resize): the preview shows what will be saved, and
+  // the size limit applies to that copy. The original only has a ceiling so a huge file cannot freeze the tab.
+  async function pick(chosen) {
+    if (!chosen || processingRef.current) return;
     setError('');
-    if (!chosen) return;
     if (!ACCEPTED.includes(chosen.type)) return setError('Chỉ chấp nhận ảnh JPG, PNG hoặc WebP.');
-    if (chosen.size > avatarMaxMb * 1024 * 1024) return setError(`Ảnh vượt quá dung lượng cho phép (tối đa ${avatarMaxMb} MB).`);
-    setFile(chosen);
-    setPreview(URL.createObjectURL(chosen));
+    if (chosen.size > MAX_SOURCE_MB * MB) {
+      return setError(`Ảnh gốc quá lớn để xử lý (tối đa ${MAX_SOURCE_MB} MB). Vui lòng chọn ảnh khác.`);
+    }
+    processingRef.current = true;
+    setProcessing(true);
+    setFile(null);
+    setPreview('');
+    setSizes(null);
+    try {
+      const result = await compressImageDetailed(chosen, AVATAR_IMAGE);
+      if (result.status === 'unreadable') {
+        return setError('Không đọc được ảnh này. Vui lòng chọn một ảnh JPG, PNG hoặc WebP khác.');
+      }
+      if (result.file.size > avatarMaxMb * MB) {
+        return setError(`Ảnh vượt quá dung lượng cho phép (tối đa ${avatarMaxMb} MB).`);
+      }
+      setFile(result.file);
+      setPreview(URL.createObjectURL(result.file));
+      setSizes({ before: chosen.size, after: result.file.size, status: result.status });
+    } finally {
+      processingRef.current = false;
+      setProcessing(false);
+    }
   }
+
+  const openPicker = () => !processing && !saving && inputRef.current?.click();
 
   async function save() {
     setSaving(true);
@@ -118,8 +148,9 @@ export default function EditAvatarPage() {
               className={`dropzone${dragging ? ' dragging' : ''}`}
               role="button"
               tabIndex={0}
-              onClick={() => inputRef.current?.click()}
-              onKeyDown={(e) => (e.key === 'Enter' || e.key === ' ') && inputRef.current?.click()}
+              aria-disabled={processing || saving}
+              onClick={openPicker}
+              onKeyDown={(e) => (e.key === 'Enter' || e.key === ' ') && openPicker()}
               onDragOver={(e) => {
                 e.preventDefault();
                 setDragging(true);
@@ -128,7 +159,7 @@ export default function EditAvatarPage() {
               onDrop={(e) => {
                 e.preventDefault();
                 setDragging(false);
-                pick(e.dataTransfer.files?.[0]);
+                if (!processing && !saving) pick(e.dataTransfer.files?.[0]);
               }}
             >
               <span className="upload-icon">
@@ -138,7 +169,8 @@ export default function EditAvatarPage() {
                 Kéo ảnh vào đây hoặc <span style={{ color: 'var(--ink-700)', textDecoration: 'underline' }}>chọn tệp</span>
               </p>
               <p className="caption muted">
-                Định dạng JPG, PNG hoặc WebP, tối đa {avatarMaxMb} MB. Nên dùng ảnh chân dung rõ nét, tỉ lệ vuông.
+                Định dạng JPG, PNG hoặc WebP, tối đa {MAX_SOURCE_MB} MB. Ảnh được tự thu nhỏ trước khi tải lên. Nên dùng
+                ảnh chân dung rõ nét, tỉ lệ vuông.
               </p>
               <input
                 ref={inputRef}
@@ -151,12 +183,25 @@ export default function EditAvatarPage() {
                 }}
               />
             </div>
+            {processing && (
+              <div className="preview avatar-processing" role="status">
+                <Icon name="progress_activity" className="avatar-spin" />
+                <span>Đang xử lý ảnh…</span>
+              </div>
+            )}
             {preview && (
               <div className="preview">
                 <img src={preview} alt="Ảnh xem trước" />
-                <div>
+                <div className="preview-text">
                   <div style={{ fontWeight: 500 }}>Ảnh mới</div>
-                  <div className="caption muted">{file.name}</div>
+                  <div className="caption muted preview-name">{file.name}</div>
+                  {sizes && (
+                    <div className="caption mono">
+                      {sizes.status === 'compressed'
+                        ? `${formatFileSize(sizes.before)} → ${formatFileSize(sizes.after)}`
+                        : `${formatFileSize(sizes.after)} · giữ nguyên ảnh gốc`}
+                    </div>
+                  )}
                   <p className="caption muted" style={{ fontStyle: 'italic', marginTop: 4 }}>
                     Ảnh được hiển thị trong khung tròn, phần giữa ảnh sẽ được giữ lại.
                   </p>
@@ -247,9 +292,9 @@ export default function EditAvatarPage() {
           <Link to="/profile" className="btn btn-secondary">
             Huỷ
           </Link>
-          <button type="button" className="btn btn-primary" onClick={save} disabled={(!file && !addressChanged && !occupationChanged) || saving}>
+          <button type="button" className="btn btn-primary" onClick={save} disabled={(!file && !addressChanged && !occupationChanged) || saving || processing}>
             <Icon name="save" size="sm" />
-            {saving ? 'Đang lưu…' : 'Lưu thay đổi'}
+            {saving ? 'Đang lưu…' : processing ? 'Đang xử lý ảnh…' : 'Lưu thay đổi'}
           </button>
         </div>
       </section>
