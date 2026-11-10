@@ -115,3 +115,46 @@ export function listEvents({ from, to, classId, childId }, user) {
     return { from, to, now: now[0].now, events: rows };
   });
 }
+
+// ── UC-77: one event ────────────────────────────────────────────────────────────────────────────────────────
+
+async function findVisible(eventId, user, db = pool, { lock = false } = {}) {
+  const { rows } = await db.query(
+    `SELECT ${EVENT_COLUMNS}, e.description, c.homeroom_teacher_id AS "homeroomTeacherId",
+            ${LOCAL_TEXT('e.created_at')} AS "createdAt", ${LOCAL_TEXT('e.updated_at')} AS "updatedAt",
+            ${LOCAL_TEXT('e.reminded_at')} AS "remindedAt", (e.created_at <= e.start_at - INTERVAL '1 day') AS "willRemind",
+            to_char(sy.start_date, 'YYYY-MM-DD') AS "yearStart"
+     ${EVENT_JOINS} JOIN school_years sy ON sy.school_year_id = c.school_year_id
+     WHERE e.event_id = $2 AND e.deleted_at IS NULL AND c.deleted_at IS NULL AND ${visibleSql(user.activeRole)}
+     ${lock ? 'FOR UPDATE OF e' : ''}`,
+    [user.userId, eventId],
+  );
+  if (!rows.length) throw notFound(ERROR_CODES.NOT_FOUND, 'Event not found.');
+  return rows[0];
+}
+
+export function getEvent(eventId, user) {
+  return guard(async () => {
+    const ev = await findVisible(eventId, user);
+    const { homeroomTeacherId, ...event } = ev;
+    // Who exactly is in the audience: shown to the creator and the homeroom teacher only.
+    const teacherId = user.activeRole === ROLES.TEACHER ? await teacherIdOf(user.userId) : null;
+    const manager = ev.isMine || (teacherId && String(homeroomTeacherId) === teacherId);
+    let viewers;
+    if (manager) {
+      ({ rows: viewers } = await pool.query(
+        `SELECT u.user_id AS "userId", u.full_name AS "name",
+                CASE WHEN EXISTS (SELECT 1 FROM students s WHERE s.user_id = u.user_id) THEN 'STUDENT'
+                     WHEN EXISTS (SELECT 1 FROM teachers t WHERE t.user_id = u.user_id) THEN 'TEACHER' ELSE 'PARENT' END AS "kind"
+         FROM class_event_viewers v JOIN users u ON u.user_id = v.user_id
+         WHERE v.event_id = $1 ORDER BY u.full_name`,
+        [eventId],
+      ));
+    }
+    return {
+      ...event,
+      canEdit: ev.isMine && user.activeRole === ROLES.TEACHER && !ev.started,
+      ...(manager ? { viewers } : {}),
+    };
+  });
+}

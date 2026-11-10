@@ -7,3 +7,9 @@ export async function getClassEvents({ from, to, classId, childId }) {
   const { data } = await api.get('/class-events', { params: { from, to, classId: classId || undefined, childId: childId || undefined } });
   return data;
 }
+
+// UC-77 – one event (creator and homeroom teacher also get `viewers`)
+export async function getClassEvent(eventId) {
+  const { data } = await api.get(`/class-events/${eventId}`);
+  return data;
+}

@@ -12,5 +12,6 @@ const teacher = [requireAuth, requireRole(ROLES.TEACHER)];
 const viewers = [requireAuth, requireRole(ROLES.TEACHER, ROLES.STUDENT, ROLES.PARENT)];
 
 router.get('/', ...viewers, ctrl.list); // SCR-39 / UC-76
+router.get('/:eventId', ...viewers, ctrl.detail); // SCR-41 / UC-77
 
 export default router;

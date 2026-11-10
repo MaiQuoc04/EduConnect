@@ -35,6 +35,7 @@ import TimetableImportPage from './pages/timetable/TimetableImportPage.jsx';
 import TimetableManagementPage from './pages/timetable/TimetableManagementPage.jsx';
 import TimetableViewPage from './pages/timetable/TimetableViewPage.jsx';
 import ClassCalendarPage from './pages/calendar/ClassCalendarPage.jsx';
+import CalendarEventPage from './pages/calendar/CalendarEventPage.jsx';
 import TeacherDetailPage from './pages/teachers/TeacherDetailPage.jsx';
 import TeacherEditPage from './pages/teachers/TeacherEditPage.jsx';
 import TeacherImportPage from './pages/teachers/TeacherImportPage.jsx';
@@ -262,6 +263,7 @@ export default function App() {
         <Route path="teaching-schedule" element={<ProtectedRoute roles={['TEACHER']}><TeachingSchedulePage /></ProtectedRoute>} />
         {/* FE-10 class calendar (Dung, It3): SCR-39 calendar, SCR-40 create, SCR-41 detail, SCR-42 update */}
         <Route path="calendar" element={<ProtectedRoute roles={['TEACHER', 'STUDENT', 'PARENT']}><ClassCalendarPage /></ProtectedRoute>} />
+        <Route path="calendar/events/:eventId" element={<ProtectedRoute roles={['TEACHER', 'STUDENT', 'PARENT']}><CalendarEventPage /></ProtectedRoute>} />
         {/* UC-116 Import Teachers (above teachers/:teacherId) */}
         <Route
           path="teachers/import"
