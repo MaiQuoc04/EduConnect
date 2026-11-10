@@ -379,3 +379,38 @@ export function createEvent(input, user) {
     return getEvent(eventId, user);
   });
 }
+
+// ── UC-79 Update / UC-80 Delete (creator only, before the event starts) ─────────────────────────────────────
+
+async function ownEvent(db, eventId, user) {
+  const ev = await findVisible(eventId, user, db, { lock: true });
+  if (!ev.isMine) throw forbidden(ERROR_CODES.NOT_OWNER, 'Only the creator can change this event.');
+  // ASSUMPTION: an event that has started is kept as it is (it is history for the class).
+  if (ev.started) throw conflict(ERROR_CODES.STARTED, 'The event has already started.');
+  return ev;
+}
+
+export function updateEvent(eventId, input, user) {
+  return guard(async () => {
+    await withTransaction(async (db) => {
+      const teacherId = await teacherIdOf(user.userId, db);
+      const ev = await ownEvent(db, eventId, user);
+      if (!teacherId) throw forbidden(ERROR_CODES.CLASS_NOT_ALLOWED, 'You are not a teacher of this class.');
+      const cls = await classInfo(ev.classId, db);
+      const viewerIds = await checkEvent(db, { cls, teacherId, input, userId: user.userId });
+      // Business rules §10: the 1-day reminder is sent again when the time changes.
+      await db.query(
+        `UPDATE class_events SET subject_id = $2, category_id = $3, title = $4, description = $5,
+                start_at = ${FROM_LOCAL('$6')}, end_at = ${FROM_LOCAL('$7')},
+                for_students = $8, for_parents = $9, for_subject_teachers = $10,
+                reminded_at = CASE WHEN start_at <> ${FROM_LOCAL('$6')} THEN NULL ELSE reminded_at END,
+                updated_at = NOW()
+         WHERE event_id = $1`,
+        [eventId, input.subjectId, input.categoryId, input.title, input.description, input.startAt, input.endAt,
+          input.forStudents, input.forParents, input.forSubjectTeachers],
+      );
+      await saveViewers(db, eventId, viewerIds);
+    });
+    return getEvent(eventId, user);
+  });
+}

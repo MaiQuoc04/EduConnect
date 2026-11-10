@@ -266,6 +266,7 @@ export default function App() {
         <Route path="calendar" element={<ProtectedRoute roles={['TEACHER', 'STUDENT', 'PARENT']}><ClassCalendarPage /></ProtectedRoute>} />
         <Route path="calendar/events/new" element={<ProtectedRoute roles={['TEACHER']}><CalendarEventFormPage /></ProtectedRoute>} />
         <Route path="calendar/events/:eventId" element={<ProtectedRoute roles={['TEACHER', 'STUDENT', 'PARENT']}><CalendarEventPage /></ProtectedRoute>} />
+        <Route path="calendar/events/:eventId/edit" element={<ProtectedRoute roles={['TEACHER']}><CalendarEventFormPage /></ProtectedRoute>} />
         {/* UC-116 Import Teachers (above teachers/:teacherId) */}
         <Route
           path="teachers/import"

@@ -60,7 +60,13 @@ export default function CalendarEventPage() {
           <h1 className="headline-lg cal-detail-title">{ev.title}</h1>
           <p className="cal-muted cal-small"><Icon name="menu_book" size="sm" /> Môn học: {ev.subjectName ?? 'Chung của lớp (giáo viên chủ nhiệm)'}</p>
         </div>
+        {ev.canEdit && (
+          <div className="cal-head-actions">
+            <Link to={`/calendar/events/${ev.eventId}/edit`} className="btn btn-primary"><Icon name="edit_calendar" size="sm" /> Sửa sự kiện</Link>
+          </div>
+        )}
       </div>
+      {ev.isMine && ev.started && <div className="notice"><Icon name="lock" /><p>Sự kiện đã bắt đầu nên không sửa hoặc xoá được nữa.</p></div>}
 
       <div className="cal-detail-grid">
         <div className="cal-detail-main">

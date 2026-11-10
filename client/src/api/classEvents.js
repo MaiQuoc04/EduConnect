@@ -32,3 +32,9 @@ export async function createClassEvent(body) {
   const { data } = await api.post('/class-events', body);
   return data;
 }
+
+// UC-79 – same body without classId
+export async function updateClassEvent(eventId, body) {
+  const { data } = await api.put(`/class-events/${eventId}`, body);
+  return data;
+}

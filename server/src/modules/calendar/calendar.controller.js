@@ -27,3 +27,9 @@ export async function detail(req, res) {
 export async function create(req, res) {
   res.status(201).json(await calendarService.createEvent(eventBody(req, { create: true }), req.user));
 }
+
+// PUT /api/v1/class-events/:eventId  (SCR-42, UC-79)
+export async function update(req, res) {
+  const eventId = eventIdParam(req);
+  res.json(await calendarService.updateEvent(eventId, eventBody(req, { create: false }), req.user));
+}

@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import {
-  createClassEvent, getClassEvent, getClassEventOptions, getClassPeople,
+  createClassEvent, getClassEvent, getClassEventOptions, getClassPeople, updateClassEvent,
 } from '../../api/classEvents.js';
 import { getClassWeek } from '../../api/timetables.js';
 import Icon from '../../components/Icon.jsx';
@@ -219,7 +219,7 @@ export default function CalendarEventFormPage() {
       viewerIds: [...form.viewerIds].map(Number),
     };
     try {
-      const saved = await createClassEvent({ ...body, classId: Number(form.classId) });
+      const saved = editing ? await updateClassEvent(eventId, body) : await createClassEvent({ ...body, classId: Number(form.classId) });
       setInitial(snapshot);
       toast(editing ? 'Đã lưu thay đổi sự kiện.' : 'Đã tạo sự kiện. Người được xem đã nhận thông báo.');
       navigate(`/calendar/events/${saved.eventId}`);
