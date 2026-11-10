@@ -40,6 +40,11 @@ import EditIdentifiersPage from './pages/admin/EditIdentifiersPage.jsx';
 import MaintenancePage from './pages/admin/MaintenancePage.jsx';
 import SystemSettingsPage from './pages/admin/SystemSettingsPage.jsx';
 import PasswordResetRequestsPage from './pages/admin/PasswordResetRequestsPage.jsx';
+import GradeControlPage from './pages/grades/GradeControlPage.jsx';
+import GradeEntryPage from './pages/grades/GradeEntryPage.jsx';
+import GradeHistoryPage from './pages/grades/GradeHistoryPage.jsx';
+import GradeResultsPage, { StudentResultsPage } from './pages/grades/GradeResultsPage.jsx';
+import GradeStructurePage from './pages/grades/GradeStructurePage.jsx';
 import ProtectedRoute from './routes/ProtectedRoute.jsx';
 
 function RoleHome() {
@@ -302,6 +307,18 @@ export default function App() {
             </ProtectedRoute>
           }
         />
+        {/* FE-11 Grade Management */}
+        {[
+          ['grades/structure', ['SCHOOL_MANAGER'], <GradeStructurePage />], // SCR-25 UC-81, UC-82
+          ['grades/control', ['SCHOOL_MANAGER'], <GradeControlPage />], // SCR-68 UC-86
+          ['grades/history', ['SCHOOL_MANAGER'], <GradeHistoryPage />], // SCR-68 UC-87
+          ['grades/entry', ['TEACHER'], <GradeEntryPage />], // SCR-44 UC-83, UC-84, UC-85
+          ['grades/results', ['SCHOOL_MANAGER', 'TEACHER', 'STUDENT', 'PARENT'], <GradeResultsPage mode="results" />], // SCR-47 UC-88
+          ['grades/ranking', ['SCHOOL_MANAGER', 'TEACHER', 'STUDENT', 'PARENT'], <GradeResultsPage mode="ranking" />], // SCR-48 UC-89
+          ['grades/students/:studentId', ['SCHOOL_MANAGER', 'TEACHER'], <StudentResultsPage />], // SCR-47 UC-88
+        ].map(([path, roles, page]) => (
+          <Route key={path} path={path} element={<ProtectedRoute roles={roles}>{page}</ProtectedRoute>} />
+        ))}
       </Route>
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>

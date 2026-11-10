@@ -30,6 +30,17 @@ export const NAV_SECTIONS = [
     ],
   },
   {
+    // FE-11 Grade Management (Linh)
+    label: 'Học tập',
+    items: [
+      { to: '/grades/entry', label: 'Nhập điểm', icon: 'edit_note', roles: ['TEACHER'] }, // SCR-44 UC-83..UC-85
+      { to: '/grades/results', label: 'Kết quả học tập', icon: 'grading', roles: ['SCHOOL_MANAGER', 'TEACHER', 'STUDENT', 'PARENT'] }, // SCR-47 UC-88
+      { to: '/grades/ranking', label: 'Xếp hạng lớp', icon: 'leaderboard', roles: ['SCHOOL_MANAGER', 'TEACHER', 'STUDENT', 'PARENT'] }, // SCR-48 UC-89
+      { to: '/grades/structure', label: 'Cấu trúc điểm', icon: 'tune', roles: ['SCHOOL_MANAGER'] }, // SCR-25 UC-81, UC-82
+      { to: '/grades/control', label: 'Quản lý sổ điểm', icon: 'fact_check', roles: ['SCHOOL_MANAGER'] }, // SCR-68 UC-86, UC-87
+    ],
+  },
+  {
     label: 'Tài khoản',
     items: [
       { to: '/profile', label: 'Hồ sơ của tôi', icon: 'person' }, // FE-01 UC-04
