@@ -72,7 +72,8 @@ function searchText(query, field) {
   return value;
 }
 
-// GET /teachers?page=&limit=&search=&subject=&homeroom=has|none&status=ACTIVE|LOCKED  (SCR-14, UC-15)
+// GET /teachers?page=&limit=&search=&subject=&department=&homeroom=has|none&status=ACTIVE|LOCKED  (SCR-14, UC-15)
+// department: a department name, or '__none' for teachers of no department (UC-114 link from the Departments screen).
 // page / limit / homeroom / status fall back to their default when the value is not usable.
 export function listTeachersQuery(req) {
   const q = req.query ?? {};
@@ -86,6 +87,7 @@ export function listTeachersQuery(req) {
     limit: toPositiveInt(q.limit, TEACHER_LIMITS.LIST_PAGE_SIZE_DEFAULT, TEACHER_LIMITS.LIST_PAGE_SIZE_MAX),
     search: searchText(q, 'search'),
     subject: searchText(q, 'subject'),
+    department: searchText(q, 'department'),
     homeroom: Object.values(HOMEROOM_FILTER).includes(homeroom) ? homeroom : '',
     status: Object.values(USER_STATUS).includes(status) ? status : '',
   };

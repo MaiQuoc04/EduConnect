@@ -20,18 +20,18 @@ async function teacherRows(filters, { limit, offset }) {
 }
 
 // SCR-14 / UC-15 – paginated teacher list with subjects, current homeroom class, class count and periods.
-export async function listTeachers({ page, limit, search, subject, homeroom, status }) {
-  const filters = { search, subject, homeroom, status };
-  const total = await queries.countTeachers(filters);
+export async function listTeachers({ page, limit, search, subject, homeroom, status, department }) {
+  const filters = { search, subject, homeroom, status, department };
+  const [total, stats] = await Promise.all([queries.countTeachers(filters), queries.findTeacherStats()]);
   const teachers = total ? await teacherRows(filters, { limit, offset: (page - 1) * limit }) : [];
-  return format.toTeacherPage({ teachers, total, page, limit });
+  return { ...format.toTeacherPage({ teachers, total, page, limit }), stats };
 }
 
 const XLSX_MIME = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
 
 // SCR-14 / UC-115 – the teacher list with the same filters as the screen, as an .xlsx file (all pages).
-export async function exportTeachers({ search, subject, homeroom, status }) {
-  const filters = { search, subject, homeroom, status };
+export async function exportTeachers({ search, subject, homeroom, status, department }) {
+  const filters = { search, subject, homeroom, status, department };
   const total = await queries.countTeachers(filters);
   if (total > TEACHER_LIMITS.EXPORT_MAX_ROWS) {
     throw badRequest(ERROR_CODES.TOO_MANY, 'Too many teachers to export; narrow the filters.', { max: TEACHER_LIMITS.EXPORT_MAX_ROWS });

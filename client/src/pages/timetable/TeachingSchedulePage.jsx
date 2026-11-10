@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
 import { getTeachingWeek } from '../../api/timetables.js';
 import Icon from '../../components/Icon.jsx';
 import { errorText } from '../../messages.js';
@@ -69,7 +69,10 @@ export default function TeachingSchedulePage() {
       {error && <div className="notice amber"><Icon name="error_outline" /><p>{error}</p></div>}
       {week && (
         <div aria-busy={loading}>
-          <WeekTimetable week={week} view={view} teacherView secondLine={(l) => `Lớp ${l.className}`} emptyText="Tuần này bạn không có tiết dạy nào." />
+          <WeekTimetable week={week} view={view} teacherView secondLine={(l) => `Lớp ${l.className}`} emptyText="Tuần này bạn không có tiết dạy nào."
+            lessonActions={(l) => (
+              <Link to={`/timetable?classId=${l.classId}&date=${l.date}`} className="btn btn-secondary"><Icon name="calendar_view_week" size="sm" /> TKB lớp {l.className}</Link>
+            )} />
         </div>
       )}
     </div>
