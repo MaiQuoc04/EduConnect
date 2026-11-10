@@ -1,9 +1,9 @@
 import { api } from './client.js';
 
-// GET /api/v1/teachers?page=1&limit=10&search=&subject=&homeroom=&status=
+// GET /api/v1/teachers?page=1&limit=10&search=&subject=&department=&homeroom=&status=
 export async function getTeachers(params = {}) {
   const res = await api.get('/teachers', { params });
-  return res.data; // { teachers, total, page, totalPages }
+  return res.data; // { teachers, total, page, totalPages, stats }
 }
 
 // GET /api/v1/teachers/:id?week=YYYY-MM-DD  (SCR-15, UC-16)

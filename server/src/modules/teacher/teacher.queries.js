@@ -2,7 +2,7 @@
 // Every function takes an optional `db` (pool or a transaction client from withTransaction).
 import { pool } from '../../config/db.js';
 import { AppError } from '../../utils/AppError.js';
-import { ENROLLMENT_STATUS, ERROR_CODES, HOMEROOM_FILTER } from './teacher.constants.js';
+import { DEPARTMENT_NONE, ENROLLMENT_STATUS, ERROR_CODES, HOMEROOM_FILTER } from './teacher.constants.js';
 import { escapeLike, foldVietnamese, phoneSearchDigits, VI_TRANSLATE } from './teacher.text.js';
 
 // ══ teacher ══════════════════════════════════════════════════════════════
@@ -15,7 +15,7 @@ const CURRENT_YEAR_SQL = `(SELECT school_year_id FROM school_years
 // ── SCR-14 list ─────────────────────────────────────────────────────────────
 
 // Builds the WHERE clause of the list. Every user value goes in `params`; `add(v)` returns its "$n" placeholder.
-function listFilters({ search, subject, homeroom, status }) {
+function listFilters({ search, subject, homeroom, status, department }) {
   // users has no deleted_at column (accounts are LOCKED, not soft-deleted)
   const conditions = [];
   const params = [];
@@ -44,9 +44,12 @@ function listFilters({ search, subject, homeroom, status }) {
   if (homeroom === HOMEROOM_FILTER.HAS || homeroom === HOMEROOM_FILTER.NONE) {
     conditions.push(`${homeroom === HOMEROOM_FILTER.NONE ? 'NOT ' : ''}EXISTS (
       SELECT 1 FROM classes c2
-      WHERE c2.homeroom_teacher_id = t.teacher_id AND c2.deleted_at IS NULL
+      WHERE c2.homeroom_teacher_id = t.teacher_id AND c2.deleted_at IS NULL AND c2.school_year_id = ${CURRENT_YEAR_SQL}
     )`);
   }
+  // Department (UC-114): teachers.department keeps the name; DEPARTMENT_NONE = teachers of no department.
+  if (department === DEPARTMENT_NONE) conditions.push('t.department IS NULL');
+  else if (department) conditions.push(`t.department = ${add(department)}`);
   if (subject) {
     conditions.push(`EXISTS (
       SELECT 1 FROM teacher_subjects ts2
@@ -114,6 +117,34 @@ export async function findCurrentHomeroomByTeacherIds(teacherIds, db = pool) {
     [teacherIds],
   );
   return rows;
+}
+
+// SCR-14 cards: whole school, not the filters – teachers, locked accounts, homeroom teachers and classes of the current
+// year, average periods/week of active teachers (assignments running today, periods from track_subjects).
+export async function findTeacherStats(db = pool) {
+  const { rows } = await db.query(
+    `WITH load AS (
+       SELECT ta.teacher_id, SUM(COALESCE(tsj.periods_per_week, 0)) AS periods
+       FROM teaching_assignments ta
+       JOIN classes c ON c.class_id = ta.class_id AND c.deleted_at IS NULL AND c.school_year_id = ${CURRENT_YEAR_SQL}
+       LEFT JOIN track_subjects tsj ON tsj.track_id = c.track_id AND tsj.subject_id = ta.subject_id
+                                   AND tsj.school_year_id = c.school_year_id
+       WHERE ta.deleted_at IS NULL AND CURRENT_DATE BETWEEN ta.start_date AND ta.end_date
+       GROUP BY ta.teacher_id
+     )
+     SELECT COUNT(*)::int AS "total",
+            COUNT(*) FILTER (WHERE u.status = 'LOCKED')::int AS "locked",
+            COUNT(*) FILTER (WHERE EXISTS (SELECT 1 FROM classes c WHERE c.homeroom_teacher_id = t.teacher_id
+                               AND c.deleted_at IS NULL AND c.school_year_id = ${CURRENT_YEAR_SQL}))::int AS "homeroom",
+            (SELECT COUNT(*) FROM classes c WHERE c.deleted_at IS NULL AND c.school_year_id = ${CURRENT_YEAR_SQL})::int AS "classes",
+            (SELECT COUNT(*) FROM classes c WHERE c.deleted_at IS NULL AND c.homeroom_teacher_id IS NOT NULL
+               AND c.school_year_id = ${CURRENT_YEAR_SQL})::int AS "classesWithHomeroom",
+            COALESCE(ROUND(AVG(COALESCE(l.periods, 0)) FILTER (WHERE u.status = 'ACTIVE'), 1), 0)::text AS "avgPeriods"
+     FROM teachers t
+     JOIN users u ON u.user_id = t.user_id
+     LEFT JOIN load l ON l.teacher_id = t.teacher_id`,
+  );
+  return { ...rows[0], avgPeriods: Number(rows[0].avgPeriods) };
 }
 
 // Class count and periods/week of assignments running today (periods from track_subjects, not subjects).
@@ -232,6 +263,7 @@ export async function findWeekSchedule(teacherId, week, db = pool) {
        sl.period_number                      AS "period",
        to_char(sl.start_time, 'HH24:MI')    AS "startTime",
        to_char(sl.end_time,   'HH24:MI')    AS "endTime",
+       c.class_id                            AS "classId",
        c.class_name                          AS "className",
        s.subject_name                        AS "subjectName",
        ts.room

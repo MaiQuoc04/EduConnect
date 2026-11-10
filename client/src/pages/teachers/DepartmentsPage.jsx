@@ -216,7 +216,9 @@ export default function DepartmentsPage() {
                 <div>
                   <h2 className="title-sm dp-card-name">{d.name}</h2>
                   <span className="caption muted">
-                    {d.teacherCount} giáo viên · {d.subjects.length} môn
+                    {d.teacherCount ? (
+                      <Link to={`/teachers?department=${encodeURIComponent(d.name)}`} title="Xem giáo viên của tổ">{d.teacherCount} giáo viên</Link>
+                    ) : '0 giáo viên'} · {d.subjects.length} môn
                   </span>
                 </div>
                 <div className="dp-card-actions">
