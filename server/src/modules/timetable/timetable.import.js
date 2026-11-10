@@ -203,6 +203,27 @@ async function run({ schoolYearId, startDate, endDate, file }, user, { commit })
 
   const work = async (db) => {
     const day = await today(db);
+    // The classes of the file are planned again together: first remove their own periods of the range (those without
+    // attendance, as saveVersion does), so a teacher moved between two classes of the file is not reported as clashing
+    // with the old timetable of the other class. Range problems are reported by the loop below.
+    const removedFirst = new Map();
+    for (const c of classes) {
+      try {
+        const cls = await classInfo(c.classId, db, { lock: true });
+        const { start, end } = checkRange(cls, day, startDate, endDate);
+        const { rows: gone } = await db.query(
+          `WITH gone AS (
+             DELETE FROM timetable_slots ts WHERE ts.class_id = $1 AND ts."date" BETWEEN $2::date AND $3::date
+               AND NOT EXISTS (SELECT 1 FROM attendances a WHERE a.timetable_slot_id = ts.timetable_slot_id)
+             RETURNING 1)
+           SELECT COUNT(*)::int AS n FROM gone`,
+          [c.classId, start, end],
+        );
+        removedFirst.set(c.classId, gone[0].n);
+      } catch (err) {
+        if (!(err instanceof AppError)) throw err;
+      }
+    }
     for (const c of classes) {
       await db.query('SAVEPOINT class_import');
       try {
@@ -210,7 +231,10 @@ async function run({ schoolYearId, startDate, endDate, file }, user, { commit })
         const { start, end } = checkRange(cls, day, startDate, endDate);
         const saved = await saveVersion(db, { cls, start, end, entries: c.entries, userId: user.userId });
         await db.query('RELEASE SAVEPOINT class_import');
-        results.push({ classId: c.classId, className: c.className, periodsPerWeek: c.entries.length, ok: true, ...saved, startDate: start, endDate: end });
+        results.push({
+          classId: c.classId, className: c.className, periodsPerWeek: c.entries.length, ok: true, ...saved,
+          removed: saved.removed + (removedFirst.get(c.classId) ?? 0), startDate: start, endDate: end,
+        });
       } catch (err) {
         await db.query('ROLLBACK TO SAVEPOINT class_import');
         if (!(err instanceof AppError)) throw err;
