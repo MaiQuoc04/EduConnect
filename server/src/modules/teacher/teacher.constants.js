@@ -20,6 +20,9 @@ export const TEACHER_LIMITS = Object.freeze({
   EXPORT_MAX_ROWS: 5000, // SCR-14 export (.xlsx)
 });
 
+// SCR-14 department filter value for "teachers of no department" (a real department name never starts with '_').
+export const DEPARTMENT_NONE = '__none';
+
 // POST / PATCH /departments accept only these fields (UC-114).
 export const DEPARTMENT_EDITABLE_FIELDS = Object.freeze(['name', 'subjectIds']);
 
