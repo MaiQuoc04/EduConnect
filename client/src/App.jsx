@@ -15,31 +15,18 @@ import GroupLayout from './pages/groups/GroupLayout.jsx';
 import GroupListPage from './pages/groups/GroupListPage.jsx';
 import GroupMembersPage from './pages/groups/GroupMembersPage.jsx';
 import GroupOverview from './pages/groups/GroupOverview.jsx';
-<<<<<<< HEAD
-import GroupPendingTab from './pages/groups/GroupPendingTab.jsx';
-
-=======
 import FeedGuard from './pages/groupfeed/FeedGuard.jsx';
 import GroupFeedPage from './pages/groupfeed/GroupFeedPage.jsx';
 import GroupPostDetailPage from './pages/groupfeed/GroupPostDetailPage.jsx';
 import GroupPostFormPage from './pages/groupfeed/GroupPostFormPage.jsx';
->>>>>>> d0fdb5dc0c4ea217196c3977d481f9467877cb90
 import CreateSchoolPostPage from './pages/schoolfeed/CreateSchoolPostPage.jsx';
 import SchoolFeedPage from './pages/schoolfeed/SchoolFeedPage.jsx';
 import { SCHOOL_FEED_ROLES } from './pages/schoolfeed/schoolFeedShared.jsx';
 import SchoolPostDetailPage from './pages/schoolfeed/SchoolPostDetailPage.jsx';
 import UpdateSchoolPostPage from './pages/schoolfeed/UpdateSchoolPostPage.jsx';
-<<<<<<< HEAD
-
 import ParentDetailPage from './pages/parents/ParentDetailPage.jsx';
 import ParentListPage from './pages/parents/ParentListPage.jsx';
 import UpdateParentPage from './pages/parents/UpdateParentPage.jsx';
-
-=======
-import ParentDetailPage from './pages/parents/ParentDetailPage.jsx';
-import ParentListPage from './pages/parents/ParentListPage.jsx';
-import UpdateParentPage from './pages/parents/UpdateParentPage.jsx';
->>>>>>> d0fdb5dc0c4ea217196c3977d481f9467877cb90
 import SchoolYearPage from './pages/school-years/SchoolYearPage.jsx';
 import ImportParentLinksPage from './pages/students/ImportParentLinksPage.jsx';
 import StudentDetailPage from './pages/students/StudentDetailPage.jsx';
