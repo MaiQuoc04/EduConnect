@@ -16,17 +16,17 @@ import GroupListPage from './pages/groups/GroupListPage.jsx';
 import GroupMembersPage from './pages/groups/GroupMembersPage.jsx';
 import GroupOverview from './pages/groups/GroupOverview.jsx';
 import GroupPendingTab from './pages/groups/GroupPendingTab.jsx';
-<<<<<<< HEAD
+
 import CreateSchoolPostPage from './pages/schoolfeed/CreateSchoolPostPage.jsx';
 import SchoolFeedPage from './pages/schoolfeed/SchoolFeedPage.jsx';
 import { SCHOOL_FEED_ROLES } from './pages/schoolfeed/schoolFeedShared.jsx';
 import SchoolPostDetailPage from './pages/schoolfeed/SchoolPostDetailPage.jsx';
 import UpdateSchoolPostPage from './pages/schoolfeed/UpdateSchoolPostPage.jsx';
-=======
+
 import ParentDetailPage from './pages/parents/ParentDetailPage.jsx';
 import ParentListPage from './pages/parents/ParentListPage.jsx';
 import UpdateParentPage from './pages/parents/UpdateParentPage.jsx';
->>>>>>> feature/fe-14-parent-management
+
 import SchoolYearPage from './pages/school-years/SchoolYearPage.jsx';
 import ImportParentLinksPage from './pages/students/ImportParentLinksPage.jsx';
 import StudentDetailPage from './pages/students/StudentDetailPage.jsx';
