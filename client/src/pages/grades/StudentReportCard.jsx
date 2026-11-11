@@ -90,7 +90,7 @@ export default function StudentReportCard({ studentId, schoolYearId, showRank = 
 function ReportTables({ d, detail, setDetail, detailSemester }) {
   return (
     <>
-      <section className="card card-outline" style={{ padding: 0 }}>
+      <section className="card card-outline" style={{ padding: 0, marginBottom: 24 }}>
         <div className="table-scroll" style={{ border: 0 }}>
           <table className="table report-table">
             <thead>
@@ -125,9 +125,6 @@ function ReportTables({ d, detail, setDetail, detailSemester }) {
           </table>
         </div>
       </section>
-      <p className="caption muted" style={{ margin: '8px 0 24px' }}>
-        ĐTB cả năm của môn = (HK1 + 2 × HK2) / 3; ĐTB chung = trung bình cộng các môn. Điểm làm tròn 1 chữ số thập phân.
-      </p>
 
       {d.subjects.length > 0 && (
         <section className="card card-outline">
@@ -146,7 +143,7 @@ function ReportTables({ d, detail, setDetail, detailSemester }) {
               <thead>
                 <tr>
                   <th>Môn học</th>
-                  <th>Điểm thành phần</th>
+                  <th className="scores">Điểm thành phần</th>
                   <th>ĐTB</th>
                 </tr>
               </thead>
@@ -156,12 +153,17 @@ function ReportTables({ d, detail, setDetail, detailSemester }) {
                   return (
                     <tr key={sub.subjectId}>
                       <td>{sub.subjectName}</td>
-                      <td className="scores" style={{ textAlign: 'left' }}>
+                      <td className="scores">
                         {sem?.components.length
                           ? sem.components.map((c) => (
-                              <div key={c.componentId}>
-                                <span className="muted">{c.name}:</span>{' '}
-                                {c.scores.map((x) => (x === null ? '–' : fmtScore(x))).join('  ')}
+                              <div key={c.componentId} className="score-line">
+                                <span className="score-label">{c.name}</span>
+                                {c.scores.map((x, i) => (
+                                  // eslint-disable-next-line react/no-array-index-key -- one cell per attempt, fixed order
+                                  <span key={i} className={`score-cell${x === null ? ' empty' : ''}`}>
+                                    {x === null ? '–' : fmtScore(x)}
+                                  </span>
+                                ))}
                               </div>
                             ))
                           : <span className="muted">Chưa có cấu trúc điểm học kỳ {detailSemester?.semesterNo}</span>}
