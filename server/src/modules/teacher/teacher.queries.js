@@ -2,7 +2,7 @@
 // Every function takes an optional `db` (pool or a transaction client from withTransaction).
 import { pool } from '../../config/db.js';
 import { AppError } from '../../utils/AppError.js';
-import { ENROLLMENT_STATUS, ERROR_CODES, HOMEROOM_FILTER } from './teacher.constants.js';
+import { DEPARTMENT_NONE, ENROLLMENT_STATUS, ERROR_CODES, HOMEROOM_FILTER } from './teacher.constants.js';
 import { escapeLike, foldVietnamese, phoneSearchDigits, VI_TRANSLATE } from './teacher.text.js';
 
 // ══ teacher ══════════════════════════════════════════════════════════════
@@ -15,7 +15,7 @@ const CURRENT_YEAR_SQL = `(SELECT school_year_id FROM school_years
 // ── SCR-14 list ─────────────────────────────────────────────────────────────
 
 // Builds the WHERE clause of the list. Every user value goes in `params`; `add(v)` returns its "$n" placeholder.
-function listFilters({ search, subject, homeroom, status }) {
+function listFilters({ search, subject, homeroom, status, department }) {
   // users has no deleted_at column (accounts are LOCKED, not soft-deleted)
   const conditions = [];
   const params = [];
@@ -44,9 +44,12 @@ function listFilters({ search, subject, homeroom, status }) {
   if (homeroom === HOMEROOM_FILTER.HAS || homeroom === HOMEROOM_FILTER.NONE) {
     conditions.push(`${homeroom === HOMEROOM_FILTER.NONE ? 'NOT ' : ''}EXISTS (
       SELECT 1 FROM classes c2
-      WHERE c2.homeroom_teacher_id = t.teacher_id AND c2.deleted_at IS NULL
+      WHERE c2.homeroom_teacher_id = t.teacher_id AND c2.deleted_at IS NULL AND c2.school_year_id = ${CURRENT_YEAR_SQL}
     )`);
   }
+  // Department (UC-114): teachers.department keeps the name; DEPARTMENT_NONE = teachers of no department.
+  if (department === DEPARTMENT_NONE) conditions.push('t.department IS NULL');
+  else if (department) conditions.push(`t.department = ${add(department)}`);
   if (subject) {
     conditions.push(`EXISTS (
       SELECT 1 FROM teacher_subjects ts2
@@ -76,6 +79,7 @@ export async function findTeachersPage(filters, { limit, offset }, db = pool) {
        t.teacher_id    AS "teacherId",
        t.teacher_code  AS "teacherCode",
        u.full_name     AS "fullName",
+       t.department,
        u.email,
        u.phone,
        u.status,
@@ -113,6 +117,34 @@ export async function findCurrentHomeroomByTeacherIds(teacherIds, db = pool) {
     [teacherIds],
   );
   return rows;
+}
+
+// SCR-14 cards: whole school, not the filters – teachers, locked accounts, homeroom teachers and classes of the current
+// year, average periods/week of active teachers (assignments running today, periods from track_subjects).
+export async function findTeacherStats(db = pool) {
+  const { rows } = await db.query(
+    `WITH load AS (
+       SELECT ta.teacher_id, SUM(COALESCE(tsj.periods_per_week, 0)) AS periods
+       FROM teaching_assignments ta
+       JOIN classes c ON c.class_id = ta.class_id AND c.deleted_at IS NULL AND c.school_year_id = ${CURRENT_YEAR_SQL}
+       LEFT JOIN track_subjects tsj ON tsj.track_id = c.track_id AND tsj.subject_id = ta.subject_id
+                                   AND tsj.school_year_id = c.school_year_id
+       WHERE ta.deleted_at IS NULL AND CURRENT_DATE BETWEEN ta.start_date AND ta.end_date
+       GROUP BY ta.teacher_id
+     )
+     SELECT COUNT(*)::int AS "total",
+            COUNT(*) FILTER (WHERE u.status = 'LOCKED')::int AS "locked",
+            COUNT(*) FILTER (WHERE EXISTS (SELECT 1 FROM classes c WHERE c.homeroom_teacher_id = t.teacher_id
+                               AND c.deleted_at IS NULL AND c.school_year_id = ${CURRENT_YEAR_SQL}))::int AS "homeroom",
+            (SELECT COUNT(*) FROM classes c WHERE c.deleted_at IS NULL AND c.school_year_id = ${CURRENT_YEAR_SQL})::int AS "classes",
+            (SELECT COUNT(*) FROM classes c WHERE c.deleted_at IS NULL AND c.homeroom_teacher_id IS NOT NULL
+               AND c.school_year_id = ${CURRENT_YEAR_SQL})::int AS "classesWithHomeroom",
+            COALESCE(ROUND(AVG(COALESCE(l.periods, 0)) FILTER (WHERE u.status = 'ACTIVE'), 1), 0)::text AS "avgPeriods"
+     FROM teachers t
+     JOIN users u ON u.user_id = t.user_id
+     LEFT JOIN load l ON l.teacher_id = t.teacher_id`,
+  );
+  return { ...rows[0], avgPeriods: Number(rows[0].avgPeriods) };
 }
 
 // Class count and periods/week of assignments running today (periods from track_subjects, not subjects).
@@ -231,6 +263,7 @@ export async function findWeekSchedule(teacherId, week, db = pool) {
        sl.period_number                      AS "period",
        to_char(sl.start_time, 'HH24:MI')    AS "startTime",
        to_char(sl.end_time,   'HH24:MI')    AS "endTime",
+       c.class_id                            AS "classId",
        c.class_name                          AS "className",
        s.subject_name                        AS "subjectName",
        ts.room
@@ -251,7 +284,7 @@ export async function findWeekSchedule(teacherId, week, db = pool) {
 
 export async function lockTeacherForUpdate(teacherId, db) {
   const { rows } = await db.query(
-    'SELECT teacher_id AS "teacherId", user_id AS "userId" FROM teachers WHERE teacher_id = $1 FOR UPDATE',
+    'SELECT teacher_id AS "teacherId", user_id AS "userId", department FROM teachers WHERE teacher_id = $1 FOR UPDATE',
     [teacherId],
   );
   return rows[0] ?? null;
@@ -399,14 +432,141 @@ export async function findActiveDepartmentById(departmentId, db = pool) {
   }
 }
 
-// ══ subject ══════════════════════════════════════════════════════════════
+// ── Departments screen (UC-114) and subjects of a department (department_subjects, patch 07/11) ─────────────
 
-export async function findActiveSubjects(db = pool) {
+// Every active department with its subjects and number of teachers (teachers.department stores the name).
+export async function findDepartmentsWithSubjects(db = pool) {
+  try {
+    const { rows } = await db.query(
+      `SELECT d.department_id AS "departmentId", d.department_name AS "name",
+              (SELECT COUNT(*) FROM teachers t WHERE t.department = d.department_name)::int AS "teacherCount",
+              COALESCE(json_agg(json_build_object('subjectId', s.subject_id, 'code', s.subject_code, 'name', s.subject_name)
+                                ORDER BY s.subject_name) FILTER (WHERE s.subject_id IS NOT NULL), '[]') AS "subjects"
+       FROM departments d
+       LEFT JOIN department_subjects ds ON ds.department_id = d.department_id
+       LEFT JOIN subjects s ON s.subject_id = ds.subject_id AND s.deleted_at IS NULL
+       WHERE d.deleted_at IS NULL
+       GROUP BY d.department_id
+       ORDER BY d.department_name`,
+    );
+    return rows;
+  } catch (err) {
+    throw notReady(err);
+  }
+}
+
+// Every department row (deleted ones too) – used to check names; few rows.
+export async function findAllDepartmentNames(db) {
   const { rows } = await db.query(
-    `SELECT subject_id AS "subjectId", subject_code AS "code", subject_name AS "name"
-     FROM subjects WHERE deleted_at IS NULL ORDER BY subject_name`,
+    `SELECT department_id AS "departmentId", department_name AS "name", (deleted_at IS NOT NULL) AS "deleted"
+     FROM departments FOR UPDATE`,
   );
   return rows;
+}
+
+export async function insertDepartment(name, db) {
+  const { rows } = await db.query('INSERT INTO departments (department_name) VALUES ($1) RETURNING department_id AS "departmentId"', [name]);
+  return rows[0].departmentId;
+}
+
+// A deleted department with the same name comes back (department_name is UNIQUE, deleted rows included).
+export async function restoreDepartment(departmentId, db) {
+  await db.query('UPDATE departments SET deleted_at = NULL WHERE department_id = $1', [departmentId]);
+}
+
+export async function renameDepartment(departmentId, name, db) {
+  await db.query('UPDATE departments SET department_name = $1 WHERE department_id = $2', [name, departmentId]);
+}
+
+// teachers.department keeps the name: a rename is copied to the teachers of the department.
+export async function renameTeachersDepartment(oldName, newName, db) {
+  await db.query('UPDATE teachers SET department = $1 WHERE department = $2', [newName, oldName]);
+}
+
+export async function countTeachersInDepartment(name, db) {
+  const { rows } = await db.query('SELECT COUNT(*)::int AS n FROM teachers WHERE department = $1', [name]);
+  return Number(rows[0].n);
+}
+
+export async function softDeleteDepartment(departmentId, db) {
+  await db.query('UPDATE departments SET deleted_at = NOW() WHERE department_id = $1', [departmentId]);
+}
+
+// Subjects (of `subjectIds`) that already belong to ANOTHER department.
+export async function findSubjectsInOtherDepartments(departmentId, subjectIds, db) {
+  const { rows } = await db.query(
+    `SELECT s.subject_name AS "subject", d.department_name AS "department"
+     FROM department_subjects ds
+     JOIN subjects s    ON s.subject_id = ds.subject_id
+     JOIN departments d ON d.department_id = ds.department_id
+     WHERE ds.subject_id = ANY($1::bigint[]) AND ds.department_id IS DISTINCT FROM $2::bigint
+     ORDER BY s.subject_name`,
+    [subjectIds, departmentId],
+  );
+  return rows;
+}
+
+// department_subjects is a link table: hard delete is allowed (like teacher_subjects).
+export async function replaceDepartmentSubjects(departmentId, subjectIds, db) {
+  await db.query('DELETE FROM department_subjects WHERE department_id = $1 AND NOT (subject_id = ANY($2::bigint[]))', [
+    departmentId,
+    subjectIds,
+  ]);
+  await db.query(
+    `INSERT INTO department_subjects (department_id, subject_id)
+     SELECT $1, s FROM unnest($2::bigint[]) AS s
+     ON CONFLICT DO NOTHING`,
+    [departmentId, subjectIds],
+  );
+}
+
+// False until patch_v0.3_department_subjects.sql has run on this database.
+export async function hasDepartmentSubjects(db = pool) {
+  const { rows } = await db.query(`SELECT to_regclass('public.department_subjects') IS NOT NULL AS "ok"`);
+  return Boolean(rows[0].ok);
+}
+
+// subject id -> department id (null = no department) for the given subjects.
+export async function findDepartmentOfSubjects(subjectIds, db = pool) {
+  const { rows } = await db.query(
+    `SELECT s.subject_id AS "subjectId", s.subject_name AS "name", ds.department_id AS "departmentId"
+     FROM subjects s LEFT JOIN department_subjects ds ON ds.subject_id = s.subject_id
+     WHERE s.subject_id = ANY($1::bigint[])`,
+    [subjectIds],
+  );
+  return rows;
+}
+
+export async function findActiveDepartmentByName(name, db = pool) {
+  const { rows } = await db.query(
+    `SELECT department_id AS "departmentId", department_name AS "name"
+     FROM departments WHERE department_name = $1 AND deleted_at IS NULL`,
+    [name],
+  );
+  return rows[0] ?? null;
+}
+
+// ══ subject ══════════════════════════════════════════════════════════════
+
+// With the department each subject belongs to (null = none). Before patch_v0.3_department_subjects.sql has run, every
+// subject is listed without a department.
+export async function findActiveSubjects(db = pool) {
+  try {
+    const { rows } = await db.query(
+      `SELECT s.subject_id AS "subjectId", s.subject_code AS "code", s.subject_name AS "name",
+              ds.department_id AS "departmentId"
+       FROM subjects s LEFT JOIN department_subjects ds ON ds.subject_id = s.subject_id
+       WHERE s.deleted_at IS NULL ORDER BY s.subject_name`,
+    );
+    return rows;
+  } catch (err) {
+    if (err?.code !== '42P01') throw err;
+    const { rows } = await db.query(
+      `SELECT subject_id AS "subjectId", subject_code AS "code", subject_name AS "name", NULL AS "departmentId"
+       FROM subjects WHERE deleted_at IS NULL ORDER BY subject_name`,
+    );
+    return rows;
+  }
 }
 
 // How many of the given ids are existing, not deleted subjects.
@@ -513,36 +673,55 @@ export async function findClassSubjectsOfYear(schoolYearId, db = pool) {
 
 // Assignments of the year that run on `date` (start_date <= date <= end_date).
 export async function findActiveOnDate(schoolYearId, date, db = pool) {
+  return findOverlapping(schoolYearId, date, date, db);
+}
+
+// Assignments of the year that overlap [from, to] (history included), with the teacher's name, oldest first.
+export async function findOverlapping(schoolYearId, from, to, db = pool) {
   const { rows } = await db.query(
     `SELECT ta.assignment_id AS "assignmentId", ta.class_id AS "classId", ta.subject_id AS "subjectId",
-            ta.teacher_id AS "teacherId",
+            ta.teacher_id AS "teacherId", u.full_name AS "teacherName", t.teacher_code AS "teacherCode",
             to_char(ta.start_date, 'YYYY-MM-DD') AS "startDate", to_char(ta.end_date, 'YYYY-MM-DD') AS "endDate"
      FROM teaching_assignments ta
-     JOIN classes c ON c.class_id = ta.class_id AND c.deleted_at IS NULL
+     JOIN classes c  ON c.class_id = ta.class_id AND c.deleted_at IS NULL
+     JOIN teachers t ON t.teacher_id = ta.teacher_id
+     JOIN users u    ON u.user_id = t.user_id
      WHERE c.school_year_id = $1 AND ta.deleted_at IS NULL
-       AND $2::date BETWEEN ta.start_date AND ta.end_date
-     ORDER BY ta.start_date`,
-    [schoolYearId, date],
+       AND ta.start_date <= $3::date AND ta.end_date >= $2::date
+     ORDER BY ta.class_id, ta.subject_id, ta.start_date`,
+    [schoolYearId, from, to],
   );
   return rows;
 }
 
-// Rows planned to start on/after `date` are replaced → soft delete (business-rules §14).
-export async function softDeleteStartingFrom(classId, subjectId, date, db) {
+/**
+ * Frees [start, end] of one (class, subject) and keeps everything outside it (history is never deleted):
+ * a row covering the whole range is split (its part after `end` becomes a new row), a row that starts before
+ * ends the day before `start`, a row inside the range is soft-deleted (it starts today or later, so it is a plan,
+ * not history), and a row that starts inside and runs past `end` starts the day after `end`.
+ */
+export async function clearRange(classId, subjectId, start, end, db) {
+  const pair = 'class_id = $1 AND subject_id = $2 AND deleted_at IS NULL';
+  await db.query(
+    `INSERT INTO teaching_assignments (class_id, subject_id, teacher_id, start_date, end_date)
+     SELECT class_id, subject_id, teacher_id, $4::date + 1, end_date FROM teaching_assignments
+     WHERE ${pair} AND start_date < $3::date AND end_date > $4::date`,
+    [classId, subjectId, start, end],
+  );
+  await db.query(
+    `UPDATE teaching_assignments SET end_date = $3::date - 1
+     WHERE ${pair} AND start_date < $3::date AND end_date >= $3::date`,
+    [classId, subjectId, start],
+  );
   await db.query(
     `UPDATE teaching_assignments SET deleted_at = NOW()
-     WHERE class_id = $1 AND subject_id = $2 AND deleted_at IS NULL AND start_date >= $3::date`,
-    [classId, subjectId, date],
+     WHERE ${pair} AND start_date >= $3::date AND end_date <= $4::date`,
+    [classId, subjectId, start, end],
   );
-}
-
-// The row running on `date` ends the day before.
-export async function endRunningBefore(classId, subjectId, date, db) {
   await db.query(
-    `UPDATE teaching_assignments SET end_date = $1::date - 1
-     WHERE class_id = $2 AND subject_id = $3 AND deleted_at IS NULL
-       AND start_date < $4::date AND end_date >= $5::date`,
-    [date, classId, subjectId, date, date],
+    `UPDATE teaching_assignments SET start_date = $4::date + 1
+     WHERE ${pair} AND start_date >= $3::date AND start_date <= $4::date AND end_date > $4::date`,
+    [classId, subjectId, start, end],
   );
 }
 
@@ -554,23 +733,47 @@ export async function insertAssignment({ classId, subjectId, teacherId, startDat
   );
 }
 
+// Two rows of the same teacher that touch (next starts the day after the previous ends) become one row, so
+// "A, then B for two weeks, then A again – B cancelled" does not leave A in pieces.
+export async function mergeTouchingRows(classId, subjectId, db) {
+  for (;;) {
+    const { rows } = await db.query(
+      `SELECT prev_id AS "prevId", assignment_id AS "nextId", to_char(end_date, 'YYYY-MM-DD') AS "endDate"
+       FROM (SELECT assignment_id, teacher_id, start_date, end_date,
+                    LAG(assignment_id) OVER w AS prev_id, LAG(teacher_id) OVER w AS prev_teacher,
+                    LAG(end_date) OVER w AS prev_end
+             FROM teaching_assignments
+             WHERE class_id = $1 AND subject_id = $2 AND deleted_at IS NULL
+             WINDOW w AS (ORDER BY start_date)) x
+       WHERE prev_teacher = teacher_id AND start_date = prev_end + 1
+       LIMIT 1`,
+      [classId, subjectId],
+    );
+    if (!rows.length) return;
+    const { prevId, nextId, endDate } = rows[0];
+    await db.query('UPDATE teaching_assignments SET end_date = $1::date WHERE assignment_id = $2', [endDate, prevId]);
+    await db.query('UPDATE teaching_assignments SET deleted_at = NOW() WHERE assignment_id = $1', [nextId]);
+  }
+}
+
 // ══ timetable ══════════════════════════════════════════════════════════════
 
-// Timetable rows of one (class, subject) from a date that have no attendance yet.
+// Timetable rows of one (class, subject) between two dates that have no attendance yet.
 // business-rules §10: rows that already have attendance are kept as they are.
-// `first` = number of the first placeholder used here (class $first, subject $first+1, date $first+2).
+// `first` = number of the first placeholder used here (class $first, subject +1, start +2, end +3).
 const freeSlots = (first) => `
   FROM timetable_slots ts
-  WHERE ts.class_id = $${first} AND ts.subject_id = $${first + 1} AND ts."date" >= $${first + 2}::date
+  WHERE ts.class_id = $${first} AND ts.subject_id = $${first + 1}
+    AND ts."date" BETWEEN $${first + 2}::date AND $${first + 3}::date
     AND NOT EXISTS (SELECT 1 FROM attendances a WHERE a.timetable_slot_id = ts.timetable_slot_id)`;
 
-export async function countFreeSlotsFrom(classId, subjectId, date, db) {
-  const { rows } = await db.query(`SELECT COUNT(*)::int AS "n" ${freeSlots(1)}`, [classId, subjectId, date]);
+export async function countFreeSlots(classId, subjectId, start, end, db) {
+  const { rows } = await db.query(`SELECT COUNT(*)::int AS "n" ${freeSlots(1)}`, [classId, subjectId, start, end]);
   return Number(rows[0].n);
 }
 
-// Periods where `teacherId` already teaches another lesson at the same date + period (first 5).
-export async function findTeacherClashes(teacherId, classId, subjectId, date, db) {
+// Periods between start and end where `teacherId` already teaches another lesson at the same date + period (first 5).
+export async function findTeacherClashes(teacherId, classId, subjectId, start, end, db) {
   const { rows } = await db.query(
     `SELECT to_char(ts."date", 'YYYY-MM-DD') AS "date", sl.period_number AS "period", c2.class_name AS "otherClass"
      FROM timetable_slots ts
@@ -579,21 +782,22 @@ export async function findTeacherClashes(teacherId, classId, subjectId, date, db
        ON other.teacher_id = $1 AND other."date" = ts."date" AND other.slot_id = ts.slot_id
       AND other.timetable_slot_id <> ts.timetable_slot_id
      JOIN classes c2 ON c2.class_id = other.class_id
-     WHERE ts.class_id = $2 AND ts.subject_id = $3 AND ts."date" >= $4::date
+     WHERE ts.class_id = $2 AND ts.subject_id = $3 AND ts."date" BETWEEN $4::date AND $5::date
        AND NOT EXISTS (SELECT 1 FROM attendances a WHERE a.timetable_slot_id = ts.timetable_slot_id)
      ORDER BY ts."date", sl.period_number
      LIMIT 5`,
-    [teacherId, classId, subjectId, date],
+    [teacherId, classId, subjectId, start, end],
   );
   return rows;
 }
 
 // No substitute teaching: the timetable teacher must match the assignment.
-export async function moveFreeSlotsToTeacher(teacherId, classId, subjectId, date, db) {
+export async function moveFreeSlotsToTeacher(teacherId, classId, subjectId, start, end, db) {
   await db.query(`UPDATE timetable_slots SET teacher_id = $1 WHERE timetable_slot_id IN (SELECT ts.timetable_slot_id ${freeSlots(2)})`, [
     teacherId,
     classId,
     subjectId,
-    date,
+    start,
+    end,
   ]);
 }

@@ -18,6 +18,18 @@ const TYPES = [
 ];
 const ACCEPT = '.xlsx,.csv';
 
+// Who uses this page. System Admin (UC-96) picks the account type; FE-03's UC-116 (School Manager, Import Teachers)
+// reuses the page with the type fixed to Teacher and its own API (pages/teachers/TeacherImportPage.jsx).
+export const ADMIN_IMPORT = {
+  types: TYPES,
+  defaultType: 'STUDENT',
+  back: { to: '/admin/accounts', label: 'Tài khoản' },
+  title: 'Nhập tài khoản từ file',
+  intro: 'Tạo nhiều tài khoản cùng lúc từ file Excel hoặc CSV. Hệ thống kiểm tra từng dòng trước khi lưu.',
+  api: { downloadTemplate: downloadImportTemplate, preview: previewImport, importFile: importAccounts },
+};
+export { TYPES as IMPORT_TYPES };
+
 const fileSize = (bytes) => (bytes < 1024 * 1024 ? `${Math.ceil(bytes / 1024)} KB` : `${(bytes / 1024 / 1024).toFixed(1)} MB`);
 
 function FormError({ text }) {
@@ -31,11 +43,12 @@ function FormError({ text }) {
 }
 
 // Step 1: type, template, file.
-function UploadStep({ type, setType, file, setFile, busy, error, onCheck }) {
+function UploadStep({ cfg, type, setType, file, setFile, busy, error, onCheck }) {
   const toast = useToast();
   const inputRef = useRef(null);
   const [dragging, setDragging] = useState(false);
-  const typeInfo = TYPES.find((t) => t.value === type);
+  const typeInfo = cfg.types.find((t) => t.value === type);
+  const oneType = cfg.types.length === 1;
 
   function pick(chosen) {
     if (!chosen) return;
@@ -48,7 +61,7 @@ function UploadStep({ type, setType, file, setFile, busy, error, onCheck }) {
 
   async function template() {
     try {
-      await downloadImportTemplate(type);
+      await cfg.api.downloadTemplate(type);
     } catch (err) {
       toast(errorText(err), { type: 'error' });
     }
@@ -56,25 +69,28 @@ function UploadStep({ type, setType, file, setFile, busy, error, onCheck }) {
 
   return (
     <section className="card card-outline admin-form">
+      {!oneType && (
+        <>
+          <h2 className="card-title title-sm">
+            <span className="step-no">1</span>
+            Loại tài khoản
+          </h2>
+          <div className="role-picker" role="radiogroup" aria-label="Loại tài khoản">
+            {cfg.types.map((t) => (
+              <label key={t.value} className={`role-option${type === t.value ? ' checked' : ''}`}>
+                <input type="radio" name="type" checked={type === t.value} onChange={() => setType(t.value)} />
+                {t.label}
+              </label>
+            ))}
+          </div>
+          <p className="caption muted" style={{ marginTop: 8 }}>
+            Mỗi file chỉ chứa một loại tài khoản. Tài khoản Quản trị hệ thống được tạo từng tài khoản một.
+          </p>
+          <div className="section-sep" />
+        </>
+      )}
       <h2 className="card-title title-sm">
-        <span className="step-no">1</span>
-        Loại tài khoản
-      </h2>
-      <div className="role-picker" role="radiogroup" aria-label="Loại tài khoản">
-        {TYPES.map((t) => (
-          <label key={t.value} className={`role-option${type === t.value ? ' checked' : ''}`}>
-            <input type="radio" name="type" checked={type === t.value} onChange={() => setType(t.value)} />
-            {t.label}
-          </label>
-        ))}
-      </div>
-      <p className="caption muted" style={{ marginTop: 8 }}>
-        Mỗi file chỉ chứa một loại tài khoản. Tài khoản Quản trị hệ thống được tạo từng tài khoản một.
-      </p>
-
-      <div className="section-sep" />
-      <h2 className="card-title title-sm">
-        <span className="step-no">2</span>
+        <span className="step-no">{oneType ? 1 : 2}</span>
         Điền file mẫu
       </h2>
       <div className="actions-row">
@@ -87,7 +103,7 @@ function UploadStep({ type, setType, file, setFile, busy, error, onCheck }) {
 
       <div className="section-sep" />
       <h2 className="card-title title-sm">
-        <span className="step-no">3</span>
+        <span className="step-no">{oneType ? 2 : 3}</span>
         Chọn file đã điền
       </h2>
       <div
@@ -145,7 +161,7 @@ function UploadStep({ type, setType, file, setFile, busy, error, onCheck }) {
 
       <div className="section-sep" />
       <div className="card-footer">
-        <Link to="/admin/accounts" className="btn btn-secondary">
+        <Link to={cfg.back.to} className="btn btn-secondary">
           Huỷ
         </Link>
         <button type="button" className="btn btn-primary" disabled={!file || busy} onClick={onCheck}>
@@ -270,7 +286,7 @@ function PreviewStep({ preview, typeInfo, busy, error, onBack, onImport }) {
 }
 
 // Step 3: created accounts and the one-time credentials file.
-function DoneStep({ result, typeInfo, onAgain }) {
+function DoneStep({ cfg, result, typeInfo, onAgain }) {
   const [downloaded, setDownloaded] = useState(false);
   function download() {
     saveBlob(result.file.base64, result.file.name, result.file.contentType);
@@ -345,7 +361,7 @@ function DoneStep({ result, typeInfo, onAgain }) {
         <button type="button" className="btn btn-secondary" onClick={onAgain}>
           Nhập file khác
         </button>
-        <Link to="/admin/accounts" className="btn btn-primary">
+        <Link to={cfg.back.to} className="btn btn-primary">
           Xong
         </Link>
       </div>
@@ -353,15 +369,16 @@ function DoneStep({ result, typeInfo, onAgain }) {
   );
 }
 
-export default function ImportAccountsPage() {
+export default function ImportAccountsPage({ config = ADMIN_IMPORT }) {
+  const cfg = config;
   const [step, setStep] = useState('upload'); // upload | preview | done
-  const [type, setType] = useState('STUDENT');
+  const [type, setType] = useState(cfg.defaultType);
   const [file, setFile] = useState(null);
   const [preview, setPreview] = useState(null);
   const [result, setResult] = useState(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
-  const typeInfo = TYPES.find((t) => t.value === type);
+  const typeInfo = cfg.types.find((t) => t.value === type);
 
   async function run(action) {
     setBusy(true);
@@ -377,19 +394,19 @@ export default function ImportAccountsPage() {
 
   const check = () =>
     run(async () => {
-      setPreview(await previewImport(type, file));
+      setPreview(await cfg.api.preview(type, file));
       setStep('preview');
     });
 
   const doImport = () =>
     run(async () => {
       try {
-        setResult(await importAccounts(type, file));
+        setResult(await cfg.api.importFile(type, file));
         setStep('done');
       } catch (err) {
         // The data changed since the check: show the fresh preview so the admin sees why.
         if (err.code === 'MSG_IMPORT_CONFLICT' || err.code === 'MSG_IMPORT_NO_VALID_ROWS') {
-          setPreview(await previewImport(type, file));
+          setPreview(await cfg.api.preview(type, file));
         }
         throw err;
       }
@@ -408,12 +425,12 @@ export default function ImportAccountsPage() {
   return (
     <>
       <nav className="breadcrumb" aria-label="Breadcrumb">
-        <span>EduConnect</span>/<Link to="/admin/accounts">Tài khoản</Link>/<span className="current">Nhập tài khoản từ file</span>
+        <span>EduConnect</span>/<Link to={cfg.back.to}>{cfg.back.label}</Link>/<span className="current">{cfg.title}</span>
       </nav>
       <div className="page-header">
         <div>
-          <h1 className="headline-lg">Nhập tài khoản từ file</h1>
-          <p>Tạo nhiều tài khoản cùng lúc từ file Excel hoặc CSV. Hệ thống kiểm tra từng dòng trước khi lưu.</p>
+          <h1 className="headline-lg">{cfg.title}</h1>
+          <p>{cfg.intro}</p>
         </div>
       </div>
 
@@ -428,6 +445,7 @@ export default function ImportAccountsPage() {
 
       {step === 'upload' && (
         <UploadStep
+          cfg={cfg}
           type={type}
           setType={(t) => {
             setType(t);
@@ -456,7 +474,7 @@ export default function ImportAccountsPage() {
           onImport={doImport}
         />
       )}
-      {step === 'done' && <DoneStep result={result} typeInfo={typeInfo} onAgain={startAgain} />}
+      {step === 'done' && <DoneStep cfg={cfg} result={result} typeInfo={typeInfo} onAgain={startAgain} />}
     </>
   );
 }

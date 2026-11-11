@@ -1,7 +1,8 @@
-import { useEffect, useRef, useState } from 'react';
-import { Link, useParams } from 'react-router-dom';
+import { useEffect } from 'react';
+import { Link, useLocation, useParams } from 'react-router-dom';
 import Avatar from '../../components/Avatar.jsx';
 import Icon from '../../components/Icon.jsx';
+import AccountSecurityActions from '../admin/AccountSecurityActions.jsx';
 import { formatDate } from '../../utils/format.js';
 import { formatPhone } from '../../utils/teacherValidation.js';
 import { useTeacherDetail } from './useTeacherDetail.js';
@@ -20,66 +21,6 @@ function todayIso() {
   return new Date(now.getTime() - now.getTimezoneOffset() * 60000).toISOString().slice(0, 10);
 }
 const shortDate = (iso) => formatDate(iso).slice(0, 5); // dd/mm
-
-// ── Actions menu ────────────────────────────────────────────────────────────
-// Reset password / lock / unlock belong to FE-13 (business-rules §3) – shown but not wired yet.
-function ActionsMenu({ isLocked, tempLocked }) {
-  const [open, setOpen] = useState(false);
-  const ref = useRef(null);
-
-  useEffect(() => {
-    if (!open) return undefined;
-    function handler(e) {
-      if (!ref.current?.contains(e.target)) setOpen(false);
-    }
-    function onKey(e) {
-      if (e.key === 'Escape') setOpen(false);
-    }
-    document.addEventListener('mousedown', handler);
-    document.addEventListener('keydown', onKey);
-    return () => {
-      document.removeEventListener('mousedown', handler);
-      document.removeEventListener('keydown', onKey);
-    };
-  }, [open]);
-
-  return (
-    <div className="td-menu" ref={ref}>
-      <button
-        type="button"
-        className="btn btn-secondary td-menu-trigger"
-        aria-haspopup="menu"
-        aria-expanded={open}
-        aria-label="Thao tác khác"
-        onClick={() => setOpen((v) => !v)}
-      >
-        <Icon name="more_horiz" />
-      </button>
-      {open && (
-        <div className="td-dropdown" role="menu">
-          <button type="button" className="td-dropdown-item" role="menuitem" disabled>
-            <Icon name="lock_reset" size="sm" /> Đặt lại mật khẩu <span className="td-soon">Sắp có</span>
-          </button>
-          {tempLocked && (
-            <button type="button" className="td-dropdown-item" role="menuitem" disabled>
-              <Icon name="lock_open_right" size="sm" /> Mở tạm khoá đăng nhập <span className="td-soon">Sắp có</span>
-            </button>
-          )}
-          <div className="td-dropdown-sep" />
-          {isLocked ? (
-            <button type="button" className="td-dropdown-item td-dropdown-item--green" role="menuitem" disabled>
-              <Icon name="lock_open" size="sm" /> Mở khoá tài khoản <span className="td-soon">Sắp có</span>
-            </button>
-          ) : (
-            <button type="button" className="td-dropdown-item td-dropdown-item--red" role="menuitem" disabled>
-              <Icon name="lock_person" size="sm" /> Khoá tài khoản <span className="td-soon">Sắp có</span>
-            </button>
-          )}
-        </div>
-      )}
-    </div>
-  );
-}
 
 // ── Header card ─────────────────────────────────────────────────────────────
 function HeaderCard({ teacher, schoolYear }) {
@@ -113,7 +54,7 @@ function HeaderCard({ teacher, schoolYear }) {
               <span key={s.subjectId} className="td-tag td-tag--ink">{s.name}</span>
             ))}
             {teacher.homeroomClasses.map((c) => (
-              <span key={c.classId} className="td-tag td-tag--amber">GVCN {c.className}</span>
+              <Link key={c.classId} to="/homeroom-assignments" className="td-tag td-tag--amber" title="Phân công chủ nhiệm">GVCN {c.className}</Link>
             ))}
             {isLocked
               ? <span className="pill red">Đã khoá</span>
@@ -128,7 +69,9 @@ function HeaderCard({ teacher, schoolYear }) {
           <Link to={`/teachers/${teacher.teacherId}/edit`} className="btn btn-secondary">
             <Icon name="edit" size="sm" /> Sửa thông tin
           </Link>
-          <ActionsMenu isLocked={isLocked} tempLocked={teacher.tempLocked} />
+          <a href="#account" className="btn btn-secondary" onClick={(e) => { e.preventDefault(); document.getElementById('account')?.scrollIntoView({ behavior: 'smooth' }); }}>
+            <Icon name="manage_accounts" size="sm" /> Tài khoản
+          </a>
         </div>
       </div>
     </section>
@@ -201,12 +144,23 @@ function PersonalCard({ teacher }) {
         </InfoRow>
         <InfoRow label="Ngày tạo tài khoản">{formatDate(teacher.createdAt)}</InfoRow>
       </div>
-      {teacher.tempLocked && (
-        <div className="notice amber td-temp-lock">
-          <Icon name="schedule" />
-          <div>Tài khoản đang bị tạm khoá đăng nhập do nhập sai mật khẩu nhiều lần.</div>
-        </div>
-      )}
+    </section>
+  );
+}
+
+// UC-100 Reset Password / UC-101 Lock / Unlock Account for School Manager – FE-13's shared component (Linh); the
+// server checks the scope (teacher accounts). A change reloads the page so the status and the warnings follow.
+function AccountCard({ teacher, onChanged }) {
+  return (
+    <section className="td-card" id="account">
+      <div className="td-card-head">
+        <h2 className="title-sm">Tài khoản đăng nhập</h2>
+        <Icon name="manage_accounts" className="td-card-icon" />
+      </div>
+      <p className="td-caption">
+        Đặt lại mật khẩu, khoá hoặc mở khoá tài khoản @{teacher.username}. Khoá tài khoản thì cần phân công lại lớp đang dạy và lớp chủ nhiệm.
+      </p>
+      <AccountSecurityActions userId={teacher.userId} onChanged={onChanged} compact />
     </section>
   );
 }
@@ -247,7 +201,7 @@ function WorkloadCard({ workload, assignments }) {
 }
 
 // ── Assignments table ───────────────────────────────────────────────────────
-function AssignmentsCard({ assignments, schoolYear, workload }) {
+function AssignmentsCard({ teacherId, assignments, schoolYear, workload }) {
   return (
     <section className="td-card td-card--flush">
       <div className="td-card-head td-card-head--padded">
@@ -255,7 +209,12 @@ function AssignmentsCard({ assignments, schoolYear, workload }) {
           <h2 className="title-sm">Phân công giảng dạy{schoolYear ? ` năm học ${schoolYear}` : ''}</h2>
           <p className="td-caption">Các lớp và môn được phân công, số tiết theo cơ cấu của từng ban</p>
         </div>
-        <span className="td-count-chip">{assignments.length} phân công</span>
+        <div className="td-button-row">
+          <span className="td-count-chip">{assignments.length} phân công</span>
+          <Link to={`/teaching-assignments?teacherId=${teacherId}`} className="btn btn-tertiary">
+            <Icon name="edit_square" size="sm" /> Phân công
+          </Link>
+        </div>
       </div>
 
       {assignments.length === 0 ? (
@@ -432,8 +391,13 @@ function Skeleton() {
 // SCR-15 Teacher Detail (UC-16): profile, teaching assignments and weekly schedule. School Manager only.
 export default function TeacherDetailPage() {
   const { teacherId } = useParams();
-  const { data, loading, scheduleLoading, error, changeWeek } = useTeacherDetail(teacherId);
+  const { data, loading, scheduleLoading, error, changeWeek, reload } = useTeacherDetail(teacherId);
   const teacher = data?.teacher;
+  const { hash } = useLocation();
+  // From the list's row menu (#account): open the page at the account card.
+  useEffect(() => {
+    if (data && hash === '#account') document.getElementById('account')?.scrollIntoView();
+  }, [data, hash]);
 
   return (
     <div className="td-page">
@@ -486,10 +450,11 @@ export default function TeacherDetailPage() {
           <div className="td-grid">
             <div className="td-col">
               <PersonalCard teacher={teacher} />
+              <AccountCard teacher={teacher} onChanged={reload} />
               <WorkloadCard workload={data.workload} assignments={data.assignments} />
             </div>
             <div className="td-col">
-              <AssignmentsCard assignments={data.assignments} schoolYear={data.schoolYear} workload={data.workload} />
+              <AssignmentsCard teacherId={teacher.teacherId} assignments={data.assignments} schoolYear={data.schoolYear} workload={data.workload} />
               <ScheduleCard schedule={data.schedule} loading={scheduleLoading} onChangeWeek={changeWeek} />
             </div>
           </div>

@@ -15,7 +15,16 @@ export const TEACHER_LIMITS = Object.freeze({
   LIST_PAGE_MAX: 100000,
   SEARCH_MAX: 100, // SCR-14 search box and subject filter
   SUBJECTS_PER_TEACHER_MAX: 30,
+  DEPARTMENT_NAME_MAX: 100, // departments.department_name
+  SUBJECTS_PER_DEPARTMENT_MAX: 50,
+  EXPORT_MAX_ROWS: 5000, // SCR-14 export (.xlsx)
 });
+
+// SCR-14 department filter value for "teachers of no department" (a real department name never starts with '_').
+export const DEPARTMENT_NONE = '__none';
+
+// POST / PATCH /departments accept only these fields (UC-114).
+export const DEPARTMENT_EDITABLE_FIELDS = Object.freeze(['name', 'subjectIds']);
 
 // PATCH /teachers/:id accepts only these fields (SCR-17).
 // departmentId: an id from the departments list (or null = no department); omitted = keep the current department.
@@ -48,7 +57,13 @@ export const ERROR_CODES = Object.freeze({
   TOO_MANY: 'MSG_TOO_MANY',
   INVALID_NAME: 'MSG_INVALID_NAME', // details: { field, reason } – reason from teacher.text.js NAME_REASON
   DEPARTMENT_INVALID: 'MSG_DEPARTMENT_INVALID', // departmentId not in the departments list
-  DEPARTMENTS_NOT_READY: 'MSG_DEPARTMENTS_NOT_READY', // table departments missing on this database
+  DEPARTMENTS_NOT_READY: 'MSG_DEPARTMENTS_NOT_READY', // table departments / department_subjects missing on this database
+  DEPARTMENT_NOT_FOUND: 'MSG_DEPARTMENT_NOT_FOUND',
+  DEPARTMENT_NAME_INVALID: 'MSG_DEPARTMENT_NAME_INVALID', // details: { field, reason } – reason from NAME_REASON
+  DEPARTMENT_NAME_TAKEN: 'MSG_DEPARTMENT_NAME_TAKEN', // another department has the same name (case / accents ignored)
+  DEPARTMENT_IN_USE: 'MSG_DEPARTMENT_IN_USE', // details: { teachers } – teachers still in the department
+  SUBJECT_IN_OTHER_DEPARTMENT: 'MSG_SUBJECT_IN_OTHER_DEPARTMENT', // details: { items: [{ subject, department }] }
+  SUBJECT_NOT_IN_DEPARTMENT: 'MSG_SUBJECT_NOT_IN_DEPARTMENT', // details: { subjects, department } (UC-17)
   LOGIN_IDENTIFIER_READONLY: 'MSG_LOGIN_IDENTIFIER_READONLY', // username / email / phone: System Admin only
   UNKNOWN_FIELD: 'MSG_UNKNOWN_FIELD',
   // teacher

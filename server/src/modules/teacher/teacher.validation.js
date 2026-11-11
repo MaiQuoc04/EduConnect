@@ -2,6 +2,7 @@
 // or throws AppError (400 / 403 / 404). Controllers call them before the service (no DB access here).
 import { badRequest, AppError, notFound } from '../../utils/AppError.js';
 import {
+  DEPARTMENT_EDITABLE_FIELDS,
   ERROR_CODES,
   HOMEROOM_FILTER,
   HOMEROOM_RULES,
@@ -11,7 +12,7 @@ import {
   TEACHING_RULES,
   USER_STATUS,
 } from './teacher.constants.js';
-import { checkPersonName, cleanText } from './teacher.text.js';
+import { checkDepartmentName, checkPersonName, cleanText } from './teacher.text.js';
 
 // ── Small helpers ───────────────────────────────────────────────────────────
 
@@ -71,7 +72,8 @@ function searchText(query, field) {
   return value;
 }
 
-// GET /teachers?page=&limit=&search=&subject=&homeroom=has|none&status=ACTIVE|LOCKED  (SCR-14, UC-15)
+// GET /teachers?page=&limit=&search=&subject=&department=&homeroom=has|none&status=ACTIVE|LOCKED  (SCR-14, UC-15)
+// department: a department name, or '__none' for teachers of no department (UC-114 link from the Departments screen).
 // page / limit / homeroom / status fall back to their default when the value is not usable.
 export function listTeachersQuery(req) {
   const q = req.query ?? {};
@@ -85,6 +87,7 @@ export function listTeachersQuery(req) {
     limit: toPositiveInt(q.limit, TEACHER_LIMITS.LIST_PAGE_SIZE_DEFAULT, TEACHER_LIMITS.LIST_PAGE_SIZE_MAX),
     search: searchText(q, 'search'),
     subject: searchText(q, 'subject'),
+    department: searchText(q, 'department'),
     homeroom: Object.values(HOMEROOM_FILTER).includes(homeroom) ? homeroom : '',
     status: Object.values(USER_STATUS).includes(status) ? status : '',
   };
@@ -184,22 +187,33 @@ export function saveHomeroomRequest(req) {
 
 // ── Teaching assignment (SCR-19, UC-18) ────────────────────────────────────
 
-// GET /teaching-assignments?schoolYearId=&date=YYYY-MM-DD  (SCR-19, UC-18)
+// GET /teaching-assignments?schoolYearId=&from=YYYY-MM-DD&to=YYYY-MM-DD  (SCR-19, UC-18)
+// `date` (older clients) is read as `from`.
 export function teachingBoardQuery(req) {
-  const date = req.query?.date;
-  if (!isQueryValue(date) || (date && !isIsoDate(date))) throw badRequest(ERROR_CODES.INVALID_DATE, 'date must be a real date YYYY-MM-DD.');
-  return { schoolYearId: optionalSchoolYearId(req.query?.schoolYearId), date: date || undefined };
+  const read = (name) => {
+    const v = req.query?.[name];
+    if (!isQueryValue(v) || (v && !isIsoDate(v))) throw badRequest(ERROR_CODES.INVALID_DATE, `${name} must be a real date YYYY-MM-DD.`, { field: name });
+    return v || undefined;
+  };
+  const from = read('from') ?? read('date');
+  const to = read('to');
+  if (from && to && to < from) throw badRequest(ERROR_CODES.INVALID_DATE, 'to must not be before from.', { field: 'to' });
+  return { schoolYearId: optionalSchoolYearId(req.query?.schoolYearId), from, to };
 }
 
-
 // PUT /teaching-assignments
-// body { schoolYearId, date, changes: [{ classId, subjectId, teacherId|null, previousTeacherId|null }] }
+// body { schoolYearId, startDate, endDate?, changes: [{ classId, subjectId, teacherId|null, previousTeacherId|null }] }
+// previousTeacherId = the teacher running on startDate (stale check). `date` (older clients) is read as startDate.
 export function saveTeachingRequest(req) {
   const body = req.body;
   if (!isPlainObject(body)) throw badRequest(ERROR_CODES.INVALID_INPUT, 'Body must be a JSON object.');
-  const { schoolYearId, date, changes } = body;
+  const { schoolYearId, changes } = body;
+  const startDate = body.startDate ?? body.date;
+  const endDate = body.endDate ?? null;
   if (!isId(schoolYearId)) throw badRequest(ERROR_CODES.REQUIRED, 'schoolYearId is required.', { field: 'schoolYearId' });
-  if (!isIsoDate(date)) throw badRequest(ERROR_CODES.INVALID_DATE, 'date must be a real date YYYY-MM-DD.');
+  if (!isIsoDate(startDate)) throw badRequest(ERROR_CODES.INVALID_DATE, 'startDate must be a real date YYYY-MM-DD.', { field: 'startDate' });
+  if (endDate !== null && !isIsoDate(endDate)) throw badRequest(ERROR_CODES.INVALID_DATE, 'endDate must be a real date YYYY-MM-DD.', { field: 'endDate' });
+  if (endDate !== null && endDate < startDate) throw badRequest(ERROR_CODES.INVALID_DATE, 'endDate must not be before startDate.', { field: 'endDate' });
   if (!Array.isArray(changes) || !changes.length) throw badRequest(ERROR_CODES.REQUIRED, 'No changes to save.', { field: 'changes' });
   if (changes.length > TEACHING_RULES.MAX_CHANGES_PER_SAVE) throw badRequest(ERROR_CODES.TOO_MANY, 'Too many changes.');
 
@@ -218,5 +232,38 @@ export function saveTeachingRequest(req) {
       previousTeacherId: toNullableId(ch.previousTeacherId),
     };
   });
-  return { schoolYearId: String(schoolYearId), date, changes: items };
+  return { schoolYearId: String(schoolYearId), startDate, endDate, changes: items };
+}
+
+// ── Departments (UC-114) ───────────────────────────────────────────────────
+
+export function departmentIdParam(req) {
+  const id = req.params?.id;
+  if (!isId(id)) throw notFound(ERROR_CODES.DEPARTMENT_NOT_FOUND, 'Department not found.');
+  return String(id);
+}
+
+// POST /departments { name, subjectIds } and PATCH /departments/:id { name?, subjectIds? }.
+// Returns { name?, subjectIds? } – a field left out of a PATCH stays as it is.
+export function departmentBody(req, { partial }) {
+  const body = req.body;
+  if (!isPlainObject(body)) throw badRequest(ERROR_CODES.INVALID_INPUT, 'Body must be a JSON object.');
+  const unknown = Object.keys(body).filter((k) => !DEPARTMENT_EDITABLE_FIELDS.includes(k));
+  if (unknown.length) throw badRequest(ERROR_CODES.UNKNOWN_FIELD, 'Unknown fields.', { fields: unknown });
+
+  const out = {};
+  if (!partial || body.name !== undefined) {
+    const name = checkDepartmentName(body.name, { max: TEACHER_LIMITS.DEPARTMENT_NAME_MAX });
+    if (name.reason) throw badRequest(ERROR_CODES.DEPARTMENT_NAME_INVALID, 'Invalid department name.', { field: 'name', reason: name.reason });
+    out.name = name.value;
+  }
+  if (!partial || body.subjectIds !== undefined) {
+    const list = body.subjectIds ?? [];
+    if (!Array.isArray(list) || list.length > TEACHER_LIMITS.SUBJECTS_PER_DEPARTMENT_MAX || !list.every(isId)) {
+      throw badRequest(ERROR_CODES.SUBJECT_INVALID, 'subjectIds must be a list of subject ids.', { field: 'subjectIds' });
+    }
+    out.subjectIds = [...new Set(list.map(String))];
+  }
+  if (partial && !Object.keys(out).length) throw badRequest(ERROR_CODES.REQUIRED, 'Nothing to change.');
+  return out;
 }

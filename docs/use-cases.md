@@ -1,4 +1,4 @@
-# Use cases (113) – numbering after the 20/10/2026 database review
+# Use cases (116) – numbering after the 20/10/2026 database review
 
 Source: Report 3 section 4.2 (draft v1.3). Actor "User" = any signed-in account. "Homeroom Teacher" is not a role: it is a Teacher who is `classes.homeroom_teacher_id` of that class.
 
@@ -38,6 +38,9 @@ Source: Report 3 section 4.2 (draft v1.3). Actor "User" = any signed-in account.
 | UC-17 | Update Teacher | School Manager | Teacher Records | Update a teacher's profile (not login identifiers). |
 | UC-18 | Assign Teaching Classes & Subjects | School Manager | Teaching Assignment | Assign a teacher to (class, subject) pairs; one teacher per pair; reassign when a teacher is locked. |
 | UC-19 | Assign Homeroom Teacher | School Manager | Teaching Assignment | Designate one homeroom teacher per class per school year. |
+| UC-114 | Manage Departments | School Manager | Teacher Records | Create, rename and delete departments (tổ chuyên môn) and choose the subjects of each; a subject belongs to at most one department (added 07/11/2026). |
+| UC-115 | Export Teacher List | School Manager | Teacher Records | Download the teacher list with the current filters as an Excel file (added 07/11/2026). |
+| UC-116 | Import Teachers | School Manager | Teacher Records | Create teacher accounts from a file with a preview, same template and checks as UC-96 (added 07/11/2026). |
 
 ## FE-04 Class & Group Management
 

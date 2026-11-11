@@ -57,6 +57,7 @@
 .tc-title-count strong { color: var(--graphite-900); font-weight: 600; }
 .tc-subtitle { margin: 2px 0 0; font-size: 14px; color: var(--graphite-600); }
 .tc-export-btn { white-space: nowrap; align-self: flex-start; }
+.tc-title-actions { display: flex; flex-wrap: wrap; gap: 8px; align-self: flex-start; justify-content: flex-end; }
 
 /* Stats grid */
 .tc-stats-grid {
