@@ -7,11 +7,11 @@ import * as queries from './teacher.queries.js';
 import { syncClassTeachers } from '../classes/classGroups.js';
 
 /**
- * Picks the school year and the matrix "view date". Assignments are date ranges, so the matrix shows the
- * assignment running on that date. Default: today if inside the year, otherwise the year's first day;
- * a date outside the year is clamped into it.
+ * Picks the school year and the view range [from, to]. Assignments are date ranges (business-rules §4), so the
+ * matrix shows every assignment overlapping the range, each with its dates. Default: from = today if inside the
+ * year (otherwise the year's first day), to = the year's last day. Dates outside the year are clamped into it.
  */
-async function resolveYearAndDate({ schoolYearId, date }) {
+async function resolveYearAndRange({ schoolYearId, from, to }) {
   const [years, today] = await Promise.all([queries.findAllSchoolYears(), queries.findToday()]);
   const currentId = currentYearId(years);
 
@@ -22,31 +22,33 @@ async function resolveYearAndDate({ schoolYearId, date }) {
   } else {
     year = years.find((y) => String(y.id) === String(currentId)) ?? years[0] ?? null;
   }
-  if (!year) return { years, year: null, date: null, today, currentId };
+  if (!year) return { years, year: null, from: null, to: null, today, currentId };
 
-  let viewDate;
-  if (date) viewDate = date < year.startDate ? year.startDate : date > year.endDate ? year.endDate : date;
-  else viewDate = today >= year.startDate && today <= year.endDate ? today : year.startDate;
-  return { years, year, date: viewDate, today, currentId };
+  const clamp = (d) => (d < year.startDate ? year.startDate : d > year.endDate ? year.endDate : d);
+  const viewFrom = from ? clamp(from) : today >= year.startDate && today <= year.endDate ? today : year.startDate;
+  let viewTo = to ? clamp(to) : year.endDate;
+  if (viewTo < viewFrom) viewTo = viewFrom;
+  return { years, year, from: viewFrom, to: viewTo, today, currentId };
 }
 
-// SCR-19 / UC-18 – matrix of classes × subjects with the teacher assigned on `date`.
-export async function getTeachingBoard({ schoolYearId, date } = {}) {
-  const { years, year, date: viewDate, today, currentId } = await resolveYearAndDate({ schoolYearId, date });
+// SCR-19 / UC-18 – matrix of classes × subjects with every assignment overlapping [from, to].
+export async function getTeachingBoard({ schoolYearId, from, to } = {}) {
+  const { years, year, from: viewFrom, to: viewTo, today, currentId } = await resolveYearAndRange({ schoolYearId, from, to });
   const schoolYears = toSchoolYearList(years, currentId);
-  if (!year) return toTeachingBoard({ schoolYears, schoolYear: null, date: null, today });
+  if (!year) return toTeachingBoard({ schoolYears, schoolYear: null, from: null, to: null, today });
 
   const [classRows, cellRows, assignments, teacherRows, teacherSubjectRows] = await Promise.all([
     queries.findClassesOfYear(year.id),
     queries.findClassSubjectsOfYear(year.id),
-    queries.findActiveOnDate(year.id, viewDate),
+    queries.findOverlapping(year.id, viewFrom, viewTo),
     queries.findAllTeachersBasic(),
     queries.findAllTeacherSubjectPairs(),
   ]);
   return toTeachingBoard({
     schoolYears,
     schoolYear: toSchoolYear(year, currentId),
-    date: viewDate,
+    from: viewFrom,
+    to: viewTo,
     today,
     classRows,
     cellRows,
@@ -57,29 +59,35 @@ export async function getTeachingBoard({ schoolYearId, date } = {}) {
 }
 
 /**
- * SCR-19 / UC-18 – save (class, subject) → teacher changes, effective from `date` to the end of the year.
- * Per pair: the running assignment ends the day before, rows planned later are soft-deleted, a new row
- * [date, year end] is inserted, and timetable periods from `date` without attendance move to the new teacher
- * (business-rules §10: no substitute teaching; rows with attendance are kept). All or nothing.
+ * SCR-19 / UC-18 – save (class, subject) → teacher for the range [startDate, endDate] (endDate defaults to the end
+ * of the school year). business-rules §4: history is kept – only the part of other rows inside the range changes
+ * (clearRange), the new row covers exactly the range, and timetable periods inside the range without attendance
+ * move to the new teacher (§10: no substitute teaching outside an assignment; rows with attendance are kept).
+ * All or nothing.
  */
-export async function saveTeachingAssignments({ schoolYearId, date, changes }) {
+export async function saveTeachingAssignments({ schoolYearId, startDate, endDate, changes }) {
+  let savedRange;
   await withTransaction(async (conn) => {
     const year = await queries.findSchoolYearById(schoolYearId, conn);
     if (!year) throw notFound(ERROR_CODES.SCHOOL_YEAR_NOT_FOUND, 'School year not found.');
     const today = await queries.findToday(conn);
-    // ASSUMPTION: never back-dated – past lessons, attendance and grades stay with the old teacher.
-    if (date < today || date < year.startDate || date > year.endDate) {
-      throw badRequest(ERROR_CODES.EFFECTIVE_DATE, 'The effective date must be today or later, inside the school year.', {
-        min: today > year.startDate ? today : year.startDate,
+    const start = startDate;
+    const end = endDate ?? year.endDate;
+    // business-rules §4: never back-dated – past lessons, attendance and grades stay with the old teacher.
+    const min = today > year.startDate ? today : year.startDate;
+    if (start < min || start > year.endDate || end < start || end > year.endDate) {
+      throw badRequest(ERROR_CODES.EFFECTIVE_DATE, 'The range must start today or later and stay inside the school year.', {
+        min,
         max: year.endDate,
       });
     }
+    savedRange = { from: start, to: end };
 
     const classes = await queries.lockClassesOfYear(schoolYearId, conn);
     const classById = new Map(classes.map((c) => [String(c.classId), c]));
     const pairs = await queries.findClassSubjectsOfYear(schoolYearId, conn);
     const subjectName = new Map(pairs.map((p) => [`${p.classId}:${p.subjectId}`, p.subjectName]));
-    const running = await queries.findActiveOnDate(schoolYearId, date, conn);
+    const running = await queries.findActiveOnDate(schoolYearId, start, conn);
     const currentByPair = new Map(running.map((a) => [`${a.classId}:${a.subjectId}`, String(a.teacherId)]));
     const label = (ch) => cellLabel(classById.get(ch.classId)?.className ?? ch.classId, subjectName.get(`${ch.classId}:${ch.subjectId}`) ?? ch.subjectId);
 
@@ -116,25 +124,22 @@ export async function saveTeachingAssignments({ schoolYearId, date, changes }) {
     const clashes = [];
     const blocked = [];
     for (const ch of changes) {
-      await queries.softDeleteStartingFrom(ch.classId, ch.subjectId, date, conn);
-      await queries.endRunningBefore(ch.classId, ch.subjectId, date, conn);
+      await queries.clearRange(ch.classId, ch.subjectId, start, end, conn);
 
       if (!ch.teacherId) {
-        const periods = await queries.countFreeSlotsFrom(ch.classId, ch.subjectId, date, conn);
+        const periods = await queries.countFreeSlots(ch.classId, ch.subjectId, start, end, conn);
         if (periods > 0) blocked.push({ cell: label(ch), periods });
         continue;
       }
       // The new teacher must be free in every moved period (DB also has UNIQUE (teacher_id, date, slot_id)).
-      const busy = await queries.findTeacherClashes(ch.teacherId, ch.classId, ch.subjectId, date, conn);
+      const busy = await queries.findTeacherClashes(ch.teacherId, ch.classId, ch.subjectId, start, end, conn);
       if (busy.length) {
         clashes.push({ cell: label(ch), items: busy });
         continue;
       }
-      await queries.insertAssignment(
-        { classId: ch.classId, subjectId: ch.subjectId, teacherId: ch.teacherId, startDate: date, endDate: year.endDate },
-        conn,
-      );
-      await queries.moveFreeSlotsToTeacher(ch.teacherId, ch.classId, ch.subjectId, date, conn);
+      await queries.insertAssignment({ classId: ch.classId, subjectId: ch.subjectId, teacherId: ch.teacherId, startDate: start, endDate: end }, conn);
+      await queries.mergeTouchingRows(ch.classId, ch.subjectId, conn);
+      await queries.moveFreeSlotsToTeacher(ch.teacherId, ch.classId, ch.subjectId, start, end, conn);
     }
 
     if (blocked.length) {
@@ -152,5 +157,5 @@ export async function saveTeachingAssignments({ schoolYearId, date, changes }) {
     for (const classId of new Set(changes.map((ch) => ch.classId))) await syncClassTeachers(conn, Number(classId));
   });
 
-  return getTeachingBoard({ schoolYearId, date });
+  return getTeachingBoard({ schoolYearId, ...savedRange });
 }

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { getDepartmentOptions, getSubjectOptions, getTeacher, updateTeacher } from '../../api/teachers.js';
 import Avatar from '../../components/Avatar.jsx';
@@ -26,11 +26,15 @@ function formatDateTime(value) {
 }
 
 // Client-side checks mirror the server (modules/teacher/teacher.validation.js + teacher.text.js).
-function validate(form) {
+// `outside` = names of subjects added now that belong to another department (business-rules §4, 07/11/2026).
+function validate(form, outside = []) {
   const errors = {};
   const name = validateFullName(form.fullName);
   if (name.error) errors.fullName = name.error;
   if (!form.subjectIds.length) errors.subjectIds = 'Chọn ít nhất một môn chuyên môn.';
+  else if (outside.length) {
+    errors.subjectIds = `Môn ${outside.join(', ')} thuộc tổ khác. Chỉ thêm được môn của tổ đã chọn hoặc môn chưa thuộc tổ nào.`;
+  }
   return errors;
 }
 
@@ -53,7 +57,9 @@ function initialDepartment(current, departments) {
 }
 
 // ── Subject chips + "Thêm môn" picker ───────────────────────────────────────
-function SubjectPicker({ options, value, locked, onChange, invalid }) {
+// isAllowed(option): the subject can be added (its department is the teacher's, or it has none – UC-114).
+// original: subjects saved on the profile – they stay even when outside the department, with a warning.
+function SubjectPicker({ options, value, locked, onChange, invalid, isAllowed = () => true, original = [], scopeText }) {
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState('');
   const ref = useRef(null);
@@ -78,9 +84,8 @@ function SubjectPicker({ options, value, locked, onChange, invalid }) {
 
   const byId = useMemo(() => Object.fromEntries(options.map((o) => [String(o.subjectId), o])), [options]);
   const q = foldVietnamese(query.trim());
-  const available = options.filter(
-    (o) => !value.includes(String(o.subjectId)) && (!q || foldVietnamese(o.name).includes(q) || foldVietnamese(o.code).includes(q)),
-  );
+  const addable = options.filter((o) => !value.includes(String(o.subjectId)) && isAllowed(o));
+  const available = addable.filter((o) => !q || foldVietnamese(o.name).includes(q) || foldVietnamese(o.code).includes(q));
 
   function add(id) {
     onChange([...value, id]);
@@ -91,8 +96,12 @@ function SubjectPicker({ options, value, locked, onChange, invalid }) {
     <div className={`te-picker${invalid ? ' te-picker--invalid' : ''}`} ref={ref}>
       {value.map((id) => {
         const isLocked = locked[id];
+        const outside = byId[id] && !isAllowed(byId[id]);
+        const kept = outside && original.includes(id);
         return (
-          <span key={id} className={`te-chip${isLocked ? ' te-chip--locked' : ''}`}>
+          <span key={id} className={`te-chip${isLocked ? ' te-chip--locked' : ''}${outside ? (kept ? ' te-chip--warn' : ' te-chip--bad') : ''}`}
+            title={outside ? (kept ? 'Môn đã có từ trước, không thuộc tổ đã chọn' : 'Môn thuộc tổ khác – hãy bỏ môn này') : undefined}>
+            {outside && <Icon name={kept ? 'info' : 'error'} size="sm" />}
             {byId[id]?.name ?? 'Môn đã xoá'}
             {isLocked ? (
               <span className="te-chip-lock" title={`Đang dạy ${isLocked.join(', ')} – không thể bỏ`}>
@@ -119,7 +128,8 @@ function SubjectPicker({ options, value, locked, onChange, invalid }) {
           aria-haspopup="listbox"
           aria-expanded={open}
           onClick={() => setOpen((v) => !v)}
-          disabled={value.length === options.length}
+          disabled={addable.length === 0}
+          title={addable.length === 0 ? 'Không còn môn nào thêm được cho tổ này' : undefined}
         >
           <Icon name="add" size="sm" /> Thêm môn
         </button>
@@ -139,6 +149,7 @@ function SubjectPicker({ options, value, locked, onChange, invalid }) {
                 }
               }}
             />
+            {scopeText && <div className="te-dropdown-scope">{scopeText}</div>}
             <div className="te-dropdown-list" role="listbox">
               {available.length === 0 ? (
                 <div className="te-dropdown-empty">Không còn môn phù hợp</div>
@@ -235,6 +246,21 @@ export default function TeacherEditPage() {
     return map;
   }, [assignments]);
 
+  // UC-114: subjects that can be added = subjects of the chosen department + subjects of no department.
+  // '' or an old name not in the list (KEEP) = no department → only subjects of no department.
+  const deptId = form && form.departmentId !== KEEP ? form.departmentId : '';
+  const isAllowed = useCallback(
+    (o) => o.departmentId == null || (deptId !== '' && String(o.departmentId) === deptId),
+    [deptId],
+  );
+  const originalSubjects = useMemo(() => (teacher ? teacher.subjects.map((s) => String(s.subjectId)) : []), [teacher]);
+  const outsideAdded = useMemo(() => {
+    if (!form) return [];
+    const byId = Object.fromEntries(options.map((o) => [String(o.subjectId), o]));
+    return form.subjectIds.filter((id) => !originalSubjects.includes(id) && byId[id] && !isAllowed(byId[id])).map((id) => byId[id].name);
+  }, [form, options, originalSubjects, isAllowed]);
+  const deptName = departments.find((d) => String(d.departmentId) === deptId)?.name;
+
   const dirty = useMemo(() => {
     if (!form || !teacher) return false;
     return (
@@ -267,7 +293,7 @@ export default function TeacherEditPage() {
 
   async function handleSubmit(e) {
     e.preventDefault();
-    const found = validate(form);
+    const found = validate(form, outsideAdded);
     setErrors(found);
     setTouched({ fullName: true });
     if (Object.keys(found).length) {
@@ -443,15 +469,22 @@ export default function TeacherEditPage() {
                     options={options}
                     value={form.subjectIds}
                     locked={locked}
-                    invalid={Boolean(errors.subjectIds)}
+                    invalid={Boolean(errors.subjectIds) || outsideAdded.length > 0}
+                    isAllowed={isAllowed}
+                    original={originalSubjects}
+                    scopeText={deptName ? `Môn của ${deptName} và môn chưa thuộc tổ nào` : 'Chưa chọn tổ: chỉ hiện môn chưa thuộc tổ nào'}
                     onChange={(ids) => setField('subjectIds', ids)}
                   />
                   {errors.subjectIds ? (
                     <span className="field-error">{errors.subjectIds}</span>
+                  ) : outsideAdded.length ? (
+                    <span className="field-error">
+                      Môn {outsideAdded.join(', ')} thuộc tổ khác. Hãy bỏ môn này hoặc chọn lại tổ chuyên môn.
+                    </span>
                   ) : (
                     <span className="field-help">
-                      Môn chuyên môn quyết định giáo viên được phân công dạy môn nào. Môn có biểu tượng khoá đang được
-                      phân công nên chưa thể bỏ.
+                      Chỉ thêm được môn của tổ đã chọn và môn chưa thuộc tổ nào (<Link to="/departments">xem tổ chuyên môn</Link>).
+                      Môn có biểu tượng khoá đang được phân công nên chưa thể bỏ.
                     </span>
                   )}
                 </div>

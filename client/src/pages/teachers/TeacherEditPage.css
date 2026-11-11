@@ -61,6 +61,10 @@
   font-weight: 500;
 }
 .te-chip--locked { padding-right: 8px; }
+.te-chip--warn { background: var(--amber-bg); color: var(--amber); outline-color: #f3d9a8; }
+.te-chip--bad { background: var(--red-bg); color: var(--red-pen); outline-color: var(--red-pen); }
+.te-chip--warn .icon, .te-chip--bad .icon { font-size: 14px !important; }
+.te-dropdown-scope { padding: 6px 12px; font-size: 11px; color: var(--graphite-500); background: var(--graphite-50); border-bottom: 1px solid var(--graphite-200); }
 .te-chip-remove, .te-chip-lock { display: inline-grid; place-items: center; width: 20px; height: 20px; border-radius: 4px; color: var(--ink-400); }
 .te-chip-remove { border: 0; background: none; cursor: pointer; padding: 0; }
 .te-chip-remove:hover { color: var(--ink-800); background: var(--ink-100); }

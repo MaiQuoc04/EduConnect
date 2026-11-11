@@ -12,9 +12,11 @@ import './TeachingAssignmentPage.css';
 const keyOf = (classId, subjectId) => `${classId}:${subjectId}`;
 const idOf = (v) => (v == null || v === '' ? null : String(v));
 const fold = (v = '') => foldVietnamese(v); // accent-insensitive search, same rule as the server
+const shortDate = (iso) => (iso ? `${iso.slice(8, 10)}/${iso.slice(5, 7)}` : '');
+const dateRange = (a) => `${shortDate(a.startDate)} – ${shortDate(a.endDate)}`;
 
 // ── Teacher picker popover (fixed position so the scrolling matrix does not clip it) ──
-function CellPicker({ anchor, cell, teachers, loads, onPick, onUndo, onClose }) {
+function CellPicker({ anchor, cell, teachers, loads, history, range, onPick, onUndo, onClose }) {
   const ref = useRef(null);
   const [query, setQuery] = useState('');
   const [pos, setPos] = useState({ top: 0, left: 0 });
@@ -54,6 +56,14 @@ function CellPicker({ anchor, cell, teachers, loads, onPick, onUndo, onClose }) 
       <div className="ta-picker-head">
         <div className="ta-picker-title">{cell.className} · {cell.subjectName}</div>
         <div className="ta-picker-sub">{cell.periods} tiết/tuần · chỉ hiện giáo viên đã đăng ký dạy môn này</div>
+        {history.length > 0 && (
+          <ul className="ta-picker-history" aria-label="Phân công trong khoảng đang xem">
+            {history.map((a) => (
+              <li key={a.assignmentId}><span>{a.teacherName}</span><span>{formatDate(a.startDate)} – {formatDate(a.endDate)}</span></li>
+            ))}
+          </ul>
+        )}
+        <div className="ta-picker-range">Giáo viên chọn ở đây dạy từ {formatDate(range.from)} đến {formatDate(range.to)}.</div>
       </div>
       <input className="ta-picker-search" placeholder="Tìm giáo viên…" value={query} onChange={(e) => setQuery(e.target.value)}
         onKeyDown={(e) => { if (e.key === 'Enter' && list[0]) { e.preventDefault(); onPick(list[0].teacherId); } }} />
@@ -133,11 +143,17 @@ export default function TeachingAssignmentPage() {
     ...t, teacherId: String(t.teacherId), subjectIds: t.subjectIds.map(String),
   }])), [board]);
 
-  // Saved teacher of each cell on the view date (if several rows overlap, the latest start wins).
-  const saved = useMemo(() => {
-    const map = {};
-    for (const a of board?.assignments ?? []) map[keyOf(a.classId, a.subjectId)] = String(a.teacherId);
-    return map;
+  // Saved teacher of each cell on the first day of the range (= the teacher a save replaces), and every assignment
+  // of the cell inside [from, to] with its dates (business-rules §4: history is kept).
+  const { saved, history } = useMemo(() => {
+    const cur = {};
+    const all = {};
+    for (const a of board?.assignments ?? []) {
+      const k = keyOf(a.classId, a.subjectId);
+      (all[k] ??= []).push(a);
+      if (a.startDate <= board.from && a.endDate >= board.from) cur[k] = String(a.teacherId);
+    }
+    return { saved: cur, history: all };
   }, [board]);
   const valueOf = useCallback((k) => (k in draft ? draft[k] : saved[k] ?? null), [draft, saved]);
 
@@ -179,7 +195,9 @@ export default function TeachingAssignmentPage() {
     return () => window.removeEventListener('beforeunload', handler);
   }, [dirty]);
 
-  const editable = board?.date && board.date >= board.today;
+  // Changes apply to the range being viewed; it must start today or later (no back-dated changes).
+  const editable = board?.from && board.from >= board.today;
+  const reload = (params) => load({ schoolYearId: board?.schoolYear?.id, from: board?.from, to: board?.to, ...params });
 
   function setCell(k, teacherId) {
     setSaveError(null);
@@ -201,7 +219,8 @@ export default function TeachingAssignmentPage() {
     try {
       const data = await saveTeachingAssignments({
         schoolYearId: Number(board.schoolYear.id),
-        date: board.date,
+        startDate: board.from,
+        endDate: board.to,
         changes: changes.map((c) => ({
           classId: Number(c.classId),
           subjectId: Number(c.subjectId),
@@ -212,7 +231,7 @@ export default function TeachingAssignmentPage() {
       setBoard(data);
       setDraft({});
       setPicker(null);
-      toast(`Đã lưu ${changes.length} thay đổi phân công, áp dụng từ ${formatDate(data.date)}.`);
+      toast(`Đã lưu ${changes.length} thay đổi phân công, áp dụng từ ${formatDate(data.from)} đến ${formatDate(data.to)}.`);
     } catch (err) {
       setSaveError({ text: errorText(err), stale: err.code === 'MSG_ASSIGNMENT_STALE' });
     } finally {
@@ -314,15 +333,25 @@ export default function TeachingAssignmentPage() {
             <Icon name="expand_more" className="select-icon" />
           </div>
           <label className="ta-date">
-            <span>Áp dụng từ ngày</span>
-            <input type="date" value={board.date ?? ''}
+            <span>Từ ngày</span>
+            <input type="date" value={board.from ?? ''}
               min={board.schoolYear?.startDate} max={board.schoolYear?.endDate}
-              onChange={(e) => e.target.value && confirmDiscard() && load({ schoolYearId: board.schoolYear.id, date: e.target.value })} />
+              onChange={(e) => e.target.value && confirmDiscard() && reload({ from: e.target.value, to: e.target.value > board.to ? e.target.value : board.to })} />
           </label>
+          <label className="ta-date">
+            <span>Đến ngày</span>
+            <input type="date" value={board.to ?? ''}
+              min={board.from ?? board.schoolYear?.startDate} max={board.schoolYear?.endDate}
+              onChange={(e) => e.target.value && confirmDiscard() && reload({ to: e.target.value < board.from ? board.from : e.target.value })} />
+          </label>
+          <div className="ta-quick">
+            <button type="button" className="hr-inline-btn" onClick={() => confirmDiscard() && reload({ from: board.today > board.schoolYear.endDate ? board.schoolYear.startDate : board.today, to: board.schoolYear.endDate })}>Từ hôm nay</button>
+            <button type="button" className="hr-inline-btn" onClick={() => confirmDiscard() && reload({ from: board.schoolYear.startDate, to: board.schoolYear.endDate })}>Cả năm học</button>
+          </div>
           <span className="ta-scope-note">
             {editable
-              ? `Ma trận hiển thị phân công ngày ${formatDate(board.date)}; thay đổi có hiệu lực từ ngày này đến hết năm học.`
-              : `Ngày ${formatDate(board.date)} đã qua – chỉ xem. Chọn từ hôm nay trở đi để thay đổi.`}
+              ? `Mỗi ô liệt kê giáo viên dạy trong khoảng ${formatDate(board.from)} – ${formatDate(board.to)} kèm ngày bắt đầu, kết thúc. Giáo viên chọn mới sẽ dạy đúng khoảng này; phần ngoài khoảng giữ nguyên.`
+              : `Khoảng này bắt đầu trước hôm nay nên chỉ xem lịch sử. Chọn "Từ ngày" là hôm nay hoặc sau đó để phân công.`}
           </span>
         </div>
       )}
@@ -330,14 +359,16 @@ export default function TeachingAssignmentPage() {
       <div className="ta-rule">
         <Icon name="info" />
         <span>
-          <strong>Quy tắc:</strong> mỗi lớp – môn có đúng một giáo viên; chỉ chọn được giáo viên đã đăng ký dạy môn đó.
-          Tiết đã điểm danh giữ nguyên giáo viên cũ, các tiết sau chuyển sang giáo viên mới.
+          <strong>Quy tắc:</strong> mỗi lớp – môn tại một thời điểm có đúng một giáo viên; chỉ chọn được giáo viên đã đăng
+          ký dạy môn đó. Phân công có ngày bắt đầu và kết thúc; lịch sử giáo viên cũ được giữ lại. Tiết đã điểm danh giữ
+          nguyên giáo viên cũ, các tiết chưa điểm danh trong khoảng chuyển sang giáo viên mới.
         </span>
         <span className="ta-legend">
           <span><i className="ta-sw ta-sw--ok" />Đã phân công</span>
           <span><i className="ta-sw ta-sw--empty" />Chưa có GV</span>
           <span><i className="ta-sw ta-sw--locked" />GV đã khoá</span>
           <span><i className="ta-sw ta-sw--changed" />Chưa lưu</span>
+          <span><i className="ta-sw ta-sw--history" />Nhiều GV trong khoảng</span>
         </span>
       </div>
 
@@ -414,7 +445,22 @@ export default function TeachingAssignmentPage() {
                               aria-haspopup="dialog"
                               aria-label={`${c.className} – ${s.name}: ${t ? t.fullName : 'chưa có giáo viên'}`}
                               onClick={(e) => setPicker(isOpen ? null : { anchor: e.currentTarget, classId: c.classId, subjectId: s.subjectId })}>
-                              {st === 'empty' ? (
+                              {changed ? (
+                                <span className="ta-cell-body">
+                                  <span className="ta-cell-name">{t ? t.fullName : <><b className="ta-empty-tag">Trống</b> Bỏ phân công</>}</span>
+                                  <span className="ta-cell-sub">Chưa lưu · {shortDate(board.from)} – {shortDate(board.to)}</span>
+                                </span>
+                              ) : (history[k]?.length ?? 0) > 1 || (history[k]?.[0] && (history[k][0].startDate > board.from || history[k][0].endDate < board.to)) ? (
+                                <span className="ta-cell-body ta-cell-history">
+                                  {history[k].map((a) => (
+                                    <span key={a.assignmentId} className="ta-hist-row">
+                                      <span className="ta-hist-name">{a.teacherName}</span>
+                                      <span className="ta-hist-dates">{dateRange(a)}</span>
+                                    </span>
+                                  ))}
+                                  {!saved[k] && <span className="ta-cell-sub"><b className="ta-empty-tag">Trống</b> từ {shortDate(board.from)}</span>}
+                                </span>
+                              ) : st === 'empty' ? (
                                 <span className="ta-cell-body">
                                   <span className="ta-cell-name"><b className="ta-empty-tag">Trống</b> Chọn GV</span>
                                   <span className="ta-cell-sub">Cần bố trí {periodsPw} tiết/tuần</span>
@@ -423,7 +469,7 @@ export default function TeachingAssignmentPage() {
                                 <span className="ta-cell-body">
                                   <span className={`ta-cell-name${st === 'locked' ? ' ta-strike' : ''}`}>{t?.fullName ?? 'Không rõ'}</span>
                                   <span className="ta-cell-sub">
-                                    {st === 'locked' ? 'Tài khoản đã khoá – cần thay' : `${t?.teacherCode ?? ''} · ${periodsPw} tiết/tuần`}
+                                    {st === 'locked' ? 'Tài khoản đã khoá – cần thay' : `${dateRange(history[k][0])} · ${periodsPw} tiết/tuần`}
                                   </span>
                                 </span>
                               )}
@@ -448,7 +494,7 @@ export default function TeachingAssignmentPage() {
               {saveError && (
                 <div className="form-error ta-save-error" role="alert">
                   <Icon name="error" size="sm" /><span>{saveError.text}</span>
-                  {saveError.stale && <button type="button" className="hr-inline-btn" onClick={() => load({ schoolYearId: board.schoolYear.id, date: board.date })}>Tải lại dữ liệu</button>}
+                  {saveError.stale && <button type="button" className="hr-inline-btn" onClick={() => reload({})}>Tải lại dữ liệu</button>}
                 </div>
               )}
               <div className="hr-savebar-info">
@@ -456,7 +502,7 @@ export default function TeachingAssignmentPage() {
                 <span>
                   {dirty ? (
                     <>
-                      <strong>{changes.length}</strong> thay đổi chưa lưu, áp dụng từ {formatDate(board.date)}
+                      <strong>{changes.length}</strong> thay đổi chưa lưu, áp dụng từ {formatDate(board.from)} đến {formatDate(board.to)}
                       {emptyChanges > 0 && <span className="hr-todo"> · gồm {emptyChanges} ô bỏ trống</span>}
                     </>
                   ) : 'Chưa có thay đổi. Bấm vào một ô để chọn giáo viên.'}
@@ -481,6 +527,8 @@ export default function TeachingAssignmentPage() {
           cell={pickerCell}
           teachers={qualified}
           loads={loads}
+          history={history[pickerCell.key] ?? []}
+          range={{ from: board.from, to: board.to }}
           onPick={(tid) => { setCell(pickerCell.key, tid); setPicker(null); }}
           onUndo={() => { setDraft((d) => { const n = { ...d }; delete n[pickerCell.key]; return n; }); setPicker(null); }}
           onClose={() => setPicker(null)}

@@ -1,4 +1,4 @@
-# Screen list (71)
+# Screen list (73)
 
 Source: Report 3 section 5.1 (draft v1.3). Screen numbers here are Report 3's; the numbering in `Screen_List_Report3_v1.2` (ordered by FE) differs. Besides desktop, 8 screens also need a mobile layout (decided 18/10): Login Page, Group Feed, Group Post Detail, Chat Room, School Feed, Timetable View, Academic Results, Child Attendance. No dashboard screen.
 
@@ -75,3 +75,5 @@ Source: Report 3 section 5.1 (draft v1.3). Screen numbers here are Report 3's; t
 | 69 | Parent List | FE-14 | Allows School Manager to search and filter parents. |
 | 70 | Class Types & Subject Weights | FE-04 | Allows School Manager to define class types (each for one grade or every grade) and set their subjects and periods per week for a school year (shown as "Loại lớp & số tiết"; every weight is 1). |
 | 71 | Password Reset Requests | FE-13 | Lists the automatic resets from password reset requests (tab waiting for sign-in / used): "sent by email" or "to hand over" with the temporary password; System Admin sees all, School Manager student, parent and teacher accounts (added 01/11/2026). |
+| 72 | Departments | FE-03 | Allows School Manager to create, rename and delete departments (tổ chuyên môn) and choose the subjects of each (UC-114, added 07/11/2026). |
+| 73 | Import Teachers | FE-03 | Allows School Manager to create teacher accounts from a file: template, preview, import, one-time password file (UC-116, same steps as Import Accounts; added 07/11/2026). |

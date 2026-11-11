@@ -1,25 +1,81 @@
 // FE-03 (Dung) – teachers: SCR-14 list (UC-15), SCR-15 detail (UC-16), SCR-17 update (UC-17).
+import ExcelJS from 'exceljs';
 import { withTransaction } from '../../config/db.js';
 import { AppError, badRequest, notFound } from '../../utils/AppError.js';
-import { ERROR_CODES } from './teacher.constants.js';
+import { ERROR_CODES, TEACHER_LIMITS, USER_STATUS } from './teacher.constants.js';
 import * as format from './teacher.format.js';
 import * as queries from './teacher.queries.js';
 
-// SCR-14 / UC-15 – paginated teacher list with subjects, current homeroom class, class count and periods.
-export async function listTeachers({ page, limit, search, subject, homeroom, status }) {
-  const filters = { search, subject, homeroom, status };
-  const total = await queries.countTeachers(filters);
-  const rows = await queries.findTeachersPage(filters, { limit, offset: (page - 1) * limit });
-  if (!rows.length) return format.toTeacherPage({ teachers: [], total, page, limit });
-
+// Teachers of one page with subjects, current homeroom class, class count and periods.
+async function teacherRows(filters, { limit, offset }) {
+  const rows = await queries.findTeachersPage(filters, { limit, offset });
+  if (!rows.length) return [];
   const ids = rows.map((r) => r.teacherId);
   const [subjectRows, homeroomRows, loadRows] = await Promise.all([
     queries.findSubjectNamesByTeacherIds(ids),
     queries.findCurrentHomeroomByTeacherIds(ids),
     queries.findCurrentLoadByTeacherIds(ids),
   ]);
-  const teachers = format.toTeacherListItems(rows, { subjectRows, homeroomRows, loadRows });
-  return format.toTeacherPage({ teachers, total, page, limit });
+  return format.toTeacherListItems(rows, { subjectRows, homeroomRows, loadRows });
+}
+
+// SCR-14 / UC-15 – paginated teacher list with subjects, current homeroom class, class count and periods.
+export async function listTeachers({ page, limit, search, subject, homeroom, status, department }) {
+  const filters = { search, subject, homeroom, status, department };
+  const [total, stats] = await Promise.all([queries.countTeachers(filters), queries.findTeacherStats()]);
+  const teachers = total ? await teacherRows(filters, { limit, offset: (page - 1) * limit }) : [];
+  return { ...format.toTeacherPage({ teachers, total, page, limit }), stats };
+}
+
+const XLSX_MIME = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
+
+// SCR-14 / UC-115 – the teacher list with the same filters as the screen, as an .xlsx file (all pages).
+export async function exportTeachers({ search, subject, homeroom, status, department }) {
+  const filters = { search, subject, homeroom, status, department };
+  const total = await queries.countTeachers(filters);
+  if (total > TEACHER_LIMITS.EXPORT_MAX_ROWS) {
+    throw badRequest(ERROR_CODES.TOO_MANY, 'Too many teachers to export; narrow the filters.', { max: TEACHER_LIMITS.EXPORT_MAX_ROWS });
+  }
+  const teachers = total ? await teacherRows(filters, { limit: TEACHER_LIMITS.EXPORT_MAX_ROWS, offset: 0 }) : [];
+
+  const wb = new ExcelJS.Workbook();
+  const ws = wb.addWorksheet('Giao vien');
+  ws.columns = [
+    { header: 'STT', key: 'no', width: 6 },
+    { header: 'Mã giáo viên', key: 'teacherCode', width: 14 },
+    { header: 'Họ và tên', key: 'fullName', width: 28 },
+    { header: 'Tổ chuyên môn', key: 'department', width: 30 },
+    { header: 'Môn chuyên môn', key: 'subjects', width: 36 },
+    { header: 'Email', key: 'email', width: 30 },
+    { header: 'Số điện thoại', key: 'phone', width: 16, style: { numFmt: '@' } }, // keeps the leading 0
+    { header: 'Lớp chủ nhiệm', key: 'homeroomClass', width: 14 },
+    { header: 'Số lớp đang dạy', key: 'classCount', width: 15 },
+    { header: 'Số tiết/tuần', key: 'periodsPerWeek', width: 13 },
+    { header: 'Trạng thái', key: 'status', width: 14 },
+  ];
+  const header = ws.getRow(1);
+  header.font = { bold: true };
+  header.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF4F1FA' } };
+  ws.views = [{ state: 'frozen', ySplit: 1 }];
+  teachers.forEach((t, i) =>
+    ws.addRow({
+      no: i + 1,
+      teacherCode: t.teacherCode,
+      fullName: t.fullName,
+      department: t.department ?? '',
+      subjects: t.subjects.join(', '),
+      email: t.email ?? '',
+      phone: t.phone ?? '',
+      homeroomClass: t.homeroomClass ?? '',
+      classCount: t.classCount,
+      periodsPerWeek: t.periodsPerWeek,
+      status: t.status === USER_STATUS.LOCKED ? 'Đã khoá' : 'Đang hoạt động',
+    }),
+  );
+  ws.autoFilter = { from: { row: 1, column: 1 }, to: { row: 1, column: ws.columns.length } };
+
+  const date = new Date().toLocaleDateString('sv-SE', { timeZone: 'Asia/Ho_Chi_Minh' }).replaceAll('-', '');
+  return { fileName: `danh-sach-giao-vien-${date}.xlsx`, contentType: XLSX_MIME, buffer: Buffer.from(await wb.xlsx.writeBuffer()) };
 }
 
 // SCR-15 / UC-16 – profile, subjects, homeroom class, assignments of the current year and one week of schedule.
@@ -69,16 +125,38 @@ export async function updateTeacher({ id, fullName, departmentId, subjectIds }) 
       });
     }
 
-    await queries.updateUserFullName(teacher.userId, fullName, conn);
+    // Department after this save: departmentId undefined = keep the current one.
+    let department = teacher.department ? await queries.findActiveDepartmentByName(teacher.department, conn) : null;
     if (departmentId !== undefined) {
-      let name = null;
+      department = null;
       if (departmentId !== null) {
-        const dept = await queries.findActiveDepartmentById(departmentId, conn);
-        if (!dept) throw badRequest(ERROR_CODES.DEPARTMENT_INVALID, 'Unknown department.', { field: 'departmentId' });
-        name = dept.name; // teachers.department keeps the name, spelled exactly as in the list
+        department = await queries.findActiveDepartmentById(departmentId, conn);
+        if (!department) throw badRequest(ERROR_CODES.DEPARTMENT_INVALID, 'Unknown department.', { field: 'departmentId' });
       }
-      await queries.updateDepartment(id, name, conn);
     }
+
+    // business-rules §4 (07/11/2026): a subject ADDED to a teacher must belong to the teacher's department or to no
+    // department. ASSUMPTION: subjects the teacher already has are kept even when they are outside the department
+    // (data from before the rule, or a department change) – the School Manager removes them when needed.
+    const current = new Set((await queries.findSubjectsOfTeacher(id, conn)).map((s) => String(s.subjectId)));
+    const added = subjectIds.filter((sid) => !current.has(String(sid)));
+    if (added.length && (await queries.hasDepartmentSubjects(conn))) {
+      const deptId = department ? String(department.departmentId) : null;
+      const outside = (await queries.findDepartmentOfSubjects(added, conn))
+        .filter((s) => s.departmentId != null && String(s.departmentId) !== deptId)
+        .map((s) => s.name);
+      if (outside.length) {
+        throw badRequest(ERROR_CODES.SUBJECT_NOT_IN_DEPARTMENT, 'Some subjects belong to another department.', {
+          field: 'subjectIds',
+          subjects: outside,
+          department: department?.name ?? null,
+        });
+      }
+    }
+
+    await queries.updateUserFullName(teacher.userId, fullName, conn);
+    // teachers.department keeps the name, spelled exactly as in the list
+    if (departmentId !== undefined) await queries.updateDepartment(id, department?.name ?? null, conn);
     await queries.replaceTeacherSubjects(id, subjectIds, conn);
     return { teacherId: Number(id) };
   });

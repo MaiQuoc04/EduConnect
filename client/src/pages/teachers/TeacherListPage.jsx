@@ -1,6 +1,9 @@
 import { useEffect, useRef, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
+import { exportTeachers, getDepartmentOptions, getSubjectOptions } from '../../api/teachers.js';
 import Icon from '../../components/Icon.jsx';
+import { useToast } from '../../context/ToastContext.jsx';
+import { errorText } from '../../messages.js';
 import { formatPhone, LIMITS } from '../../utils/teacherValidation.js';
 import { useTeachers } from './useTeachers.js';
 import './TeacherListPage.css';
@@ -65,15 +68,23 @@ function RowMenu({ teacherId, isLocked }) {
           >
             <Icon name="edit_note" size="sm" /> Sửa thông tin
           </button>
-          {isLocked ? (
-            <button type="button" className="tc-dropdown-item tc-dropdown-item--green" role="menuitem">
-              <Icon name="lock_open" size="sm" /> Mở khoá hồ sơ
-            </button>
-          ) : (
-            <button type="button" className="tc-dropdown-item tc-dropdown-item--ink" role="menuitem">
-              <Icon name="assignment_ind" size="sm" /> Phân công lại
-            </button>
-          )}
+          <button
+            type="button"
+            className="tc-dropdown-item tc-dropdown-item--ink"
+            role="menuitem"
+            onClick={() => navigate(`/teaching-assignments?teacherId=${teacherId}`)}
+          >
+            <Icon name="assignment_ind" size="sm" /> {isLocked ? 'Phân công lại giảng dạy' : 'Phân công giảng dạy'}
+          </button>
+          {/* UC-100 / UC-101 (FE-13) live on the detail screen: reset password, lock / unlock, clear a temporary lock. */}
+          <button
+            type="button"
+            className={`tc-dropdown-item ${isLocked ? 'tc-dropdown-item--green' : ''}`}
+            role="menuitem"
+            onClick={() => navigate(`/teachers/${teacherId}#account`)}
+          >
+            <Icon name={isLocked ? 'lock_open' : 'manage_accounts'} size="sm" /> {isLocked ? 'Mở khoá tài khoản' : 'Tài khoản & mật khẩu'}
+          </button>
         </div>
       )}
     </div>
@@ -153,14 +164,15 @@ function SkeletonRow() {
   );
 }
 
-// ── Stats cards ───────────────────────────────────────────────────────────────
-function StatsCards({ total, loading }) {
+// ── Stats cards (whole school, not the filters) ──────────────────────────────
+function StatsCards({ stats }) {
+  const v = (x) => (stats ? x : '—');
   return (
     <div className="tc-stats-grid">
       <div className="tc-stat-card">
         <div>
           <div className="tc-stat-label">Tổng nhân sự</div>
-          <div className="tc-stat-value">{loading ? '—' : total}</div>
+          <div className="tc-stat-value">{v(stats?.total)}</div>
           <div className="tc-stat-caption">Cán bộ, giáo viên</div>
         </div>
         <div className="tc-stat-icon tc-stat-icon--ink"><Icon name="badge" /></div>
@@ -168,24 +180,26 @@ function StatsCards({ total, loading }) {
       <div className="tc-stat-card">
         <div>
           <div className="tc-stat-label">Đang chủ nhiệm</div>
-          <div className="tc-stat-value">—</div>
-          <div className="tc-stat-caption tc-text-green">Đạt 100% chỉ tiêu lớp</div>
+          <div className="tc-stat-value">{v(stats?.homeroom)}</div>
+          <div className={`tc-stat-caption${stats && stats.classesWithHomeroom === stats.classes ? ' tc-text-green' : ''}`}>
+            {stats ? `${stats.classesWithHomeroom}/${stats.classes} lớp năm học này đã có GVCN` : 'Năm học hiện tại'}
+          </div>
         </div>
         <div className="tc-stat-icon tc-stat-icon--green"><Icon name="assignment_turned_in" /></div>
       </div>
       <div className="tc-stat-card">
         <div>
           <div className="tc-stat-label">Tải giờ TB</div>
-          <div className="tc-stat-value">— <span className="tc-stat-unit">tiết/tuần</span></div>
-          <div className="tc-stat-caption">Định mức chuẩn: 18 tiết</div>
+          <div className="tc-stat-value">{v(stats ? String(stats.avgPeriods).replace('.', ',') : null)} <span className="tc-stat-unit">tiết/tuần</span></div>
+          <div className="tc-stat-caption">Trung bình giáo viên đang công tác, theo phân công hôm nay</div>
         </div>
         <div className="tc-stat-icon tc-stat-icon--blue"><Icon name="timelapse" /></div>
       </div>
       <div className="tc-stat-card">
         <div>
           <div className="tc-stat-label">Hồ sơ đã khoá</div>
-          <div className="tc-stat-value tc-text-red">—</div>
-          <div className="tc-stat-caption">Tạm ngưng công tác</div>
+          <div className="tc-stat-value tc-text-red">{v(stats?.locked)}</div>
+          <div className="tc-stat-caption">Tài khoản đã khoá</div>
         </div>
         <div className="tc-stat-icon tc-stat-icon--red"><Icon name="lock" /></div>
       </div>
@@ -196,16 +210,39 @@ function StatsCards({ total, loading }) {
 // ── Main page ─────────────────────────────────────────────────────────────────
 export default function TeacherListPage() {
   const {
-    teachers, total, totalPages, page, setPage,
+    teachers, total, totalPages, page, setPage, filters, stats,
     loading, error,
     search, setSearch,
     filterSubject, setFilterSubject,
+    filterDepartment, setFilterDepartment,
     filterHomeroom, setFilterHomeroom,
     filterStatus, setFilterStatus,
     resetFilters,
   } = useTeachers();
 
+  // Filter choices from the database (subjects of the school, departments of UC-114), not a fixed list.
+  const [subjectOptions, setSubjectOptions] = useState([]);
+  const [departmentOptions, setDepartmentOptions] = useState([]);
+  useEffect(() => {
+    getSubjectOptions().then((d) => setSubjectOptions(d.subjects ?? [])).catch(() => {});
+    getDepartmentOptions().then((d) => setDepartmentOptions(d.departments ?? [])).catch(() => {});
+  }, []);
+
   const searchRef = useRef(null);
+  const toast = useToast();
+  const [exporting, setExporting] = useState(false);
+
+  // UC-115: every teacher matching the current filters (all pages) as an .xlsx file.
+  async function handleExport() {
+    setExporting(true);
+    try {
+      await exportTeachers(filters);
+    } catch (err) {
+      toast(errorText(err), { type: 'error' });
+    } finally {
+      setExporting(false);
+    }
+  }
 
   // ⌘K / Ctrl+K focus search
   useEffect(() => {
@@ -232,8 +269,6 @@ export default function TeacherListPage() {
         </div>
         <div className="tc-header-meta">
           <span className="stamp-badge">SCR-14</span>
-          <span className="tc-sep">·</span>
-          <span className="tc-meta-label">Niên khoá 2026–2027</span>
         </div>
       </div>
 
@@ -248,16 +283,25 @@ export default function TeacherListPage() {
             )}
           </div>
           <p className="tc-subtitle">
-            Danh sách cán bộ giáo viên niên khoá 2026–2027 · Quản lý hồ sơ chuyên môn và phân công giảng dạy
+            Danh sách cán bộ giáo viên · Quản lý hồ sơ chuyên môn và phân công giảng dạy
           </p>
         </div>
-        <button type="button" className="btn btn-secondary tc-export-btn">
-          <Icon name="download" size="sm" /> Xuất danh sách (.xlsx)
-        </button>
+        <div className="tc-title-actions">
+          <Link to="/departments" className="btn btn-secondary tc-export-btn">
+            <Icon name="account_tree" size="sm" /> Tổ chuyên môn
+          </Link>
+          <Link to="/teachers/import" className="btn btn-secondary tc-export-btn">
+            <Icon name="upload_file" size="sm" /> Nhập từ Excel
+          </Link>
+          <button type="button" className="btn btn-primary tc-export-btn" onClick={handleExport} disabled={exporting || loading || total === 0}
+            title={total === 0 ? 'Không có giáo viên nào để xuất' : 'Xuất các giáo viên đang khớp bộ lọc (mọi trang)'}>
+            <Icon name="download" size="sm" /> {exporting ? 'Đang xuất…' : 'Xuất danh sách (.xlsx)'}
+          </button>
+        </div>
       </div>
 
       {/* ── Stats ── */}
-      <StatsCards total={total} loading={loading} />
+      <StatsCards stats={stats} />
 
       {/* ── Filters ── */}
       <div className="tc-filter-bar">
@@ -282,15 +326,23 @@ export default function TeacherListPage() {
               onChange={(e) => { setFilterSubject(e.target.value); setPage(1); }}
             >
               <option value="">Môn dạy: Tất cả</option>
-              <option value="Toán">Toán học</option>
-              <option value="Ngữ văn">Ngữ văn</option>
-              <option value="Tiếng Anh">Tiếng Anh</option>
-              <option value="Vật lý">Vật lý</option>
-              <option value="Hóa học">Hóa học</option>
-              <option value="Sinh học">Sinh học</option>
-              <option value="Tin học">Tin học</option>
-              <option value="Lịch sử">Lịch sử</option>
-              <option value="Địa lý">Địa lý</option>
+              {filterSubject && !subjectOptions.some((s) => s.name === filterSubject) && <option value={filterSubject}>{filterSubject}</option>}
+              {subjectOptions.map((s) => <option key={s.subjectId} value={s.name}>{s.name}</option>)}
+            </select>
+            <Icon name="expand_more" className="select-icon" />
+          </div>
+          <div className="select-wrap">
+            <select
+              value={filterDepartment}
+              onChange={(e) => { setFilterDepartment(e.target.value); setPage(1); }}
+              aria-label="Tổ chuyên môn"
+            >
+              <option value="">Tổ: Tất cả</option>
+              {filterDepartment && filterDepartment !== '__none' && !departmentOptions.some((d) => d.name === filterDepartment) && (
+                <option value={filterDepartment}>{filterDepartment}</option>
+              )}
+              {departmentOptions.map((d) => <option key={d.departmentId} value={d.name}>{d.name}</option>)}
+              <option value="__none">Chưa thuộc tổ nào</option>
             </select>
             <Icon name="expand_more" className="select-icon" />
           </div>
