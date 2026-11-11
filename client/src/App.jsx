@@ -24,6 +24,9 @@ import SchoolFeedPage from './pages/schoolfeed/SchoolFeedPage.jsx';
 import { SCHOOL_FEED_ROLES } from './pages/schoolfeed/schoolFeedShared.jsx';
 import SchoolPostDetailPage from './pages/schoolfeed/SchoolPostDetailPage.jsx';
 import UpdateSchoolPostPage from './pages/schoolfeed/UpdateSchoolPostPage.jsx';
+import ParentDetailPage from './pages/parents/ParentDetailPage.jsx';
+import ParentListPage from './pages/parents/ParentListPage.jsx';
+import UpdateParentPage from './pages/parents/UpdateParentPage.jsx';
 import SchoolYearPage from './pages/school-years/SchoolYearPage.jsx';
 import ImportParentLinksPage from './pages/students/ImportParentLinksPage.jsx';
 import StudentDetailPage from './pages/students/StudentDetailPage.jsx';
@@ -188,6 +191,33 @@ export default function App() {
           element={
             <ProtectedRoute roles={['SCHOOL_MANAGER']}>
               <UpdateStudentRelationshipPage />
+            </ProtectedRoute>
+          }
+        />
+        {/* FE-14 Parent Management (Anh) */}
+        <Route
+          path="parents"
+          element={
+            <ProtectedRoute roles={['SCHOOL_MANAGER']}>
+              <ParentListPage />
+            </ProtectedRoute>
+          }
+        />
+        {/* UC-105 View Parent Detail (SCR-10), opened from SCR-69. */}
+        <Route
+          path="parents/:parentId"
+          element={
+            <ProtectedRoute roles={['SCHOOL_MANAGER']}>
+              <ParentDetailPage />
+            </ProtectedRoute>
+          }
+        />
+        {/* UC-106 Update Parent Information (SCR-16), opened from SCR-10. */}
+        <Route
+          path="parents/:parentId/edit"
+          element={
+            <ProtectedRoute roles={['SCHOOL_MANAGER']}>
+              <UpdateParentPage />
             </ProtectedRoute>
           }
         />

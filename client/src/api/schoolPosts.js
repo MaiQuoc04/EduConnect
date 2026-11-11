@@ -40,16 +40,26 @@ export async function unlikeSchoolPost(schoolPostId) {
   return data;
 }
 
-// UC-60 POST /school-posts { title, content, postType, sendNotification?, gradeLevelIds?, classIds? }
-// -> 201 { post, attachments } (UC-59 shape). ANNOUNCEMENT without a grade or class -> 400 MSG_AUDIENCE_REQUIRED;
-// a class outside the current school year -> 400 MSG_CLASS_NOT_FOUND { classIds }.
+// GET /school-posts/attachment-limits (School Manager) -> { maxFiles, maxFileMb, maxVideoMb, types: [{ mimeType, kind,
+// extensions }] }: the file picker of SCR-31 / SCR-06. Sizes come from system_settings at each call.
+export async function getAttachmentLimits({ signal } = {}) {
+  const { data } = await api.get('/school-posts/attachment-limits', { signal });
+  return data;
+}
+
+// UC-60 POST /school-posts { title, content, postType, sendNotification?, gradeLevelIds?, classIds?, attachments? }
+// -> 201 { post, attachments } (UC-59 shape). attachments = the /uploads/confirm answers (api/uploads.js), at most 10,
+// in the order shown. ANNOUNCEMENT without a grade or class -> 400 MSG_AUDIENCE_REQUIRED; a class outside the current
+// school year -> 400 MSG_CLASS_NOT_FOUND { classIds }; too many files -> 400 MSG_TOO_MANY_ATTACHMENTS { max }.
+// UC-59 attachments: [{ attachmentId, fileName, mimeType, sizeBytes, url }] with url signed for one hour.
 export async function createSchoolPost(body) {
   const { data } = await api.post('/school-posts', body);
   return data;
 }
 
-// UC-61 PATCH /school-posts/:schoolPostId -> { post, attachments }. Only title, content, gradeLevelIds, classIds are
-// accepted (postType / sendNotification -> 400 MSG_FIELD_NOT_EDITABLE { fields }). gradeLevelIds and classIds are one
+// UC-61 PATCH /school-posts/:schoolPostId -> { post, attachments }. Only title, content, gradeLevelIds, classIds,
+// targetRoles, attachments (new files, as UC-60) and removeAttachmentIds (files taken off) are accepted
+// (postType / sendNotification -> 400 MSG_FIELD_NOT_EDITABLE { fields }). gradeLevelIds and classIds are one
 // audience: sending either replaces all the targets.
 export async function updateSchoolPost(schoolPostId, changes) {
   const { data } = await api.patch(`/school-posts/${encodeURIComponent(schoolPostId)}`, changes);

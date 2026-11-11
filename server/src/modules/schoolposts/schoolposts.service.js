@@ -1,6 +1,12 @@
 import { pool, withTransaction } from '../../config/db.js';
 import { emitToSchoolPost, emitToUsers } from '../../sockets/index.js';
 import { badRequest, forbidden, notFound } from '../../utils/AppError.js';
+// Attachment rows shared with FE-05 / FE-06 (data only, no permission check) and the storage they point to.
+import * as files from '../../utils/attachments.js';
+import { objectInfo, signedUrl } from '../../utils/storage.js';
+import { getNumberSetting } from '../../utils/settings.js';
+// The 15 types of the attachments bucket (read only; the shared upload module owns the list).
+import { ATTACHMENT_TYPES } from '../uploads/uploads.service.js';
 import { containsPattern, VI_TRANSLATE } from '../../utils/search.js';
 // Likes / comments rows shared with FE-05 Group Feed: data only; who may do what in the school feed (§8) is here.
 import * as feed from '../../utils/feedInteractions.js';
@@ -11,7 +17,8 @@ import { enrollmentsOfYear, resolveSchoolYearId } from '../students/students.ser
 //   Stage 1 (reading): UC-58 View School Feed & News, UC-59 View School Post Detail (SCR-02, SCR-05).
 //   Stage 2 (School Manager writes): UC-60 Create, UC-61 Update, UC-62 Delete, UC-63 Pin / Unpin (SCR-31, SCR-06).
 //   Stage 3 (interaction): UC-64 React (Like), UC-65 Comment, UC-66 Delete Comment (SCR-05).
-//   Later: attachments (business-rules §15: storage provider not decided yet).
+//   Stage 6 of Supabase Storage (11/11/2026): attachments of UC-58..UC-62 through utils/attachments.js (files in the
+//   PRIVATE attachments bucket; every read signs short-lived links).
 //
 // Schema v0.3: school_posts, comments, attachments and classes have deleted_at; users, students, parents,
 // class_enrollments, student_parents, post_likes, grade_levels, the two *_targets tables, notifications and
@@ -243,19 +250,96 @@ export function countSchoolPostComments(schoolPostIds, db = pool) {
 
 const SCHOOL_POST = feed.FEED_COLUMNS.SCHOOL_POST; // the column of school posts in post_likes / comments
 
-/** Attachments per school post (not deleted): Map id → { attachmentCount, firstImageUrl }. */
+// The column of school posts in attachments (utils/attachments.js target).
+const ATTACHMENT_COLUMN = files.ATTACHMENT_COLUMNS.SCHOOL_POST;
+const attachmentTarget = (schoolPostId) => ({ column: ATTACHMENT_COLUMN, id: schoolPostId });
+
+// Runs fn over items with at most `limit` at the same time (signing calls Supabase over HTTP, not the DB pool).
+async function mapLimit(items, limit, fn) {
+  const out = new Array(items.length);
+  let next = 0;
+  const worker = async () => {
+    while (next < items.length) {
+      const i = next++;
+      out[i] = await fn(items[i]);
+    }
+  };
+  await Promise.all(Array.from({ length: Math.min(limit, items.length) }, worker));
+  return out;
+}
+
+/**
+ * Attachments per school post for the UC-58 cards: Map id → { attachmentCount, firstImageUrl }.
+ * TWO queries for the whole page, whatever its size (DB_POOL_MAX=3): the counts (shared countAttachments) and the
+ * first image of each post (DISTINCT ON). Only that first image is signed – one link per card, never every file – and
+ * the signing is an HTTP call to Supabase Storage, not a DB query (at most 6 at a time). A link that cannot be signed
+ * (object missing, Storage down) gives null: the card simply shows no picture. A row kept on local disk (no
+ * storage_key) gives its file_url as before.
+ */
 async function summarizeAttachments(schoolPostIds, db = pool) {
   if (!schoolPostIds.length) return new Map();
+  const counts = await files.countAttachments(ATTACHMENT_COLUMN, schoolPostIds, db);
+  if (!counts.size) return new Map();
   const { rows } = await db.query(
-    `SELECT school_post_id AS "schoolPostId", COUNT(*) AS "attachmentCount",
-            (array_agg(file_url ORDER BY created_at, attachment_id) FILTER (WHERE mime_type LIKE 'image/%'))[1]
-              AS "firstImageUrl"
+    `SELECT DISTINCT ON (school_post_id) school_post_id AS "schoolPostId", file_url AS "fileUrl",
+            storage_key AS "storageKey", bucket
      FROM attachments
-     WHERE school_post_id = ANY($1::bigint[]) AND deleted_at IS NULL
-     GROUP BY school_post_id`,
-    [schoolPostIds],
+     WHERE school_post_id = ANY($1::bigint[]) AND deleted_at IS NULL AND mime_type LIKE 'image/%'
+     ORDER BY school_post_id, attachment_id`,
+    [[...counts.keys()]],
   );
-  return new Map(rows.map(({ schoolPostId, ...summary }) => [schoolPostId, summary]));
+  const firstImages = new Map(
+    await mapLimit(rows, 6, async ({ schoolPostId, fileUrl, storageKey, bucket }) => {
+      if (!storageKey) return [schoolPostId, fileUrl];
+      try {
+        return [schoolPostId, await signedUrl(bucket, storageKey)];
+      } catch (err) {
+        console.error(`[schoolposts] first image of post ${schoolPostId} not signed: ${err.message}`);
+        return [schoolPostId, null];
+      }
+    }),
+  );
+  return new Map(
+    [...counts].map(([id, attachmentCount]) => [id, { attachmentCount, firstImageUrl: firstImages.get(id) ?? null }]),
+  );
+}
+
+// --- Attachments of UC-60 / UC-61 ----------------------------------------------------------------------------------
+
+// ASSUMPTION: at most 10 files per school post (business-rules §5 sets sizes, not a number). Ten files of up to
+// 10 MB (videos 50 MB) already make a heavy post on a phone, and the Free plan has 5 GB of egress a month.
+export const MAX_ATTACHMENTS = 10;
+
+/** What the SCR-31 / SCR-06 file picker must respect, read from system_settings at each call (never hard-coded). */
+export async function getAttachmentLimits() {
+  return {
+    maxFiles: MAX_ATTACHMENTS,
+    maxFileMb: await getNumberSetting('upload.max_file_mb', 10),
+    maxVideoMb: await getNumberSetting('upload.max_video_mb', 50),
+    types: Object.entries(ATTACHMENT_TYPES).map(([mimeType, rule]) => ({
+      mimeType,
+      kind: rule.kind,
+      extensions: rule.ext,
+    })),
+  };
+}
+
+/**
+ * The files of a UC-60 / UC-61 body (already shaped by the controller: storageKey in school-posts/, the attachments
+ * bucket, a file name), checked against the bucket BEFORE the transaction (HTTP calls must not hold a DB connection
+ * and a lock): each object must exist, and its REAL size and type are written, never the numbers of the body
+ * (they come from the client; /uploads/confirm checked the object itself, these values are its result).
+ * insertAttachments then refuses a key that is still in tmp/ or belongs to another feature, and a file already
+ * attached somewhere (409).
+ */
+async function readAttachments(list) {
+  return mapLimit(list, 4, async ({ storageKey, bucket, fileName }) => {
+    const info = await objectInfo(bucket, storageKey);
+    if (!info) {
+      throw badRequest('MSG_UPLOAD_FAILED', 'An attached file was not found. Please upload it again.', { storageKey });
+    }
+    return { storageKey, bucket, fileName, mimeType: info.mimeType, sizeBytes: info.size };
+  });
 }
 
 /**
@@ -425,14 +509,9 @@ export async function getSchoolPost(user, schoolPostId, db = pool) {
 
   const interactions = await interactionsOf([post], user.userId, db);
   const targets = (await findTargets([post.schoolPostId], db)).get(post.schoolPostId);
-  const { rows: attachments } = await db.query(
-    `SELECT attachment_id AS "attachmentId", file_url AS "fileUrl", file_name AS "fileName", mime_type AS "mimeType",
-            size_bytes AS "sizeBytes", created_at AS "createdAt"
-     FROM attachments
-     WHERE school_post_id = $1 AND deleted_at IS NULL
-     ORDER BY created_at, attachment_id`,
-    [post.schoolPostId],
-  );
+  // Read only AFTER the visibility check above: a reader outside the audience gets the 404 and no link at all.
+  // Each url is signed now from the row's storage_key (private bucket, 1 hour); null when it cannot be signed.
+  const attachments = await files.listAttachments(attachmentTarget(post.schoolPostId), db);
   return {
     post: {
       ...post,
@@ -548,16 +627,19 @@ async function notifySchoolPost(client, { schoolPostId, title, createdBy }) {
  * - sendNotification left out → the default of the type (§8; schema comment): ANNOUNCEMENT true, NEWS false.
  * - ANNOUNCEMENT needs at least one grade or class (§8); NEWS may have targets or none (none = whole school).
  *   Roles do not count for that rule: "Toàn trường × Giáo viên" is sent as NEWS, or as an ANNOUNCEMENT to every grade.
- * - Not pinned (UC-63 pins). Post, targets and notification are written together or not at all.
- * Attachments come later (§15): they will be one more step inside this same transaction.
+ * - Not pinned (UC-63 pins). Post, targets, attachments and notification are written together or not at all.
+ * - attachments: what /uploads/confirm returned (controller: at most MAX_ATTACHMENTS, keys in school-posts/). Their
+ *   objects are checked before the transaction (readAttachments); the rows are inserted in it, in the order sent, by
+ *   the shared insertAttachments. NEWS and ANNOUNCEMENT alike (§5 / §8 do not tell them apart here).
  */
 export async function createSchoolPost(user, input) {
-  const { title, content, postType, gradeLevelIds, classIds, targetRoles = [] } = input;
+  const { title, content, postType, gradeLevelIds, classIds, targetRoles = [], attachments = [] } = input;
   if (postType === 'ANNOUNCEMENT' && !gradeLevelIds.length && !classIds.length) {
     throw badRequest('MSG_AUDIENCE_REQUIRED', 'An announcement needs at least one grade level or class.',
       { fields: ['gradeLevelIds', 'classIds'] });
   }
   const sendNotification = input.sendNotification ?? postType === 'ANNOUNCEMENT';
+  const fileRows = await readAttachments(attachments);
 
   const result = await withTransaction(async (client) => {
     await checkTargets(client, { gradeLevelIds, classIds });
@@ -570,6 +652,13 @@ export async function createSchoolPost(user, input) {
     );
     const { schoolPostId } = rows[0];
     await saveTargets(client, schoolPostId, { gradeLevelIds, classIds });
+    if (fileRows.length) {
+      await files.insertAttachments(
+        attachmentTarget(schoolPostId),
+        fileRows.map((row) => ({ ...row, uploadedBy: user.userId })),
+        client,
+      );
+    }
     if (sendNotification) await notifySchoolPost(client, { schoolPostId, title, createdBy: user.userId });
     return getSchoolPost(user, schoolPostId, client);
   });
@@ -622,6 +711,8 @@ const sameIds = (a, b) => {
  *   again in this transaction (school_post_grade_targets / school_post_class_targets are join tables, like
  *   student_parents; the proposal to add them to business-rules §14 is with the lead). Same set as now → no write.
  *   ANNOUNCEMENT must keep at least one target (§8) → 400 MSG_AUDIENCE_REQUIRED; NEWS with none = whole school.
+ * - attachments (new files, as in UC-60) / removeAttachmentIds (files of this post to take off): changeAttachments.
+ *   Taking a file off soft deletes its row; the object stays in the bucket.
  * Something really changed → updated_at = NOW() (no trigger on school_posts). Nothing changed → still 200.
  * ASSUMPTION: an update sends no new notification (§8 does not say so; one per typo fix would be noise).
  * ASSUMPTION: also when the audience changes, people who are new in it get NO notification: the post's notification
@@ -634,9 +725,14 @@ export async function updateSchoolPost(user, schoolPostId, changes) {
   // Real time: who could see the post BEFORE an audience change (they must hear that it left their screen).
   let before = [];
   let anythingChanged = false;
+  // New files are checked against the bucket before the lock (HTTP, see readAttachments).
+  const addRows = await readAttachments(changes.attachments ?? []);
   const result = await withTransaction(async (client) => {
     const post = await lockSchoolPost(client, schoolPostId);
-    let changed = false;
+    let changed = await changeAttachments(client, user, schoolPostId, {
+      add: addRows,
+      removeIds: changes.removeAttachmentIds ?? [],
+    });
 
     const { audience, targetRoles } = changes;
     let targetsChanged = false;
@@ -695,8 +791,52 @@ export async function updateSchoolPost(user, schoolPostId, changes) {
 }
 
 /**
+ * UC-61 attachments, inside the post's lock: removeIds are SOFT deleted (§14, deleted_at; the objects stay in the
+ * bucket, nobody gets a link to them any more), then `add` is inserted by the shared insertAttachments.
+ * - removeIds must be attachments of THIS post (another post's id → 400, nothing written); one already deleted (two
+ *   School Managers at once) is skipped.
+ * - The post may not end with more than MAX_ATTACHMENTS files → 400 MSG_TOO_MANY_ATTACHMENTS { max }.
+ * ASSUMPTION: rows are soft deleted one by one here because the shared softDeleteAttachments removes ALL the files of
+ * a post (UC-62). Proposed to move into utils/attachments.js as a shared function (FE-05 needs the same for edits).
+ * @returns {Promise<boolean>} true when a row was added or removed
+ */
+async function changeAttachments(client, user, schoolPostId, { add, removeIds }) {
+  if (!add.length && !removeIds.length) return false;
+  const { rows } = await client.query(
+    `SELECT attachment_id AS id, deleted_at IS NOT NULL AS "isDeleted"
+     FROM attachments WHERE school_post_id = $1
+     FOR UPDATE`,
+    [schoolPostId],
+  );
+  const ofPost = new Map(rows.map((r) => [r.id, r.isDeleted]));
+  const foreign = removeIds.filter((id) => !ofPost.has(id));
+  if (foreign.length) {
+    throw badRequest('MSG_INVALID_PARAM', 'These files are not attached to this post.',
+      { field: 'removeAttachmentIds', attachmentIds: foreign });
+  }
+  const removing = removeIds.filter((id) => ofPost.get(id) === false);
+  const kept = rows.filter((r) => !r.isDeleted).length - removing.length;
+  if (kept + add.length > MAX_ATTACHMENTS) {
+    throw badRequest('MSG_TOO_MANY_ATTACHMENTS', `A school post can have at most ${MAX_ATTACHMENTS} files.`,
+      { max: MAX_ATTACHMENTS });
+  }
+  if (removing.length) {
+    await client.query(
+      `UPDATE attachments SET deleted_at = NOW()
+       WHERE school_post_id = $1 AND attachment_id = ANY($2::bigint[]) AND deleted_at IS NULL`,
+      [schoolPostId, removing],
+    );
+  }
+  if (add.length) {
+    await files.insertAttachments(attachmentTarget(schoolPostId), add.map((r) => ({ ...r, uploadedBy: user.userId })), client);
+  }
+  return removing.length > 0 || add.length > 0;
+}
+
+/**
  * UC-62 Delete School Post: soft delete (business-rules §14), deleted_at = NOW(), deleted_by = the School Manager.
- * Comments, likes, attachments and the notification already sent stay as they are; the post simply no longer shows
+ * Its attachments are soft deleted with it (shared softDeleteAttachments, same transaction); the objects stay in the
+ * bucket. Comments, likes and the notification already sent stay as they are; the post simply no longer shows
  * (every read filters deleted_at). Already deleted → 404.
  * Returns the UC-59 object as it was just before the delete (read inside the transaction; afterwards UC-59 gives 404).
  */
@@ -711,6 +851,7 @@ export async function deleteSchoolPost(user, schoolPostId) {
       'UPDATE school_posts SET deleted_at = NOW(), deleted_by = $2 WHERE school_post_id = $1 AND deleted_at IS NULL',
       [schoolPostId, user.userId],
     );
+    await files.softDeleteAttachments(attachmentTarget(schoolPostId), client);
     return current;
   });
   publishSchoolPostChanged(result.post.schoolPostId, 'deleted', { before, readNow: false }); // after COMMIT

@@ -10,7 +10,9 @@ const RULES = {
   'login.lock_minutes_step': { type: 'int', min: 1, max: 60 },
   'login.lock_minutes_max': { type: 'int', min: 1, max: 1440 },
   'upload.max_file_mb': { type: 'int', min: 1, max: 50 },
-  'upload.max_video_mb': { type: 'int', min: 1, max: 200 },
+  // Max 50, not 200 (10/11/2026): files go to Supabase Storage, whose Free plan refuses any file over 50 MB. A higher
+  // value would let users pick a video that the storage then rejects. Proposed update of business rules §13.
+  'upload.max_video_mb': { type: 'int', min: 1, max: 50 },
   'otp.expiry_minutes': { type: 'int', min: 1, max: 30 },
   'password_reset.request_cooldown_minutes': { type: 'int', min: 1, max: 1440 },
   'attendance.edit_deadline_time': { type: 'time' },

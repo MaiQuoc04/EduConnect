@@ -202,38 +202,47 @@ async function findStudent(studentId, db = pool) {
   return student;
 }
 
+/**
+ * Current enrollment of each student: same school year and same choice (STUDYING first, else the latest) as the
+ * UC-07 list. Shared by UC-08 (one student) and FE-14 UC-105 (the children of a parent).
+ * Returns a Map studentId -> enrollment; a student with no class this year yet (business-rules §3), or every student
+ * when no school year exists, is simply missing from the Map. Two queries, one after the other (DB_POOL_MAX=3).
+ */
+export async function findCurrentEnrollments(studentIds, db = pool) {
+  if (!studentIds.length) return new Map();
+  const yearId = await resolveSchoolYearId({}, db);
+  if (!yearId) return new Map();
+  const params = [yearId];
+  const enrollments = enrollmentsOfYear(params);
+  params.push(studentIds);
+  // ASSUMPTION: homeroom teacher name is FE-03 data (Dung); read with a minimal join, null when the class has
+  // none (business-rules §4).
+  const { rows } = await db.query(
+    `SELECT e.student_id AS "studentId",
+            ce.enrollment_id AS "enrollmentId", c.class_id AS "classId", c.class_name AS "className",
+            gl.grade_level_name AS "gradeLevelName", t.track_name AS "trackName", ce.nickname,
+            ce.status, ce.enrolled_at AS "enrolledAt", ce.left_at AS "leftAt",
+            sy.school_year_id AS "schoolYearId", sy.year_name AS "schoolYearName",
+            hu.full_name AS "homeroomTeacherName"
+     FROM ${enrollments}
+     JOIN class_enrollments ce ON ce.enrollment_id = e.enrollment_id
+     JOIN classes c ON c.class_id = e.class_id
+     JOIN grade_levels gl ON gl.grade_level_id = c.grade_level_id
+     JOIN class_tracks t ON t.track_id = c.track_id
+     JOIN school_years sy ON sy.school_year_id = c.school_year_id
+     LEFT JOIN teachers ht ON ht.teacher_id = c.homeroom_teacher_id
+     LEFT JOIN users hu ON hu.user_id = ht.user_id
+     WHERE e.student_id = ANY($${params.length}::bigint[])`,
+    params,
+  );
+  return new Map(rows.map(({ studentId, ...enrollment }) => [studentId, enrollment]));
+}
+
 export async function getStudentDetail(studentId) {
   const student = await findStudent(studentId);
 
-  // Current enrollment: same school year and same choice (STUDYING first, else the latest) as the UC-07 list.
   // null when the student has no class this year yet (business-rules §3) or no school year exists.
-  let currentEnrollment = null;
-  const yearId = await resolveSchoolYearId();
-  if (yearId) {
-    const params = [yearId];
-    const enrollments = enrollmentsOfYear(params);
-    params.push(studentId);
-    // ASSUMPTION: homeroom teacher name is FE-03 data (Dung); read with a minimal join, null when the class has
-    // none (business-rules §4).
-    const { rows } = await pool.query(
-      `SELECT ce.enrollment_id AS "enrollmentId", c.class_id AS "classId", c.class_name AS "className",
-              gl.grade_level_name AS "gradeLevelName", t.track_name AS "trackName", ce.nickname,
-              ce.status, ce.enrolled_at AS "enrolledAt", ce.left_at AS "leftAt",
-              sy.school_year_id AS "schoolYearId", sy.year_name AS "schoolYearName",
-              hu.full_name AS "homeroomTeacherName"
-       FROM ${enrollments}
-       JOIN class_enrollments ce ON ce.enrollment_id = e.enrollment_id
-       JOIN classes c ON c.class_id = e.class_id
-       JOIN grade_levels gl ON gl.grade_level_id = c.grade_level_id
-       JOIN class_tracks t ON t.track_id = c.track_id
-       JOIN school_years sy ON sy.school_year_id = c.school_year_id
-       LEFT JOIN teachers ht ON ht.teacher_id = c.homeroom_teacher_id
-       LEFT JOIN users hu ON hu.user_id = ht.user_id
-       WHERE e.student_id = $${params.length}`,
-      params,
-    );
-    currentEnrollment = rows[0] ?? null;
-  }
+  const currentEnrollment = (await findCurrentEnrollments([studentId])).get(studentId) ?? null;
 
   // Class history: every enrollment of every year, newest first. A transfer leaves a TRANSFERRED row next to the
   // new one and a promotion adds a row in the next year (business-rules §4), so a year can have several rows.
