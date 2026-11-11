@@ -987,6 +987,17 @@ a.link-row .icon:last-child { color: var(--graphite-400); }
 }
 .gd-features li a { display: inline-flex; align-items: center; gap: 6px; color: inherit; }
 .gd-features li a:hover { text-decoration: underline; }
+/* FE-05 approval switch on SCR-21 */
+.gd-switch { display: flex; align-items: flex-start; gap: 12px; margin-top: 16px; padding: 12px 14px; border-radius: var(--radius-control); background: var(--graphite-50); cursor: pointer; }
+.gd-switch > span:last-child { display: grid; gap: 2px; }
+.gd-switch-label { font-weight: 500; color: var(--graphite-900); }
+.gd-switch input { position: absolute; opacity: 0; width: 1px; height: 1px; }
+.gd-switch-track { flex: none; position: relative; width: 36px; height: 20px; margin-top: 1px; border-radius: 999px; background: var(--graphite-300); transition: background 0.15s; }
+.gd-switch-track::after { content: ''; position: absolute; top: 2px; left: 2px; width: 16px; height: 16px; border-radius: 50%; background: var(--white); box-shadow: var(--shadow-menu); transition: transform 0.15s; }
+.gd-switch input:checked + .gd-switch-track { background: var(--ink-600); }
+.gd-switch input:checked + .gd-switch-track::after { transform: translateX(16px); }
+.gd-switch input:focus-visible + .gd-switch-track { outline: 2px solid var(--ink-400); outline-offset: 2px; }
+.gd-switch input:disabled + .gd-switch-track { opacity: 0.55; }
 /* Feed / chat tabs until FE-05 / FE-06 land. */
 .gd-pending { display: grid; justify-items: center; gap: 10px; padding: 48px 24px; text-align: center; }
 .gd-pending > p { max-width: 460px; }

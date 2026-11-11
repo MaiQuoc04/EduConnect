@@ -28,7 +28,17 @@ reactions, attachments) is merged into one place after both are on `develop`.
 
 ## Current status (read first; update after every merge, schema patch or new decision)
 
-Last updated: 09/11/2026 (FE-14 Parent Management and FE-08 School Feed built by Anh, not merged; FE-08 patch
+Last updated: 11/11/2026 (FE-05 Group Feed started on `feature/fe-05-group-feed`, FE-08 branch merged into it to
+reuse `feedInteractions.js` / `CommentThread.jsx`; lead agreed the FE-05 post-state rules, business rules §5:
+rejected / hidden / unhide / edit back to pending / max 5 pins / approval switch / no SM approval in classes / 5,000
+characters). FE-05 server done (`modules/posts`, UC-36..UC-46 + `PUT /groups/:groupId/post-approval`, signals
+`post:changed` / `post:comment` / `post:comment-deleted` / `feed:settings`; new shared `utils/requestParsers.js`),
+tested on the local DB. FE-05 client done: `pages/groupfeed/` (SCR-35 feed with tabs Bảng tin / Bài của tôi /
+Chờ duyệt / Đã ẩn, SCR-36/38 one form, SCR-37 detail, mobile layout), approval switch on SCR-21 (`canSetApproval` on
+GET /groups/:id). Two backward-compatible additions in FE-08 shared client code (Anh to confirm): `useLike(..., requests)`
+and `CommentThread canWrite` (read-only comments). Not yet clicked through in a browser. Note: `dev-local-db.js` cannot start from a folder whose path has
+accents (initdb fails on "Đồ Án"); copy `server/` + `database/` to an ASCII path to run it.
+Before: 09/11/2026 (FE-14 Parent Management and FE-08 School Feed built by Anh, not merged; FE-08 patch
 `patch_v0.3_school_post_roles.sql` waiting to be run).
 Before: 07/11/2026 (FE-06 Messaging merged with UC-110..UC-113, patch run on the shared DB; FE-13 departments
 merged (It1 item #2 done); lead accepted Khanh's FE-06 decisions and assumptions (business rules §6) and the 1–1440

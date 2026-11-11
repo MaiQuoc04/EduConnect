@@ -15,7 +15,10 @@ import GroupLayout from './pages/groups/GroupLayout.jsx';
 import GroupListPage from './pages/groups/GroupListPage.jsx';
 import GroupMembersPage from './pages/groups/GroupMembersPage.jsx';
 import GroupOverview from './pages/groups/GroupOverview.jsx';
-import GroupPendingTab from './pages/groups/GroupPendingTab.jsx';
+import FeedGuard from './pages/groupfeed/FeedGuard.jsx';
+import GroupFeedPage from './pages/groupfeed/GroupFeedPage.jsx';
+import GroupPostDetailPage from './pages/groupfeed/GroupPostDetailPage.jsx';
+import GroupPostFormPage from './pages/groupfeed/GroupPostFormPage.jsx';
 import CreateSchoolPostPage from './pages/schoolfeed/CreateSchoolPostPage.jsx';
 import SchoolFeedPage from './pages/schoolfeed/SchoolFeedPage.jsx';
 import { SCHOOL_FEED_ROLES } from './pages/schoolfeed/schoolFeedShared.jsx';
@@ -262,8 +265,13 @@ export default function App() {
           }
         >
           <Route index element={<GroupOverview />} />
-          {/* FE-05 (Khanh): replace GroupPendingTab with the group feed page. */}
-          <Route path="feed" element={<GroupPendingTab kind="feed" />} />
+          {/* FE-05 Group Feed (Khanh): SCR-35..SCR-38. The pages check canSeeContent / feed groups themselves. */}
+          <Route path="feed" element={<FeedGuard />}>
+            <Route index element={<GroupFeedPage />} />
+            <Route path="new" element={<GroupPostFormPage />} />
+            <Route path=":postId" element={<GroupPostDetailPage />} />
+            <Route path=":postId/edit" element={<GroupPostFormPage />} />
+          </Route>
           <Route path="members" element={<GroupMembersPage />} />
         </Route>
         {/* Split chat view: shell from FE-04, messages by FE-06 (Khanh); School Manager: teacher group only. */}
