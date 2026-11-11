@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Link, useLocation, useNavigate, useParams } from 'react-router-dom';
 import { getSchoolPost, updateSchoolPost } from '../../api/schoolPosts.js';
+import { UPLOAD_TARGETS } from '../../api/uploads.js';
+import AttachmentPicker, { useAttachmentUploads } from '../../components/AttachmentPicker.jsx';
 import Icon from '../../components/Icon.jsx';
 import { useAuth } from '../../context/AuthContext.jsx';
 import { useToast } from '../../context/ToastContext.jsx';
@@ -22,6 +24,8 @@ import {
   saveErrorOf,
   tickedRolesOf,
   TitleCounter,
+  UPLOADING_HINT,
+  useAttachmentLimits,
   useAudienceOptions,
   validatePost,
 } from './schoolPostForm.jsx';
@@ -31,7 +35,9 @@ import {
 // Design: Stitch "SCR-37 Update School Post". Only title, content and the audience can change (lead 07/11/2026);
 // postType and sendNotification are shown read only (the server refuses them with MSG_FIELD_NOT_EDITABLE). Only the
 // fields that really changed are sent. An audience change sends no new notification (server ASSUMPTION, told on
-// screen). Attachments: not built (business-rules §15).
+// screen). Attachments (stage 6 of Supabase Storage): the files of the post can be taken off (soft deleted on save,
+// the object stays in Storage) and new ones uploaded with the shared components/AttachmentPicker; both travel with the
+// other changes in the same PATCH.
 
 const FEED_PATH = '/school-feed';
 const LOAD_ERROR = 'Không tải được bài viết. Vui lòng thử lại.';
@@ -52,9 +58,11 @@ const formOf = (post) => ({
 });
 
 // The whitelist of UC-61: title, content, gradeLevelIds + classIds (one audience, sent together), targetRoles (the
-// other dimension of the audience, sent on its own) – only when changed.
-function changedFields(form, post) {
+// other dimension of the audience, sent on its own), attachments (new files) and removeAttachmentIds – only when changed.
+function changedFields(form, post, files) {
   const changes = {};
+  if (files.uploaded.length) changes.attachments = files.uploaded;
+  if (files.removedIds.size) changes.removeAttachmentIds = [...files.removedIds];
   const title = normalizeTitle(form.title);
   if (title !== post.title) changes.title = title;
   const content = normalizeContent(form.content);
@@ -107,7 +115,10 @@ export default function UpdateSchoolPostPage() {
   const validId = /^[1-9]\d*$/.test(schoolPostId ?? '');
 
   const options = useAudienceOptions();
+  const fileLimits = useAttachmentLimits();
   const [post, setPost] = useState(null);
+  const [existingFiles, setExistingFiles] = useState([]); // UC-59 attachments of the post
+  const [removedIds, setRemovedIds] = useState(() => new Set());
   const [form, setForm] = useState(null);
   const [loading, setLoading] = useState(validId);
   const [loadError, setLoadError] = useState('');
@@ -127,6 +138,8 @@ export default function UpdateSchoolPostPage() {
       .then((data) => {
         setPost(data.post);
         setForm(formOf(data.post));
+        setExistingFiles(data.attachments ?? []);
+        setRemovedIds(new Set());
       })
       .catch((err) => {
         if (controller.signal.aborted) return;
@@ -139,9 +152,12 @@ export default function UpdateSchoolPostPage() {
     return () => controller.abort();
   }, [schoolPostId, validId, attempt]);
 
-  const changes = post && form ? changedFields(form, post) : {};
+  const keptFiles = existingFiles.length - removedIds.size;
+  const uploads = useAttachmentUploads({ target: UPLOAD_TARGETS.SCHOOL_POST, limits: fileLimits.limits, existingCount: keptFiles });
+  const changes = post && form ? changedFields(form, post, { uploaded: uploads.uploaded, removedIds }) : {};
   const changedKeys = Object.keys(changes).filter((k) => k !== 'classIds');
-  const dirty = changedKeys.length > 0;
+  // A file being uploaded is a change too (leaving would lose it), even before it is ready to send.
+  const dirty = changedKeys.length > 0 || uploads.items.length > 0;
   const { asking, setAsking, stay, leave } = useLeaveGuard(dirty && !notFound);
 
   const backToDetail = useCallback(
@@ -216,9 +232,19 @@ export default function UpdateSchoolPostPage() {
     setServerError(null);
   }
 
+  function toggleExisting(attachmentId) {
+    setRemovedIds((set) => {
+      const next = new Set(set);
+      if (next.has(attachmentId)) next.delete(attachmentId);
+      else next.add(attachmentId);
+      return next;
+    });
+    setServerError(null);
+  }
+
   async function save(e) {
     e.preventDefault();
-    if (saving || !dirty) return;
+    if (saving || !dirty || uploads.busy || !changedKeys.length) return;
     setSubmitted(true);
     const first = FIELD_ORDER.find((f) => errors[f]);
     if (first) {
@@ -346,7 +372,16 @@ export default function UpdateSchoolPostPage() {
                 </span>
               )}
             </div>
-            {/* TODO FE-08 attachments (business-rules §15): adding / removing files comes with the storage provider. */}
+            <AttachmentPicker
+              uploads={uploads}
+              limits={fileLimits.limits}
+              limitsError={fileLimits.error}
+              onReloadLimits={fileLimits.reload}
+              existing={existingFiles}
+              removedIds={removedIds}
+              onToggleExisting={toggleExisting}
+              disabled={saving}
+            />
           </section>
 
           <section className="spf-section">
@@ -400,6 +435,11 @@ export default function UpdateSchoolPostPage() {
                 <Icon name="block" size="sm" />
                 {AUDIENCE_REQUIRED_HINT}
               </span>
+            ) : uploads.busy ? (
+              <span id="spf-footer-note" className="caption spf-footer-note is-blocked" aria-live="polite">
+                <Icon name="cloud_upload" size="sm" />
+                {UPLOADING_HINT}
+              </span>
             ) : (
               <span id="spf-footer-note" className="caption muted spf-footer-note" aria-live="polite">
                 <Icon name={changedCount ? 'edit_note' : 'check'} size="sm" />
@@ -413,8 +453,8 @@ export default function UpdateSchoolPostPage() {
               <button
                 type="submit"
                 className="btn btn-primary"
-                disabled={saving || !dirty || noAudience}
-                title={noAudience ? AUDIENCE_REQUIRED_HINT : undefined}
+                disabled={saving || !changedKeys.length || noAudience || uploads.busy}
+                title={noAudience ? AUDIENCE_REQUIRED_HINT : uploads.busy ? UPLOADING_HINT : undefined}
                 aria-describedby="spf-footer-note"
               >
                 <Icon name={saving ? 'progress_activity' : 'save'} size="sm" className={saving ? 'sf-spin' : undefined} />
@@ -431,6 +471,10 @@ export default function UpdateSchoolPostPage() {
           labels={labels}
           roles={form.targetRoles}
           authorName={post.authorName ?? user?.fullName}
+          files={[
+            ...existingFiles.filter((f) => !removedIds.has(f.attachmentId)).map((f) => ({ mimeType: f.mimeType, previewUrl: f.url })),
+            ...uploads.items.filter((item) => item.status !== 'error'),
+          ]}
         />
       </div>
 

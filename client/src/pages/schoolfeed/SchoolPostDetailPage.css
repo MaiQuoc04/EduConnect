@@ -67,36 +67,6 @@
 .school-post-detail-section-title .icon { color: var(--graphite-600); }
 
 .school-post-detail-files { margin-top: 16px; padding-top: 20px; border-top: 1px solid var(--graphite-200); }
-.school-post-detail-files ul {
-  list-style: none;
-  margin: 0;
-  padding: 0;
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 8px;
-}
-.school-post-detail-files li {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  min-width: 0;
-  padding: 8px 10px;
-  border-radius: var(--radius-control);
-  background: var(--graphite-50);
-}
-.school-post-detail-files .file-icon {
-  display: grid;
-  place-items: center;
-  flex: none;
-  width: 32px;
-  height: 32px;
-  border-radius: 4px;
-  background: var(--ink-50);
-  color: var(--ink-700);
-}
-.school-post-detail-files .file-text { display: grid; min-width: 0; flex: 1; }
-.school-post-detail-files .file-name { font-weight: 500; color: var(--graphite-900); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.school-post-detail-files .file-note { flex: none; }
 
 .school-post-detail-interactions {
   display: flex;
@@ -143,6 +113,4 @@
   .school-post-detail-article::before { left: 12px; }
   .school-post-detail-inner { padding-left: 12px; }
   .school-post-detail-title { font-size: 24px; line-height: 31px; }
-  .school-post-detail-files ul { grid-template-columns: minmax(0, 1fr); }
-  .school-post-detail-files li { flex-wrap: wrap; }
-}
+    }

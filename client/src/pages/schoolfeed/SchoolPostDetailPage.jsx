@@ -8,6 +8,7 @@ import {
   listSchoolPostComments,
   setSchoolPostPinned,
 } from '../../api/schoolPosts.js';
+import AttachmentList from '../../components/AttachmentList.jsx';
 import Avatar from '../../components/Avatar.jsx';
 import CommentThread from '../../components/CommentThread.jsx';
 import Icon from '../../components/Icon.jsx';
@@ -43,21 +44,6 @@ const COMMENT_MESSAGES = {
   MSG_CANNOT_COMMENT_NEWS: 'Không thể bình luận tin tức.',
   MSG_SCHOOL_POST_NOT_FOUND: 'Không tìm thấy bài viết.',
 };
-
-// "120000" bytes -> "117 KB"
-function fileSize(bytes) {
-  const n = Number(bytes);
-  if (!Number.isFinite(n) || n <= 0) return '';
-  if (n < 1024 * 1024) return `${Math.max(1, Math.round(n / 1024)).toLocaleString('vi-VN')} KB`;
-  return `${(n / 1024 / 1024).toLocaleString('vi-VN', { maximumFractionDigits: 1 })} MB`;
-}
-
-function fileIcon(mimeType = '') {
-  if (mimeType.startsWith('image/')) return 'image';
-  if (mimeType.startsWith('video/')) return 'movie';
-  if (mimeType === 'application/pdf') return 'picture_as_pdf';
-  return 'description';
-}
 
 // 404 for a post that does not exist, was deleted OR is not addressed to the reader: the server answers the same on
 // purpose, so the page never talks about permissions. `gone`: the post was open and disappeared meanwhile (deleted,
@@ -258,15 +244,24 @@ export default function SchoolPostDetailPage() {
 
   // The post again, quietly (no skeleton: what is shown stays until the answer). 404 → the post is gone for this
   // reader (deleted, or no longer in its audience – also a reader with two roles acting as the other one).
+  // Resolves to the post's fresh attachments (new signed links), or null: AttachmentList uses it when a link expired.
   const refreshPost = useCallback(() => {
-    if (!validId) return;
-    getSchoolPost(schoolPostId)
-      .then((data) => setState((s) => (s.data ? { ...s, data } : s)))
+    if (!validId) return Promise.resolve(null);
+    return getSchoolPost(schoolPostId)
+      .then((data) => {
+        setState((s) => (s.data ? { ...s, data } : s));
+        return data.attachments;
+      })
       .catch((err) => {
         if (err.status === 404 || err.code === 'MSG_SCHOOL_POST_NOT_FOUND') setGone(true);
         // other errors: keep what is shown; the next signal / reconnect / poll tries again
+        return null;
       });
   }, [schoolPostId, validId]);
+
+  // When the attachment links were signed (they live one hour): every new UC-59 answer brings new ones.
+  const [signedAt, setSignedAt] = useState(() => Date.now());
+  useEffect(() => setSignedAt(Date.now()), [state.data]);
 
   // "schoolpost:changed" arrives on the user's own room (user:<id>), no join needed.
   useEffect(() => {
@@ -426,27 +421,15 @@ export default function SchoolPostDetailPage() {
             <div className="school-post-detail-content">{post.content}</div>
 
             {attachments.length > 0 && (
-              <section className="school-post-detail-files" aria-labelledby="spd-files-title">
-                <h2 id="spd-files-title" className="school-post-detail-section-title">
-                  <Icon name="attach_file" size="sm" />
-                  Tệp đính kèm ({attachments.length})
-                </h2>
-                {/* TODO FE-08 attachments: downloading waits for the storage provider (business-rules §15). */}
-                <ul>
-                  {attachments.map((file) => (
-                    <li key={file.attachmentId}>
-                      <span className="file-icon">
-                        <Icon name={fileIcon(file.mimeType)} />
-                      </span>
-                      <span className="file-text">
-                        <span className="file-name">{file.fileName}</span>
-                        <span className="caption muted">{fileSize(file.sizeBytes)}</span>
-                      </span>
-                      <span className="caption muted file-note">Chưa tải xuống được</span>
-                    </li>
-                  ))}
-                </ul>
-              </section>
+              // Links signed by the server for one hour; an expired one is refreshed through UC-59 (refreshPost).
+              <div className="school-post-detail-files">
+                <AttachmentList
+                  attachments={attachments}
+                  signedAt={signedAt}
+                  onRefresh={refreshPost}
+                  headingId="spd-files-title"
+                />
+              </div>
             )}
 
             {/* Likes and comments: announcements only; news is view only (business-rules §8). */}

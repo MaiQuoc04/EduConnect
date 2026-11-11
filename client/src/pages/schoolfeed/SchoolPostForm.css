@@ -2,7 +2,7 @@
    .school-post-form (the .spf-* pieces are only rendered inside it). Dialogs (.sf-dialog) are in styles.css.
    Design: Stitch "SCR-36 Create School Post" / "SCR-37 Update School Post": the form card on the left with sections
    split by hairlines and a footer bar, the live preview on the right. Rich text and cover image of the design are not
-   used (no editor library; attachments wait for §15). The audience is grades / classes first, then the roles that
+   used (no editor library). Attachments: components/AttachmentPicker (stage 6 of Supabase Storage). The audience is grades / classes first, then the roles that
    narrow them (target_roles), all as the same toggle chips, summed up in one "Gửi tới" line.
    Breakpoints as the other screens: 1080px (preview under the form), 900px (app drawer, 44px controls), 640px. */
 
@@ -56,20 +56,10 @@
 .spf-locked-note { display: flex; align-items: flex-start; gap: 6px; color: var(--graphite-600); }
 .spf-locked-note .icon { flex: none; color: var(--graphite-400); }
 
-/* Attachments: disabled until the storage provider is decided (§15). */
-.spf-attach-box {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  min-height: 44px;
-  padding: 0 14px;
-  border: 1px dashed var(--graphite-300);
-  border-radius: var(--radius-control);
-  background: var(--graphite-50);
-  font: 500 14px/20px var(--font-ui);
-  color: var(--graphite-500);
-}
-.spf-attach-box:disabled { cursor: not-allowed; }
+/* Attachments: the shared components/AttachmentPicker (its own CSS). Preview: first picture and the count. */
+.school-post-form .spf-preview-image { margin: 10px 0 0; border-radius: var(--radius-control); overflow: hidden; background: var(--graphite-100); }
+.school-post-form .spf-preview-image img { display: block; width: 100%; max-height: 200px; object-fit: cover; }
+.school-post-form .spf-preview-files { display: flex; align-items: center; gap: 4px; margin: 8px 0 0; }
 
 /* ---------- audience ---------- */
 .spf-audience { display: grid; gap: 14px; min-width: 0; margin: 0; padding: 0; border: 0; }

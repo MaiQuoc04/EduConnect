@@ -113,7 +113,9 @@ function SkeletonCards({ count }) {
   ));
 }
 
-// Image of the card (UC-58 firstImageUrl). Hidden when it cannot be loaded (§15: storage not decided yet).
+// Image of the card (UC-58 firstImageUrl: the post's first picture, signed by the server for one hour). Hidden when it
+// cannot be loaded (link expired on a page left open, object missing): the card still shows the attachment count, and
+// the next reload of the list brings a new link.
 function CardImage({ src }) {
   const [failed, setFailed] = useState(false);
   if (!src || failed) return null;

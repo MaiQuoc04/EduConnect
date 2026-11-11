@@ -1,5 +1,5 @@
 import { useEffect, useId, useMemo, useRef, useState } from 'react';
-import { getGradeLevelOptions } from '../../api/schoolPosts.js';
+import { getAttachmentLimits, getGradeLevelOptions } from '../../api/schoolPosts.js';
 import { getClassOptions } from '../../api/students.js';
 import Icon from '../../components/Icon.jsx';
 import {
@@ -89,6 +89,31 @@ export function useAudienceOptions() {
   }, [attempt]);
   return { ...state, reload: () => setAttempt((n) => n + 1) };
 }
+
+/**
+ * Limits of the file picker (components/AttachmentPicker): GET /school-posts/attachment-limits = max files, the sizes
+ * of system_settings (upload.max_file_mb / upload.max_video_mb, read at each call, never hard-coded) and the 15 types
+ * of the attachments bucket. { limits: null while loading, error, reload }.
+ */
+export function useAttachmentLimits() {
+  const [state, setState] = useState({ limits: null, error: '' });
+  const [attempt, setAttempt] = useState(0);
+  useEffect(() => {
+    const controller = new AbortController();
+    setState({ limits: null, error: '' });
+    getAttachmentLimits({ signal: controller.signal })
+      .then((limits) => setState({ limits, error: '' }))
+      .catch((err) => {
+        if (controller.signal.aborted) return;
+        setState({ limits: null, error: feedErrorText(err, 'Không tải được giới hạn tệp. Vui lòng thử lại.') });
+      });
+    return () => controller.abort();
+  }, [attempt]);
+  return { ...state, reload: () => setAttempt((n) => n + 1) };
+}
+
+// Why "Đăng bài" / "Lưu thay đổi" is locked while files are being prepared.
+export const UPLOADING_HINT = 'Đang tải tệp đính kèm lên. Vui lòng chờ tải xong rồi đăng.';
 
 // §8: an announcement needs a grade or a class; until then it cannot be posted / saved (button locked).
 export const audienceMissing = (postType, audience) => postType === 'ANNOUNCEMENT' && isAudienceEmpty(audience);
@@ -515,6 +540,7 @@ const FORM_MESSAGES = {
   MSG_FIELD_NOT_EDITABLE: 'Một số thông tin không thể sửa ở đây.',
   MSG_REQUIRED: 'Trường này là bắt buộc.',
   MSG_INVALID_PARAM: 'Giá trị không hợp lệ.',
+  MSG_TOO_MANY_ATTACHMENTS: 'Bài viết có quá nhiều tệp đính kèm.',
 };
 const FIELD_NAMES = { title: 'Tiêu đề', content: 'Nội dung', postType: 'Loại bài', sendNotification: 'Gửi thông báo' };
 
@@ -529,6 +555,12 @@ export function saveErrorOf(err, fallback) {
     return { field: null, text: FORM_MESSAGES.MSG_SCHOOL_POST_NOT_FOUND, notFound: true };
   }
   if (code === 'MSG_AUDIENCE_REQUIRED') return { field: 'audience', text: FORM_MESSAGES[code] };
+  if (code === 'MSG_TOO_MANY_ATTACHMENTS') {
+    return { field: null, text: `Mỗi bài viết có tối đa ${err.details?.max ?? 10} tệp đính kèm. Hãy gỡ bớt tệp.` };
+  }
+  if (field === 'attachments' || field === 'removeAttachmentIds' || (code === 'MSG_UPLOAD_FAILED' && err.details?.storageKey)) {
+    return { field: null, text: 'Một tệp đính kèm không còn dùng được. Hãy gỡ tệp đó, tải lên lại rồi thử lần nữa.' };
+  }
   if (code === 'MSG_GRADE_NOT_FOUND' || code === 'MSG_CLASS_NOT_FOUND') {
     return {
       field: 'audience',
@@ -553,11 +585,13 @@ export function saveErrorOf(err, fallback) {
 
 // --- Preview and confirmation ----------------------------------------------------------------------------------
 
-// Live preview as the post will look in the feed (Stitch "Xem trước trên Bảng tin").
-export function PostPreview({ postType, title, content, labels, roles, authorName }) {
+// Live preview as the post will look in the feed (Stitch "Xem trước trên Bảng tin"). files = the attachments the post
+// will have ([{ mimeType, previewUrl? }]): the card shows the first picture (as UC-58 firstImageUrl) and the count.
+export function PostPreview({ postType, title, content, labels, roles, authorName, files = [] }) {
   const announcement = postType === 'ANNOUNCEMENT';
   const cleanTitle = normalizeTitle(title);
   const text = normalizeContent(content);
+  const picture = files.find((f) => f.mimeType?.startsWith('image/') && f.previewUrl)?.previewUrl;
   return (
     <aside className="spf-preview" aria-label="Xem trước trên bảng tin">
       <div className="spf-preview-head">
@@ -581,6 +615,17 @@ export function PostPreview({ postType, title, content, labels, roles, authorNam
           </span>
         </p>
         <p className={`spf-preview-text${text ? '' : ' is-empty'}`}>{text || 'Nội dung bài viết sẽ hiện ở đây.'}</p>
+        {picture && (
+          <figure className="spf-preview-image">
+            <img src={picture} alt="" />
+          </figure>
+        )}
+        {files.length > 0 && (
+          <p className="caption muted spf-preview-files">
+            <Icon name="attach_file" size="sm" />
+            {files.length} tệp đính kèm
+          </p>
+        )}
         <p className="caption spf-preview-foot">
           <Icon name={announcement ? 'favorite' : 'menu_book'} size="sm" />
           {announcement ? 'Người nhận thích và bình luận được' : 'Chỉ để đọc'}

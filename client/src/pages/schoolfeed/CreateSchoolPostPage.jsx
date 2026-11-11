@@ -1,7 +1,9 @@
 import { useRef, useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { createSchoolPost } from '../../api/schoolPosts.js';
+import AttachmentPicker, { useAttachmentUploads } from '../../components/AttachmentPicker.jsx';
 import Icon from '../../components/Icon.jsx';
+import { UPLOAD_TARGETS } from '../../api/uploads.js';
 import { useAuth } from '../../context/AuthContext.jsx';
 import { useToast } from '../../context/ToastContext.jsx';
 import { LeaveDialog, useLeaveGuard } from './leaveGuard.jsx';
@@ -25,15 +27,18 @@ import {
   sameRoles,
   saveErrorOf,
   TitleCounter,
+  UPLOADING_HINT,
+  useAttachmentLimits,
   useAudienceOptions,
   validatePost,
 } from './schoolPostForm.jsx';
 
 // SCR-31 Create School Post (FE-08, owner Anh): UC-60, School Manager only (permissions.md "School post – Create";
 // the route is wrapped in ProtectedRoute and the server checks the active role).
-// Design: Stitch "SCR-36 Create School Post". Not built here:
-//   - attachments and cover image: the storage provider is not decided (business-rules §15);
-//   - pinning on create: pinning is its own action (UC-63, on the detail page and the feed).
+// Design: Stitch "SCR-36 Create School Post". Attachments (stage 6 of Supabase Storage): the shared
+// components/AttachmentPicker uploads each file straight to Storage (images compressed first) while the post is being
+// written; "Đăng bài" is locked until every file is up, and the post carries the /uploads/confirm answers. Not built
+// here: the cover image of the design; pinning on create (UC-63, on the detail page and the feed).
 
 const FEED_PATH = '/school-feed';
 const SAVE_ERROR = 'Không đăng được bài viết. Vui lòng thử lại.';
@@ -58,6 +63,8 @@ export default function CreateSchoolPostPage() {
   const backTo = `${FEED_PATH}${listSearch}`;
 
   const options = useAudienceOptions();
+  const fileLimits = useAttachmentLimits();
+  const uploads = useAttachmentUploads({ target: UPLOAD_TARGETS.SCHOOL_POST, limits: fileLimits.limits });
   const [form, setForm] = useState(INITIAL);
   const [touched, setTouched] = useState({});
   const [submitted, setSubmitted] = useState(false);
@@ -70,7 +77,8 @@ export default function CreateSchoolPostPage() {
   const dirty =
     normalizeTitle(form.title) !== '' || normalizeContent(form.content) !== '' || !isAudienceEmpty(form.audience) ||
     !sameRoles(form.targetRoles, INITIAL.targetRoles) ||
-    form.postType !== INITIAL.postType || form.sendNotification !== DEFAULT_SEND_NOTIFICATION[form.postType];
+    form.postType !== INITIAL.postType || form.sendNotification !== DEFAULT_SEND_NOTIFICATION[form.postType] ||
+    uploads.items.length > 0;
   const { asking, setAsking, stay, leave } = useLeaveGuard(dirty);
 
   const errors = validatePost(form);
@@ -94,7 +102,7 @@ export default function CreateSchoolPostPage() {
 
   function submit(e) {
     e.preventDefault();
-    if (saving || options.loading) return;
+    if (saving || options.loading || uploads.busy) return;
     setSubmitted(true);
     const first = FIELD_ORDER.find((f) => errors[f]);
     if (first) {
@@ -117,6 +125,7 @@ export default function CreateSchoolPostPage() {
         gradeLevelIds: form.audience.gradeLevelIds,
         classIds: form.audience.classIds,
         targetRoles: rolesToSend(form.targetRoles),
+        attachments: uploads.uploaded, // in the order of the list; files that failed are left out (told on screen)
       });
       toast(announcement ? 'Đã đăng thông báo.' : 'Đã đăng tin tức.');
       handOverPost(data);
@@ -228,15 +237,13 @@ export default function CreateSchoolPostPage() {
               )}
             </div>
 
-            {/* TODO FE-08 attachments (business-rules §15: storage provider not decided yet). */}
-            <div className="field spf-attach">
-              <span className="field-label spf-label">Tệp đính kèm</span>
-              <button type="button" className="spf-attach-box" disabled>
-                <Icon name="attach_file" size="sm" />
-                <span>Chọn tệp</span>
-              </button>
-              <span className="field-help">Chưa đính kèm được tệp: nhà trường đang chọn nơi lưu trữ tệp.</span>
-            </div>
+            <AttachmentPicker
+              uploads={uploads}
+              limits={fileLimits.limits}
+              limitsError={fileLimits.error}
+              onReloadLimits={fileLimits.reload}
+              disabled={saving}
+            />
           </section>
 
           <section className="spf-section">
@@ -285,6 +292,11 @@ export default function CreateSchoolPostPage() {
                 <Icon name="block" size="sm" />
                 {AUDIENCE_REQUIRED_HINT}
               </span>
+            ) : uploads.busy ? (
+              <span id="spf-footer-note" className="caption spf-footer-note is-blocked" aria-live="polite">
+                <Icon name="cloud_upload" size="sm" />
+                {UPLOADING_HINT}
+              </span>
             ) : (
               <span id="spf-footer-note" className="caption muted spf-footer-note" aria-live="polite">
                 <Icon name="info" size="sm" />
@@ -300,8 +312,8 @@ export default function CreateSchoolPostPage() {
               <button
                 type="submit"
                 className="btn btn-primary"
-                disabled={saving || options.loading || noAudience}
-                title={noAudience ? AUDIENCE_REQUIRED_HINT : undefined}
+                disabled={saving || options.loading || noAudience || uploads.busy}
+                title={noAudience ? AUDIENCE_REQUIRED_HINT : uploads.busy ? UPLOADING_HINT : undefined}
                 aria-describedby="spf-footer-note"
               >
                 <Icon name={saving ? 'progress_activity' : 'send'} size="sm" className={saving ? 'sf-spin' : undefined} />
@@ -318,6 +330,7 @@ export default function CreateSchoolPostPage() {
           labels={labels}
           roles={form.targetRoles}
           authorName={user?.fullName}
+          files={uploads.items.filter((item) => item.status !== 'error')}
         />
       </div>
 
