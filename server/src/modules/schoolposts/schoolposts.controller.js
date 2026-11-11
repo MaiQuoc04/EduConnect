@@ -1,3 +1,4 @@
+import { env } from '../../config/env.js';
 import { badRequest } from '../../utils/AppError.js';
 import * as service from './schoolposts.service.js';
 
@@ -62,8 +63,10 @@ export async function detail(req, res) {
 const MAX_TITLE_LENGTH = 255; // school_posts.title VARCHAR(255)
 // Fields each write accepts. Any other key → 400 MSG_FIELD_NOT_EDITABLE with the refused names (as UC-09).
 // UC-61: postType and sendNotification are refused on purpose (see updateSchoolPost in the service).
-const CREATE_FIELDS = ['title', 'content', 'postType', 'sendNotification', 'gradeLevelIds', 'classIds', 'targetRoles'];
-const UPDATE_FIELDS = ['title', 'content', 'gradeLevelIds', 'classIds', 'targetRoles'];
+const CREATE_FIELDS = [
+  'title', 'content', 'postType', 'sendNotification', 'gradeLevelIds', 'classIds', 'targetRoles', 'attachments',
+];
+const UPDATE_FIELDS = ['title', 'content', 'gradeLevelIds', 'classIds', 'targetRoles', 'attachments', 'removeAttachmentIds'];
 const PIN_FIELDS = ['isPinned'];
 
 function jsonBody(req, allowed) {
@@ -122,6 +125,39 @@ function roleList(body) {
   return roles.length === service.TARGETABLE_ROLES.length ? [] : roles;
 }
 
+/**
+ * Optional attachments of UC-60 / UC-61: the answers of POST /uploads/confirm, [{ storageKey, bucket, fileName, … }],
+ * in the order they are shown. Only storageKey, bucket and fileName are kept: size and type are read from the stored
+ * object by the service (the body's numbers are the client's). Checked here before anything else:
+ *   - at most service.MAX_ATTACHMENTS → 400 MSG_TOO_MANY_ATTACHMENTS { max };
+ *   - the key is a school feed file (school-posts/…, the folder /uploads/confirm moves a 'school-post' upload to),
+ *     not one of FE-05 (posts/) or FE-06 (messages/), nor one still in tmp/ → 400 MSG_INVALID_PARAM;
+ *   - the bucket is the attachments bucket; the same key twice → 400.
+ */
+function attachmentList(body) {
+  const value = body.attachments;
+  if (value === undefined || value === null) return [];
+  if (!Array.isArray(value)) throw invalid('attachments');
+  if (value.length > service.MAX_ATTACHMENTS) {
+    throw badRequest('MSG_TOO_MANY_ATTACHMENTS', `A school post can have at most ${service.MAX_ATTACHMENTS} files.`,
+      { max: service.MAX_ATTACHMENTS });
+  }
+  const list = value.map((item) => {
+    if (!item || typeof item !== 'object') throw invalid('attachments');
+    const { storageKey, bucket, fileName } = item;
+    if (
+      typeof storageKey !== 'string' || !/^school-posts\/[\w./-]+$/.test(storageKey) || storageKey.includes('..') ||
+      storageKey.length > 500 || bucket !== env.storage.buckets.attachments
+    ) {
+      throw invalid('attachments');
+    }
+    if (typeof fileName !== 'string' || !fileName.trim() || [...fileName.trim()].length > 255) throw invalid('attachments');
+    return { storageKey, bucket, fileName: fileName.normalize('NFC').trim() };
+  });
+  if (new Set(list.map((f) => f.storageKey)).size !== list.length) throw invalid('attachments');
+  return list;
+}
+
 // UC-60 Create School Post
 export async function create(req, res) {
   const body = jsonBody(req, CREATE_FIELDS);
@@ -137,6 +173,7 @@ export async function create(req, res) {
     gradeLevelIds: idList(body, 'gradeLevelIds'),
     classIds: idList(body, 'classIds'),
     targetRoles: roleList(body),
+    attachments: attachmentList(body),
   };
   res.status(201).json(await service.createSchoolPost(req.user, input));
 }
@@ -157,7 +194,16 @@ export async function update(req, res) {
   }
   // The role dimension is separate: sent → replaces the roles ([] / null = every role); left out → kept.
   if ('targetRoles' in body) changes.targetRoles = roleList(body);
+  // Files: new ones added (as UC-60), removeAttachmentIds taken off (soft delete). The limit on the total is checked
+  // in the service, which knows how many the post has.
+  if ('attachments' in body) changes.attachments = attachmentList(body);
+  if ('removeAttachmentIds' in body) changes.removeAttachmentIds = idList(body, 'removeAttachmentIds');
   res.json(await service.updateSchoolPost(req.user, schoolPostId, changes));
+}
+
+// Limits of the SCR-31 / SCR-06 file picker (count, sizes from system_settings, the 15 types).
+export async function attachmentLimits(_req, res) {
+  res.json(await service.getAttachmentLimits());
 }
 
 // UC-62 Delete School Post

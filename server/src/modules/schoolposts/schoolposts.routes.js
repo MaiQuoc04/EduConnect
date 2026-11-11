@@ -9,12 +9,14 @@ const VIEW_ROLES = ['SCHOOL_MANAGER', 'TEACHER', 'STUDENT', 'PARENT'];
 
 const router = Router();
 
-router.get('/', requireAuth, requireRole(...VIEW_ROLES), ctrl.list); // UC-58
-router.get('/:schoolPostId', requireAuth, requireRole(...VIEW_ROLES), ctrl.detail); // UC-59
-
 // permissions.md "School post – Create / update / delete / pin": School Manager Full, every other role No
 // (System Admin included, business-rules §1).
 const manage = [requireAuth, requireRole('SCHOOL_MANAGER')];
+
+router.get('/', requireAuth, requireRole(...VIEW_ROLES), ctrl.list); // UC-58
+// File picker limits of UC-60 / UC-61 (before '/:schoolPostId', which would take the path as an id).
+router.get('/attachment-limits', ...manage, ctrl.attachmentLimits);
+router.get('/:schoolPostId', requireAuth, requireRole(...VIEW_ROLES), ctrl.detail); // UC-59
 router.post('/', ...manage, ctrl.create); // UC-60
 router.patch('/:schoolPostId', ...manage, ctrl.update); // UC-61
 router.delete('/:schoolPostId', ...manage, ctrl.remove); // UC-62
