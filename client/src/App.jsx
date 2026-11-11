@@ -16,6 +16,11 @@ import GroupListPage from './pages/groups/GroupListPage.jsx';
 import GroupMembersPage from './pages/groups/GroupMembersPage.jsx';
 import GroupOverview from './pages/groups/GroupOverview.jsx';
 import GroupPendingTab from './pages/groups/GroupPendingTab.jsx';
+import CreateSchoolPostPage from './pages/schoolfeed/CreateSchoolPostPage.jsx';
+import SchoolFeedPage from './pages/schoolfeed/SchoolFeedPage.jsx';
+import { SCHOOL_FEED_ROLES } from './pages/schoolfeed/schoolFeedShared.jsx';
+import SchoolPostDetailPage from './pages/schoolfeed/SchoolPostDetailPage.jsx';
+import UpdateSchoolPostPage from './pages/schoolfeed/UpdateSchoolPostPage.jsx';
 import SchoolYearPage from './pages/school-years/SchoolYearPage.jsx';
 import ImportParentLinksPage from './pages/students/ImportParentLinksPage.jsx';
 import StudentDetailPage from './pages/students/StudentDetailPage.jsx';
@@ -65,6 +70,42 @@ export default function App() {
         }
       >
         <Route index element={<RoleHome />} />
+        {/* FE-08 School Feed: SCR-02 (home of every role except System Admin, navigation.js HOME_BY_ROLE) and SCR-05.
+            System Admin sees no content (business-rules §1); the server answers 403 to SA as well. */}
+        <Route
+          path="school-feed"
+          element={
+            <ProtectedRoute roles={SCHOOL_FEED_ROLES}>
+              <SchoolFeedPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="school-feed/:schoolPostId"
+          element={
+            <ProtectedRoute roles={SCHOOL_FEED_ROLES}>
+              <SchoolPostDetailPage />
+            </ProtectedRoute>
+          }
+        />
+        {/* SCR-31 (UC-60) and SCR-06 (UC-61): School Manager only (permissions.md "School post – Create / update").
+            "new" is a static segment, so React Router ranks it above ":schoolPostId". */}
+        <Route
+          path="school-feed/new"
+          element={
+            <ProtectedRoute roles={['SCHOOL_MANAGER']}>
+              <CreateSchoolPostPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="school-feed/:schoolPostId/edit"
+          element={
+            <ProtectedRoute roles={['SCHOOL_MANAGER']}>
+              <UpdateSchoolPostPage />
+            </ProtectedRoute>
+          }
+        />
         {/* FE-01 Personal Account */}
         <Route path="profile" element={<ProfilePage />} />
         <Route path="profile/avatar" element={<EditAvatarPage />} />

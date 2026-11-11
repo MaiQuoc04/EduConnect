@@ -18,6 +18,8 @@
 -- 07/11/2026: FE-06 reply, reactions, delete message: messages.reply_to_message_id, deleted_for_everyone_at / _by, tables
 --   message_user_deletions and message_reactions (50 tables), setting chat.delete_for_everyone_minutes. Existing database:
 --   run patch_v0.3_message_actions.sql.
+-- 09/11/2026: + school_posts.target_roles (FE-08: a post for some roles only, e.g. the parents of grade 10). Existing
+--   database: run patch_v0.3_school_post_roles.sql.
 -- How to run: Supabase > SQL Editor > paste the whole file > Run (on an empty database).
 -- Conventions:
 --   * Soft delete everywhere (deleted_at / deleted_by). Hard delete only for: post_likes (unlike),
@@ -450,9 +452,13 @@ CREATE TABLE school_posts (
   updated_at        TIMESTAMPTZ NULL,
   deleted_at        TIMESTAMPTZ NULL,
   deleted_by        BIGINT NULL,
+  -- Roles that get the post inside the chosen grades / classes (STUDENT, PARENT, TEACHER); NULL = every role. School
+  -- Managers see every post, the homeroom teacher of a targeted class always gets it (code).
+  target_roles      VARCHAR(20)[] NULL,
   FOREIGN KEY (author_id)  REFERENCES users(user_id),
   FOREIGN KEY (deleted_by) REFERENCES users(user_id),
-  CHECK (post_type IN ('ANNOUNCEMENT','NEWS'))
+  CHECK (post_type IN ('ANNOUNCEMENT','NEWS')),
+  CHECK (target_roles <@ ARRAY['STUDENT','PARENT','TEACHER']::VARCHAR(20)[])
 );
 
 CREATE TABLE school_post_grade_targets (

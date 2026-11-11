@@ -204,6 +204,74 @@ FROM users u JOIN classes c ON c.class_name = '11D1'
 JOIN school_years sy ON sy.school_year_id = c.school_year_id AND sy.year_name = '2026-2027'
 JOIN groups g ON g.class_id = c.class_id AND g.group_type = 'GENERAL'
 WHERE u.username = 'gvph3';
+
+-- FE-08 UC-58 / UC-59 (school feed, read only). Posts by binhnv (SM), each title starts with its tag; created_at is
+-- spread so the order is known (pinned first, then newest first). Targets are 2026-2027 classes unless noted.
+--   SP1  NEWS, whole school                        SP6  ANNOUNCEMENT, whole school, soft-deleted
+--   SP2  ANNOUNCEMENT, whole school (likes, comments, attachments)
+--   SP3  ANNOUNCEMENT, grade 10                    SP7  ANNOUNCEMENT, whole school, pinned, oldest
+--   SP4  ANNOUNCEMENT, class 11D1                  SP8  ANNOUNCEMENT, whole school, "%" in the title
+--   SP5  ANNOUNCEMENT, grade 10 + class 11D1       SP9  ANNOUNCEMENT, grade 12 (nobody in the seed)
+--   SP10 ANNOUNCEMENT, class 11D1 of 2027-2028 (another school year: no 2026-2027 reader gets it)
+-- Likes on SP2: baopg, toanpv, lannt. Comments on SP2: 3 (one a reply) + 1 deleted. SP1 (NEWS) gets one like and one
+-- comment anyway (rows no screen can create), to check that NEWS always shows 0 / 0 / false.
+INSERT INTO school_posts (author_id, title, content, post_type, send_notification, is_pinned, created_at, deleted_at, deleted_by)
+SELECT u.user_id, v.title, v.content, v.post_type, v.post_type = 'ANNOUNCEMENT', v.is_pinned, v.created_at::timestamptz,
+       v.deleted_at::timestamptz, CASE WHEN v.deleted_at IS NOT NULL THEN u.user_id END
+FROM (VALUES
+  ('[SP1] Tin tức: Lễ khai giảng năm học 2026-2027', 'Sáng 05/09 toàn trường dự lễ khai giảng.', 'NEWS', FALSE, '2026-09-05 08:00', NULL),
+  ('[SP2] Thông báo lịch thi giữa học kỳ I', E'Lịch thi giữa học kỳ I áp dụng cho toàn trường.\\n\\nXem tệp đính kèm.', 'ANNOUNCEMENT', FALSE, '2026-10-20 08:00', NULL),
+  ('[SP3] Họp phụ huynh khối 10', 'Họp phụ huynh khối 10 vào thứ Bảy.', 'ANNOUNCEMENT', FALSE, '2026-10-21 08:00', NULL),
+  ('[SP4] Lớp 11D1 đổi phòng học', 'Lớp 11D1 chuyển sang phòng B204.', 'ANNOUNCEMENT', FALSE, '2026-10-22 08:00', NULL),
+  ('[SP5] Ngoại khoá khối 10 và lớp 11D1', 'Buổi ngoại khoá kỹ năng sống.', 'ANNOUNCEMENT', FALSE, '2026-10-23 08:00', NULL),
+  ('[SP6] Bài đã xoá', 'Bài này đã bị xoá.', 'ANNOUNCEMENT', FALSE, '2026-10-24 08:00', '2026-10-25 08:00'),
+  ('[SP7] Nội quy nhà trường', 'Nội quy áp dụng từ năm học 2026-2027.', 'ANNOUNCEMENT', TRUE, '2026-09-01 08:00', NULL),
+  ('[SP8] Giảm 50% phí gửi xe', 'Áp dụng từ tháng 11.', 'ANNOUNCEMENT', FALSE, '2026-10-26 08:00', NULL),
+  ('[SP9] Thông báo khối 12', 'Chỉ dành cho khối 12.', 'ANNOUNCEMENT', FALSE, '2026-10-27 08:00', NULL),
+  ('[SP10] Lớp 11D1 năm học 2027-2028', 'Thông báo cho lớp 11D1 của năm học sau.', 'ANNOUNCEMENT', FALSE, '2026-10-28 08:00', NULL))
+  AS v(title, content, post_type, is_pinned, created_at, deleted_at)
+JOIN users u ON u.username = 'binhnv';
+INSERT INTO school_post_grade_targets (school_post_id, grade_level_id)
+SELECT sp.school_post_id, gl.grade_level_id
+FROM (VALUES ('[SP3]', '10'), ('[SP5]', '10'), ('[SP9]', '12')) AS v(tag, grade)
+JOIN school_posts sp ON sp.title LIKE v.tag || '%'
+JOIN grade_levels gl ON gl.grade_level_name = v.grade;
+INSERT INTO school_post_class_targets (school_post_id, class_id)
+SELECT sp.school_post_id, c.class_id
+FROM (VALUES ('[SP4]', '11D1', '2026-2027'), ('[SP5]', '11D1', '2026-2027'), ('[SP10]', '11D1', '2027-2028'))
+  AS v(tag, class_name, year_name)
+JOIN school_posts sp ON sp.title LIKE v.tag || '%'
+JOIN school_years sy ON sy.year_name = v.year_name
+JOIN classes c ON c.class_name = v.class_name AND c.school_year_id = sy.school_year_id;
+INSERT INTO post_likes (user_id, school_post_id)
+SELECT u.user_id, sp.school_post_id
+FROM (VALUES ('baopg', '[SP2]'), ('toanpv', '[SP2]'), ('lannt', '[SP2]'), ('baopg', '[SP1]')) AS v(username, tag)
+JOIN users u ON u.username = v.username
+JOIN school_posts sp ON sp.title LIKE v.tag || '%';
+INSERT INTO comments (school_post_id, author_id, content, created_at, deleted_at, deleted_by)
+SELECT sp.school_post_id, u.user_id, v.content, v.created_at::timestamptz, v.deleted_at::timestamptz,
+       CASE WHEN v.deleted_at IS NOT NULL THEN u.user_id END
+FROM (VALUES ('[SP2]', 'baopg', 'Em cảm ơn thầy cô.', '2026-10-20 09:00', NULL),
+             ('[SP2]', 'toanpv', 'Phụ huynh đã nắm lịch.', '2026-10-20 10:00', NULL),
+             ('[SP2]', 'lannt', 'Bình luận đã xoá.', '2026-10-20 11:00', '2026-10-20 12:00'),
+             ('[SP1]', 'baopg', 'Bình luận trên bản tin (dữ liệu sai).', '2026-09-05 09:00', NULL))
+  AS v(tag, username, content, created_at, deleted_at)
+JOIN users u ON u.username = v.username
+JOIN school_posts sp ON sp.title LIKE v.tag || '%';
+-- A reply to the first comment (multi-level comments, schema 9).
+INSERT INTO comments (school_post_id, parent_comment_id, author_id, content, created_at)
+SELECT c.school_post_id, c.comment_id, (SELECT user_id FROM users WHERE username = 'binhnv'), 'Chúc các em thi tốt.',
+       '2026-10-20 13:00'
+FROM comments c WHERE c.content = 'Em cảm ơn thầy cô.';
+INSERT INTO attachments (school_post_id, file_url, file_name, mime_type, size_bytes, uploaded_by, created_at, deleted_at)
+SELECT sp.school_post_id, v.file_url, v.file_name, v.mime_type, v.size_bytes, u.user_id, v.created_at::timestamptz,
+       v.deleted_at::timestamptz
+FROM (VALUES ('/uploads/test/lich-thi.pdf', 'lich-thi.pdf', 'application/pdf', 120000, '2026-10-20 08:00', NULL),
+             ('/uploads/test/so-do-phong-thi.png', 'so-do-phong-thi.png', 'image/png', 80000, '2026-10-20 08:01', NULL),
+             ('/uploads/test/anh-cu.jpg', 'anh-cu.jpg', 'image/jpeg', 50000, '2026-10-20 07:59', '2026-10-20 09:00'))
+  AS v(file_url, file_name, mime_type, size_bytes, created_at, deleted_at)
+JOIN users u ON u.username = 'binhnv'
+JOIN school_posts sp ON sp.title LIKE '[SP2]%';
 COMMIT;`;
 
 const epg = new EmbeddedPostgres({
