@@ -260,10 +260,11 @@ function ClassView({ mode }) {
               </table>
             </div>
           </section>
-          <p className="caption muted" style={{ marginTop: 8 }}>
-            {d.ranked} học sinh được xếp hạng. Học sinh chưa có điểm nào hoặc đã rời lớp không được xếp hạng.
-            {!d.subjects.length && ' Lớp chưa có môn nào được cấu hình điểm.'}
-          </p>
+          {!d.subjects.length && (
+            <p className="caption muted" style={{ marginTop: 8 }}>
+              Lớp chưa có môn nào được cấu hình điểm.
+            </p>
+          )}
         </>
       )}
     </>
