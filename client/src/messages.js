@@ -97,6 +97,17 @@ const ERROR_MESSAGES = {
   MSG_TEAM_CLASS_NOT_ALLOWED: 'Bạn chỉ tạo được team trong lớp của mình.',
   MSG_TEAM_MEMBER_NOT_ELIGIBLE: 'Có người không thuộc lớp hoặc nhóm này, hoặc tài khoản đang bị khoá.',
   MSG_TEAM_SCHOOL_NOT_ALLOWED: 'Chỉ giáo viên trong nhóm giáo viên toàn trường mới tạo được team giáo viên.',
+  // FE-05 Group Feed
+  MSG_FEED_NOT_FOUND: 'Nhóm này không có bảng tin hoặc bạn không xem được bảng tin của nhóm.',
+  MSG_POST_NOT_FOUND: 'Không tìm thấy bài viết. Bài có thể đã bị xoá hoặc không còn hiển thị với bạn.',
+  MSG_POST_HIDDEN: 'Bài viết đã bị ẩn nên không thể sửa. Bạn vẫn có thể xoá bài.',
+  MSG_POST_NOT_INTERACTIVE: 'Chỉ thích và bình luận được bài đã duyệt và đang hiển thị.',
+  MSG_POST_NOT_PENDING: 'Bài viết không còn chờ duyệt. Vui lòng tải lại.',
+  MSG_POST_NOT_APPROVED: 'Chỉ ẩn được bài đã duyệt.',
+  MSG_PIN_LIMIT: ({ max } = {}) =>
+    `Đã đạt giới hạn ${max ?? 5} bài ghim. Vui lòng bỏ ghim bài cũ trước khi ghim bài mới.`,
+  MSG_TEXT_TOO_LONG: ({ max } = {}) => `Nội dung tối đa ${(max ?? 5000).toLocaleString('vi-VN')} ký tự.`,
+  MSG_COMMENT_NOT_FOUND: 'Không tìm thấy bình luận.',
   // FE-06 Messaging
   MSG_CHAT_NO_ACCESS: 'Quản lý trường không xem tin nhắn của nhóm lớp.',
   MSG_CHAT_NOT_MEMBER: 'Bạn không còn là thành viên của cuộc trò chuyện này.',
@@ -169,12 +180,34 @@ const ERROR_MESSAGES = {
     'Hãy phân công lại giảng dạy trước.',
   MSG_INVALID_INPUT: 'Dữ liệu gửi lên không hợp lệ. Vui lòng tải lại trang.',
   MSG_TOO_MANY: ({ field, max } = {}) =>
-    field === 'subjectIds' ? `Chỉ chọn tối đa ${max} môn.` : 'Quá nhiều thay đổi trong một lần lưu.',
+    field === 'subjectIds'
+      ? `Chỉ chọn tối đa ${max} môn.`
+      : max && !field
+        ? `Danh sách quá dài để xuất (tối đa ${max} giáo viên). Hãy lọc bớt rồi xuất lại.`
+        : 'Quá nhiều thay đổi trong một lần lưu.',
   MSG_INVALID_NAME: ({ reason } = {}) => NAME_REASON_TEXT[reason] ?? 'Họ và tên không hợp lệ.',
   MSG_INVALID_DEPARTMENT: ({ reason } = {}) => DEPARTMENT_REASON_TEXT[reason] ?? 'Tên tổ chuyên môn không hợp lệ.',
   MSG_DEPARTMENT_INVALID: 'Tổ chuyên môn không còn trong danh sách. Vui lòng tải lại trang và chọn lại.',
   MSG_DEPARTMENTS_NOT_READY:
-    'Danh sách tổ chuyên môn chưa được tạo trong cơ sở dữ liệu (cần chạy database/patch_v0.3_departments.sql).',
+    'Danh sách tổ chuyên môn chưa được tạo đủ trong cơ sở dữ liệu (cần chạy database/patch_v0.3_departments.sql và patch_v0.3_department_subjects.sql).',
+  // UC-114 Manage Departments
+  MSG_DEPARTMENT_NOT_FOUND: 'Tổ chuyên môn này không còn tồn tại. Vui lòng tải lại trang.',
+  MSG_DEPARTMENT_NAME_INVALID: ({ reason } = {}) =>
+    ({
+      REQUIRED: 'Vui lòng nhập tên tổ chuyên môn.',
+      TOO_SHORT: 'Tên tổ cần ít nhất 2 chữ cái hoặc chữ số.',
+      TOO_LONG: 'Tên tổ tối đa 100 ký tự.',
+      INVALID_CHAR: "Tên tổ chỉ gồm chữ, số, khoảng trắng và các dấu . , - – ( ) & / '.",
+      NO_LETTER: 'Tên tổ phải có chữ cái.',
+    })[reason] ?? 'Tên tổ chuyên môn không hợp lệ.',
+  MSG_DEPARTMENT_NAME_TAKEN: ({ name } = {}) => `Đã có tổ “${name ?? ''}”. Tên tổ không được trùng (không phân biệt hoa thường và dấu).`,
+  MSG_DEPARTMENT_IN_USE: ({ teachers } = {}) =>
+    `Tổ còn ${teachers ?? 'một số'} giáo viên. Hãy chuyển các giáo viên này sang tổ khác trước khi xoá.`,
+  MSG_SUBJECT_IN_OTHER_DEPARTMENT: ({ items = [] } = {}) =>
+    `Môn ${items.map((i) => `${i.subject} (đang thuộc ${i.department})`).join(', ')} đã thuộc tổ khác. Hãy bỏ môn khỏi tổ đó trước.`,
+  MSG_SUBJECT_NOT_IN_DEPARTMENT: ({ subjects = [], department } = {}) =>
+    `Môn ${subjects.join(', ')} thuộc tổ khác nên không thêm được cho giáo viên ${department ? `của ${department}` : 'chưa thuộc tổ nào'}. ` +
+    'Chỉ thêm được môn của tổ đã chọn hoặc môn chưa thuộc tổ nào.',
   MSG_LOGIN_IDENTIFIER_READONLY: 'Chỉ Quản trị hệ thống mới được đổi tên đăng nhập, email và số điện thoại.',
   MSG_UNKNOWN_FIELD: 'Dữ liệu gửi lên có trường không được phép. Vui lòng tải lại trang.',
   SCHOOL_YEAR_NOT_FOUND: 'Không tìm thấy năm học.',
@@ -186,7 +219,7 @@ const ERROR_MESSAGES = {
     `Mỗi giáo viên chủ nhiệm tối đa ${max} lớp: ` +
     conflicts.map((c) => `${c.teacher} (${c.classes.join(', ')})`).join('; ') + '.',
   MSG_EFFECTIVE_DATE: ({ min, max } = {}) =>
-    `Ngày áp dụng phải từ ${formatVnDate(min)} đến ${formatVnDate(max)} (không sửa phân công trong quá khứ).`,
+    `Khoảng phân công phải bắt đầu từ ${formatVnDate(min)} trở đi và kết thúc trước ${formatVnDate(max)} (không sửa phân công trong quá khứ).`,
   MSG_SUBJECT_NOT_IN_CLASS: 'Lớp này không học môn đã chọn trong năm học.',
   MSG_ASSIGNMENT_STALE: ({ cells = [] } = {}) =>
     `Ô ${cells.join(', ')} vừa được người khác thay đổi. Hãy tải lại dữ liệu rồi phân công lại.`,

@@ -872,6 +872,47 @@ a.link-row .icon:last-child { color: var(--graphite-400); }
 .group-nickname .input { width: 160px; height: 32px; }
 .group-nickname .btn { height: 32px; padding: 0 6px; }
 .group-members .table th, .group-members .table .pill { white-space: nowrap; }
+/* SCR-22 member table: everything stays visible without scrolling sideways. The global ".table-scroll td" nowrap
+   (admin.css) is undone here: names, "parent of …" lines, roles and e-mails wrap; the number, status and buttons
+   do not. Below 1100px each member becomes a stacked card instead of a table row. */
+.group-members .table-scroll { overflow-x: visible; }
+.group-members .table-scroll td { white-space: normal; }
+.group-members .table-scroll td.gm-no,
+.group-members .table-scroll td.gm-status,
+.group-members .table-scroll td.gm-actions { white-space: nowrap; }
+.group-members .gm-name { min-width: 180px; }
+.group-members .gm-contact .muted { overflow-wrap: anywhere; }
+.group-members .gm-name .group-member > span { min-width: 0; overflow-wrap: anywhere; }
+@media (max-width: 1100px) {
+  .group-members .group-members-table thead { display: none; }
+  .group-members .group-members-table, .group-members .group-members-table tbody { display: block; }
+  .group-members .group-members-table tr {
+    display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 8px 12px; padding: 12px 16px;
+    grid-template-areas: 'name status' 'role role' 'nick nick' 'contact contact' 'actions actions';
+    border-bottom: 1px solid var(--graphite-200);
+  }
+  .group-members .group-members-table tr:last-child { border-bottom: 0; }
+  .group-members .group-members-table td { display: block; height: auto; padding: 0; border: 0; text-align: left; }
+  .group-members .group-members-table td.gm-no, .group-members .group-members-table td.is-empty,
+  .group-members .group-members-table td.gm-actions:not(:has(button)) { display: none; }
+  .group-members .group-members-table td.gm-name { grid-area: name; min-width: 0; }
+  .group-members .group-members-table td.gm-status { grid-area: status; }
+  .group-members .group-members-table td.gm-role { grid-area: role; padding-left: 42px; }
+  .group-members .group-members-table td.gm-nick { grid-area: nick; padding-left: 42px; }
+  .group-members .group-members-table td.gm-contact { grid-area: contact; padding-left: 42px; }
+  .group-members .group-members-table td.gm-actions { grid-area: actions; padding-left: 36px; }
+  .group-members .group-members-table td.gm-nick:not(:has(form))::before { content: attr(data-label) ': '; color: var(--graphite-500); }
+  .group-members .group-members-table .group-member-contact { display: flex; flex-wrap: wrap; gap: 2px 12px; }
+  .group-members .group-members-table .group-row-actions { display: flex; flex-wrap: wrap; }
+  .group-members .group-members-table .group-row-actions .group-message span { display: inline; }
+  .group-members .group-members-table .group-nickname .input { width: min(220px, 100%); }
+}
+@media (max-width: 640px) {
+  .group-members .group-members-table tr { padding: 12px; }
+  .group-members .group-members-table td.gm-role, .group-members .group-members-table td.gm-nick,
+  .group-members .group-members-table td.gm-contact { padding-left: 0; }
+  .group-members .group-members-table td.gm-actions { padding-left: 0; margin-left: -6px; }
+}
 .group-dialog { width: min(440px, calc(100vw - 32px)); padding: 24px; border: 0; border-radius: var(--radius-dialog); box-shadow: var(--shadow-dialog); display: grid; gap: 12px; }
 .group-dialog:not([open]) { display: none; }
 .group-dialog::backdrop { background: rgba(28, 27, 25, 0.32); }
@@ -994,6 +1035,17 @@ a.link-row .icon:last-child { color: var(--graphite-400); }
 }
 .gd-features li a { display: inline-flex; align-items: center; gap: 6px; color: inherit; }
 .gd-features li a:hover { text-decoration: underline; }
+/* FE-05 approval switch on SCR-21 */
+.gd-switch { display: flex; align-items: flex-start; gap: 12px; margin-top: 16px; padding: 12px 14px; border-radius: var(--radius-control); background: var(--graphite-50); cursor: pointer; }
+.gd-switch > span:last-child { display: grid; gap: 2px; }
+.gd-switch-label { font-weight: 500; color: var(--graphite-900); }
+.gd-switch input { position: absolute; opacity: 0; width: 1px; height: 1px; }
+.gd-switch-track { flex: none; position: relative; width: 36px; height: 20px; margin-top: 1px; border-radius: 999px; background: var(--graphite-300); transition: background 0.15s; }
+.gd-switch-track::after { content: ''; position: absolute; top: 2px; left: 2px; width: 16px; height: 16px; border-radius: 50%; background: var(--white); box-shadow: var(--shadow-menu); transition: transform 0.15s; }
+.gd-switch input:checked + .gd-switch-track { background: var(--ink-600); }
+.gd-switch input:checked + .gd-switch-track::after { transform: translateX(16px); }
+.gd-switch input:focus-visible + .gd-switch-track { outline: 2px solid var(--ink-400); outline-offset: 2px; }
+.gd-switch input:disabled + .gd-switch-track { opacity: 0.55; }
 /* Feed / chat tabs until FE-05 / FE-06 land. */
 .gd-pending { display: grid; justify-items: center; gap: 10px; padding: 48px 24px; text-align: center; }
 .gd-pending > p { max-width: 460px; }

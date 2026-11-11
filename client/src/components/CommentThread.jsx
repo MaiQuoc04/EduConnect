@@ -141,7 +141,7 @@ function mergeWindow(shown, fetched, full) {
  * Text box + Send. The text is owned by the thread (drafts survive syncs and a deleted reply target), so it is
  * controlled: text / setText. onSubmit(content) resolves { ok: true } or { error: 'Vietnamese text' }; never rejects.
  */
-function Composer({ text, setText, onSubmit, placeholder, replyingTo, onCancel, autoFocus, user }) {
+function Composer({ text, setText, onSubmit, placeholder, replyingTo, onCancel, autoFocus, user, enterToSend }) {
   const id = useId();
   const [error, setError] = useState('');
   const [sending, setSending] = useState(false);
@@ -193,7 +193,11 @@ function Composer({ text, setText, onSubmit, placeholder, replyingTo, onCancel, 
               setError('');
             }}
             onKeyDown={(e) => {
-              if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) send(e);
+              // enterToSend (FE-05): Enter sends, Shift + Enter breaks the line, as in the chat; never while an input
+              // method (Vietnamese Telex / VNI) is still composing. Otherwise Ctrl / Cmd + Enter sends (FE-08).
+              if (e.key === 'Enter' && !e.nativeEvent.isComposing) {
+                if (enterToSend ? !e.shiftKey : e.ctrlKey || e.metaKey) send(e);
+              }
               if (e.key === 'Escape' && onCancel && !sending) onCancel();
             }}
             placeholder={placeholder}
@@ -212,7 +216,7 @@ function Composer({ text, setText, onSubmit, placeholder, replyingTo, onCancel, 
                     : `Vượt ${(-left).toLocaleString('vi-VN')} ký tự, tối đa ${MAX_COMMENT_LENGTH.toLocaleString('vi-VN')}`}
                 </span>
               ) : (
-                'Ctrl + Enter để gửi'
+                enterToSend ? 'Enter để gửi, Shift + Enter để xuống dòng' : 'Ctrl + Enter để gửi'
               )}
             </span>
             <div className="ct-composer-buttons">
@@ -277,10 +281,12 @@ function CommentNode({ node, depth, parentName, reply, onDelete }) {
             </div>
             <p className="ct-content">{node.content}</p>
             <div className="ct-actions">
-              <button type="button" className="ct-action" onClick={() => reply.toggle(node.commentId)} aria-expanded={replying}>
-                <Icon name="reply" size="sm" />
-                Trả lời
-              </button>
+              {reply.enabled && (
+                <button type="button" className="ct-action" onClick={() => reply.toggle(node.commentId)} aria-expanded={replying}>
+                  <Icon name="reply" size="sm" />
+                  Trả lời
+                </button>
+              )}
               {node.canDelete && (
                 <button type="button" className="ct-action is-danger" onClick={() => onDelete(node)}>
                   <Icon name="delete" size="sm" />
@@ -302,6 +308,7 @@ function CommentNode({ node, depth, parentName, reply, onDelete }) {
             replyingTo={node.authorName}
             placeholder={`Trả lời ${node.authorName}…`}
             autoFocus
+            enterToSend={reply.enterToSend}
           />
         </div>
       )}
@@ -406,6 +413,8 @@ export default function CommentThread({
   title = 'Bình luận',
   live,
   refreshKey = 0,
+  canWrite = true, // FE-05: false = read only (no composer, no "Trả lời"), e.g. a hidden post or last year's group
+  enterToSend = false, // FE-05: Enter sends (Shift + Enter = new line); default Ctrl + Enter as FE-08 built it
 }) {
   const toast = useToast();
   const { user } = useAuth();
@@ -752,6 +761,8 @@ export default function CommentThread({
   }
 
   const reply = {
+    enabled: canWrite,
+    enterToSend,
     to: replyTo,
     text: replyText,
     setText: setReplyText,
@@ -773,13 +784,16 @@ export default function CommentThread({
         {title} <span className="mono">({count.toLocaleString('vi-VN')})</span>
       </h2>
 
-      <Composer
-        text={mainText}
-        setText={setMainText}
-        onSubmit={(content) => submit(content)}
-        placeholder="Viết bình luận…"
-        user={user}
-      />
+      {canWrite && (
+        <Composer
+          text={mainText}
+          setText={setMainText}
+          onSubmit={(content) => submit(content)}
+          placeholder="Viết bình luận…"
+          user={user}
+          enterToSend={enterToSend}
+        />
+      )}
 
       {/* Always rendered (zero height, sticky): the pill floats over the list without moving it. */}
       <div className="ct-new-pill-wrap" aria-live="polite">

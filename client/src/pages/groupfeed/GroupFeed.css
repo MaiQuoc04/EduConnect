@@ -1,0 +1,97 @@
+/* FE-05 Group Feed (SCR-35..SCR-38). Every rule is scoped under .gf (the .gf-* pieces it renders); like button,
+   comment count and dialogs reuse the shared .sf-like / .sf-comments / .group-dialog rules in styles.css. */
+
+.gf { display: grid; gap: 16px; max-width: 760px; }
+.gf .btn-sm { height: 32px; padding: 0 10px; font-size: 13px; gap: 4px; }
+.gf .notice p { margin: 0; }
+
+/* Composer opener (SCR-35 → SCR-36) */
+.gf-composer-open {
+  display: flex; align-items: center; gap: 12px; padding: 14px 16px;
+  color: var(--graphite-600); text-decoration: none;
+}
+.gf-composer-open:hover { text-decoration: none; background: var(--graphite-50); }
+.gf-composer-open:focus-visible { outline: 2px solid var(--ink-400); outline-offset: 2px; }
+.gf-composer-open > .icon { margin-left: auto; color: var(--ink-600); }
+.gf-composer-placeholder {
+  flex: 1; min-width: 0; padding: 8px 14px; border-radius: 999px; background: var(--graphite-100);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.gf-hint { display: flex; align-items: center; gap: 6px; margin: -8px 0 0; }
+.gf-tabs { justify-self: start; max-width: 100%; overflow-x: auto; }
+
+.gf-list { display: grid; gap: 16px; }
+.gf-list.is-loading { opacity: 0.6; }
+.gf-load-more { justify-self: center; }
+.gf-empty { display: grid; justify-items: center; gap: 10px; padding: 40px 24px; text-align: center; }
+.gf-empty > .icon { font-size: 32px; color: var(--graphite-400); }
+
+/* A post */
+.gf-post { display: grid; gap: 12px; padding: 20px 24px; }
+.gf-post.is-pinned { outline-color: var(--ink-200); background: linear-gradient(var(--ink-50), var(--white) 72px); }
+.gf-post-head { display: flex; align-items: flex-start; gap: 12px; }
+.gf-post-who { display: grid; gap: 2px; min-width: 0; }
+.gf-author { font-weight: 600; color: var(--graphite-900); display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.gf-locked { font-size: 11px; }
+.gf-time { color: inherit; }
+.gf-post-status { margin-left: auto; display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 6px; }
+.gf-stamp .icon { font-size: 14px; }
+.gf-status-notice { padding: 10px 14px; font-size: 13px; }
+.gf-content {
+  margin: 0; white-space: pre-wrap; overflow-wrap: anywhere;
+  font-size: 15px; line-height: 24px; color: var(--graphite-900);
+}
+.gf-more { justify-self: start; font-weight: 500; }
+.gf-post-foot {
+  display: flex; flex-wrap: wrap; align-items: center; gap: 8px;
+  padding-top: 10px; border-top: 1px solid var(--graphite-100);
+}
+.gf-interactions { display: flex; align-items: center; gap: 4px; }
+.gf-comments-link { color: inherit; text-decoration: none; }
+.gf-comments-link:hover { text-decoration: none; }
+.gf-actions { margin-left: auto; display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 4px; }
+
+/* "⋮" menu at the top right of a post */
+.gf-menu { position: relative; flex: none; margin: -4px -8px 0 0; } /* after .gf-post-status (margin-left: auto) */
+.gf-menu-trigger[aria-expanded='true'] { background: var(--graphite-100); color: var(--graphite-900); }
+.gf-menu-list {
+  position: absolute; top: calc(100% + 4px); right: 0; z-index: 20; min-width: 168px;
+  display: grid; padding: 4px; border-radius: var(--radius-control);
+  background: var(--white); outline: 1px solid var(--graphite-200); box-shadow: var(--shadow-menu);
+}
+.gf-menu-item {
+  display: flex; align-items: center; gap: 10px; width: 100%; padding: 8px 10px;
+  border: 0; border-radius: 4px; background: transparent; font: inherit; font-size: 14px;
+  color: var(--graphite-900); text-align: left; text-decoration: none; cursor: pointer;
+}
+.gf-menu-item .icon { color: var(--graphite-600); }
+.gf-menu-item:hover, .gf-menu-item:focus-visible { background: var(--graphite-50); text-decoration: none; outline: none; }
+.gf-menu-item.is-danger, .gf-menu-item.is-danger .icon { color: var(--red-pen); }
+.gf-menu-item.is-danger:hover, .gf-menu-item.is-danger:focus-visible { background: var(--red-bg); }
+
+/* SCR-37 */
+.gf-back { justify-self: start; }
+.gf-comments { padding: 20px 24px; }
+
+/* SCR-36 / SCR-38 */
+.gf-form { display: grid; gap: 16px; max-width: 760px; }
+.gf-form-title { display: flex; align-items: center; gap: 8px; margin: 0; }
+.gf-form-title .icon { color: var(--ink-600); }
+.gf-form-who { display: flex; align-items: center; gap: 10px; }
+.gf-textarea { height: auto; min-height: 200px; padding: 12px 14px; resize: vertical; line-height: 22px; }
+.gf-over { color: var(--red-pen); }
+
+/* Mobile layout (docs/screens.md: Group Feed and Group Post Detail need one) */
+@media (max-width: 640px) {
+  .gf { gap: 12px; }
+  .gf-post, .gf-comments { padding: 14px 16px; border-radius: 0; margin: 0 -16px; }
+  .gf-post-head { flex-wrap: wrap; }
+  /* labels go to their own row under the name; the "⋮" menu stays at the top right */
+  .gf-post-who { flex: 1; }
+  .gf-post-status { order: 3; margin-left: 52px; justify-content: flex-start; width: 100%; }
+  .gf-post-status:empty { display: none; }
+  .gf-post-foot { gap: 4px; }
+  .gf-actions { margin-left: 0; width: 100%; justify-content: flex-start; }
+  .gf-form { padding: 16px; }
+  .gf .btn-sm { height: 36px; } /* a larger touch target */
+}

@@ -10,7 +10,7 @@ The app serves **one high school** (grades 10–12). Users never self-register.
 | Role code | Who | Scope |
 |---|---|---|
 | `SYSTEM_ADMIN` | IT admin | Accounts and system only: create / import / export accounts, change login identifiers, reset passwords and lock / unlock **any** account, system settings, maintenance. **Cannot see any content** (feeds, chats, grades, school posts), is in no group, cannot create teams. |
-| `SCHOOL_MANAGER` | Principal / office staff (several, equal rights) | All school business. Views and updates student / parent / teacher profiles (cannot create or delete them). Resets passwords and locks / unlocks student, parent and teacher accounts. Manages the **school-wide teacher group** (pin / hide / approve) and the school feed. **Does not see class feeds or class chats.** Private messages only with people in the teacher group. Views grades and rankings of the whole school (read only), unlocks grades, views grade history, corrects attendance after the day, sees school-wide attendance statistics. |
+| `SCHOOL_MANAGER` | Principal / office staff (several, equal rights) | All school business. Views and updates student / parent / teacher profiles (cannot create or delete them, except importing teacher accounts, UC-116, §4). Resets passwords and locks / unlocks student, parent and teacher accounts. Manages the **school-wide teacher group** (pin / hide / approve) and the school feed. **Does not see class feeds or class chats.** Private messages only with people in the teacher group. Views grades and rankings of the whole school (read only), unlocks grades, views grade history, corrects attendance after the day, sees school-wide attendance statistics. |
 | `TEACHER` | Teachers | Teaches assigned classes / subjects. A teacher becomes **Homeroom Teacher** of a class when `classes.homeroom_teacher_id` points to them – this is **not a separate role**. |
 | `STUDENT` | Students | Own data, own classes and groups. |
 | `PARENT` | Parents / guardians | Their children's data; picks a child first on child-specific screens. |
@@ -195,15 +195,41 @@ Boundaries that are easy to get wrong:
     assignment cannot be removed.
   - **Departments** (tổ chuyên môn) come from the `departments` list; SM picks one on Update Teacher.
     `teachers.department` stores the department name (no foreign key yet).
+  - **Managing departments (UC-114, agreed with the lead 07/11/2026):** SM creates, renames and deletes departments
+    on the Departments screen and chooses the subjects of each one (`department_subjects`). A subject belongs to
+    **at most one department**; a subject of no department (e.g. HĐTN, taught by homeroom teachers) can be taught by
+    a teacher of any department. Names are unique ignoring case, accents and the kind of dash; a rename is copied to
+    `teachers.department` of its teachers. A department that still has teachers cannot be deleted (move them first);
+    deleting it (soft delete) makes its subjects subjects of no department. Starting list: Tổ Toán – Khoa học tự nhiên
+    (Toán, Lí, Hoá, Sinh, Tin, CN), Tổ Ngữ văn – Khoa học xã hội (Văn, Sử, Địa, KTPL), Tổ Ngoại ngữ – Thể chất (Anh,
+    GDTC, QPAN).
+  - **Subjects follow the department (UC-17, 07/11/2026):** a subject **added** to a teacher must belong to the
+    teacher's department or to no department (no department chosen → only subjects of no department). Subjects the
+    teacher already has stay even if they are outside the department (shown with a warning); SM removes them when
+    needed.
+  - **Import teachers (UC-116, 07/11/2026):** SM imports teacher accounts from a file – the same template, checks,
+    preview and one-time passwords as UC-96 (FE-13), account type fixed to Teacher. The department column must name a
+    department of the list (case, accents and dash type ignored) or stay empty; subjects are set later on UC-17.
+  - **Export the teacher list (UC-115, 07/11/2026):** SM downloads the list with the filters of the screen (all
+    pages, max 5000 rows) as .xlsx: code, name, department, subjects, email, phone, homeroom class, classes,
+    periods/week, status.
   - **Homeroom:** one homeroom teacher per class per school year, and a teacher is homeroom teacher of **at most one
     class** per school year.
   - A **locked teacher** gets no new homeroom class and no new teaching assignment (existing ones stay until SM
     reassigns them).
   - **Teaching assignment:** one teacher per (class, subject) at a time; the subject must belong to the class type
-    for that year (`track_subjects`). A change takes effect from a date **today or later** inside the school year
-    (never back-dated): the running assignment ends the day before and the new one runs to the end of the year.
-    Timetable periods from that date **without attendance** move to the new teacher; periods with attendance stay.
-    A (class, subject) cannot be left without a teacher while it still has such periods.
+    for that year (`track_subjects`). **Each assignment has a start and an end date** (changed 07/11/2026, agreed
+    with the lead): SM chooses the range [start, end] (start **today or later**, never back-dated; end defaults to the
+    end of the school year). Only the part of other assignments inside the range changes and **history is kept**:
+    an assignment that covers the whole range is split (A runs 05/09–31/05, B is assigned for 01/12–15/12 → A
+    05/09–30/11, B 01/12–15/12, A 16/12–31/05), one that starts before ends the day before, plans inside the range
+    are replaced (soft delete). Two touching assignments of the same
+    teacher are joined. Timetable periods **inside the range without attendance** move to the new teacher; periods
+    with attendance stay. A (class, subject) cannot be left without a teacher in a range that still has such
+    periods.
+  - **Viewing assignments by range (SCR-19):** SM picks "from" and "to"; each (class, subject) lists every teacher
+    whose assignment overlaps the range, with its start and end dates (01/01–31/05 shows only A, 01/06–31/12 only
+    B, 01/01–31/12 both). Changes are made for the range on screen and only when it starts today or later.
 - Importing a class creates 3 groups automatically: **GENERAL** (feed + chat), **STUDENT** (chat), **PARENT** (chat).
   Groups can also be created by hand. One **TEACHER_SCHOOL** group for the whole school (feed + chat, all teachers +
   SMs, managed by SM, reused across years). After promotion, last year's groups are read only.
@@ -253,6 +279,27 @@ Boundaries that are easy to get wrong:
 - Only **Like** (no other reactions). One like per user per post; unlike removes the row.
 - Images, files and videos can be attached to posts and messages: images / files ≤ 10 MB, video ≤ 50 MB.
   Files live in cloud storage; the DB stores the URL (`attachments`).
+- **Post states in detail** (Khanh's proposals, agreed by the lead 11/11/2026):
+  - **Moderator posts are auto-approved:** the homeroom teacher in the class feed, the School Manager in the teacher
+    group. Any post is also approved at once when the group has `require_approval = false`.
+  - **Rejected** (`REJECTED`): seen only by its author (label "Đã bị từ chối") and the group moderator; no reason is
+    stored. The author may edit it – saving sends it back to `PENDING` – or delete it.
+  - **Editing an approved post** while the group has `require_approval = true` (author not the moderator) sends it
+    back to `PENDING`: it leaves the feed until the moderator approves it again. With approval off it stays
+    `APPROVED` and shows "Đã chỉnh sửa" (`updated_at`).
+  - **Hidden** (`is_hidden`): the author still sees it, labelled "Bài viết đã bị ẩn bởi người kiểm duyệt"; other
+    members do not. The moderator sees the list of hidden posts and can **unhide** one (it comes back as a normal
+    post). Only posts are hidden; comments are still only deleted.
+  - **Pin:** at most **5 pinned posts per group**; pinning a 6th is refused ("Đã đạt giới hạn 5 bài ghim. Vui lòng
+    bỏ ghim bài cũ trước khi ghim bài mới."). Hiding a post unpins it; unhiding does not pin it again.
+  - **Turning approval on / off** (`groups.require_approval`): the homeroom teacher for the class general group, the
+    School Manager for the teacher group, with a switch on the group detail screen (SCR-21); no new screen. The School
+    Manager still does not see class feeds (§2).
+  - **Class without a homeroom teacher** (none assigned, or locked): the class feed shows a banner "Lớp học hiện chưa
+    có GVCN phụ trách kiểm duyệt. Bài viết chờ duyệt có thể bị xử lý chậm."; pending posts wait until the School
+    Manager assigns a homeroom teacher (UC-19), who then takes them over. Nobody approves in place of the homeroom
+    teacher.
+  - **Lengths:** post content at most 5,000 characters; comments at most 2,000 (as FE-08). Group posts have no title.
 
 ## 6. Messaging (FE-06)
 - Group chats (GENERAL / STUDENT / PARENT / TEACHER_SCHOOL / TEAM_CHAT) and **1-1 chats**. A 1-1 chat is a group of
@@ -369,7 +416,7 @@ Boundaries that are easy to get wrong:
 - `system_settings` (key–value, loaded by SQL; SA edits values only): sign-in lock thresholds, upload limits, OTP
   lifetime, password reset request cooldown, attendance edit deadline, chat delete-for-everyone time. Allowed values
   (01/11/2026): wrong passwords before a lock 3–10; lock step 1–60 min; lock max 1–1440 min; images / files 1–50 MB;
-  videos 1–200 MB; OTP lifetime 1–30 min; reset request cooldown 1–1440 min (default 15); attendance deadline a time
+  videos 1–50 MB (lowered from 200 by the lead 11/11/2026: the Supabase Free plan takes files up to 50 MB); OTP lifetime 1–30 min; reset request cooldown 1–1440 min (default 15); attendance deadline a time
   `HH:MM`; `chat.delete_for_everyone_minutes` 1–1440 min (default 15, §6; agreed by the lead 07/11/2026).
 - `activity_logs` (never deleted) records only important actions: sign-in success / failure, account create /
   import / lock / unlock, password reset, role change, setting change, grade unlock. **The log is only kept in the
@@ -379,7 +426,7 @@ Boundaries that are easy to get wrong:
 ## 14. Deleting data
 - **Every delete in the system is a soft delete** (`deleted_at`, often `deleted_by`): never `DELETE` business rows,
   always filter `deleted_at IS NULL`.
-- Hard delete is allowed only for technical / configuration rows: `post_likes` (unlike), `message_reactions`
+- Hard delete is allowed only for technical / configuration rows: `department_subjects` (07/11/2026), `post_likes` (unlike), `message_reactions`
   (reaction removed, §6), `class_event_viewers`,
   `teacher_subjects`, `user_roles`, `student_parents` (unlink), expired OTPs, `track_subjects` (a subject removed
   from a class type while the year has no grades, §4).

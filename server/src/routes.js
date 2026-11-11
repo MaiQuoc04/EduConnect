@@ -10,7 +10,9 @@ import subjectRoutes from './modules/subjects/subjects.routes.js';
 import classTrackRoutes from './modules/class-tracks/class-tracks.routes.js';
 import classRoutes from './modules/classes/classes.routes.js';
 import groupRoutes from './modules/groups/groups.routes.js';
+import postRoutes from './modules/posts/posts.routes.js';
 import conversationRoutes from './modules/conversations/conversations.routes.js';
+import departmentRoutes from './modules/teacher/department.routes.js';
 import homeroomRoutes from './modules/teacher/homeroom.routes.js';
 import teacherRoutes from './modules/teacher/teacher.routes.js';
 import teachingRoutes from './modules/teacher/teaching.routes.js';
@@ -21,7 +23,7 @@ import parentRoutes from './modules/parents/parents.routes.js';
 // Each feature gets its own folder in src/modules and is mounted here, e.g.
 //   FE-01 account   -> /auth, /account (Quoc)
 //   FE-02 students  -> /students      (Anh)
-//   FE-03 teachers  -> /teachers, /homeroom-assignments, /teaching-assignments (Dung)
+//   FE-03 teachers  -> /teachers, /departments, /homeroom-assignments, /teaching-assignments (Dung)
 //   FE-04 classes   -> /school-years, /classes, /groups, /subjects, /class-tracks (Khanh)
 //   FE-05 feed      -> /posts         (Khanh)
 //   FE-06 chat      -> /conversations (Khanh, + src/sockets)
@@ -45,8 +47,10 @@ router.use('/subjects', subjectRoutes);
 router.use('/class-tracks', classTrackRoutes);
 router.use('/classes', classRoutes);
 router.use('/groups', groupRoutes);
+router.use(postRoutes); // FE-05: /groups/:groupId/posts and /posts/:postId (paths in posts.routes.js)
 router.use('/conversations', conversationRoutes);
 router.use('/teachers', teacherRoutes);
+router.use('/departments', departmentRoutes);
 router.use('/homeroom-assignments', homeroomRoutes);
 router.use('/teaching-assignments', teachingRoutes);
 router.use('/school-posts', schoolPostRoutes);

@@ -152,7 +152,9 @@ export function targetScopeLabels(post) {
  * differs from the server's. So five quick clicks end liked, with at most two requests, and the count shown is the
  * server's in the end. On an error the server's last known state comes back and onError gets the error.
  */
-export function useLike(schoolPostId, likedByMe, likeCount, onError) {
+// `requests` lets FE-05 Group Feed reuse the hook with its own calls; FE-08 keeps the default (school posts).
+const SCHOOL_POST_LIKE = { like: likeSchoolPost, unlike: unlikeSchoolPost };
+export function useLike(schoolPostId, likedByMe, likeCount, onError, requests = SCHOOL_POST_LIKE) {
   const confirmed = useRef({ likedByMe, likeCount });
   const wanted = useRef(likedByMe);
   const busy = useRef(false);
@@ -170,7 +172,7 @@ export function useLike(schoolPostId, likedByMe, likeCount, onError) {
     busy.current = true;
     try {
       while (wanted.current !== confirmed.current.likedByMe) {
-        const request = wanted.current ? likeSchoolPost : unlikeSchoolPost;
+        const request = wanted.current ? requests.like : requests.unlike;
         confirmed.current = await request(schoolPostId);
       }
       setView({ ...confirmed.current });
