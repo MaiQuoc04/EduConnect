@@ -1,0 +1,219 @@
+/* FE-14 Parent Detail (SCR-10). Only this screen's styles; every rule is scoped under .parent-detail.
+   No Stitch design exists for this screen: it follows Student Detail (SCR-08, StudentDetailPage.css), so both detail
+   screens look alike. Colours, radii and type come from the tokens in styles.css.
+   styles.css is loaded after this file, so rules that override a shared class (.card, .dl, .pill, .notice) are
+   prefixed with .parent-detail to win on specificity.
+   Breakpoints: 1080px (two columns become one), 900px (app shell becomes a drawer) and 640px. */
+
+.parent-detail .strong { font-weight: 600; color: var(--graphite-900); }
+.parent-detail .btn-icon-only { width: 36px; padding: 0; }
+.parent-detail .pill.amber { background: var(--amber-bg); color: var(--amber); }
+
+/* ---------- header ---------- */
+.parent-detail .page-header {
+  align-items: flex-end;
+  padding-bottom: 24px;
+  border-bottom: 1px solid var(--graphite-200);
+}
+.parent-detail .page-header p { overflow-wrap: anywhere; }
+.parent-detail .page-header .actions-row { gap: 10px; flex-wrap: nowrap; }
+.parent-detail-menu-wrap { position: relative; }
+.parent-detail-menu {
+  position: absolute;
+  right: 0;
+  top: calc(100% + 6px);
+  z-index: 20;
+  width: 240px;
+  padding: 6px 0;
+  border-radius: var(--radius-card);
+  background: var(--white);
+  outline: 1px solid var(--graphite-200);
+  box-shadow: var(--shadow-menu);
+}
+.parent-detail-menu .label-upper { padding: 4px 12px; color: var(--graphite-400); }
+.parent-detail-menu hr { margin: 4px 0; border: 0; border-top: 1px solid var(--graphite-200); }
+.parent-detail-menu button {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  min-height: 36px;
+  padding: 0 12px;
+  border: 0;
+  background: none;
+  color: var(--graphite-900);
+  font: 500 14px/20px var(--font-ui);
+  text-align: left;
+  cursor: pointer;
+}
+.parent-detail-menu button .icon { color: var(--graphite-600); }
+.parent-detail-menu button.danger,
+.parent-detail-menu button.danger .icon { color: var(--red-pen); }
+.parent-detail-menu button:not(:disabled):hover { background: var(--graphite-50); }
+.parent-detail-menu button:disabled { opacity: 0.55; cursor: default; }
+
+/* ---------- identity strip ---------- */
+.parent-detail .parent-detail-identity {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  margin-top: 24px;
+  padding: 20px;
+}
+.parent-detail-identity > div { min-width: 0; }
+.parent-detail-identity .avatar { background: var(--graphite-100); color: var(--graphite-700); outline: 1px solid var(--graphite-200); }
+.parent-detail-identity-name { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; }
+.parent-detail-identity-name h2 { overflow-wrap: anywhere; }
+.parent-detail-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 16px;
+  margin: 6px 0 0;
+  padding: 0;
+  list-style: none;
+  color: var(--graphite-600);
+}
+.parent-detail-meta li { display: inline-flex; align-items: center; gap: 4px; }
+.parent-detail-meta .icon { color: var(--graphite-400); }
+/* The phone identifies the parent (business-rules §3): it reads at full strength. */
+.parent-detail-meta li.phone { color: var(--graphite-900); font-weight: 600; }
+
+/* ---------- main grid ---------- */
+.parent-detail-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 7fr) minmax(0, 5fr);
+  gap: 24px;
+  margin-top: 24px;
+  align-items: start;
+}
+.parent-detail-side { display: grid; gap: 24px; min-width: 0; }
+.parent-detail .card-title {
+  padding-bottom: 16px;
+  margin-bottom: 20px;
+  border-bottom: 1px solid var(--graphite-200);
+}
+.parent-detail .card-title .aside { margin-left: auto; }
+
+/* Read-only values sit in boxes like Student Detail's fields. */
+.parent-detail .parent-detail-fields dt {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  font-size: 12px;
+  line-height: 16px;
+  font-weight: 500;
+  color: var(--graphite-500);
+}
+.parent-detail-readonly { font-weight: 400; color: var(--graphite-400); }
+.parent-detail .parent-detail-fields dd {
+  min-height: 36px;
+  display: flex;
+  align-items: center;
+  padding: 6px 12px;
+  border: 1px solid var(--graphite-200);
+  border-radius: var(--radius-control);
+  background: var(--white);
+  color: var(--graphite-900);
+}
+.parent-detail .parent-detail-fields dd.is-readonly { background: var(--graphite-50); color: var(--graphite-700); }
+.parent-detail .parent-detail-fields dd.empty { color: var(--graphite-400); font-weight: 400; }
+
+.parent-detail .parent-detail-security-wrap { padding-top: 16px; border-top: 1px solid var(--graphite-100); }
+.parent-detail .parent-detail-security-wrap dd { display: block; padding: 0; border: 0; min-height: 0; background: none; }
+.parent-detail-security {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  border: 1px solid var(--graphite-200);
+  border-radius: var(--radius-control);
+}
+.parent-detail-security li { display: flex; align-items: flex-start; gap: 10px; padding: 10px 14px; }
+.parent-detail-security li + li { border-top: 1px solid var(--graphite-200); }
+.parent-detail-security .icon { margin-top: 1px; color: var(--graphite-600); }
+.parent-detail-security .green .icon { color: var(--green); }
+.parent-detail-security .amber .icon { color: var(--amber); }
+.parent-detail-security .red .icon { color: var(--red-pen); }
+.parent-detail-security .caption { margin-top: 2px; }
+.parent-detail-sa-note { display: flex; align-items: center; gap: 6px; margin-top: 16px; }
+
+/* ---------- linked children ---------- */
+.parent-detail .parent-detail-children { padding: 20px; }
+.parent-detail-children .card-title { padding-bottom: 12px; margin-bottom: 12px; }
+.parent-detail-child-list { display: grid; gap: 12px; }
+.parent-detail-child {
+  display: grid;
+  gap: 10px;
+  padding: 14px;
+  border: 1px solid var(--graphite-200);
+  border-radius: var(--radius-control);
+  background: var(--white);
+  cursor: pointer;
+  transition: border-color 0.15s, background 0.15s;
+}
+.parent-detail-child:hover { border-color: var(--ink-200); background: var(--graphite-50); }
+.parent-detail-child header { display: flex; align-items: center; gap: 10px; }
+.parent-detail-child header > div { flex: 1; min-width: 0; }
+.parent-detail-child header a { color: var(--graphite-900); overflow-wrap: anywhere; }
+.parent-detail-child header a:hover { color: var(--ink-700); text-decoration: underline; }
+.parent-detail-child header .chip { flex: none; font-weight: 600; }
+.parent-detail-child dl { display: grid; gap: 2px; margin: 0; color: var(--graphite-600); }
+.parent-detail-child dl div { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; }
+.parent-detail-child dt { font-weight: 500; color: var(--graphite-700); }
+.parent-detail-child dd { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 6px; margin: 0; overflow-wrap: anywhere; }
+.parent-detail-child dd.muted { color: var(--graphite-500); }
+.parent-detail-child .parent-detail-child-manage { justify-self: start; margin-left: -8px; }
+.parent-detail .parent-detail-children-empty { align-items: flex-start; }
+.parent-detail-children-empty .caption { margin-top: 2px; color: var(--graphite-700); }
+.parent-detail-link-more {
+  display: grid;
+  gap: 6px;
+  justify-items: start;
+  margin-top: 16px;
+  padding-top: 16px;
+  border-top: 1px solid var(--graphite-200);
+}
+
+/* ---------- loading, not found, error (same as Student Detail) ---------- */
+.parent-detail-skeleton { display: grid; gap: 12px; }
+.parent-detail-skeleton.tall { min-height: 280px; align-content: start; }
+.parent-detail-skeleton .block { display: block; height: 12px; width: 60%; border-radius: 4px; background: var(--graphite-100); }
+.parent-detail-skeleton .block.avatar-block { width: 64px; height: 64px; border-radius: 50%; flex: none; }
+.parent-detail-identity.parent-detail-skeleton { display: flex; }
+.parent-detail .parent-detail-missing {
+  display: grid;
+  justify-items: center;
+  gap: 8px;
+  margin-top: 24px;
+  padding: 48px 24px;
+  text-align: center;
+}
+.parent-detail-missing > .icon { font-size: 40px; color: var(--graphite-400); }
+.parent-detail-missing .btn { margin-top: 12px; }
+.parent-detail .form-error { margin-top: 16px; }
+.parent-detail-retry { margin-top: 16px; }
+
+/* ---------- responsive (same breakpoints as Student Detail) ---------- */
+@media (max-width: 1080px) {
+  .parent-detail-grid { grid-template-columns: minmax(0, 1fr); }
+  /* The children column is full width now: two cards side by side. */
+  .parent-detail-child-list { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@media (max-width: 900px) {
+  .parent-detail .page-header { align-items: stretch; }
+  .parent-detail .page-header .actions-row { width: 100%; }
+}
+@media (max-width: 640px) {
+  .parent-detail .breadcrumb a { display: inline-flex; align-items: center; min-height: 44px; margin: -12px 0; }
+  .parent-detail .page-header .actions-row .btn { flex: 1 1 auto; height: 44px; }
+  .parent-detail .page-header .actions-row .btn-icon-only { flex: none; width: 44px; }
+  .parent-detail-menu button { min-height: 44px; }
+  .parent-detail .parent-detail-identity { align-items: flex-start; padding: 16px; }
+  .parent-detail .parent-detail-fields { grid-template-columns: minmax(0, 1fr); }
+  .parent-detail .parent-detail-fields dd { min-height: 44px; }
+  .parent-detail-child-list { grid-template-columns: minmax(0, 1fr); }
+  .parent-detail-child header a { display: inline-flex; align-items: center; min-height: 44px; margin: -12px 0; }
+  .parent-detail-child .parent-detail-child-manage { height: 44px; }
+  .parent-detail-link-more .btn { width: 100%; height: 44px; }
+  .parent-detail-retry .btn { flex: 1 1 100%; height: 44px; }
+  .parent-detail-missing .btn { width: 100%; height: 44px; }
+}

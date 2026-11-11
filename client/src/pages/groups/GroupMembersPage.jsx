@@ -195,7 +195,7 @@ export default function GroupMembersPage() {
 
       <div className="card card-outline class-table">
         <div className="table-scroll">
-          <table className="table">
+          <table className="table group-members-table">
             <thead>
               <tr>
                 <th className="num">STT</th>
@@ -210,8 +210,8 @@ export default function GroupMembersPage() {
             <tbody>
               {shown.map((m, i) => (
                 <tr key={m.userId}>
-                  <td className="num muted">{String(i + 1).padStart(2, '0')}</td>
-                  <td>
+                  <td className="num muted gm-no">{String(i + 1).padStart(2, '0')}</td>
+                  <td className="gm-name">
                     <span className="group-member">
                       <Avatar src={m.avatarUrl} name={m.fullName} size={32} />
                       <span>
@@ -222,7 +222,10 @@ export default function GroupMembersPage() {
                     </span>
                   </td>
                   {isClass && (
-                    <td>
+                    <td
+                      className={`gm-nick${!m.nickname && editing?.userId !== m.userId ? ' is-empty' : ''}`}
+                      data-label="Biệt danh"
+                    >
                       {editing?.userId === m.userId ? (
                         <form className="group-nickname" onSubmit={saveNickname}>
                           <span className="group-nickname-row">
@@ -256,7 +259,7 @@ export default function GroupMembersPage() {
                       )}
                     </td>
                   )}
-                  <td>
+                  <td className="gm-role">
                     <span className="chips">
                       {m.kinds.map((k) => (
                         <span key={k} className={`chip${k === 'HOMEROOM' || k === 'MANAGER' ? ' ink' : ''}`}>
@@ -266,7 +269,7 @@ export default function GroupMembersPage() {
                     </span>
                   </td>
                   {showContacts && (
-                    <td className="caption">
+                    <td className={`caption gm-contact${m.phone || m.email ? '' : ' is-empty'}`}>
                       {m.phone || m.email ? (
                         <span className="group-member-contact">
                           {m.phone && <span className="mono">{m.phone}</span>}
@@ -277,11 +280,11 @@ export default function GroupMembersPage() {
                       )}
                     </td>
                   )}
-                  <td>
+                  <td className="gm-status">
                     {m.status === 'LOCKED' ? <span className="pill red">Đã khoá</span> : <span className="pill green">Hoạt động</span>}
                   </td>
                   {showActions && (
-                    <td className="num">
+                    <td className="num gm-actions">
                       <span className="group-row-actions">
                         {m.canMessage && (
                           <button

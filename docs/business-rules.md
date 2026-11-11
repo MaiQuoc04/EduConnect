@@ -279,6 +279,27 @@ Boundaries that are easy to get wrong:
 - Only **Like** (no other reactions). One like per user per post; unlike removes the row.
 - Images, files and videos can be attached to posts and messages: images / files ≤ 10 MB, video ≤ 50 MB.
   Files live in cloud storage; the DB stores the URL (`attachments`).
+- **Post states in detail** (Khanh's proposals, agreed by the lead 11/11/2026):
+  - **Moderator posts are auto-approved:** the homeroom teacher in the class feed, the School Manager in the teacher
+    group. Any post is also approved at once when the group has `require_approval = false`.
+  - **Rejected** (`REJECTED`): seen only by its author (label "Đã bị từ chối") and the group moderator; no reason is
+    stored. The author may edit it – saving sends it back to `PENDING` – or delete it.
+  - **Editing an approved post** while the group has `require_approval = true` (author not the moderator) sends it
+    back to `PENDING`: it leaves the feed until the moderator approves it again. With approval off it stays
+    `APPROVED` and shows "Đã chỉnh sửa" (`updated_at`).
+  - **Hidden** (`is_hidden`): the author still sees it, labelled "Bài viết đã bị ẩn bởi người kiểm duyệt"; other
+    members do not. The moderator sees the list of hidden posts and can **unhide** one (it comes back as a normal
+    post). Only posts are hidden; comments are still only deleted.
+  - **Pin:** at most **5 pinned posts per group**; pinning a 6th is refused ("Đã đạt giới hạn 5 bài ghim. Vui lòng
+    bỏ ghim bài cũ trước khi ghim bài mới."). Hiding a post unpins it; unhiding does not pin it again.
+  - **Turning approval on / off** (`groups.require_approval`): the homeroom teacher for the class general group, the
+    School Manager for the teacher group, with a switch on the group detail screen (SCR-21); no new screen. The School
+    Manager still does not see class feeds (§2).
+  - **Class without a homeroom teacher** (none assigned, or locked): the class feed shows a banner "Lớp học hiện chưa
+    có GVCN phụ trách kiểm duyệt. Bài viết chờ duyệt có thể bị xử lý chậm."; pending posts wait until the School
+    Manager assigns a homeroom teacher (UC-19), who then takes them over. Nobody approves in place of the homeroom
+    teacher.
+  - **Lengths:** post content at most 5,000 characters; comments at most 2,000 (as FE-08). Group posts have no title.
 
 ## 6. Messaging (FE-06)
 - Group chats (GENERAL / STUDENT / PARENT / TEACHER_SCHOOL / TEAM_CHAT) and **1-1 chats**. A 1-1 chat is a group of

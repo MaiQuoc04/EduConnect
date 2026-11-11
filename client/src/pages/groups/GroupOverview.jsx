@@ -1,7 +1,10 @@
 import { useState } from 'react';
 import { Link, useNavigate, useOutletContext } from 'react-router-dom';
+import { setPostApproval } from '../../api/groupPosts.js';
 import Icon from '../../components/Icon.jsx';
 import { useAuth } from '../../context/AuthContext.jsx';
+import { useToast } from '../../context/ToastContext.jsx';
+import { errorText } from '../../messages.js';
 import { formatDate } from '../../utils/format.js';
 import { yearLabel } from '../school-years/schoolYearLabels.js';
 import {
@@ -13,6 +16,42 @@ import {
   groupHasFeed,
 } from './groupLabels.js';
 import TeamCreatePanel from './TeamCreatePanel.jsx';
+
+// FE-05 approval switch (business-rules §5, 11/11/2026): the homeroom teacher of the class group, the School Manager
+// of the teacher group (server flag canSetApproval). Turning it off does not approve the posts already waiting.
+function ApprovalSwitch({ g }) {
+  const toast = useToast();
+  const [saving, setSaving] = useState(false);
+  const on = g.requireApproval;
+
+  async function toggle() {
+    setSaving(true);
+    try {
+      const { requireApproval } = await setPostApproval(g.groupId, !on);
+      toast(requireApproval ? 'Đã bật duyệt bài trước khi đăng.' : 'Đã tắt duyệt bài. Bài mới sẽ hiện ngay.');
+      g.reload();
+    } catch (err) {
+      toast(errorText(err), { type: 'error' });
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <label className="gd-switch">
+      <input type="checkbox" role="switch" checked={on} onChange={toggle} disabled={saving} />
+      <span className="gd-switch-track" aria-hidden="true" />
+      <span>
+        <span className="gd-switch-label">Duyệt bài trước khi đăng</span>
+        <span className="caption muted">
+          {on
+            ? 'Bài của thành viên chờ bạn duyệt rồi mới hiện trên bảng tin.'
+            : 'Bài của thành viên hiện ngay trên bảng tin. Các bài đang chờ vẫn cần bạn duyệt.'}
+        </span>
+      </span>
+    </label>
+  );
+}
 
 // SCR-21 – UC-30 View Group Detail, overview tab: what the group is for, the class's other groups and "Team của lớp"
 // with UC-35 Create Team Chat (teachers, students and parents; never the School Manager) on the left; class
@@ -75,13 +114,14 @@ export default function GroupOverview() {
                 </>
               )}
             </li>
-            {feed && (
+            {feed && !g.canSetApproval && (
               <li className={g.requireApproval ? 'is-on' : ''}>
                 <Icon name={g.requireApproval ? 'verified' : 'remove_done'} size="sm" />
                 {g.requireApproval ? 'Bài đăng cần duyệt' : 'Bài đăng không cần duyệt'}
               </li>
             )}
           </ul>
+          {feed && g.canSetApproval && <ApprovalSwitch g={g} />}
           {g.readOnly && (
             <div className="notice">
               <Icon name="history" />
