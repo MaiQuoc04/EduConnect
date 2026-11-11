@@ -1,0 +1,144 @@
+/* FE-14 Update Parent (SCR-16). Only this screen's styles; every rule is scoped under .update-parent.
+   No Stitch design exists for this screen: it follows Update Student (SCR-09, UpdateStudentPage.css), so both edit
+   screens look alike. Colours, radii and type come from the tokens in styles.css.
+   styles.css is loaded after this file, so rules that override a shared class (.card, .input, .notice) are prefixed
+   with .update-parent to win on specificity.
+   Breakpoints: 900px (app shell becomes a drawer) and 640px. */
+
+.update-parent .strong { font-weight: 600; color: var(--graphite-900); }
+
+/* ---------- header (same as Parent Detail) ---------- */
+.update-parent .page-header {
+  align-items: flex-end;
+  padding-bottom: 24px;
+  border-bottom: 1px solid var(--graphite-200);
+}
+.update-parent .page-header p { overflow-wrap: anywhere; }
+.update-parent .update-parent-back { flex: none; }
+
+/* ---------- the sheet: one card, sections split by hairlines ---------- */
+.update-parent .update-parent-sheet { margin-top: 24px; padding: 0; overflow: hidden; }
+.update-parent-section { padding: 24px; }
+.update-parent-section + .update-parent-section { border-top: 1px solid var(--graphite-200); }
+.update-parent-section.is-readonly { background: var(--paper); }
+.update-parent-section-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 4px 12px;
+  padding-bottom: 8px;
+  margin-bottom: 16px;
+  border-bottom: 1px solid var(--graphite-200);
+}
+/* Ink margin mark before each section title (graphite for the read-only one). */
+.update-parent-section-head h2 { display: flex; align-items: center; gap: 8px; }
+.update-parent-section-head h2::before {
+  content: '';
+  flex: none;
+  width: 6px;
+  height: 16px;
+  border-radius: 999px;
+  background: var(--ink-600);
+}
+.update-parent-section.is-readonly .update-parent-section-head h2::before { background: var(--graphite-500); }
+.update-parent-locked-note { display: inline-flex; align-items: center; gap: 4px; }
+
+.update-parent-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px 24px; align-items: start; }
+.update-parent-grid .wide { grid-column: 1 / -1; }
+.update-parent-grid .field { min-width: 0; }
+.update-parent .field-label { color: var(--graphite-900); }
+.update-parent-required { color: var(--red-pen); }
+.update-parent .update-parent-textarea { height: auto; min-height: 88px; resize: vertical; }
+
+/* Read-only account fields look like locked inputs. */
+.update-parent-lock-icon {
+  position: absolute;
+  right: 12px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: var(--graphite-400);
+  pointer-events: none;
+}
+.update-parent .update-parent-locked {
+  padding-right: 40px;
+  background: var(--graphite-50);
+  color: var(--graphite-700);
+  cursor: default;
+  text-overflow: ellipsis;
+}
+.update-parent .update-parent-locked:focus { border-color: var(--graphite-300); box-shadow: none; }
+.update-parent .update-parent-notice { margin-bottom: 16px; padding: 12px; }
+.update-parent .update-parent-notice .caption { margin-top: 2px; color: var(--graphite-700); }
+
+/* ---------- footer bar ---------- */
+.update-parent .update-parent-form-error { margin: 0 24px 16px; }
+.update-parent-footer {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px 16px;
+  padding: 16px 24px;
+  border-top: 1px solid var(--graphite-200);
+  background: var(--white);
+}
+.update-parent-status { display: inline-flex; align-items: center; gap: 6px; min-width: 0; color: var(--graphite-600); }
+.update-parent-status .icon { color: var(--graphite-400); }
+.update-parent-buttons { display: flex; gap: 8px; margin-left: auto; }
+.update-parent-spin { animation: update-parent-spin 0.9s linear infinite; }
+@keyframes update-parent-spin { to { transform: rotate(360deg); } }
+
+/* ---------- leave confirmation ---------- */
+.update-parent-dialog {
+  width: min(440px, calc(100vw - 32px));
+  padding: 24px;
+  border: 0;
+  border-radius: var(--radius-dialog);
+  background: var(--white);
+  color: var(--graphite-900);
+  box-shadow: var(--shadow-dialog);
+}
+.update-parent-dialog::backdrop { background: rgba(28, 27, 25, 0.32); }
+.update-parent-dialog-body { display: flex; gap: 12px; align-items: flex-start; }
+.update-parent-dialog-body > .icon { color: var(--ink-600); }
+.update-parent-dialog-body p { margin-top: 4px; }
+.update-parent-dialog-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 8px; margin-top: 24px; }
+
+/* ---------- loading, not found, error (same as Parent Detail) ---------- */
+.update-parent .update-parent-skeleton { display: grid; gap: 16px; margin-top: 24px; min-height: 280px; align-content: start; }
+.update-parent-skeleton .block { display: block; height: 12px; width: 60%; border-radius: 4px; background: var(--graphite-100); }
+.update-parent-skeleton .block.short { width: 30%; }
+.update-parent .update-parent-missing {
+  display: grid;
+  justify-items: center;
+  gap: 8px;
+  margin-top: 24px;
+  padding: 48px 24px;
+  text-align: center;
+}
+.update-parent-missing > .icon { font-size: 40px; color: var(--graphite-400); }
+.update-parent-missing .btn { margin-top: 12px; }
+.update-parent .form-error { margin-top: 16px; }
+.update-parent-retry { margin-top: 16px; }
+
+/* ---------- responsive ---------- */
+@media (max-width: 900px) {
+  .update-parent .page-header { align-items: stretch; }
+  .update-parent .update-parent-back { align-self: flex-start; }
+}
+@media (max-width: 640px) {
+  .update-parent .breadcrumb a { display: inline-flex; align-items: center; min-height: 44px; margin: -12px 0; }
+  .update-parent .update-parent-back { height: 44px; margin-left: -8px; }
+  .update-parent-section { padding: 20px 16px; }
+  .update-parent-grid { grid-template-columns: minmax(0, 1fr); }
+  .update-parent input.input { height: 44px; }
+  .update-parent .update-parent-form-error { margin: 0 16px 16px; }
+  .update-parent-footer { padding: 16px; }
+  .update-parent-buttons { width: 100%; margin-left: 0; }
+  .update-parent-buttons .btn { flex: 1 1 0; height: 44px; min-width: 0; }
+  .update-parent-dialog { padding: 20px 16px; }
+  .update-parent-dialog-actions .btn { flex: 1 1 100%; height: 44px; }
+  .update-parent-retry .btn { flex: 1 1 100%; height: 44px; }
+  .update-parent-missing .btn { width: 100%; height: 44px; }
+}

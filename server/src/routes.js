@@ -16,6 +16,7 @@ import teacherRoutes from './modules/teacher/teacher.routes.js';
 import teachingRoutes from './modules/teacher/teaching.routes.js';
 import schoolPostRoutes from './modules/schoolposts/schoolposts.routes.js';
 import uploadRoutes from './modules/uploads/uploads.routes.js';
+import parentRoutes from './modules/parents/parents.routes.js';
 
 // Each feature gets its own folder in src/modules and is mounted here, e.g.
 //   FE-01 account   -> /auth, /account (Quoc)
@@ -49,6 +50,7 @@ router.use('/teachers', teacherRoutes);
 router.use('/homeroom-assignments', homeroomRoutes);
 router.use('/teaching-assignments', teachingRoutes);
 router.use('/school-posts', schoolPostRoutes);
+router.use('/parents', parentRoutes);
 router.use('/admin', adminRoutes);
 router.use('/maintenance', maintenanceRoutes);
 router.use('/uploads', uploadRoutes);

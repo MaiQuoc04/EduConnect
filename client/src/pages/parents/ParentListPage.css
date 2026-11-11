@@ -1,0 +1,140 @@
+/* FE-14 Parent List (SCR-69). Only this screen's styles; every rule is scoped under .parent-list.
+   No Stitch design exists for this screen: it follows the Student List (SCR-07, StudentListPage.css) rule for rule,
+   so both record lists look alike. Colours, radii and type come from the tokens in styles.css.
+   styles.css is loaded after this file, so rules that override a shared class (.card) are prefixed with
+   .parent-list to win on specificity.
+   Breakpoints: 900px (app shell becomes a drawer) and 640px, as on the Student List. */
+
+/* ---------- filter strip ---------- */
+.parent-list .parent-list-filters {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 16px;
+  margin-bottom: 16px;
+}
+.parent-list-controls { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; flex: 1; min-width: 0; }
+.parent-list-controls .input { height: 36px; width: auto; max-width: 100%; }
+.parent-list-controls select.input { padding-right: 32px; cursor: pointer; }
+.parent-list-search { position: relative; flex: 1 1 240px; max-width: 340px; }
+.parent-list-search .icon {
+  position: absolute;
+  left: 10px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: var(--graphite-400);
+  pointer-events: none;
+}
+.parent-list-search .input { width: 100%; padding-left: 32px; }
+.parent-list-total { display: flex; align-items: center; gap: 8px; }
+.parent-list-count {
+  padding: 2px 10px;
+  border-radius: 4px;
+  background: var(--graphite-100);
+  color: var(--graphite-900);
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+/* ---------- table ---------- */
+.parent-list .parent-list-table { padding: 0; overflow: hidden; }
+/* position: relative keeps absolutely positioned children inside the scroll box, so they cannot widen the page. */
+.parent-list-scroll { position: relative; overflow-x: auto; }
+.parent-list .table { min-width: 960px; transition: opacity 0.15s; }
+.parent-list .table.is-refreshing { opacity: 0.55; }
+.parent-list .table th { height: 40px; padding: 0 16px; white-space: nowrap; }
+.parent-list .table td { padding: 0 16px; white-space: nowrap; }
+.parent-list .table .num { text-align: right; }
+.parent-list .table tbody tr:hover td { background: var(--graphite-100); }
+.parent-list .table .caption { color: var(--graphite-600); }
+
+/* Name column stays visible while the table scrolls sideways (narrow screens). */
+.parent-list .table .sticky { position: sticky; left: 0; z-index: 1; background: var(--white); }
+.parent-list .table th.sticky { background: var(--graphite-50); }
+.parent-list-name { display: flex; align-items: center; gap: 8px; font-weight: 600; }
+.parent-list-name .avatar.square { border-radius: 4px; }
+.parent-list .table tr.is-clickable { cursor: pointer; }
+.parent-list-name a { color: inherit; }
+.parent-list-name a:hover { color: var(--ink-700); text-decoration: underline; }
+
+/* The phone identifies the parent (business-rules §3), so it reads at full strength. */
+.parent-list .table .parent-list-phone { color: var(--graphite-900); font-weight: 500; }
+
+.parent-list-children {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 2px 8px;
+  border-radius: 4px;
+  background: var(--graphite-100);
+  color: var(--graphite-700);
+  font-size: 12px;
+  line-height: 18px;
+  font-weight: 500;
+}
+/* No child linked yet: something School Manager has to follow up (same mark as the Student List). */
+.parent-list-children.none { background: var(--amber-bg); color: var(--amber); }
+.parent-list-children.none::before { content: ''; width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
+
+.parent-list-names { display: inline-flex; align-items: center; gap: 6px; max-width: 280px; }
+.parent-list-names-text { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+
+/* Locked accounts stay in the list (business-rules §3), dimmed. */
+.parent-list .table tr.is-locked td { background: var(--graphite-50); color: var(--graphite-500); }
+.parent-list .table tr.is-locked .parent-list-name,
+.parent-list .table tr.is-locked .parent-list-phone { color: var(--graphite-600); }
+.parent-list .table tr.is-locked .avatar { background: var(--graphite-200); color: var(--graphite-600); }
+
+.parent-list-empty { height: 96px !important; text-align: center; color: var(--graphite-600); }
+
+.parent-list-skeleton td span {
+  display: block;
+  height: 10px;
+  width: 70%;
+  border-radius: 4px;
+  background: var(--graphite-100);
+}
+
+/* ---------- pagination ---------- */
+.parent-list-pager {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 16px;
+  border-top: 1px solid var(--graphite-200);
+}
+.parent-list-pager .strong { color: var(--graphite-900); font-weight: 500; }
+.parent-list-pager-controls { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; }
+.parent-list-page-size { display: inline-flex; align-items: center; gap: 8px; }
+.parent-list-page-size .input { width: auto; height: 32px; padding: 0 28px 0 10px; }
+.parent-list-pages { display: flex; align-items: center; gap: 4px; }
+.parent-list-pages .btn { height: 32px; min-width: 32px; padding: 0 8px; font-size: 12px; color: var(--graphite-700); }
+.parent-list-pages .btn:not(.btn-secondary):hover { background: var(--graphite-100); }
+.parent-list-pages .btn.current { background: var(--graphite-100); color: var(--graphite-900); font-weight: 600; }
+.parent-list-pages .gap { padding: 0 4px; color: var(--graphite-400); }
+.parent-list-page-of { display: none; }
+
+/* ---------- responsive (same breakpoints as the Student List) ---------- */
+@media (max-width: 640px) {
+  .parent-list .parent-list-filters { flex-direction: column; align-items: stretch; padding: 16px; }
+  .parent-list-controls { flex-direction: column; align-items: stretch; }
+  .parent-list-controls .input,
+  .parent-list-search { width: 100%; max-width: none; flex: none; }
+  .parent-list-controls .input { height: 44px; }
+  .parent-list .table td { height: 48px; }
+  /* The name link is the row's keyboard / touch target: give it the full row height. */
+  .parent-list-name a { display: inline-flex; align-items: center; min-height: 44px; }
+  .parent-list-pager { flex-direction: column; align-items: stretch; }
+  .parent-list-pager-controls { justify-content: space-between; }
+  .parent-list-page-size .input { height: 44px; }
+  /* Numbered pages make way for "Trang x / y"; previous / next stay as 44px targets. */
+  .parent-list-pages .btn:not(.btn-secondary),
+  .parent-list-pages .gap { display: none; }
+  .parent-list-pages .btn { height: 44px; min-width: 44px; }
+  .parent-list-page-of { display: inline; order: 1; }
+  .parent-list-pages { order: 2; }
+}
