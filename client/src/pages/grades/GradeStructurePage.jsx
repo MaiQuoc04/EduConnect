@@ -120,20 +120,6 @@ export default function GradeStructurePage() {
     }
   }
 
-  // Preview of the semester average formula, e.g. (TX1 + … + TX4 + 2 × GK + 3 × CK) / 9
-  const formula = useMemo(() => {
-    const valid = rows.filter((r) => r.name.trim() && Number(r.weight.replace(',', '.')) > 0 && Number(r.scoreCount) >= 1);
-    if (!valid.length) return '';
-    const parts = valid.map((r) => {
-      const w = r.weight.replace('.', ',');
-      const n = Number(r.scoreCount);
-      const terms = n > 1 ? `${r.name}1 + … + ${r.name}${n}` : r.name;
-      return w === '1' ? terms : `${w} × ${n > 1 ? `(${terms})` : terms}`;
-    });
-    const total = valid.reduce((sum, r) => sum + Number(r.weight.replace(',', '.')) * Number(r.scoreCount), 0);
-    return `ĐTB = (${parts.join(' + ')}) / ${String(Math.round(total * 100) / 100).replace('.', ',')}`;
-  }, [rows]);
-
   const firstRowError = rowErrors.find((e) => e.index === -1);
 
   return (
@@ -212,12 +198,6 @@ export default function GradeStructurePage() {
                 </span>
               </div>
 
-              {!detail.components.length && !readOnly && (
-                <div className="notice ink" style={{ marginBottom: 16 }}>
-                  <Icon name="info" />
-                  <p>Môn này chưa có cấu trúc điểm. Bảng dưới là gợi ý theo Thông tư 22; chỉnh lại rồi bấm Lưu.</p>
-                </div>
-              )}
               {ended && !locked && <p className="notice" style={{ marginBottom: 16 }}>Năm học đã kết thúc, cấu trúc chỉ để xem.</p>}
 
               <div className="table-scroll" style={{ border: 0 }}>
@@ -305,7 +285,6 @@ export default function GradeStructurePage() {
               {firstRowError && (
                 <p className="field-error">{firstRowError.code === 'TOO_MANY' ? 'Tối đa 10 thành phần.' : 'Cần ít nhất một thành phần.'}</p>
               )}
-              {formula && <p className="formula" style={{ margin: '12px 0' }}>{formula}</p>}
 
               <div className="card-footer">
                 {!readOnly && (
