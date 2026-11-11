@@ -10,6 +10,7 @@ import subjectRoutes from './modules/subjects/subjects.routes.js';
 import classTrackRoutes from './modules/class-tracks/class-tracks.routes.js';
 import classRoutes from './modules/classes/classes.routes.js';
 import groupRoutes from './modules/groups/groups.routes.js';
+import postRoutes from './modules/posts/posts.routes.js';
 import conversationRoutes from './modules/conversations/conversations.routes.js';
 import homeroomRoutes from './modules/teacher/homeroom.routes.js';
 import teacherRoutes from './modules/teacher/teacher.routes.js';
@@ -42,6 +43,7 @@ router.use('/subjects', subjectRoutes);
 router.use('/class-tracks', classTrackRoutes);
 router.use('/classes', classRoutes);
 router.use('/groups', groupRoutes);
+router.use(postRoutes); // FE-05: /groups/:groupId/posts and /posts/:postId (paths in posts.routes.js)
 router.use('/conversations', conversationRoutes);
 router.use('/teachers', teacherRoutes);
 router.use('/homeroom-assignments', homeroomRoutes);
