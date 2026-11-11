@@ -19,11 +19,12 @@
 --   message_user_deletions and message_reactions (50 tables), setting chat.delete_for_everyone_minutes. Existing database:
 --   run patch_v0.3_message_actions.sql.
 -- 07/11/2026: + department_subjects (FE-03: each department owns a fixed set of subjects; 51 tables). Existing
---   database: run patch_v0.3_department_subjects.sql (after the lead approves).
+--   database: run patch_v0.3_department_subjects.sql (approved by the lead; run on the shared DB 11/11/2026).
 -- How to run: Supabase > SQL Editor > paste the whole file > Run (on an empty database).
 -- Conventions:
 --   * Soft delete everywhere (deleted_at / deleted_by). Hard delete only for: post_likes (unlike),
---     message_reactions (reaction removed), class_event_viewers, teacher_subjects, user_roles, student_parents (unlink), expired OTPs,
+--     message_reactions (reaction removed), class_event_viewers, teacher_subjects, department_subjects, user_roles,
+--     student_parents (unlink), expired OTPs,
 --     track_subjects (subject removed from a class type before the year has grades).
 --   * Rules marked "code" are checked in the application, not in the DB.
 --   * Times are TIMESTAMPTZ; the database time zone is Asia/Ho_Chi_Minh, so NOW() and ::date follow Vietnam time.

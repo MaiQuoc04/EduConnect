@@ -28,10 +28,9 @@ reactions, attachments) is merged into one place after both are on `develop`.
 
 ## Current status (read first; update after every merge, schema patch or new decision)
 
-Last updated: 07/11/2026 (FE-06 Messaging merged with UC-110..UC-113, patch run on the shared DB; FE-13 departments
-merged (It1 item #2 done); lead accepted Khanh's FE-06 decisions and assumptions (business rules §6) and the 1–1440
-min range of `chat.delete_for_everyone_minutes`;
-It2: Anh FE-08 + FE-14, Khanh FE-05 + FE-06).
+Last updated: 11/11/2026 (FE-03 additions merged: UC-114..UC-116 and teaching assignments by date range,
+`department_subjects` patch run on the shared DB, 51 tables, 116 use cases, 73 screens. Before, 07/11: FE-06
+Messaging and FE-13 departments merged. It2: Anh FE-08 + FE-14, Khanh FE-05 + FE-06, Dung FE-10 timetable).
 
 - **Shared DB (Supabase):** schema v0.3 + `patch_v0.3_password_reset_requests.sql` (27/10) +
   `patch_v0.3_users_address.sql` (28/10: `users.address` added, `parents.address` dropped) +
@@ -42,9 +41,8 @@ It2: Anh FE-08 + FE-14, Khanh FE-05 + FE-06).
   `patch_v0.3_class_track_grade.sql` (FE-04, run by Khanh 02/11 before approval; accepted 03/11:
   `class_tracks.grade_level_id`) +
   `patch_v0.3_message_actions.sql` (FE-06, run by Khanh 07/11 after the lead's OK: reply, delete, reactions) +
-  `patch_v0.3_department_subjects.sql` (FE-03, run by Dung 11/11 after the lead's OK). 51 tables.
-- **FE-03 (11/11, approved by the lead):** `patch_v0.3_department_subjects.sql` ran on the shared DB 11/11 (Dung) –
-  table `department_subjects` (subjects of each department) with the starting list (business rules §4). 51 tables.
+  `patch_v0.3_department_subjects.sql` (FE-03, run by Dung 11/11 after the lead's OK: table `department_subjects`
+  with the starting list, business rules §4). 51 tables.
 - **Sample data added to the shared DB (03/11, Anh, accepted by the lead 03/11), through the app API (UC-96, UC-14, UC-28),
   no SQL:** 90 student accounts `HS7001..HS7090` (no class yet), 90 parent accounts with phones
   `0977000001..0977000090` (all with `must_change_password`), 65 links (HS7001–7020 two parents, HS7021–7045 one,
@@ -72,6 +70,8 @@ It2: Anh FE-08 + FE-14, Khanh FE-05 + FE-06).
     finished by the lead (see "FE-02 (Anh)" below). No schema change.
   - FE-13 (Linh) commit "select a specialized department/team" merged 07/11 (create / import accounts pick a
     department, `admin/departments.js`).
+  - FE-03 additions (Dung) merged 11/11: UC-114 Manage Departments, UC-115 Export Teacher List, UC-116 Import
+    Teachers, UC-18 teaching assignments by date range, teacher list / detail fixes (details in "FE-03 additions" below).
   - FE-06 (Khanh) merged 07/11: UC-47 Chat in Group, UC-48 View Conversation List, UC-49 Send Private Message,
     UC-110..UC-113 message actions, UC-35 teacher teams; module `server/src/modules/conversations/`, screens in
     `client/src/pages/chat/`. Needs `patch_v0.3_message_actions.sql` (run on the shared DB 07/11).
@@ -130,12 +130,11 @@ It2: Anh FE-08 + FE-14, Khanh FE-05 + FE-06).
   | 2 | FE-13 departments: create / import pick from the `departments` list (details below) | Linh | **done**, merged 07/11 (the follow-up patch is still open) |
   | 3 | Replace the temporary `GET /students/parents/lookup` with FE-14 UC-104 | Anh | with FE-14 (It2) |
   | 4 | Shared Excel reading `utils/excel.js` for UC-96 / UC-14 / UC-27 (It2 clean-up, after the features merge) | Linh | It2 clean-up |
-  | 5 | Decide: who adds a new department (SQL only today, or a screen for SM / SA) | Quoc | **decided 07/11**: School Manager, Departments screen (UC-114, FE-03, branch `feature/fe-03-teacher-management`) |
+  | 5 | Decide: who adds a new department (SQL only today, or a screen for SM / SA) | Quoc | **decided 07/11**: School Manager, Departments screen (UC-114, FE-03, merged 11/11) |
   | 6 | Decide: the empty test school years on the shared DB (2025-2026, 2028-2029, 2030-2031; no classes; `school_years` has no `deleted_at`) – keep or remove | Quoc | 07/11 |
   | 7 | Decide: daily job to sync class groups when an assignment ends later (see "Open" below; proposal: FE-09, It3) | Quoc | before It3 |
 
-- **FE-03 additions (Dung, 07/11, agreed with the lead; branch `feature/fe-03-teacher-management`, PR into
-  `develop`):** UC-114 Manage Departments (`/departments`, SCR-72), UC-115 Export Teacher List
+- **FE-03 additions (Dung, 07/11, agreed with the lead; merged into `develop` 11/11):** UC-114 Manage Departments (`/departments`, SCR-72), UC-115 Export Teacher List
   (`GET /teachers/export`), UC-116 Import Teachers (`/teachers/import…`, SCR-73, reuses FE-13's
   `accountImport.service.js`), teaching assignments with start and end dates and history by range (UC-18,
   `GET /teaching-assignments?from=&to=`, `PUT` body `{ startDate, endDate }`; `date` is still read as the start).
