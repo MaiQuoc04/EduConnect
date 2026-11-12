@@ -1,6 +1,6 @@
 import { pool } from '../config/db.js';
 import { AppError, badRequest } from './AppError.js';
-import { objectUrl, SIGNED_URL_TTL_SECONDS, signedUrl } from './storage.js';
+import { objectInfo, objectUrl, SIGNED_URL_TTL_SECONDS, signedUrl } from './storage.js';
 
 // Files attached to a post or a message – the data layer shared by FE-05 Group Feed (posts, owner Khanh), FE-06
 // Messaging (messages, owner Khanh) and FE-08 School Feed (school_posts, owner Anh). An attachments row has exactly one
@@ -183,4 +183,139 @@ export async function countAttachments(column, ids, db = pool) {
     [ids],
   );
   return new Map(rows.map((r) => [r.id, r.count]));
+}
+
+// --- Helpers for a post's files (FE-05 Group Feed, 12/11/2026). Same logic FE-08 keeps in schoolposts.service.js
+// (summarizeAttachments / readAttachments / changeAttachments; its own comment proposes moving them here). FE-08 code
+// is not changed: it can switch to these when its owner touches it.
+
+// Runs fn over items with at most `limit` at the same time (storage calls are HTTP, not the DB pool).
+async function mapLimit(items, limit, fn) {
+  const out = new Array(items.length);
+  let next = 0;
+  const worker = async () => {
+    while (next < items.length) {
+      const i = next++;
+      out[i] = await fn(items[i]);
+    }
+  };
+  await Promise.all(Array.from({ length: Math.min(limit, items.length) }, worker));
+  return out;
+}
+
+/**
+ * For the cards of a list: Map id → { attachmentCount, firstImageUrl }. Two queries for the whole page (counts, first
+ * image of each post), and only that first image is signed (at most 6 at a time). A link that cannot be signed gives
+ * null: the card shows no picture. Ids without files are missing from the map.
+ * @param {'post_id' | 'message_id' | 'school_post_id'} column
+ */
+export async function summarizeAttachments(column, ids, db = pool) {
+  const counts = await countAttachments(column, ids, db);
+  if (!counts.size) return new Map();
+  const { rows } = await db.query(
+    `SELECT DISTINCT ON (${column}) ${column} AS "id", file_url AS "fileUrl", storage_key AS "storageKey", bucket
+     FROM attachments
+     WHERE ${column} = ANY($1::bigint[]) AND deleted_at IS NULL AND mime_type LIKE 'image/%'
+     ORDER BY ${column}, attachment_id`,
+    [[...counts.keys()]],
+  );
+  const firstImages = new Map(
+    await mapLimit(rows, 6, async ({ id, fileUrl, storageKey, bucket }) => {
+      if (!storageKey) return [id, fileUrl];
+      try {
+        return [id, await signedUrl(bucket, storageKey)];
+      } catch (err) {
+        console.error(`[attachments] first image of ${column} ${id} not signed: ${err.message}`);
+        return [id, null];
+      }
+    }),
+  );
+  return new Map([...counts].map(([id, attachmentCount]) => [id, { attachmentCount, firstImageUrl: firstImages.get(id) ?? null }]));
+}
+
+/**
+ * The files a client sends with a post ([{ storageKey, bucket, fileName }], the /uploads/confirm answers, already
+ * checked in shape by the controller), read from storage BEFORE the transaction (HTTP must not hold a DB connection
+ * or a lock): each object must exist, and its REAL size and type are kept, never the client's numbers.
+ * Missing object → 400 MSG_UPLOAD_FAILED { storageKey }. Returns rows ready for insertAttachments (without uploadedBy).
+ */
+export async function readUploadedFiles(list) {
+  return mapLimit(list ?? [], 4, async ({ storageKey, bucket, fileName }) => {
+    const info = await objectInfo(bucket, storageKey);
+    if (!info) throw badRequest('MSG_UPLOAD_FAILED', 'An attached file was not found. Please upload it again.', { storageKey });
+    return { storageKey, bucket, fileName, mimeType: info.mimeType, sizeBytes: info.size };
+  });
+}
+
+/**
+ * Edits the files of one post inside its transaction (the caller holds the post's lock): removeIds are SOFT deleted
+ * (§14; the objects stay in the bucket, no link is signed for them any more), then `add` (readUploadedFiles rows) is
+ * inserted. removeIds must belong to this target (another one → 400 MSG_INVALID_PARAM, nothing written); one already
+ * deleted is skipped. The target may not end with more than `max` files → 400 MSG_TOO_MANY_ATTACHMENTS { max }.
+ * @returns {Promise<boolean>} true when a file was added or removed
+ */
+export async function changeAttachments(target, { add = [], removeIds = [], uploadedBy, max }, db = pool) {
+  const column = columnOf(target);
+  const id = idOf(target);
+  if (!add.length && !removeIds.length) return false;
+  const { rows } = await db.query(
+    `SELECT attachment_id AS "attachmentId", deleted_at IS NOT NULL AS "isDeleted"
+     FROM attachments WHERE ${column} = $1
+     FOR UPDATE`,
+    [id],
+  );
+  const own = new Map(rows.map((r) => [r.attachmentId, r.isDeleted]));
+  const foreign = removeIds.filter((attachmentId) => !own.has(attachmentId));
+  if (foreign.length) {
+    throw badRequest('MSG_INVALID_PARAM', 'These files are not attached here.', { field: 'removeAttachmentIds', attachmentIds: foreign });
+  }
+  const removing = removeIds.filter((attachmentId) => own.get(attachmentId) === false);
+  const kept = rows.filter((r) => !r.isDeleted).length - removing.length;
+  if (kept + add.length > max) {
+    throw badRequest('MSG_TOO_MANY_ATTACHMENTS', `At most ${max} files can be attached.`, { max });
+  }
+  if (removing.length) {
+    await db.query(
+      `UPDATE attachments SET deleted_at = NOW()
+       WHERE ${column} = $1 AND attachment_id = ANY($2::bigint[]) AND deleted_at IS NULL`,
+      [id, removing],
+    );
+  }
+  if (add.length) await insertAttachments(target, add.map((r) => ({ ...r, uploadedBy })), db);
+  return removing.length > 0 || add.length > 0;
+}
+
+/**
+ * Attachments of many posts / messages in ONE query, each with its link signed now (at most 6 signings at a time):
+ * Map id → [{ attachmentId, fileName, mimeType, sizeBytes, url, uploadedBy, createdAt }], oldest first. For a page of
+ * chat messages (FE-06). Ids without files are missing. A link that cannot be signed is null (as listAttachments).
+ * @param {'post_id' | 'message_id' | 'school_post_id'} column
+ */
+export async function listAttachmentsOf(column, ids, db = pool, { ttlSeconds = SIGNED_URL_TTL_SECONDS } = {}) {
+  columnOf({ column });
+  if (!ids?.length) return new Map();
+  const { rows } = await db.query(
+    `SELECT ${column} AS "ownerId", attachment_id AS "attachmentId", file_name AS "fileName", mime_type AS "mimeType",
+            size_bytes AS "sizeBytes", file_url AS "fileUrl", storage_key AS "storageKey", bucket,
+            uploaded_by AS "uploadedBy", created_at AS "createdAt"
+     FROM attachments
+     WHERE ${column} = ANY($1::bigint[]) AND deleted_at IS NULL
+     ORDER BY attachment_id`,
+    [ids],
+  );
+  const signed = await mapLimit(rows, 6, async ({ ownerId, fileUrl, storageKey, bucket, ...row }) => {
+    if (!storageKey) return { ownerId, ...row, url: fileUrl };
+    try {
+      return { ownerId, ...row, url: await signedUrl(bucket, storageKey, ttlSeconds) };
+    } catch (err) {
+      console.error(`[attachments] cannot sign attachment ${row.attachmentId}: ${err.message}`);
+      return { ownerId, ...row, url: null };
+    }
+  });
+  const byOwner = new Map();
+  for (const { ownerId, ...file } of signed) {
+    if (!byOwner.has(ownerId)) byOwner.set(ownerId, []);
+    byOwner.get(ownerId).push(file);
+  }
+  return byOwner;
 }

@@ -73,3 +73,40 @@ export function requiredText(body, field, max) {
   }
   return text;
 }
+
+/**
+ * Files sent with a post: the answers of POST /uploads/confirm, [{ storageKey, bucket, fileName, … }], in the order
+ * shown. Only storageKey, bucket and fileName are kept (size and type are read from the stored object later). Missing
+ * → []. More than max → 400 MSG_TOO_MANY_ATTACHMENTS { max }; a key outside `folder` (another feature's, or one still
+ * in tmp/), another bucket, a blank or too long name, the same key twice → 400 MSG_INVALID_PARAM.
+ */
+export function uploadedFiles(body, field, { folder, bucket, max }) {
+  const value = body[field];
+  if (value === undefined || value === null) return [];
+  if (!Array.isArray(value)) throw invalid(field);
+  if (value.length > max) throw badRequest('MSG_TOO_MANY_ATTACHMENTS', `At most ${max} files can be attached.`, { max });
+  const list = value.map((item) => {
+    if (!item || typeof item !== 'object') throw invalid(field);
+    const { storageKey, bucket: itemBucket, fileName } = item;
+    const keyOk =
+      typeof storageKey === 'string' &&
+      storageKey.length <= 500 &&
+      storageKey.startsWith(folder) &&
+      /^[\w./-]+$/.test(storageKey) &&
+      !storageKey.includes('..');
+    if (!keyOk) throw invalid(field);
+    if (itemBucket !== bucket) throw invalid(field);
+    if (typeof fileName !== 'string' || !fileName.trim() || [...fileName.trim()].length > 255) throw invalid(field);
+    return { storageKey, bucket, fileName: fileName.normalize('NFC').trim() };
+  });
+  if (new Set(list.map((f) => f.storageKey)).size !== list.length) throw invalid(field);
+  return list;
+}
+
+// A list of ids in the body (e.g. removeAttachmentIds): missing → []; duplicates dropped.
+export function idList(body, field) {
+  const value = body[field];
+  if (value === undefined || value === null) return [];
+  if (!Array.isArray(value)) throw invalid(field);
+  return [...new Set(value.map((v) => parseId(v, field)))];
+}
