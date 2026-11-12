@@ -106,7 +106,8 @@ export async function unlockBook(params, body, user, ip) {
   return { status: 'UNLOCKED' };
 }
 
-// UC-87 View Grade Change History: newest first, 50 per page. Filters: semester (required), class, subject,
+// UC-87 View Grade Change History: changes to an existing score only (edit or clear; first entries are hidden, also
+// rows logged before 12/11), newest first, 50 per page. Filters: semester (required), class, subject,
 // student (name or code, accents ignored – business-rules §16).
 export async function listHistory(query) {
   const semester = await loadSemester(pool, query.semesterId);
@@ -131,7 +132,7 @@ export async function listHistory(query) {
      JOIN users su ON su.user_id = s.user_id
      JOIN subjects sb ON sb.subject_id = gc.subject_id
      JOIN users cu ON cu.user_id = h.changed_by
-     WHERE gc.semester_id = $1 AND ($2::bigint IS NULL OR c.class_id = $2) AND ($3::bigint IS NULL OR gc.subject_id = $3)
+     WHERE gc.semester_id = $1 AND h.old_score IS NOT NULL AND ($2::bigint IS NULL OR c.class_id = $2) AND ($3::bigint IS NULL OR gc.subject_id = $3)
        AND ($4::text IS NULL OR ${fold('su.full_name')} LIKE $4 OR lower(s.student_code) LIKE $4)
      ORDER BY h.changed_at DESC, h.history_id DESC
      LIMIT $7 OFFSET $8`,

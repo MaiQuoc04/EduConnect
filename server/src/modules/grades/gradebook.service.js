@@ -18,8 +18,9 @@ import {
 
 // FE-11 (owner: Linh) – the grade book of one class × subject × semester: UC-83 Enter Grades, UC-85 Finalize Grades
 // (teacher), read only for School Manager (SCR-68) and the class's other teachers. UC-84 import uses applyChanges.
-// Every score is one `grades` row (attempt_no); every entry / change writes `grade_histories` (first old_score NULL);
-// rows are never deleted – clearing a score sets it to NULL.
+// Every score is one `grades` row (attempt_no); rows are never deleted – clearing a score sets it to NULL.
+// `grade_histories` keeps only changes to an existing score (edit or clear); entering a score into an empty cell is
+// not logged (decided by Linh 12/11).
 
 const MAX_CHANGES = 5000;
 
@@ -192,11 +193,11 @@ export async function applyChanges(params, user, buildChanges) {
     }
 
     if (inserts.length) {
-      const { rows: created } = await client.query(
+      await client.query(
         `INSERT INTO grades (enrollment_id, component_id, attempt_no, score, entered_by)
          SELECT c.enrollment_id, c.component_id, c.attempt_no, c.score, $5
          FROM unnest($1::bigint[], $2::bigint[], $3::int[], $4::numeric[]) AS c(enrollment_id, component_id, attempt_no, score)
-         RETURNING grade_id, score`,
+`,
         [
           inserts.map((c) => c.enrollmentId),
           inserts.map((c) => c.componentId),
@@ -204,11 +205,6 @@ export async function applyChanges(params, user, buildChanges) {
           inserts.map((c) => c.score),
           teacherId,
         ],
-      );
-      await client.query(
-        `INSERT INTO grade_histories (grade_id, old_score, new_score, changed_by)
-         SELECT h.grade_id, NULL, h.score, $3 FROM unnest($1::bigint[], $2::numeric[]) AS h(grade_id, score)`,
-        [created.map((r) => r.grade_id), created.map((r) => r.score), user.userId],
       );
     }
     if (updates.length) {
@@ -218,12 +214,16 @@ export async function applyChanges(params, user, buildChanges) {
          WHERE g.grade_id = u.grade_id`,
         [updates.map((u) => u.gradeId), updates.map((u) => u.score)],
       );
-      await client.query(
-        `INSERT INTO grade_histories (grade_id, old_score, new_score, changed_by)
-         SELECT h.grade_id, h.old_score, h.new_score, $4
-         FROM unnest($1::bigint[], $2::numeric[], $3::numeric[]) AS h(grade_id, old_score, new_score)`,
-        [updates.map((u) => u.gradeId), updates.map((u) => u.old), updates.map((u) => u.score), user.userId],
-      );
+      // A score typed into an empty cell (old NULL) is an entry, not a change: only edits and clears are logged.
+      const edited = updates.filter((u) => u.old !== null);
+      if (edited.length) {
+        await client.query(
+          `INSERT INTO grade_histories (grade_id, old_score, new_score, changed_by)
+           SELECT h.grade_id, h.old_score, h.new_score, $4
+           FROM unnest($1::bigint[], $2::numeric[], $3::numeric[]) AS h(grade_id, old_score, new_score)`,
+          [edited.map((u) => u.gradeId), edited.map((u) => u.old), edited.map((u) => u.score), user.userId],
+        );
+      }
     }
     return { changed: inserts.length + updates.length };
   });
