@@ -451,7 +451,8 @@ Boundaries that are easy to get wrong:
     place, note) for the **whole school or one grade**. Start in the future (checked again only when it changes),
     inside a school year; the end inside the same year. Past dates can be corrected or deleted too (Dung's request,
     13/11; a date that already started may keep or get a past start). Delete is a soft delete. Stale save →
-    `MSG_SCHOOL_EVENT_CHANGED`. The page lists 10 dates per page (tabs Sắp tới / Đã qua).
+    `MSG_SCHOOL_EVENT_CHANGED`. The same name (ignoring case and extra spaces) on the same day for the same audience
+    is refused as a duplicate (`MSG_SCHOOL_EVENT_DUPLICATE`). The page lists 10 dates per page (tabs Sắp tới / Đã qua).
   - Who sees (ASSUMPTION – public inside the school): School Manager and teachers – every date; students and parents –
     whole-school dates and the dates of the grades of their (children's) classes being studied.
   - Shown on the school feed column (next 5 dates), on `/school-events` (menu "Lịch của trường": upcoming / past) and,

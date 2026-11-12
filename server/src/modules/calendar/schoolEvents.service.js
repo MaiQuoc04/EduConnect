@@ -164,12 +164,27 @@ async function checkGrade(db, gradeLevelId) {
   if (!rows.length) throw badRequest(C.GRADE, 'Unknown grade.');
 }
 
+// Same name on the same day for the same audience (whole school / grade) = a duplicate (double click, two managers).
+// Compared without case and extra spaces. `exceptId` = the event being updated.
+async function checkDuplicate(db, input, exceptId = null) {
+  const { rows } = await db.query(
+    `SELECT 1 FROM school_events se
+     WHERE se.deleted_at IS NULL AND lower(regexp_replace(se.title, '\\s+', ' ', 'g')) = lower(regexp_replace($1, '\\s+', ' ', 'g'))
+       AND ${LOCAL_DAY('se.start_at')} = $2::date AND se.grade_level_id IS NOT DISTINCT FROM $3::bigint
+       AND ($4::bigint IS NULL OR se.event_id <> $4::bigint)
+     LIMIT 1`,
+    [input.title, input.startAt.slice(0, 10), input.gradeLevelId, exceptId],
+  );
+  if (rows.length) throw conflict(C.DUPLICATE, 'The same event already exists on that day.');
+}
+
 // POST /school-events (School Manager)
 export function createSchoolEvent(input, user) {
   return guard(() =>
     withTransaction(async (db) => {
       await checkGrade(db, input.gradeLevelId);
       const yearId = await checkTimes(db, input);
+      await checkDuplicate(db, input);
       const { rows } = await db.query(
         `INSERT INTO school_events (school_year_id, grade_level_id, title, description, location, start_at, end_at, created_by)
          VALUES ($1, $2, $3, $4, $5, ${FROM_LOCAL('$6')}, ${FROM_LOCAL('$7')}, $8) RETURNING event_id AS "eventId"`,
@@ -189,6 +204,7 @@ export function updateSchoolEvent(eventId, input, user) {
       if (before.stamp !== input.stamp) throw conflict(C.CHANGED, 'The event was changed after the form was opened.');
       await checkGrade(db, input.gradeLevelId);
       const yearId = await checkTimes(db, input, { before });
+      await checkDuplicate(db, input, eventId);
       const same = before.title === input.title && (before.description ?? null) === input.description && (before.location ?? null) === input.location
         && before.startAt === input.startAt && (before.endAt ?? null) === input.endAt && String(before.gradeLevelId ?? '') === String(input.gradeLevelId ?? '');
       if (!same) {

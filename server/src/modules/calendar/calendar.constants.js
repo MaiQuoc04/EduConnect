@@ -62,5 +62,6 @@ export const SCHOOL_EVENT_CODES = Object.freeze({
   TIME: 'MSG_SCHOOL_EVENT_TIME', // details: { reason: PAST | END_BEFORE_START | NO_YEAR | OUTSIDE_YEAR, min?, max? }
   GRADE: 'MSG_SCHOOL_EVENT_GRADE', // unknown grade level
   CHANGED: 'MSG_SCHOOL_EVENT_CHANGED', // 409 – stale stamp
+  DUPLICATE: 'MSG_SCHOOL_EVENT_DUPLICATE', // 409 – same name, same day, same audience
   NOT_READY: 'MSG_SCHOOL_EVENTS_NOT_READY', // 503 – table school_events missing (patch not run)
 });
