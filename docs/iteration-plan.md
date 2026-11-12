@@ -481,6 +481,15 @@ Class calendar (UC-76..80) + job: class event reminder 1 day before. Moved from 
 | UC-56 | View Registration List | Homeroom Teacher |
 | UC-57 | Export Registration List | Homeroom Teacher |
 
+Status (Dung, 12/11/2026): built on `feature/fe-07-extracurricular` from `develop` – module
+`server/src/modules/extracurricular/` (`/api/v1/extracurricular-events`), client `client/src/pages/extracurricular/`
+(menu "Ngoại khoá"; SCR-66 form with live preview, SCR-67 registration list from Stitch; detail page for UC-53).
+Waiting for the lead: `database/patch_v0.3_activity_title.sql` (new column `extracurricular_events.title`) – until it
+runs, the API answers 503 `MSG_ACTIVITY_NOT_READY` and the feed works as before. Rules and ASSUMPTIONs: business
+rules §7 "As built". Follow-ups: FE-09 (Quoc) calls `sendActivityDeadlineReminders()` from the UC-69 job; FE-05
+(Khanh) – `posts.service.js` now adds `activity` to posts and refuses edit / delete of an activity's post (3 small
+hooks, marked FE-07).
+
 ### Quoc: FE-09 Notifications (3 UC)
 
 | ID | Use case | Actor |
