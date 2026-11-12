@@ -60,9 +60,9 @@ It2: Anh FE-08 + FE-14, Khanh FE-05 + FE-06).
   with the starting list, business rules §4) +
   `patch_v0.3_school_post_roles.sql` (FE-08, Anh: column `school_posts.target_roles`) +
   `patch_v0.3_attachment_storage.sql` (storage, Anh: `attachments.storage_key` / `bucket` + check). Both checked on the
-  shared DB by the lead 11/11. 51 tables in `develop`.
-  The shared DB also has `timetables` and `timetable_entries` from FE-10's `patch_v0.3_timetables.sql` (Dung, run
-  11/11, lead OK), so `npm run db:check` shows **53 tables** until FE-10 is merged.
+  shared DB by the lead 11/11 +
+  `patch_v0.3_timetables.sql` (FE-10, run by Dung 11/11 after the lead's OK: tables `timetables` – version of a class
+  timetable with its date range – and `timetable_entries` – weekly pattern). **53 tables** (with FE-10 merged).
 - **Sample data added to the shared DB (03/11, Anh, accepted by the lead 03/11), through the app API (UC-96, UC-14, UC-28),
   no SQL:** 90 student accounts `HS7001..HS7090` (no class yet), 90 parent accounts with phones
   `0977000001..0977000090` (all with `must_change_password`), 65 links (HS7001–7020 two parents, HS7021–7045 one,
