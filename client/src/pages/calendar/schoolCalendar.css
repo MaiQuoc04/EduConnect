@@ -63,3 +63,11 @@
   .sc-facts div { grid-template-columns: 1fr; gap: 2px; }
 }
 .sc-warn { margin: 0; color: var(--amber); }
+.sc-act { height: 32px; padding: 0 10px; font-size: 13px; }
+.sc-act-danger { background: transparent; color: var(--red-pen); }
+.sc-act-danger:hover { background: var(--red-bg); }
+.sc-pager { display: flex; flex-wrap: wrap; justify-content: flex-end; align-items: center; gap: 6px; }
+.sc-pager .caption { margin-right: auto; }
+.sc-pager-item { display: inline-flex; align-items: center; gap: 6px; }
+.sc-pg { min-width: 32px; height: 32px; border-radius: 8px; border: 1px solid var(--graphite-200); background: var(--white); font: inherit; font-size: 13px; cursor: pointer; }
+.sc-pg.is-on { background: var(--ink-600); border-color: var(--ink-600); color: #fff; font-weight: 600; }

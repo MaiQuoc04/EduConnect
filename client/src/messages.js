@@ -215,7 +215,6 @@ const ERROR_MESSAGES = {
         : reason === 'NO_YEAR' ? 'Ngày này không thuộc năm học nào. Hãy tạo năm học trước.'
           : `Sự kiện phải kết thúc trong năm học (${formatVnDate(min)} – ${formatVnDate(max)}).`,
   MSG_SCHOOL_EVENT_GRADE: 'Khối lớp không hợp lệ. Vui lòng tải lại trang.',
-  MSG_SCHOOL_EVENT_STARTED: 'Sự kiện đã bắt đầu nên không sửa hoặc xoá được nữa.',
   MSG_SCHOOL_EVENT_CHANGED: 'Sự kiện vừa được sửa ở nơi khác sau khi bạn mở. Hãy tải lại rồi sửa tiếp.',
   MSG_SCHOOL_EVENTS_NOT_READY: 'Lịch của trường chưa sẵn sàng: cơ sở dữ liệu cần chạy patch_v0.3_school_events.sql.',
   // FE-10 period times (School Manager)

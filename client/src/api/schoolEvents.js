@@ -7,8 +7,9 @@ export async function getUpcomingSchoolEvents(limit = 5) {
   return data;
 }
 
-export async function getPastSchoolEvents(limit = 20) {
-  const { data } = await api.get('/school-events/past', { params: { limit } });
+// One page of the list: when = 'upcoming' | 'past' → { total, page, pages, pageSize, events }
+export async function getSchoolEventPage(when, page = 1, pageSize = 10) {
+  const { data } = await api.get(`/school-events/${when === 'past' ? 'past' : 'upcoming'}`, { params: { page, pageSize } });
   return data;
 }
 

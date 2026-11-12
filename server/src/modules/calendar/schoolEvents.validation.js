@@ -24,14 +24,19 @@ export function rangeQuery(req) {
   return { from: q.from, to: q.to, classId: q.classId ? String(q.classId) : null };
 }
 
-// GET /school-events/upcoming?limit=
+// GET /school-events/upcoming|past?page=&pageSize=  (or ?limit=N = page 1 of N, the school feed column)
 export function upcomingQuery(req) {
-  const raw = req.query?.limit;
-  if (raw === undefined || raw === '') return { limit: 5 };
-  if (!/^\d{1,2}$/.test(String(raw)) || Number(raw) < 1 || Number(raw) > L.UPCOMING_MAX) {
-    throw badRequest(ERROR_CODES.INVALID_INPUT, `limit must be 1..${L.UPCOMING_MAX}.`, { field: 'limit' });
-  }
-  return { limit: Number(raw) };
+  const q = req.query ?? {};
+  const num = (field, def, max) => {
+    const raw = q[field];
+    if (raw === undefined || raw === '') return def;
+    if (!/^\d{1,4}$/.test(String(raw)) || Number(raw) < 1 || Number(raw) > max) {
+      throw badRequest(ERROR_CODES.INVALID_INPUT, `${field} must be 1..${max}.`, { field });
+    }
+    return Number(raw);
+  };
+  if (q.limit !== undefined && q.limit !== '') return { page: 1, pageSize: num('limit', 5, L.UPCOMING_MAX) };
+  return { page: num('page', 1, 9999), pageSize: num('pageSize', 10, L.UPCOMING_MAX) };
 }
 
 const FIELDS = ['stamp', 'title', 'description', 'location', 'startAt', 'endAt', 'gradeLevelId'];

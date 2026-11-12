@@ -61,7 +61,6 @@ export const SCHOOL_EVENT_CODES = Object.freeze({
   DESCRIPTION: 'MSG_SCHOOL_EVENT_DESCRIPTION', // details: { max }
   TIME: 'MSG_SCHOOL_EVENT_TIME', // details: { reason: PAST | END_BEFORE_START | NO_YEAR | OUTSIDE_YEAR, min?, max? }
   GRADE: 'MSG_SCHOOL_EVENT_GRADE', // unknown grade level
-  STARTED: 'MSG_SCHOOL_EVENT_STARTED', // 409 – already started: read only
   CHANGED: 'MSG_SCHOOL_EVENT_CHANGED', // 409 – stale stamp
   NOT_READY: 'MSG_SCHOOL_EVENTS_NOT_READY', // 503 – table school_events missing (patch not run)
 });

@@ -1,8 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import {
-  createSchoolEvent, deleteSchoolEvent, getPastSchoolEvents, getSchoolEvent, getSchoolEventOptions, getUpcomingSchoolEvents,
-  updateSchoolEvent,
+  createSchoolEvent, deleteSchoolEvent, getSchoolEvent, getSchoolEventOptions, getSchoolEventPage, updateSchoolEvent,
 } from '../../api/schoolEvents.js';
 import Icon from '../../components/Icon.jsx';
 import { useToast } from '../../context/ToastContext.jsx';
@@ -11,10 +10,10 @@ import { dmy, longDate, timeRange } from './calendarUtils.js';
 import './schoolCalendar.css';
 
 // FE-10 school calendar ("Lịch của trường", Dung, 13/11/2026). Everyone reads (students / parents: whole school +
-// their grades); the School Manager adds, edits and deletes dates that have not started. Shown on the school feed
-// ("Lịch sắp tới của trường") and in the class calendar. ?tab=past, ?event=<id> opens one, ?new=1 opens the form.
+// their grades); the School Manager adds, edits and deletes any date (past ones too, to correct the record). Shown on the school feed
+// ("Lịch sắp tới của trường") and in the class calendar. ?tab=past, ?page=, ?event=<id> opens one, ?new=1 the form.
 
-const LIMIT = 50;
+const PAGE_SIZE = 10;
 const len = (v) => [...(v ?? '')].length;
 
 function EventDialog({ eventId, canManage, onClose, onEdit, onDelete }) {
@@ -81,7 +80,7 @@ function FormDialog({ options, original, onClose, onSaved, onReload }) {
   if (len(form.location.trim()) > L.LOCATION_MAX) p.location = `Địa điểm tối đa ${L.LOCATION_MAX} ký tự.`;
   if (len(form.description.trim()) > L.DESCRIPTION_MAX) p.description = `Ghi chú tối đa ${L.DESCRIPTION_MAX} ký tự.`;
   if (!startAt) p.start = 'Chọn ngày và giờ bắt đầu.';
-  else if ((!original || original.startAt !== startAt) && startAt <= now) p.start = 'Thời gian bắt đầu phải sau thời điểm hiện tại.';
+  else if ((!original || (!original.started && original.startAt !== startAt)) && startAt <= now) p.start = 'Thời gian bắt đầu phải sau thời điểm hiện tại.';
   else if (!year) p.start = 'Ngày này không thuộc năm học đang mở.';
   if (form.endDate && !form.endTime) p.end = 'Chọn giờ kết thúc (hoặc xoá ngày kết thúc).';
   else if (endAt && startAt && endAt <= startAt) p.end = 'Thời gian kết thúc phải sau thời gian bắt đầu.';
@@ -118,6 +117,7 @@ function FormDialog({ options, original, onClose, onSaved, onReload }) {
           <span className="label-upper">Lịch của trường</span>
           <h2 id="sc-form-title">{original ? 'Sửa sự kiện' : 'Thêm sự kiện'}</h2>
         </div>
+        {original?.started && <p className="caption muted">Sự kiện {original.ended ? 'đã diễn ra' : 'đang diễn ra'}: sửa để cập nhật lại thông tin cho đúng.</p>}
         <label className="field">
           <span className="field-label">Tên sự kiện *</span>
           <input className="input" value={form.title} maxLength={L.TITLE_MAX + 20} onChange={(e) => set('title', e.target.value)} placeholder="Ví dụ: Thi khảo sát Toán & Ngữ văn" />
@@ -133,14 +133,14 @@ function FormDialog({ options, original, onClose, onSaved, onReload }) {
         </label>
         <div className="sc-row">
           <label className="field"><span className="field-label">Ngày bắt đầu *</span>
-            <input type="date" className="input" value={form.startDate} min={now.slice(0, 10)} onChange={(e) => set('startDate', e.target.value)} /></label>
+            <input type="date" className="input" value={form.startDate} min={original?.started ? undefined : now.slice(0, 10)} onChange={(e) => set('startDate', e.target.value)} /></label>
           <label className="field"><span className="field-label">Giờ bắt đầu *</span>
             <input type="time" className="input" value={form.startTime} onChange={(e) => set('startTime', e.target.value)} /></label>
         </div>
         {(tried || form.startDate) && p.start && <span className="field-error">{p.start}</span>}
         <div className="sc-row">
           <label className="field"><span className="field-label">Ngày kết thúc</span>
-            <input type="date" className="input" value={form.endDate} min={form.startDate || now.slice(0, 10)} onChange={(e) => set('endDate', e.target.value)} />
+            <input type="date" className="input" value={form.endDate} min={form.startDate || undefined} onChange={(e) => set('endDate', e.target.value)} />
             <span className="field-help">Để trống nếu kết thúc trong ngày.</span></label>
           <label className="field"><span className="field-label">Giờ kết thúc</span>
             <input type="time" className="input" value={form.endTime} onChange={(e) => set('endTime', e.target.value)} /></label>
@@ -178,6 +178,7 @@ export default function SchoolEventsPage() {
   const toast = useToast();
   const [params, setParams] = useSearchParams();
   const tab = params.get('tab') === 'past' ? 'past' : 'upcoming';
+  const page = /^\d{1,4}$/.test(params.get('page') ?? '') && Number(params.get('page')) > 0 ? Number(params.get('page')) : 1;
   const openId = /^\d+$/.test(params.get('event') ?? '') ? params.get('event') : null;
   const [data, setData] = useState(null);
   const [error, setError] = useState('');
@@ -195,11 +196,11 @@ export default function SchoolEventsPage() {
   const load = useCallback(async () => {
     setError('');
     try {
-      setData(tab === 'past' ? await getPastSchoolEvents(LIMIT) : await getUpcomingSchoolEvents(LIMIT));
+      setData(await getSchoolEventPage(tab, page, PAGE_SIZE));
     } catch (err) {
       setError(errorText(err));
     }
-  }, [tab]);
+  }, [tab, page]);
   useEffect(() => { load(); }, [load]);
 
   const canManage = Boolean(data?.canManage);
@@ -238,13 +239,13 @@ export default function SchoolEventsPage() {
       <div className="sc-head">
         <div>
           <h1 className="headline-lg">Lịch của trường</h1>
-          <p>Các mốc chung của nhà trường: thi, lễ, họp, ngày hội. {canManage ? 'Ban giám hiệu thêm, sửa, xoá các sự kiện chưa diễn ra.' : 'Sự kiện của khối hiện cả trong lịch lớp.'}</p>
+          <p>Các mốc chung của nhà trường: thi, lễ, họp, ngày hội. {canManage ? 'Ban giám hiệu thêm, sửa, xoá sự kiện; sự kiện của khối hiện cả trong lịch lớp.' : 'Sự kiện của khối hiện cả trong lịch lớp.'}</p>
         </div>
         {canManage && <button type="button" className="btn btn-primary" onClick={() => setEditing({})} disabled={!options}><Icon name="add" size="sm" /> Thêm sự kiện</button>}
       </div>
       <div className="sc-tabs" role="tablist" aria-label="Thời gian">
-        <button type="button" role="tab" aria-selected={tab === 'upcoming'} onClick={() => setParam({ tab: '' })}>Sắp tới</button>
-        <button type="button" role="tab" aria-selected={tab === 'past'} onClick={() => setParam({ tab: 'past' })}>Đã qua</button>
+        <button type="button" role="tab" aria-selected={tab === 'upcoming'} onClick={() => setParam({ tab: '', page: '' })}>Sắp tới{tab === 'upcoming' && data ? ` (${data.total})` : ''}</button>
+        <button type="button" role="tab" aria-selected={tab === 'past'} onClick={() => setParam({ tab: 'past', page: '' })}>Đã qua{tab === 'past' && data ? ` (${data.total})` : ''}</button>
       </div>
 
       {error && <div className="notice amber" role="alert"><Icon name="error_outline" /><div><p>{error}</p><button type="button" className="btn btn-secondary" onClick={load}>Thử lại</button></div></div>}
@@ -266,17 +267,32 @@ export default function SchoolEventsPage() {
                   {ev.started && !ev.ended && <span className="sc-chip is-now">Đang diễn ra</span>}
                 </div>
               </div>
-              {canManage && ev.can.edit && (
+              {canManage && (
                 <div className="sc-item-actions">
-                  <button type="button" className="btn btn-icon" aria-label={`Sửa ${ev.title}`} onClick={() => startEdit(ev)} disabled={!options}><Icon name="edit" /></button>
-                  <button type="button" className="btn btn-icon" aria-label={`Xoá ${ev.title}`} onClick={() => setRemoving(ev)}><Icon name="delete" /></button>
+                  <button type="button" className="btn btn-secondary sc-act" aria-label={`Sửa ${ev.title}`} onClick={() => startEdit(ev)} disabled={!options}><Icon name="edit" size="sm" /> Sửa</button>
+                  <button type="button" className="btn sc-act sc-act-danger" aria-label={`Xoá ${ev.title}`} onClick={() => setRemoving(ev)}><Icon name="delete" size="sm" /> Xoá</button>
                 </div>
               )}
             </li>
           ))}
         </ul>
       )}
-      {data && data.events.length >= LIMIT && <p className="caption muted">Hiển thị {LIMIT} sự kiện {tab === 'past' ? 'gần nhất' : 'sớm nhất'}.</p>}
+      {data && data.pages > 1 && (
+        <nav className="sc-pager" aria-label="Phân trang">
+          <span className="caption muted">{(data.page - 1) * data.pageSize + 1}–{Math.min(data.page * data.pageSize, data.total)} trong {data.total} sự kiện</span>
+          <button type="button" className="btn btn-icon" aria-label="Trang trước" disabled={data.page <= 1} onClick={() => setParam({ page: data.page - 1 > 1 ? String(data.page - 1) : '' })}><Icon name="chevron_left" /></button>
+          {Array.from({ length: data.pages }, (_, i) => i + 1)
+            .filter((n) => n === 1 || n === data.pages || Math.abs(n - data.page) <= 1)
+            .map((n, i, arr) => (
+              <span key={n} className="sc-pager-item">
+                {i > 0 && n - arr[i - 1] > 1 && <span className="muted">…</span>}
+                <button type="button" className={`sc-pg${n === data.page ? ' is-on' : ''}`} aria-current={n === data.page ? 'page' : undefined}
+                  onClick={() => setParam({ page: n > 1 ? String(n) : '' })}>{n}</button>
+              </span>
+            ))}
+          <button type="button" className="btn btn-icon" aria-label="Trang sau" disabled={data.page >= data.pages} onClick={() => setParam({ page: String(data.page + 1) })}><Icon name="chevron_right" /></button>
+        </nav>
+      )}
 
       {openId && (
         <EventDialog eventId={openId} canManage={canManage} onClose={() => setParam({ event: '' })}
@@ -290,7 +306,7 @@ export default function SchoolEventsPage() {
         <div className="sc-overlay" onClick={() => !busy && setRemoving(null)}>
           <div className="sc-dialog sc-dialog-sm" role="alertdialog" aria-modal="true" aria-labelledby="sc-del-title" onClick={(e) => e.stopPropagation()}>
             <h2 id="sc-del-title">Xoá sự kiện?</h2>
-            <p>“{removing.title}” ({timeRange(removing)} {dmy(removing.startAt.slice(0, 10))}) sẽ không còn hiện trên bảng tin trường và lịch lớp.</p>
+            <p>“{removing.title}” ({timeRange(removing)} {dmy(removing.startAt.slice(0, 10))}) sẽ không còn hiện trên bảng tin trường, trang này và lịch lớp.</p>
             <div className="sc-actions">
               <button type="button" className="btn btn-secondary" onClick={() => setRemoving(null)} disabled={busy}>Huỷ</button>
               <button type="button" className="btn sc-danger" onClick={confirmDelete} disabled={busy}>{busy ? 'Đang xoá…' : 'Xoá sự kiện'}</button>

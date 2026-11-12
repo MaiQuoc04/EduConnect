@@ -63,7 +63,7 @@ const shape = (user) => (row) => {
   return {
     ...rest,
     audience: row.gradeName ? `Khối ${row.gradeName}` : 'Toàn trường',
-    ...(canManage(user) ? { stamp, can: { edit: !row.started, delete: !row.started } } : { can: { edit: false, delete: false } }),
+    ...(canManage(user) ? { stamp, can: { edit: true, delete: true } } : { can: { edit: false, delete: false } }),
   };
 };
 async function nowText(db = pool) {
@@ -87,37 +87,26 @@ export function listSchoolEvents({ from, to, classId }, user) {
   });
 }
 
-// GET /school-events/upcoming?limit= – not finished yet, soonest first (school feed column).
-export function upcomingSchoolEvents({ limit }, user) {
-  return guard(async () => {
-    const params = [user.userId];
-    const where = scope(user, params, null);
-    params.push(limit);
-    const { rows } = await pool.query(
-      `SELECT ${COLUMNS} ${FROM}
-       WHERE ${where} AND COALESCE(se.end_at, se.start_at) > NOW() AND $1::bigint IS NOT NULL
-       ORDER BY se.start_at, se.event_id LIMIT $${params.length}`,
-      params,
-    );
-    return { now: await nowText(), canManage: canManage(user), events: rows.map(shape(user)) };
-  });
+// GET /school-events/upcoming and /past – one page, `when` = upcoming (not finished, soonest first) or past
+// (finished, latest first). { page, pageSize } – the school feed column asks for page 1 of 5.
+async function pageOf(when, { page, pageSize }, user) {
+  const params = [user.userId];
+  const where = `${scope(user, params, null)} AND COALESCE(se.end_at, se.start_at) ${when === 'past' ? '<=' : '>'} NOW()
+    AND $1::bigint IS NOT NULL`;
+  const { rows: count } = await pool.query(`SELECT COUNT(*)::int AS n FROM school_events se WHERE ${where}`, params);
+  const total = count[0].n;
+  const pages = Math.max(1, Math.ceil(total / pageSize));
+  const current = Math.min(page, pages);
+  const { rows } = await pool.query(
+    `SELECT ${COLUMNS} ${FROM} WHERE ${where}
+     ORDER BY ${when === 'past' ? 'se.start_at DESC, se.event_id DESC' : 'se.start_at, se.event_id'}
+     LIMIT ${pageSize} OFFSET ${(current - 1) * pageSize}`,
+    params,
+  );
+  return { now: await nowText(), canManage: canManage(user), total, page: current, pageSize, pages, events: rows.map(shape(user)) };
 }
-
-// GET /school-events/past?limit= – finished, latest first (the "Đã qua" tab).
-export function pastSchoolEvents({ limit }, user) {
-  return guard(async () => {
-    const params = [user.userId];
-    const where = scope(user, params, null);
-    params.push(limit);
-    const { rows } = await pool.query(
-      `SELECT ${COLUMNS} ${FROM}
-       WHERE ${where} AND COALESCE(se.end_at, se.start_at) <= NOW() AND $1::bigint IS NOT NULL
-       ORDER BY se.start_at DESC, se.event_id DESC LIMIT $${params.length}`,
-      params,
-    );
-    return { now: await nowText(), canManage: canManage(user), events: rows.map(shape(user)) };
-  });
-}
+export const upcomingSchoolEvents = (q, user) => guard(() => pageOf('upcoming', q, user));
+export const pastSchoolEvents = (q, user) => guard(() => pageOf('past', q, user));
 
 async function findOne(db, eventId, user, { lock = false } = {}) {
   const params = [user.userId, eventId];
@@ -151,9 +140,10 @@ export function schoolEventOptions() {
   });
 }
 
-// Start in the future (only checked when it changes on update), a school year that contains the start and the end.
+// Start in the future (only checked when it changes, and not for a date that already started), inside a school year.
 async function checkTimes(db, input, { before } = {}) {
-  const startChanged = !before || before.startAt !== input.startAt;
+  // A new or not-yet-started date must start in the future; a date that already started may be corrected (record).
+  const startChanged = (!before || before.startAt !== input.startAt) && !before?.started;
   const { rows } = await db.query(
     `SELECT ($1::timestamp AT TIME ZONE ${TZ}) <= NOW() AS "past",
             (SELECT json_build_object('id', sy.school_year_id, 'min', to_char(sy.start_date, 'YYYY-MM-DD'), 'max', to_char(sy.end_date, 'YYYY-MM-DD'))
@@ -190,13 +180,13 @@ export function createSchoolEvent(input, user) {
   );
 }
 
-// PUT /school-events/:eventId (School Manager) – not started yet; stale stamp → 409.
+// PUT /school-events/:eventId (School Manager) – any date (Dung 13/11: the manager corrects past dates too); stale
+// stamp → 409.
 export function updateSchoolEvent(eventId, input, user) {
   return guard(() =>
     withTransaction(async (db) => {
       const before = await findOne(db, eventId, user, { lock: true });
       if (before.stamp !== input.stamp) throw conflict(C.CHANGED, 'The event was changed after the form was opened.');
-      if (before.started) throw conflict(C.STARTED, 'The event already started.');
       await checkGrade(db, input.gradeLevelId);
       const yearId = await checkTimes(db, input, { before });
       const same = before.title === input.title && (before.description ?? null) === input.description && (before.location ?? null) === input.location
@@ -214,12 +204,11 @@ export function updateSchoolEvent(eventId, input, user) {
   );
 }
 
-// DELETE /school-events/:eventId (School Manager) – soft delete, not started yet (ASSUMPTION: past dates stay as record).
+// DELETE /school-events/:eventId (School Manager) – soft delete, any date (Dung 13/11/2026).
 export function deleteSchoolEvent(eventId, user) {
   return guard(() =>
     withTransaction(async (db) => {
-      const ev = await findOne(db, eventId, user, { lock: true });
-      if (ev.started) throw conflict(C.STARTED, 'The event already started.');
+      await findOne(db, eventId, user, { lock: true });
       await db.query('UPDATE school_events SET deleted_at = NOW(), deleted_by = $2 WHERE event_id = $1', [eventId, user.userId]);
       return { eventId, deleted: true };
     }),
