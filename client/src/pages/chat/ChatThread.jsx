@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { api } from '../../api/client.js';
+import { UPLOAD_TARGETS } from '../../api/uploads.js';
+import { fileIcon, useAttachmentUploads } from '../../components/AttachmentPicker.jsx';
 import Icon from '../../components/Icon.jsx';
 import { useAuth } from '../../context/AuthContext.jsx';
 import { useSocket } from '../../context/SocketContext.jsx';
@@ -7,7 +9,7 @@ import { useToast } from '../../context/ToastContext.jsx';
 import { errorText } from '../../messages.js';
 import { MEMBER_KIND_LABELS } from '../groups/groupLabels.js';
 import { memberSubline } from '../groups/memberText.js';
-import { dayOf } from './chatText.js';
+import { dayOf, filesText } from './chatText.js';
 import DeleteMessageDialog from './DeleteMessageDialog.jsx';
 import EmojiPicker from './EmojiPicker.jsx';
 import MessageRow from './MessageRow.jsx';
@@ -18,8 +20,22 @@ import MessageRow from './MessageRow.jsx';
 // socket ("message:new", "message:read"); "seen by" compares message ids sent by the server, not times.
 // UC-110 reply, UC-111 reactions, UC-112 emoji, UC-113 delete message: the composer holds the message being answered;
 // reactions and deletions also arrive over the socket ("message:reaction", "message:deleted", "message:hidden").
+// Files (12/11/2026): the 📎 button (or pasting a picture) uploads each file straight to storage with the shared FE-08
+// upload queue (target 'message', images compressed first); "Gửi" waits until they are up. A message may be files
+// only. Links live one hour: a picture that no longer loads asks for that message again (refreshFiles).
 const MESSAGE_MAX = 2000; // same limit as the server (ASSUMPTION there, plan question Q5)
 const SEEN_NAMES = 3;
+const FILE_RETRY_MS = 15_000; // one new link per message at most this often
+
+// Limits of the file button (count, sizes from system_settings, types): read once per page load, shared by every chat.
+let limitsRequest = null;
+function loadFileLimits() {
+  limitsRequest ??= api.get('/conversations/attachment-limits').then((r) => r.data).catch((err) => {
+    limitsRequest = null; // try again next time
+    throw err;
+  });
+  return limitsRequest;
+}
 const NEAR_BOTTOM_PX = 120;
 const INPUT_MIN_PX = 36; // = .btn height
 const INPUT_MAX_PX = 136; // about six lines of 20px
@@ -65,6 +81,9 @@ export default function ChatThread({ groupId, onPeer }) {
   const [menu, setMenu] = useState(null); // { id, kind: 'react' | 'who' } popup of one message
   const [emojiOpen, setEmojiOpen] = useState(false);
   const [deleting, setDeleting] = useState(null); // { message, forEveryone, expired }
+  const [fileLimits, setFileLimits] = useState(null);
+  const fileInput = useRef(null);
+  const fileRefresh = useRef(new Map()); // messageId -> last time new links were asked for
   const jumpTo = useRef(null); // message to scroll to once it is loaded
   const listRef = useRef(null);
   const inputRef = useRef(null);
@@ -72,6 +91,46 @@ export default function ChatThread({ groupId, onPeer }) {
   const prepend = useRef(null); // scroll position kept while older messages are added on top
   const readTimer = useRef(null);
   const id = Number(groupId);
+  const uploads = useAttachmentUploads({ target: UPLOAD_TARGETS.MESSAGE, groupId: id, limits: fileLimits });
+
+  useEffect(() => {
+    let alive = true;
+    loadFileLimits().then((limits) => alive && setFileLimits(limits)).catch(() => {});
+    return () => {
+      alive = false;
+    };
+  }, []);
+
+  function addFiles(list) {
+    const notice = uploads.add(list);
+    if (notice) toast(notice.replace('Mỗi bài', 'Mỗi tin nhắn'));
+  }
+
+  // A picture pasted into the message box is attached (text pastes as usual).
+  function onPaste(e) {
+    const pasted = [...(e.clipboardData?.files ?? [])];
+    if (!pasted.length || !fileLimits || !state.canSend) return;
+    e.preventDefault();
+    addFiles(pasted);
+  }
+
+  // New links for the files of one message (the old ones expired): the page of exactly that message.
+  const refreshFiles = useCallback(
+    async (messageId) => {
+      const last = fileRefresh.current.get(messageId) ?? 0;
+      if (Date.now() - last < FILE_RETRY_MS) return;
+      fileRefresh.current.set(messageId, Date.now());
+      try {
+        const { data } = await api.get(`/conversations/${id}/messages`, { params: { before: messageId + 1, limit: 1 } });
+        const fresh = data.messages.find((m) => m.messageId === messageId);
+        if (!fresh) return;
+        setMessages((list) => list.map((m) => (m.messageId === messageId ? { ...m, attachments: fresh.attachments } : m)));
+      } catch {
+        // keep what is shown; the next reload brings new links
+      }
+    },
+    [id],
+  );
 
   // Tell the server the chat is read up to now – only while the tab is visible, at most once per second.
   const markRead = useCallback(() => {
@@ -304,7 +363,12 @@ export default function ChatThread({ groupId, onPeer }) {
 
   async function send() {
     const content = text.trim();
-    if (!content || sending) return;
+    const files = uploads.uploaded;
+    if ((!content && !files.length) || sending) return;
+    if (uploads.busy) {
+      toast('Đang tải tệp lên. Vui lòng chờ tải xong rồi gửi.');
+      return;
+    }
     if (content.length > MESSAGE_MAX) {
       toast(errorText({ code: 'MSG_MESSAGE_TOO_LONG', details: { max: MESSAGE_MAX } }));
       return;
@@ -312,9 +376,11 @@ export default function ChatThread({ groupId, onPeer }) {
     setSending(true);
     try {
       const { data: message } = await api.post(`/conversations/${id}/messages`, {
-        content,
+        ...(content ? { content } : {}),
+        ...(files.length ? { attachments: files } : {}),
         ...(replyTo ? { replyToMessageId: replyTo.messageId } : {}),
       });
+      uploads.items.forEach((item) => uploads.remove(item.id)); // sent (failed ones are dropped too)
       stickToBottom.current = true;
       setMessages((list) => (list.some((m) => m.messageId === message.messageId) ? list : [...list, stamp(message)]));
       setText('');
@@ -423,6 +489,7 @@ export default function ChatThread({ groupId, onPeer }) {
                   onReply={startReply}
                   onDelete={startDelete}
                   onJump={jump}
+                  onFilesExpired={refreshFiles}
                 />
               );
             })}
@@ -440,12 +507,37 @@ export default function ChatThread({ groupId, onPeer }) {
             <strong>
               Đang trả lời {replyTo.senderId === me ? 'chính bạn' : replyTo.senderNickname || replyTo.senderName}
             </strong>
-            <span className="caption muted">{replyTo.content}</span>
+            <span className="caption muted">{replyTo.content || filesText(replyTo.attachments?.length)}</span>
           </span>
           <button type="button" className="btn btn-icon" onClick={() => setReplyTo(null)} aria-label="Huỷ trả lời">
             <Icon name="close" size="sm" />
           </button>
         </div>
+      )}
+      {uploads.items.length > 0 && (
+        <ul className="chat-files" aria-label="Tệp sẽ gửi kèm">
+          {uploads.items.map((item) => (
+            <li key={item.id} className={`chat-file is-${item.status}`} title={item.error || item.name}>
+              <span className="chat-file-thumb">
+                {item.previewUrl ? <img src={item.previewUrl} alt="" /> : <Icon name={fileIcon(item.mimeType)} />}
+                {(item.status === 'uploading' || item.status === 'compressing' || item.status === 'waiting') && (
+                  <span className="chat-file-progress" aria-hidden="true">
+                    {item.status === 'uploading' ? `${Math.round((item.progress ?? 0) * 100)}%` : '…'}
+                  </span>
+                )}
+              </span>
+              <span className="chat-file-name caption">{item.status === 'error' ? item.error : item.name}</span>
+              {item.status === 'error' && item.retryable && (
+                <button type="button" className="btn btn-icon" onClick={() => uploads.retry(item.id)} aria-label={`Thử lại ${item.name}`}>
+                  <Icon name="refresh" size="sm" />
+                </button>
+              )}
+              <button type="button" className="btn btn-icon" onClick={() => uploads.remove(item.id)} aria-label={`Gỡ ${item.name}`} title="Gỡ tệp">
+                <Icon name="close" size="sm" />
+              </button>
+            </li>
+          ))}
+        </ul>
       )}
       <form
         className="chat-composer"
@@ -470,6 +562,31 @@ export default function ChatThread({ groupId, onPeer }) {
           </button>
           {emojiOpen && <EmojiPicker onPick={insertEmoji} />}
         </div>
+        <button
+          type="button"
+          className="btn btn-icon"
+          onClick={() => fileInput.current?.click()}
+          disabled={!state.canSend || !fileLimits || uploads.items.length >= (fileLimits?.maxFiles ?? 0)}
+          aria-label="Gửi tệp"
+          title={
+            fileLimits
+              ? `Gửi ảnh, video hoặc tài liệu (ảnh, tài liệu tối đa ${fileLimits.maxFileMb} MB; video tối đa ${fileLimits.maxVideoMb} MB)`
+              : 'Gửi tệp'
+          }
+        >
+          <Icon name="attach_file" />
+        </button>
+        <input
+          ref={fileInput}
+          type="file"
+          multiple
+          hidden
+          accept={fileLimits?.types.flatMap((t) => [t.mimeType, ...t.extensions]).join(',') ?? ''}
+          onChange={(e) => {
+            addFiles(e.target.files);
+            e.target.value = '';
+          }}
+        />
         <textarea
           ref={inputRef}
           className="input chat-input"
@@ -477,6 +594,7 @@ export default function ChatThread({ groupId, onPeer }) {
           value={text}
           onChange={(e) => setText(e.target.value)}
           onKeyDown={onKeyDown}
+          onPaste={onPaste}
           placeholder={state.canSend ? 'Nhập tin nhắn…' : BLOCKED_TEXT[state.blockedReason] ?? BLOCKED_TEXT.READ_ONLY}
           disabled={!state.canSend}
           aria-label="Nhập tin nhắn"
@@ -486,7 +604,12 @@ export default function ChatThread({ groupId, onPeer }) {
             {text.length}/{MESSAGE_MAX}
           </span>
         )}
-        <button type="submit" className="btn btn-primary" disabled={!state.canSend || sending || !text.trim()}>
+        <button
+          type="submit"
+          className="btn btn-primary"
+          disabled={!state.canSend || sending || uploads.busy || (!text.trim() && !uploads.uploaded.length)}
+          title={uploads.busy ? 'Đang tải tệp lên…' : undefined}
+        >
           <Icon name="send" size="sm" />
           Gửi
         </button>

@@ -1,6 +1,7 @@
 import Avatar from '../../components/Avatar.jsx';
 import Icon from '../../components/Icon.jsx';
-import { dayLabel, dayOf, REACTIONS, REACTION_EMOJI, timeOf } from './chatText.js';
+import { dayLabel, dayOf, filesText, REACTIONS, REACTION_EMOJI, timeOf } from './chatText.js';
+import MessageFiles from './MessageFiles.jsx';
 
 // One message of a chat: a day separator when needed, the sender, the quote of the message it answers, the text, the
 // reactions and the actions (react, reply, delete). The thread (ChatThread.jsx) holds the state and calls the server.
@@ -10,7 +11,7 @@ function replyText(reply, me) {
   if (reply.state === 'DELETED') return { who: '', text: 'Tin nhắn đã được xoá' };
   if (reply.state === 'HIDDEN') return { who: '', text: 'Bạn đã xoá tin nhắn này' };
   const who = reply.senderId === me ? 'Bạn' : reply.senderNickname || reply.senderName;
-  return { who, text: reply.content };
+  return { who, text: reply.content || filesText(reply.attachmentCount) };
 }
 
 // "Bạn đã trả lời Lan", "Bin đã trả lời bạn": who answered whom, above the message.
@@ -37,6 +38,7 @@ export default function MessageRow({
   onReply,
   onDelete,
   onJump,
+  onFilesExpired,
 }) {
   const mine = m.senderId === me;
   const name = m.senderNickname ? `${m.senderNickname} (${m.senderName})` : m.senderName;
@@ -108,9 +110,12 @@ export default function MessageRow({
                   <span>{reply.text}</span>
                 </button>
               )}
-              <p className="msg-text">
-                {m.isDeleted ? (mine ? 'Bạn đã xoá một tin nhắn' : 'Tin nhắn đã được xoá') : m.content}
-              </p>
+              {!m.isDeleted && <MessageFiles files={m.attachments} onExpired={() => onFilesExpired?.(m.messageId)} />}
+              {(m.isDeleted || m.content) && (
+                <p className="msg-text">
+                  {m.isDeleted ? (mine ? 'Bạn đã xoá một tin nhắn' : 'Tin nhắn đã được xoá') : m.content}
+                </p>
+              )}
               <time className="msg-time" dateTime={m.sentAt}>
                 {timeOf(m.sentAt)}
               </time>

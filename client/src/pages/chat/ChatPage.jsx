@@ -403,7 +403,7 @@ function DirectRoom({ summary, backState }) {
           <p className="caption muted">{sub || 'Tin nhắn riêng'}</p>
         </div>
       </header>
-      <ChatThread groupId={summary.groupId} onPeer={setDetail} />
+      <ChatThread key={summary.groupId} groupId={summary.groupId} onPeer={setDetail} />
     </>
   );
 }
@@ -449,7 +449,7 @@ function ChatRoom({ groupId, backState }) {
         </Link>
       </header>
       {g.canSeeContent ? (
-        <ChatThread groupId={g.groupId} />
+        <ChatThread key={g.groupId} groupId={g.groupId} />
       ) : (
         <div className="chat-empty">
           <span className="gd-pending-icon" aria-hidden="true">

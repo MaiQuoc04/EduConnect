@@ -1220,6 +1220,30 @@ textarea.input.chat-input { display: block; height: 36px; min-height: 36px; max-
 .msg-seen { align-self: flex-start; display: flex; align-items: center; gap: 4px; margin: 4px 0 0 40px; }
 .msg-seen.mine { align-self: flex-end; margin-left: 0; }
 .msg-seen span { display: inline-flex; align-items: center; gap: 4px; }
+/* FE-06 files (12/11/2026): in the bubble, and the files waiting above the composer */
+.msg-files { display: grid; gap: 6px; margin-bottom: 4px; }
+.msg-files + .msg-text { margin-top: 2px; }
+.msg-images { display: grid; grid-template-columns: repeat(2, minmax(0, 120px)); gap: 4px; }
+.msg-images.is-single { grid-template-columns: minmax(0, 260px); }
+.msg-image { display: block; border-radius: 8px; overflow: hidden; background: var(--graphite-100); }
+.msg-image img { display: block; width: 100%; height: 120px; object-fit: cover; }
+.msg-images.is-single .msg-image img { height: auto; max-height: 260px; }
+.msg-video { display: block; width: 100%; max-width: 280px; max-height: 240px; border-radius: 8px; background: #000; }
+.msg-file { display: flex; align-items: center; gap: 8px; min-width: 200px; max-width: 280px; padding: 6px 4px 6px 8px; border-radius: 8px; background: var(--white); outline: 1px solid var(--graphite-200); }
+.msg-file > .icon { color: var(--ink-600); }
+.msg-file-text { display: grid; min-width: 0; flex: 1; }
+.msg-file-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 13px; }
+.chat-files { display: flex; gap: 8px; margin: 0; padding: 8px 16px 0; list-style: none; overflow-x: auto; border-top: 1px solid var(--graphite-200); }
+.chat-files + .chat-composer { border-top: 0; }
+.chat-reply-bar + .chat-files { border-top: 0; }
+.chat-file { flex: none; display: flex; align-items: center; gap: 6px; max-width: 220px; padding: 4px 2px 4px 4px; border-radius: 8px; background: var(--graphite-50); outline: 1px solid var(--graphite-200); }
+.chat-file.is-error { outline-color: var(--red-pen); background: var(--red-bg); }
+.chat-file .btn-icon { width: 28px; height: 28px; }
+.chat-file-thumb { position: relative; flex: none; display: grid; place-items: center; width: 36px; height: 36px; border-radius: 6px; overflow: hidden; background: var(--white); color: var(--ink-600); }
+.chat-file-thumb img { width: 100%; height: 100%; object-fit: cover; }
+.chat-file-progress { position: absolute; inset: 0; display: grid; place-items: center; background: rgba(28, 27, 25, 0.45); color: var(--white); font-size: 11px; font-weight: 600; }
+.chat-file-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.chat-file.is-error .chat-file-name { color: var(--red-pen); }
 @media (max-width: 900px) {
   .chat-shell { grid-template-columns: minmax(0, 1fr); height: calc(100dvh - 64px - 24px); }
   .chat-shell .chat-room { display: none; }

@@ -35,9 +35,15 @@ export function previewText(message, myId, direct = false) {
     if (message.senderId === myId) return 'Bạn đã xoá một tin nhắn';
     return direct ? 'Tin nhắn đã được xoá' : `${message.senderNickname || message.senderName} đã xoá một tin nhắn`;
   }
-  const text = (message.content ?? '').replace(/\s+/g, ' ').trim();
+  const text = (message.content ?? '').replace(/\s+/g, ' ').trim() || filesText(message.attachmentCount ?? message.attachments?.length); // list: count; socket: the files
   if (message.senderId === myId) return `Bạn: ${text}`;
   return direct ? text : `${message.senderNickname || message.senderName}: ${text}`;
+}
+
+// A message that is only files: "Đã gửi một tệp" / "Đã gửi 3 tệp" (previews, quotes).
+export function filesText(count) {
+  if (!count) return '';
+  return count === 1 ? 'Đã gửi một tệp' : `Đã gửi ${count} tệp`;
 }
 
 // UC-49: who someone is to me, e.g. "Giáo viên chủ nhiệm · 10A1" or "Bố của Phạm Gia Bảo · 10A1".
