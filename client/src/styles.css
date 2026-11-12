@@ -613,8 +613,16 @@ a.link-row .icon:last-child { color: var(--graphite-400); }
 .track-table-bar { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: -8px; }
 .track-copy-select { width: auto; max-width: 100%; height: 32px; font-size: 13px; }
 .track-grade-chip { margin-left: 8px; vertical-align: middle; font-family: var(--font-ui); }
-.track-section + .track-section { border-top: 1px solid var(--graphite-200); }
-.track-section-head { display: flex; align-items: center; gap: 6px; margin: 0; padding: 10px 16px 4px; }
+/* SCR-70 list: one grade at a time (tabs) and the grade on every card */
+.track-tabs-wrap { padding: 10px 12px; border-bottom: 1px solid var(--graphite-200); overflow-x: auto; }
+.track-tabs { display: flex; width: max-content; min-width: 100%; }
+.track-tabs button { flex: 1; white-space: nowrap; }
+.track-item { grid-template-columns: auto minmax(0, 1fr); align-items: start; gap: 12px; }
+.track-item-body { display: grid; gap: 6px; min-width: 0; }
+.track-grade { display: grid; place-items: center; align-content: center; width: 44px; height: 44px; border-radius: 10px; background: var(--ink-50); outline: 1px solid var(--ink-100); color: var(--ink-700); font-size: 17px; font-weight: 700; line-height: 1; font-variant-numeric: tabular-nums; }
+.track-grade-label { font-size: 9px; font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase; margin-bottom: 2px; }
+.track-grade.is-all { font-size: 11px; background: var(--graphite-100); outline-color: var(--graphite-200); color: var(--graphite-700); }
+.year-item.selected .track-grade { background: var(--ink-600); outline-color: var(--ink-600); color: var(--white); }
 .track-grades { margin: 0; padding: 0; border: 0; }
 .track-grade-options { display: flex; flex-wrap: wrap; gap: 8px; }
 .track-grade-option { display: inline-flex; align-items: center; gap: 6px; height: 34px; padding: 0 12px; border-radius: var(--radius-control); outline: 1px solid var(--graphite-200); font-size: 14px; cursor: pointer; }
