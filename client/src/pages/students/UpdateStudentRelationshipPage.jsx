@@ -1,6 +1,7 @@
 import { useEffect, useId, useRef, useState } from 'react';
 import { Link, useLocation, useNavigate, useParams } from 'react-router-dom';
-import { getStudentParents, linkParent, listStudents, lookupParentByPhone, unlinkParent } from '../../api/students.js';
+import { listParents } from '../../api/parents.js';
+import { getStudentParents, linkParent, listStudents, unlinkParent } from '../../api/students.js';
 import Avatar from '../../components/Avatar.jsx';
 import Icon from '../../components/Icon.jsx';
 import { useToast } from '../../context/ToastContext.jsx';
@@ -220,14 +221,22 @@ function LinkedParent({ parent, disabled, onUnlink }) {
   );
 }
 
-// Picking an EXISTING parent account. TODO FE-14 (Khanh): there is no parent list endpoint yet (UC-104 View Parent
-// List is not built). Until then two read-only ways, both through FE-02's own endpoints, and both show the parent's
-// name before linking:
+// The parent with exactly this phone among the UC-104 results, shaped like the parent object this page uses, or null.
+// The list search matches "contains" on the phone, so a complete number could in theory also match a longer one;
+// only the exact number is taken. users.phone is unique, so there is at most one.
+function parentWithPhone(items, phone) {
+  const parent = items.find((p) => p.phone === phone);
+  // linkedStudentCount is what SelectedParent shows (it came from the old lookup); UC-104 calls it childrenCount.
+  return parent ? { ...parent, linkedStudentCount: parent.childrenCount } : null;
+}
+
+// Picking an EXISTING parent account, two read-only ways, both show the parent's name before linking:
 //  - "Tìm theo số điện thoại" (default): the phone identifies a parent (required for parents, business-rules §3) and
-//    School Manager has it in the student's file. Exact match on the TEMPORARY GET /students/parents/lookup.
+//    School Manager has it in the student's file. Looked up with FE-14's UC-104 parent list (GET /parents?q=<phone>,
+//    PARENT accounts only, LOCKED ones included), replacing the temporary GET /students/parents/lookup (It1 closing
+//    item #3); an exact phone match is required.
 //  - "Qua anh, chị, em": search a student who studies at the school (GET /students?q=), then pick one of THEIR
 //    linked parents (GET /students/:id/parents) – useful when the phone number is not at hand.
-// Switch the phone lookup to Khanh's endpoint once FE-14 has it.
 function PhoneLookup({ disabled, onSelect }) {
   const [phone, setPhone] = useState('');
   const [result, setResult] = useState(null); // { found, parent? } for the number currently typed
@@ -249,10 +258,12 @@ function PhoneLookup({ disabled, onSelect }) {
     const controller = new AbortController();
     setSearching(true);
     const timer = setTimeout(() => {
-      lookupParentByPhone(normalized, { signal: controller.signal })
+      // pageSize 5: a complete number gives one row; a few more only guard the exact-match filter above.
+      listParents({ q: normalized, pageSize: 5 }, { signal: controller.signal })
         .then((data) => {
-          setResult(data);
-          if (data.found) onSelect(data.parent);
+          const parent = parentWithPhone(data.items ?? [], normalized);
+          setResult(parent ? { found: true, parent } : { found: false });
+          if (parent) onSelect(parent);
         })
         .catch((err) => {
           if (controller.signal.aborted) return;
@@ -485,7 +496,7 @@ function SiblingPicker({ studentId, linkedIds, disabled, selected, onSelect }) {
 }
 
 // The parent about to be linked, always with a name: School Manager checks the person before linking.
-// linkedStudentCount comes from the phone lookup only; occupation from both ways.
+// linkedStudentCount comes from the phone lookup only (UC-104 childrenCount); occupation from both ways.
 function SelectedParent({ parent, alreadyLinked }) {
   return (
     <div className="update-relationship-selected">
@@ -516,8 +527,8 @@ function SelectedParent({ parent, alreadyLinked }) {
 // Design: Stitch "SCR-12 Update Student Relationship" (the Stitch numbers are one behind docs/screens.md): a page of
 // its own with the linked parents on the left and the "new link" panel on the right. Left out of the design on
 // purpose: the unlink reason (student_parents has no column for it), the permission checkboxes and the extra
-// relationship types (the schema has only FATHER / MOTHER / GUARDIAN), search by name / ID card (no parent list
-// endpoint yet; the parent is found by exact phone or through a sibling, see PhoneLookup).
+// relationship types (the schema has only FATHER / MOTHER / GUARDIAN), search by name / ID card (the parent is found
+// by exact phone through FE-14's parent list, or through a sibling, see PhoneLookup).
 // Both actions answer with the whole UC-12 data, which replaces the page state: no extra GET after a success.
 export default function UpdateStudentRelationshipPage() {
   const { studentId } = useParams();

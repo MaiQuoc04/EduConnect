@@ -10,7 +10,7 @@ The app serves **one high school** (grades 10–12). Users never self-register.
 | Role code | Who | Scope |
 |---|---|---|
 | `SYSTEM_ADMIN` | IT admin | Accounts and system only: create / import / export accounts, change login identifiers, reset passwords and lock / unlock **any** account, system settings, maintenance. **Cannot see any content** (feeds, chats, grades, school posts), is in no group, cannot create teams. |
-| `SCHOOL_MANAGER` | Principal / office staff (several, equal rights) | All school business. Views and updates student / parent / teacher profiles (cannot create or delete them). Resets passwords and locks / unlocks student, parent and teacher accounts. Manages the **school-wide teacher group** (pin / hide / approve) and the school feed. **Does not see class feeds or class chats.** Private messages only with people in the teacher group. Views grades and rankings of the whole school (read only), unlocks grades, views grade history, corrects attendance after the day, sees school-wide attendance statistics. |
+| `SCHOOL_MANAGER` | Principal / office staff (several, equal rights) | All school business. Views and updates student / parent / teacher profiles (cannot create or delete them, except importing teacher accounts, UC-116, §4). Resets passwords and locks / unlocks student, parent and teacher accounts. Manages the **school-wide teacher group** (pin / hide / approve) and the school feed. **Does not see class feeds or class chats.** Private messages only with people in the teacher group. Views grades and rankings of the whole school (read only), unlocks grades, views grade history, corrects attendance after the day, sees school-wide attendance statistics. |
 | `TEACHER` | Teachers | Teaches assigned classes / subjects. A teacher becomes **Homeroom Teacher** of a class when `classes.homeroom_teacher_id` points to them – this is **not a separate role**. |
 | `STUDENT` | Students | Own data, own classes and groups. |
 | `PARENT` | Parents / guardians | Their children's data; picks a child first on child-specific screens. |
@@ -279,6 +279,27 @@ Boundaries that are easy to get wrong:
 - Only **Like** (no other reactions). One like per user per post; unlike removes the row.
 - Images, files and videos can be attached to posts and messages: images / files ≤ 10 MB, video ≤ 50 MB.
   Files live in cloud storage; the DB stores the URL (`attachments`).
+- **Post states in detail** (Khanh's proposals, agreed by the lead 11/11/2026):
+  - **Moderator posts are auto-approved:** the homeroom teacher in the class feed, the School Manager in the teacher
+    group. Any post is also approved at once when the group has `require_approval = false`.
+  - **Rejected** (`REJECTED`): seen only by its author (label "Đã bị từ chối") and the group moderator; no reason is
+    stored. The author may edit it – saving sends it back to `PENDING` – or delete it.
+  - **Editing an approved post** while the group has `require_approval = true` (author not the moderator) sends it
+    back to `PENDING`: it leaves the feed until the moderator approves it again. With approval off it stays
+    `APPROVED` and shows "Đã chỉnh sửa" (`updated_at`).
+  - **Hidden** (`is_hidden`): the author still sees it, labelled "Bài viết đã bị ẩn bởi người kiểm duyệt"; other
+    members do not. The moderator sees the list of hidden posts and can **unhide** one (it comes back as a normal
+    post). Only posts are hidden; comments are still only deleted.
+  - **Pin:** at most **5 pinned posts per group**; pinning a 6th is refused ("Đã đạt giới hạn 5 bài ghim. Vui lòng
+    bỏ ghim bài cũ trước khi ghim bài mới."). Hiding a post unpins it; unhiding does not pin it again.
+  - **Turning approval on / off** (`groups.require_approval`): the homeroom teacher for the class general group, the
+    School Manager for the teacher group, with a switch on the group detail screen (SCR-21); no new screen. The School
+    Manager still does not see class feeds (§2).
+  - **Class without a homeroom teacher** (none assigned, or locked): the class feed shows a banner "Lớp học hiện chưa
+    có GVCN phụ trách kiểm duyệt. Bài viết chờ duyệt có thể bị xử lý chậm."; pending posts wait until the School
+    Manager assigns a homeroom teacher (UC-19), who then takes them over. Nobody approves in place of the homeroom
+    teacher.
+  - **Lengths:** post content at most 5,000 characters; comments at most 2,000 (as FE-08). Group posts have no title.
 
 ## 6. Messaging (FE-06)
 - Group chats (GENERAL / STUDENT / PARENT / TEACHER_SCHOOL / TEAM_CHAT) and **1-1 chats**. A 1-1 chat is a group of
@@ -445,7 +466,7 @@ Boundaries that are easy to get wrong:
 - `system_settings` (key–value, loaded by SQL; SA edits values only): sign-in lock thresholds, upload limits, OTP
   lifetime, password reset request cooldown, attendance edit deadline, chat delete-for-everyone time. Allowed values
   (01/11/2026): wrong passwords before a lock 3–10; lock step 1–60 min; lock max 1–1440 min; images / files 1–50 MB;
-  videos 1–200 MB; OTP lifetime 1–30 min; reset request cooldown 1–1440 min (default 15); attendance deadline a time
+  videos 1–50 MB (lowered from 200 by the lead 11/11/2026: the Supabase Free plan takes files up to 50 MB); OTP lifetime 1–30 min; reset request cooldown 1–1440 min (default 15); attendance deadline a time
   `HH:MM`; `chat.delete_for_everyone_minutes` 1–1440 min (default 15, §6; agreed by the lead 07/11/2026).
 - `activity_logs` (never deleted) records only important actions: sign-in success / failure, account create /
   import / lock / unlock, password reset, role change, setting change, grade unlock. **The log is only kept in the

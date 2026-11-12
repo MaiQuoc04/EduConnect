@@ -10,6 +10,7 @@ import subjectRoutes from './modules/subjects/subjects.routes.js';
 import classTrackRoutes from './modules/class-tracks/class-tracks.routes.js';
 import classRoutes from './modules/classes/classes.routes.js';
 import groupRoutes from './modules/groups/groups.routes.js';
+import postRoutes from './modules/posts/posts.routes.js';
 import conversationRoutes from './modules/conversations/conversations.routes.js';
 import departmentRoutes from './modules/teacher/department.routes.js';
 import homeroomRoutes from './modules/teacher/homeroom.routes.js';
@@ -17,6 +18,9 @@ import teacherRoutes from './modules/teacher/teacher.routes.js';
 import teachingRoutes from './modules/teacher/teaching.routes.js';
 import timetableRoutes from './modules/timetable/timetable.routes.js';
 import calendarRoutes from './modules/calendar/calendar.routes.js';
+import schoolPostRoutes from './modules/schoolposts/schoolposts.routes.js';
+import uploadRoutes from './modules/uploads/uploads.routes.js';
+import parentRoutes from './modules/parents/parents.routes.js';
 
 // Each feature gets its own folder in src/modules and is mounted here, e.g.
 //   FE-01 account   -> /auth, /account (Quoc)
@@ -35,6 +39,7 @@ import calendarRoutes from './modules/calendar/calendar.routes.js';
 //   FE-12 attendance-> /attendances   (Quoc)
 //   FE-13 admin     -> /admin         (Linh)
 //   FE-14 parents   -> /parents       (Anh)
+//   shared storage  -> /uploads       (Anh; attachments of FE-05, FE-06, FE-08)
 const router = Router();
 
 router.use('/health', healthRoutes);
@@ -46,6 +51,7 @@ router.use('/subjects', subjectRoutes);
 router.use('/class-tracks', classTrackRoutes);
 router.use('/classes', classRoutes);
 router.use('/groups', groupRoutes);
+router.use(postRoutes); // FE-05: /groups/:groupId/posts and /posts/:postId (paths in posts.routes.js)
 router.use('/conversations', conversationRoutes);
 router.use('/teachers', teacherRoutes);
 router.use('/departments', departmentRoutes);
@@ -53,7 +59,10 @@ router.use('/homeroom-assignments', homeroomRoutes);
 router.use('/teaching-assignments', teachingRoutes);
 router.use('/timetables', timetableRoutes);
 router.use('/class-events', calendarRoutes);
+router.use('/school-posts', schoolPostRoutes);
+router.use('/parents', parentRoutes);
 router.use('/admin', adminRoutes);
 router.use('/maintenance', maintenanceRoutes);
+router.use('/uploads', uploadRoutes);
 
 export default router;

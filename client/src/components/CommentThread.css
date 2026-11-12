@@ -1,0 +1,158 @@
+/* Shared comment tree (components/CommentThread.jsx), used by FE-08 SCR-05 and meant for FE-05 Group Feed.
+   Every rule is scoped under .ct (or the .ct-* pieces it renders); the delete dialog uses the shared .sf-dialog
+   classes of styles.css. Ink & Paper tokens only.
+   Indent: level 1 flush, level 2 and 3 one step each, level 4+ no further step (see MAX_INDENT_DEPTH).
+   Step = 40px (avatar 32px + gap) on wide screens, 16px at 640px and below so a level-3 reply keeps most of a phone's
+   width. Breakpoints as the other screens: 900px (44px touch targets), 640px. */
+
+.ct { display: grid; gap: 16px; min-width: 0; --ct-step: 40px; }
+.ct-title {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 14px;
+  line-height: 20px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  color: var(--graphite-700);
+}
+.ct-title .icon { color: var(--graphite-600); }
+.ct-strong { font-weight: 600; color: var(--graphite-900); }
+.ct-visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+
+/* ---------- composer ---------- */
+.ct-composer { display: grid; gap: 6px; min-width: 0; }
+.ct-composer-row { display: flex; gap: 8px; align-items: flex-start; min-width: 0; }
+.ct-composer-avatar { flex: none; padding-top: 4px; }
+.ct-composer-box { flex: 1; display: grid; gap: 6px; min-width: 0; }
+.ct textarea.input.ct-composer-input { min-height: 72px; line-height: 20px; resize: vertical; }
+.ct-composer.is-reply textarea.input.ct-composer-input { min-height: 56px; }
+.ct-composer-foot { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px; }
+.ct-composer-hint { min-width: 0; }
+.ct-over { color: var(--red-pen); font-weight: 600; }
+.ct-composer-buttons { display: flex; gap: 8px; margin-left: auto; }
+.ct-composer-replying { display: inline-flex; align-items: center; gap: 4px; color: var(--ink-700); }
+
+/* ---------- tree ---------- */
+.ct-list,
+.ct-replies { list-style: none; margin: 0; padding: 0; display: grid; gap: 4px; min-width: 0; }
+.ct-node { display: grid; gap: 4px; min-width: 0; }
+/* Replies hang under the parent's avatar, with a thread line. */
+.ct-replies { margin-left: calc(var(--ct-step) / 2 - 1px); padding-left: calc(var(--ct-step) / 2); border-left: 1px solid var(--graphite-200); }
+.ct-replies.is-flat { margin-left: 0; padding-left: 0; border-left: 0; }
+.ct-reply-box { margin-left: var(--ct-step); padding: 4px 0 8px; }
+.ct-reply-box.is-flat { margin-left: 0; }
+
+.ct-comment { display: flex; gap: 8px; align-items: flex-start; min-width: 0; padding: 8px 0 2px; }
+.ct-avatar { flex: none; }
+.ct-body { flex: 1; min-width: 0; display: grid; gap: 2px; }
+.ct-meta { display: flex; flex-wrap: wrap; align-items: baseline; gap: 2px 8px; min-width: 0; }
+.ct-author { font-weight: 600; color: var(--graphite-900); overflow-wrap: anywhere; }
+.ct-to { display: inline-flex; align-items: center; gap: 2px; overflow-wrap: anywhere; }
+.ct-content { color: var(--graphite-700); line-height: 22px; white-space: pre-wrap; overflow-wrap: anywhere; }
+.ct-actions { display: flex; flex-wrap: wrap; gap: 4px; margin-left: -8px; }
+.ct-action {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  min-height: 32px;
+  padding: 0 8px;
+  border: 0;
+  border-radius: var(--radius-control);
+  background: transparent;
+  font: 500 13px/18px var(--font-ui);
+  color: var(--graphite-600);
+  cursor: pointer;
+}
+.ct-action:hover { background: var(--ink-50); color: var(--ink-700); }
+.ct-action[aria-expanded='true'] { color: var(--ink-700); }
+.ct-action.is-danger:hover { background: var(--red-bg); color: var(--red-pen); }
+.ct-action:focus-visible { outline: 2px solid var(--ink-400); outline-offset: 2px; }
+
+/* A deleted comment kept for its replies: no avatar, no name. */
+.ct-comment.is-deleted { align-items: center; }
+.ct-deleted-mark {
+  flex: none;
+  display: inline-grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  border: 1px dashed var(--graphite-300);
+  color: var(--graphite-400);
+}
+.ct-deleted-text { font-style: italic; color: var(--graphite-500); }
+
+.ct-empty { padding: 8px 0; }
+.ct-more { display: grid; justify-items: start; gap: 6px; padding-top: 4px; }
+.ct-load-error { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; }
+.ct-skeleton { display: grid; gap: 12px; }
+.ct-skeleton span { display: block; height: 44px; border-radius: var(--radius-control); background: var(--graphite-100); }
+.ct-skeleton span + span { width: 70%; }
+.ct-dialog-quote {
+  display: -webkit-box;
+  -webkit-line-clamp: 4;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  padding-left: 12px;
+  border-left: 2px solid var(--ink-200);
+  white-space: pre-wrap;
+  color: var(--graphite-700);
+}
+.ct-spin { animation: ct-spin 0.9s linear infinite; }
+@keyframes ct-spin { to { transform: rotate(360deg); } }
+
+@media (max-width: 900px) {
+  .ct-action { min-height: 44px; }
+  .ct .btn { height: 44px; }
+}
+
+@media (max-width: 640px) {
+  .ct { --ct-step: 16px; }
+  .ct-replies { margin-left: 0; padding-left: calc(var(--ct-step) - 1px); }
+  .ct-reply-box { margin-left: var(--ct-step); }
+  .ct-composer-avatar { display: none; }
+  .ct-composer-buttons { width: 100%; }
+  .ct-composer-buttons .btn { flex: 1 1 0; }
+  .ct-more .btn { width: 100%; }
+}
+
+/* ---------- real time ---------- */
+/* The thread anchors the scroll position itself (captureAnchor); the browser's own anchoring would add a second
+   correction, so it is off for the list. */
+.ct-list { overflow-anchor: none; }
+/* "N bình luận mới ↑": always in the DOM with zero height (and the grid gap it adds taken back), sticky at the top of
+   the window while the list scrolls, so showing it never moves the comments being read. */
+.ct-new-pill-wrap {
+  position: sticky;
+  top: 12px;
+  z-index: 3;
+  height: 0;
+  margin-bottom: -16px;
+  display: flex;
+  justify-content: center;
+  overflow: visible;
+}
+.ct-new-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 44px;
+  padding: 0 18px;
+  border: 0;
+  border-radius: 999px;
+  background: var(--ink-700);
+  color: #fff;
+  font: 500 14px/20px var(--font-ui);
+  box-shadow: var(--shadow-menu);
+  cursor: pointer;
+}
+.ct-new-pill:hover { background: var(--ink-800); }
+.ct-new-pill:focus-visible { outline: 2px solid var(--ink-400); outline-offset: 2px; }
