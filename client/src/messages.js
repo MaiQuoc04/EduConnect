@@ -190,6 +190,64 @@ const ERROR_MESSAGES = {
   MSG_DEPARTMENT_INVALID: 'Tổ chuyên môn không còn trong danh sách. Vui lòng tải lại trang và chọn lại.',
   MSG_DEPARTMENTS_NOT_READY:
     'Danh sách tổ chuyên môn chưa được tạo đủ trong cơ sở dữ liệu (cần chạy database/patch_v0.3_departments.sql và patch_v0.3_department_subjects.sql).',
+  // FE-10 timetable (UC-70..UC-75)
+  MSG_TIMETABLES_NOT_READY: 'Bảng thời khoá biểu chưa được tạo trong cơ sở dữ liệu (cần chạy database/patch_v0.3_timetables.sql).',
+  MSG_TIMETABLE_STALE: 'Thời khoá biểu lớp này vừa được người khác thay đổi. Vui lòng tải lại trước khi lưu.',
+  MSG_TIMETABLE_RANGE: ({ min, max } = {}) =>
+    `Thời khoá biểu phải áp dụng từ ${formatVnDate(min)} trở đi và kết thúc trước ${formatVnDate(max)} (không sửa các ngày đã qua).`,
+  MSG_TIMETABLE_ENTRY_INVALID: ({ field } = {}) =>
+    field === 'weekday' ? 'Chỉ xếp tiết từ thứ Hai đến thứ Bảy.' : field === 'room' ? 'Tên phòng tối đa 50 ký tự.' : 'Có ô thời khoá biểu không hợp lệ. Vui lòng tải lại trang.',
+  MSG_TIMETABLE_DUPLICATE_PERIOD: 'Một tiết chỉ xếp được một môn.',
+  MSG_TIMETABLE_SUBJECT_NOT_IN_CLASS: ({ subjects = [] } = {}) => `Môn ${subjects.join(', ')} không thuộc loại lớp này.`,
+  MSG_TIMETABLE_NO_TEACHER: ({ className } = {}) =>
+    `Một số môn${className ? ` của lớp ${className}` : ''} chưa có giáo viên được phân công trong khoảng ngày này. Hãy phân công giảng dạy trước.`,
+  MSG_TIMETABLE_TEACHER_CLASH: ({ className } = {}) =>
+    `Trùng giờ: giáo viên đã có tiết ở lớp khác cùng giờ${className ? ` (khi xếp lớp ${className})` : ''}.`,
+  MSG_TIMETABLE_IMPORT_HAS_ERRORS: 'File còn lỗi nên chưa lưu lớp nào. Hãy sửa theo kết quả kiểm tra rồi nhập lại.',
+  // FE-10 school calendar (Lịch của trường)
+  MSG_SCHOOL_EVENT_NOT_FOUND: 'Không tìm thấy sự kiện này. Sự kiện có thể đã bị xoá.',
+  MSG_SCHOOL_EVENT_TITLE: ({ reason, max } = {}) => (reason === 'TOO_LONG' ? `Tên sự kiện tối đa ${max} ký tự.` : 'Vui lòng nhập tên sự kiện.'),
+  MSG_SCHOOL_EVENT_LOCATION: ({ max } = {}) => `Địa điểm tối đa ${max} ký tự.`,
+  MSG_SCHOOL_EVENT_DESCRIPTION: ({ max } = {}) => `Ghi chú tối đa ${max} ký tự.`,
+  MSG_SCHOOL_EVENT_TIME: ({ reason, min, max } = {}) =>
+    reason === 'PAST' ? 'Thời gian bắt đầu phải sau thời điểm hiện tại.'
+      : reason === 'END_BEFORE_START' ? 'Thời gian kết thúc phải sau thời gian bắt đầu.'
+        : reason === 'NO_YEAR' ? 'Ngày này không thuộc năm học nào. Hãy tạo năm học trước.'
+          : `Sự kiện phải kết thúc trong năm học (${formatVnDate(min)} – ${formatVnDate(max)}).`,
+  MSG_SCHOOL_EVENT_GRADE: 'Khối lớp không hợp lệ. Vui lòng tải lại trang.',
+  MSG_SCHOOL_EVENT_DUPLICATE: 'Ngày này đã có sự kiện cùng tên cho cùng đối tượng. Hãy kiểm tra lại lịch.',
+  MSG_SCHOOL_EVENT_CHANGED: 'Sự kiện vừa được sửa ở nơi khác sau khi bạn mở. Hãy tải lại rồi sửa tiếp.',
+  MSG_SCHOOL_EVENTS_NOT_READY: 'Lịch của trường chưa sẵn sàng: cơ sở dữ liệu cần chạy patch_v0.3_school_events.sql.',
+  // FE-10 period times (School Manager)
+  MSG_PERIOD_TIMES_INVALID: ({ field, reason, min, max, earliest, gap, end } = {}) =>
+    field === 'duration' ? `Thời lượng một tiết từ ${min} đến ${max} phút.`
+      : reason === 'OVERLAP' ? `Buổi sau phải bắt đầu từ ${earliest} trở đi (nghỉ giữa hai buổi ít nhất ${gap} phút).`
+        : reason === 'DAY' ? `Giờ học phải nằm trong ${min} – ${max} (đang kết thúc lúc ${end}).`
+          : reason === 'COUNT' ? 'Số buổi học vừa thay đổi. Vui lòng tải lại trang.'
+            : 'Giờ bắt đầu không hợp lệ (giờ:phút).',
+  MSG_PERIOD_TIMES_CHANGED: 'Giờ học vừa được người khác thay đổi sau khi bạn mở trang. Hãy tải lại để xem giờ mới.',
+  MSG_PERIOD_TIMES_EMPTY: 'Chưa có tiết học nào trong cơ sở dữ liệu.',
+  // FE-10 class calendar (UC-76..UC-80)
+  MSG_CALENDAR_NOT_READY: 'Bảng lịch lớp chưa có trong cơ sở dữ liệu.',
+  MSG_EVENT_RANGE: 'Chỉ xem được tối đa 62 ngày một lần.',
+  MSG_EVENT_NOT_FOUND: 'Không tìm thấy sự kiện này hoặc bạn không thuộc người được xem.',
+  MSG_EVENT_NOT_OWNER: 'Chỉ người tạo mới được sửa hoặc xoá sự kiện.',
+  MSG_EVENT_STARTED: 'Sự kiện đã bắt đầu nên không sửa hoặc xoá được nữa.',
+  MSG_EVENT_CLASS_NOT_ALLOWED: 'Bạn không chủ nhiệm hoặc giảng dạy lớp này.',
+  MSG_EVENT_GENERAL_HOMEROOM_ONLY: 'Chỉ giáo viên chủ nhiệm được tạo sự kiện chung của lớp. Hãy chọn môn bạn dạy.',
+  MSG_EVENT_SUBJECT_NOT_TAUGHT: 'Bạn không được phân công dạy môn này ở lớp này vào ngày diễn ra sự kiện.',
+  MSG_EVENT_CATEGORY: 'Vui lòng chọn loại sự kiện.',
+  MSG_EVENT_TITLE: ({ reason, max } = {}) => (reason === 'TOO_LONG' ? `Tiêu đề tối đa ${max ?? 255} ký tự.` : 'Vui lòng nhập tiêu đề sự kiện.'),
+  MSG_EVENT_DESCRIPTION: ({ max } = {}) => `Mô tả tối đa ${max ?? 2000} ký tự.`,
+  MSG_EVENT_TIME: ({ reason, min, max } = {}) =>
+    reason === 'PAST' ? 'Thời gian bắt đầu phải sau thời điểm hiện tại.'
+      : reason === 'END_BEFORE_START' ? 'Thời gian kết thúc phải sau thời gian bắt đầu.'
+        : reason === 'END_OTHER_DAY' ? 'Sự kiện diễn ra trong một ngày; giờ kết thúc phải cùng ngày với giờ bắt đầu.'
+          : `Sự kiện phải nằm trong năm học (${formatVnDate(min)} – ${formatVnDate(max)}).`,
+  MSG_EVENT_CHANGED: 'Sự kiện vừa được lưu ở nơi khác sau khi bạn mở trang. Hãy tải lại để xem bản mới rồi sửa tiếp.',
+  MSG_EVENT_VIEWERS: ({ reason, max } = {}) =>
+    reason === 'TOO_MANY' ? `Chỉ chọn tối đa ${max ?? 100} người; hãy dùng các ô "Tất cả học sinh / phụ huynh / giáo viên".`
+      : 'Có người được chọn không còn thuộc lớp này. Vui lòng tải lại danh sách.',
   // UC-114 Manage Departments
   MSG_DEPARTMENT_NOT_FOUND: 'Tổ chuyên môn này không còn tồn tại. Vui lòng tải lại trang.',
   MSG_DEPARTMENT_NAME_INVALID: ({ reason } = {}) =>

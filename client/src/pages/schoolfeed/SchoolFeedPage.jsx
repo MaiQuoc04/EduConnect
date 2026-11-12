@@ -6,6 +6,7 @@ import Icon from '../../components/Icon.jsx';
 import { useAuth } from '../../context/AuthContext.jsx';
 import { useSocket } from '../../context/SocketContext.jsx';
 import { useToast } from '../../context/ToastContext.jsx';
+import SchoolCalendarBox from '../calendar/SchoolCalendarBox.jsx'; // FE-10 school calendar (Dung)
 import { useLiveRefresh } from './useLiveRefresh.js';
 import {
   CommentCount,
@@ -25,7 +26,6 @@ const SEARCH_DELAY_MS = 350; // same as the FE-02 lists
 // ASSUMPTION: 10 posts per page (the API allows up to 50; a feed page stays short to read).
 const PAGE_SIZE = 10;
 const MAX_Q_LENGTH = 100; // server limit
-const NOT_BUILT = 'Chức năng đang phát triển';
 
 // URL value of ?tab= -> postType sent to GET /school-posts. "Tất cả" sends no postType: the server returns both
 // types already ordered (pinned first, then newest), so the client never merges two lists.
@@ -238,7 +238,7 @@ function ListState({ list, emptyText }) {
   return null;
 }
 
-// Right column of Stitch SCR-34. The school calendar belongs to FE-10 Schedule (not built yet): only the frame.
+// Right column of Stitch SCR-34. The school calendar itself is FE-10 Schedule (Dung): pages/calendar/SchoolCalendarBox.
 function UpcomingCalendar() {
   return (
     <aside className="school-feed-side" aria-labelledby="sf-calendar-title">
@@ -247,8 +247,7 @@ function UpcomingCalendar() {
           <Icon name="event_upcoming" />
           Lịch sắp tới của trường
         </h2>
-        {/* TODO FE-10 Schedule: upcoming school events. No API call and no sample data until FE-10 exists. */}
-        <p className="school-feed-calendar-empty caption">{NOT_BUILT}</p>
+        <SchoolCalendarBox />
       </section>
     </aside>
   );

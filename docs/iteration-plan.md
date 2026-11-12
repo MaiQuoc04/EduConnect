@@ -60,9 +60,9 @@ It2: Anh FE-08 + FE-14, Khanh FE-05 + FE-06).
   with the starting list, business rules §4) +
   `patch_v0.3_school_post_roles.sql` (FE-08, Anh: column `school_posts.target_roles`) +
   `patch_v0.3_attachment_storage.sql` (storage, Anh: `attachments.storage_key` / `bucket` + check). Both checked on the
-  shared DB by the lead 11/11. 51 tables in `develop`.
-  The shared DB also has `timetables` and `timetable_entries` from FE-10's `patch_v0.3_timetables.sql` (Dung, run
-  11/11, lead OK), so `npm run db:check` shows **53 tables** until FE-10 is merged.
+  shared DB by the lead 11/11 +
+  `patch_v0.3_timetables.sql` (FE-10, run by Dung 11/11 after the lead's OK: tables `timetables` – version of a class
+  timetable with its date range – and `timetable_entries` – weekly pattern). **53 tables** (with FE-10 merged).
 - **Sample data added to the shared DB (03/11, Anh, accepted by the lead 03/11), through the app API (UC-96, UC-14, UC-28),
   no SQL:** 90 student accounts `HS7001..HS7090` (no class yet), 90 parent accounts with phones
   `0977000001..0977000090` (all with `must_change_password`), 65 links (HS7001–7020 two parents, HS7021–7045 one,
@@ -107,7 +107,7 @@ It2: Anh FE-08 + FE-14, Khanh FE-05 + FE-06).
   - FE-08 School Feed (Anh, It2) – merged 11/11: UC-58..UC-66 (all 9 UC), screens SCR-02 School Feed, SCR-05
     School Post Detail, SCR-31 Create School Post, SCR-06 Update School Post. The school feed is the home screen
     (`HOME_BY_ROLE`) and the first menu item of every role except System Admin. Layout per Stitch: three tabs
-    Tất cả / Thông báo / Tin tức; the "Lịch sắp tới của trường" column is an empty frame until FE-10 (Dung).
+    Tất cả / Thông báo / Tin tức; the "Lịch sắp tới của trường" column shows the FE-10 school calendar (Dung, 13/11).
     Comments are a tree (top-level newest first, replies oldest first; `utils/feedInteractions.js`
     `listComments`, shared with FE-05). Attachments: built 11/11 on the shared storage layer (Supabase Storage, UC-60..UC-62).
   - FE-08 real time (approved by the lead 09/11): room `schoolpost:<id>` (client sends `schoolpost:join` /
@@ -183,6 +183,11 @@ It2: Anh FE-08 + FE-14, Khanh FE-05 + FE-06).
   Rules in business rules §4 "Teachers". Touches FE-13 files (Linh, please review): `admin/departments.js`
   (department names compared with FE-03's `departmentKey`, so "Tổ Toán - Tin" typed with "-" matches "Tổ Toán – Tin")
   and `pages/admin/ImportAccountsPage.jsx` (optional `config` prop; System Admin page unchanged).
+- **FE-10 class calendar (Dung, It3, started 10/11):** server done in `server/src/modules/calendar/` (`/class-events`:
+  list by range, detail, options, people of a class, create / update / delete; rules and ASSUMPTIONS in business rules
+  §10). No schema change (tables already in v0.3). Screens SCR-39..42 built from the Stitch export 11/11 (`/calendar`, `/calendar/events/new`, `/calendar/events/:id`, `…/edit`, menu "Lịch lớp"). The 1-day reminder
+  is `sendClassEventReminders()` (`calendar.reminders.js`): **FE-09 (Quoc) – please call it from the UC-69 job**.
+  FE-07 starts after FE-05 (posts in the class feed) is on `develop`.
 - **Follow-ups owed:**
   - FE-10 (Dung, It2): the timetable uses the date ranges of `teaching_assignments` – a period's teacher is the one
     whose assignment covers that date (no substitute teaching outside an assignment).
@@ -467,6 +472,11 @@ Class calendar (UC-76..80) + job: class event reminder 1 day before. Moved from 
 | UC-78 | Create Calendar Event | Teacher |
 | UC-79 | Update Calendar Event | Teacher (event creator) |
 | UC-80 | Delete Calendar Event | Teacher (event creator) |
+
+Added 13/11/2026 at Dung's request (no UC ids yet – the lead decides; business rules §10):
+- **Period times** (School Manager): start of each session + one period length, breaks unchanged – `/timetables/period-times`.
+- **School calendar** (School Manager manages, everyone reads): `/school-events`, the "Lịch sắp tới của trường" column
+  of the school feed and the class calendar. Needs `patch_v0.3_school_events.sql` (proposed, waiting for the lead).
 
 ### Dung: FE-07 Extracurricular Event Management (8 UC)
 
