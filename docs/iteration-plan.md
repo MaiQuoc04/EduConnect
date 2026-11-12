@@ -107,7 +107,7 @@ It2: Anh FE-08 + FE-14, Khanh FE-05 + FE-06).
   - FE-08 School Feed (Anh, It2) – merged 11/11: UC-58..UC-66 (all 9 UC), screens SCR-02 School Feed, SCR-05
     School Post Detail, SCR-31 Create School Post, SCR-06 Update School Post. The school feed is the home screen
     (`HOME_BY_ROLE`) and the first menu item of every role except System Admin. Layout per Stitch: three tabs
-    Tất cả / Thông báo / Tin tức; the "Lịch sắp tới của trường" column is an empty frame until FE-10 (Dung).
+    Tất cả / Thông báo / Tin tức; the "Lịch sắp tới của trường" column shows the FE-10 school calendar (Dung, 13/11).
     Comments are a tree (top-level newest first, replies oldest first; `utils/feedInteractions.js`
     `listComments`, shared with FE-05). Attachments: built 11/11 on the shared storage layer (Supabase Storage, UC-60..UC-62).
   - FE-08 real time (approved by the lead 09/11): room `schoolpost:<id>` (client sends `schoolpost:join` /
@@ -472,6 +472,11 @@ Class calendar (UC-76..80) + job: class event reminder 1 day before. Moved from 
 | UC-78 | Create Calendar Event | Teacher |
 | UC-79 | Update Calendar Event | Teacher (event creator) |
 | UC-80 | Delete Calendar Event | Teacher (event creator) |
+
+Added 13/11/2026 at Dung's request (no UC ids yet – the lead decides; business rules §10):
+- **Period times** (School Manager): start of each session + one period length, breaks unchanged – `/timetables/period-times`.
+- **School calendar** (School Manager manages, everyone reads): `/school-events`, the "Lịch sắp tới của trường" column
+  of the school feed and the class calendar. Needs `patch_v0.3_school_events.sql` (proposed, waiting for the lead).
 
 ### Dung: FE-07 Extracurricular Event Management (8 UC)
 

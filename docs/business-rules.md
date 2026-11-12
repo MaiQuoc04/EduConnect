@@ -436,6 +436,26 @@ Boundaries that are easy to get wrong:
     `class_events.updated_at` is not "last edited by a person"; the detail hides an `updated_at` that only comes from
     that reminder write.
 
+- **Period times (13/11/2026, Dung, requested for the School Manager – no UC id yet, waiting for the lead):** the School
+  Manager sets the **start of each session** (morning, afternoon) and **one length for every period** on
+  `/timetables/period-times` (button "Giờ học" on SCR-27); the **break after each period keeps its current length**.
+  Sessions are found from the current times (a break longer than 45 minutes starts a new session; seed: periods 1–5
+  morning, 6–10 afternoon). Rules (ASSUMPTION): a period lasts 30–60 minutes; lessons between 05:00 and 22:00; at
+  least 60 minutes between the end of one session and the start of the next. `time_slots` keeps no history and the
+  timetables store period numbers only, so **every day, past weeks included, shows the new times**. Two managers:
+  a save made from a page opened before someone else's save is refused (`MSG_PERIOD_TIMES_CHANGED`). Each change is
+  logged (`activity_logs` SETTING_CHANGE, target TIME_SLOTS). No notification is sent (ASSUMPTION).
+- **School calendar (13/11/2026, Dung – "Lịch sắp tới của trường" of Stitch SCR-34; table `school_events`, proposed
+  `patch_v0.3_school_events.sql`, waiting for the lead; no UC id yet):**
+  - The School Manager adds, edits and deletes school-wide dates (title, start, optional end – may be another day,
+    place, note) for the **whole school or one grade**. Start in the future (checked again only when it changes),
+    inside a school year; the end inside the same year. A date that has started is read only and cannot be deleted
+    (kept as a record, ASSUMPTION). Delete is a soft delete. Stale save → `MSG_SCHOOL_EVENT_CHANGED`.
+  - Who sees (ASSUMPTION – public inside the school): School Manager and teachers – every date; students and parents –
+    whole-school dates and the dates of the grades of their (children's) classes being studied.
+  - Shown on the school feed column (next 5 dates), on `/school-events` (menu "Lịch của trường": upcoming / past) and,
+    read only, in the class calendar (SCR-39) of the classes of that grade. No notification yet (ASSUMPTION; FE-09).
+
 ## 11. Grades (FE-11)
 - SM configures the grade structure per **subject × grade level × semester**: components with a weight and a number
   of scores (`score_count`, e.g. regular tests = 4 scores, mid-term = 1, final = 1). Semester 2 is copied from
