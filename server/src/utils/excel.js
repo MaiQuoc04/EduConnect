@@ -1,7 +1,14 @@
+import { Readable } from 'node:stream';
 import ExcelJS from 'exceljs';
 import { badRequest } from './AppError.js';
+import { removeAccents } from './username.js';
 
-// Shared helpers for Excel imports (class list UC-27; later timetable, grades, accounts). Only .xlsx is read.
+// Shared helpers for Excel imports and exports. Two ways to read an upload:
+// - readSheet: .xlsx only, every column required (class list UC-27, grades UC-84).
+// - loadTemplateSheet + templateHeaderKey: .xlsx or .csv made from a downloaded template, headers matched without
+//   notes in brackets or "*" (accounts UC-96, FE-13; parent–student links UC-14 can use them too).
+
+export const XLSX_MIME = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
 
 // A cell as trimmed text: numbers stay as typed ("10"), rich text and formulas use their shown value.
 export function cellText(value) {
@@ -81,9 +88,50 @@ export function assertXlsx(file) {
   }
 }
 
+// .xlsx bytes of a workbook (for a JSON response or a download).
+export async function workbookBuffer(workbook) {
+  return Buffer.from(await workbook.xlsx.writeBuffer());
+}
+
+// A template header compared without accents, case, notes in brackets, "*" or spaces:
+// "Ngày sinh (dd/mm/yyyy) *" -> "ngaysinh".
+export const templateHeaderKey = (value) =>
+  removeAccents(String(value ?? ''))
+    .toLowerCase()
+    .replace(/\(.*?\)/g, '')
+    .replace(/[^a-z0-9]/g, '');
+
+const templateFileError = () =>
+  badRequest('MSG_IMPORT_FILE', 'Only .xlsx or .csv files made from the template can be imported.');
+
+// The first sheet of an upload made from a template: a real .xlsx named *.xlsx, or a UTF-8 .csv named *.csv (values
+// kept as typed). Anything else, or an unreadable file, throws MSG_IMPORT_FILE.
+export async function loadTemplateSheet(file) {
+  const name = file?.originalname ?? '';
+  const isXlsxName = /\.xlsx$/i.test(name);
+  const isCsvName = /\.csv$/i.test(name);
+  if (!file?.buffer || (!isXlsxName && !isCsvName)) throw templateFileError();
+  const wb = new ExcelJS.Workbook();
+  const isZip = file.buffer.length > 4 && file.buffer.readUInt32LE(0) === 0x04034b50; // .xlsx is a zip file
+  let sheet;
+  try {
+    if (isXlsxName && isZip) {
+      await wb.xlsx.load(file.buffer);
+      [sheet] = wb.worksheets;
+    } else if (isCsvName && !isZip) {
+      const content = file.buffer.toString('utf8').replace(/^\uFEFF/, '');
+      sheet = await wb.csv.read(Readable.from([content]), { map: (v) => v });
+    }
+  } catch {
+    // unreadable: same error below
+  }
+  if (!sheet) throw templateFileError();
+  return sheet;
+}
+
 // Sends a workbook as a download.
 export async function sendWorkbook(res, workbook, filename) {
-  res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+  res.setHeader('Content-Type', XLSX_MIME);
   res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
-  res.end(Buffer.from(await workbook.xlsx.writeBuffer()));
+  res.end(await workbookBuffer(workbook));
 }

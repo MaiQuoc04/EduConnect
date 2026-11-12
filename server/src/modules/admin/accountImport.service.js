@@ -1,9 +1,9 @@
-import { Readable } from 'node:stream';
 import ExcelJS from 'exceljs';
 import { pool, withTransaction } from '../../config/db.js';
 import { AppError, badRequest } from '../../utils/AppError.js';
 import { logActivity } from '../../utils/activityLog.js';
-import { removeAccents, planUsernames } from '../../utils/username.js';
+import { cellText, loadTemplateSheet, templateHeaderKey as headerKey, workbookBuffer, XLSX_MIME } from '../../utils/excel.js';
+import { planUsernames } from '../../utils/username.js';
 import { prepareCredentials, readAccountInput } from './accounts.service.js';
 import { applyDepartment, listDepartments } from './departments.js';
 
@@ -37,14 +37,6 @@ const TEMPLATES = {
 };
 const CODE_FIELD = { STUDENT: 'studentCode', TEACHER: 'teacherCode' };
 const GENDER_WORDS = { nam: 'MALE', male: 'MALE', nu: 'FEMALE', female: 'FEMALE', khac: 'OTHER', other: 'OTHER' };
-const XLSX_MIME = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
-
-// "Ngày sinh (dd/mm/yyyy) *" -> "ngaysinh": headers are matched without accents, case, notes or "*".
-const headerKey = (value) =>
-  removeAccents(String(value ?? ''))
-    .toLowerCase()
-    .replace(/\(.*?\)/g, '')
-    .replace(/[^a-z0-9]/g, '');
 
 function readType(type) {
   if (!IMPORT_TYPES.includes(type)) throw badRequest('MSG_IMPORT_TYPE', 'Please choose the account type of the file.');
@@ -93,44 +85,13 @@ export async function buildTemplate(type) {
   return {
     fileName: `mau-nhap-tai-khoan-${template.name}.xlsx`,
     contentType: XLSX_MIME,
-    buffer: Buffer.from(await wb.xlsx.writeBuffer()),
+    buffer: await workbookBuffer(wb),
   };
 }
 
 // ---------------------------------------------------------------- reading the file
-
-// Plain text of an ExcelJS cell value (rich text, hyperlinks and formulas included).
-function cellText(value) {
-  if (value === null || value === undefined) return '';
-  if (value instanceof Date) return value;
-  if (typeof value === 'object') {
-    if (Array.isArray(value.richText)) return value.richText.map((r) => r.text).join('');
-    if ('text' in value) return cellText(value.text);
-    if ('result' in value) return cellText(value.result);
-    return '';
-  }
-  return String(value).trim();
-}
-
-async function loadWorksheet(file) {
-  const wb = new ExcelJS.Workbook();
-  const isZip = file.buffer.length > 4 && file.buffer.readUInt32LE(0) === 0x04034b50; // .xlsx is a zip file
-  const isCsv = /\.csv$/i.test(file.originalname ?? '');
-  try {
-    if (isZip) {
-      await wb.xlsx.load(file.buffer);
-      return wb.worksheets[0];
-    }
-    if (isCsv) {
-      const content = file.buffer.toString('utf8').replace(/^﻿/, '');
-      // map keeps every value as typed (no automatic number / date conversion).
-      return await wb.csv.read(Readable.from([content]), { map: (v) => v });
-    }
-  } catch {
-    // fall through: unreadable file
-  }
-  throw badRequest('MSG_IMPORT_FILE', 'Only .xlsx or .csv files made from the template can be imported.');
-}
+// The file is read with utils/excel.js (loadTemplateSheet, cellText, templateHeaderKey). cellText gives a date cell as
+// "yyyy-mm-dd", which toIsoDate accepts.
 
 function toIsoDate(value) {
   if (!value) return '';
@@ -164,8 +125,7 @@ function toPhone(value) {
 
 // Reads the rows of the sheet into { row, values } using the header row to find each column.
 async function readRows(file, template) {
-  const ws = await loadWorksheet(file);
-  if (!ws) throw badRequest('MSG_IMPORT_FILE', 'Only .xlsx or .csv files made from the template can be imported.');
+  const ws = await loadTemplateSheet(file);
 
   const columnOf = {};
   ws.getRow(1).eachCell((cell, col) => {
@@ -325,7 +285,7 @@ async function buildCredentialsFile(type, created) {
   created.forEach((c, i) => ws.addRow({ no: i + 1, ...c }));
   ws.addRow([]);
   ws.addRow(['', 'Mật khẩu tạm thời chỉ dùng cho lần đăng nhập đầu tiên; người dùng phải đổi mật khẩu ngay sau đó.']);
-  return Buffer.from(await wb.xlsx.writeBuffer());
+  return workbookBuffer(wb);
 }
 
 export async function importAccounts({ file, type, actorId, ip }) {
