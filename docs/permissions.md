@@ -28,7 +28,8 @@ Source: Report 3 section 4.4 (draft v1.3). Full = all records; Restricted (n) = 
 | Team | Leave (own membership) | No | No | Restricted (4) | Restricted (4) | Restricted (4) | Restricted (4) |
 | Group feed post | View / create / comment / react | No | Restricted (6) | Restricted (4) | Restricted (4) | Restricted (4) | Restricted (4) |
 | Group feed post | Edit / delete own | No | Restricted (6) | Restricted (4) | Restricted (4) | Restricted (4) | Restricted (4) |
-| Group feed post | Pin / hide / approve | No | Restricted (6) | Restricted (5) | No | No | No |
+| Group feed post | Pin / hide / unhide / approve / reject | No | Restricted (6) | Restricted (5) | No | No | No |
+| Group feed | Turn post approval on / off | No | Restricted (6) | Restricted (5) | No | No | No |
 | Group feed comment | Delete | No | Restricted (6) | Restricted (16) | Restricted (16) | Restricted (16) | Restricted (16) |
 | Group / team chat | Send / read | No | Restricted (6) | Restricted (4) | Restricted (4) | Restricted (4) | Restricted (4) |
 | Private message | Send / read | No | Restricted (6) | Restricted (4) | Restricted (4) | Restricted (4) | Restricted (4) |

@@ -1,0 +1,60 @@
+/* Shared attachment picker (components/AttachmentPicker.jsx): "Ink & Paper" tokens of styles.css only. */
+.attachment-picker .field-label { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; }
+
+.ap-drop {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+  padding: 12px;
+  border: 1px dashed var(--graphite-300);
+  border-radius: var(--radius-control);
+  background: var(--paper);
+}
+.ap-drop.is-dragging { border-color: var(--ink-600); background: var(--ink-50); }
+.ap-drop.is-locked { background: var(--graphite-50); }
+.ap-choose { flex: none; }
+.ap-help { flex: 1 1 220px; min-width: 0; }
+.ap-notice { margin: 6px 0 0; color: var(--amber); }
+
+.ap-list { list-style: none; margin: 8px 0 0; padding: 0; display: grid; gap: 6px; }
+.ap-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+  padding: 6px 6px 6px 8px;
+  border-radius: var(--radius-control);
+  background: var(--graphite-50);
+}
+.ap-item.is-error { background: var(--red-bg); }
+.ap-item.is-removed .ap-name { text-decoration: line-through; color: var(--graphite-500); }
+.ap-thumb {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 40px;
+  height: 40px;
+  border-radius: 4px;
+  overflow: hidden;
+  background: var(--ink-50);
+  color: var(--ink-700);
+}
+.ap-thumb img { width: 100%; height: 100%; object-fit: cover; }
+.ap-text { display: grid; gap: 2px; flex: 1; min-width: 0; }
+.ap-name { font-weight: 500; color: var(--graphite-900); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ap-status { overflow-wrap: anywhere; }
+.ap-error { color: var(--red-pen); }
+.ap-bar { display: block; height: 3px; border-radius: 2px; background: var(--graphite-200); overflow: hidden; }
+.ap-bar > span { display: block; height: 100%; background: var(--ink-600); transition: width 0.2s linear; }
+.ap-action { flex: none; height: 32px; }
+.ap-remove { width: 32px; padding: 0; justify-content: center; }
+
+@media (prefers-reduced-motion: reduce) {
+  .ap-bar > span { transition: none; }
+}
+@media (max-width: 640px) {
+  .ap-choose { width: 100%; justify-content: center; }
+  .ap-item { flex-wrap: wrap; }
+  .ap-text { flex-basis: calc(100% - 100px); }
+}

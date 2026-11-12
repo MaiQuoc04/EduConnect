@@ -230,6 +230,12 @@ export async function getGroup(user, groupId) {
     canManageMembers: group.canManageMembers,
     canSetNickname: group.canSetNickname,
     canLeave: group.canLeave,
+    // FE-05 approval switch (business-rules §5, 11/11/2026): the feed's moderator, open year only. Same rule as
+    // isModeratorOf in posts.service.js, which checks it again on PUT /groups/:groupId/post-approval.
+    canSetApproval:
+      !group.readOnly &&
+      ((group.groupType === 'GENERAL' && user.activeRole === 'TEACHER' && group.isHomeroom) ||
+        (group.groupType === 'TEACHER_SCHOOL' && user.activeRole === 'SCHOOL_MANAGER')),
   };
 }
 

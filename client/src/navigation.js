@@ -4,6 +4,13 @@
 //   { to: '/students', label: 'Học sinh', icon: 'school', roles: ['SCHOOL_MANAGER'] }
 export const NAV_SECTIONS = [
   {
+    label: 'Trường', // Stitch app shell: the school feed is the first item
+    items: [
+      // FE-08 School Feed (SCR-02, UC-58). System Admin sees no content (business-rules §1).
+      { to: '/school-feed', label: 'Bảng tin trường', icon: 'campaign', roles: ['SCHOOL_MANAGER', 'TEACHER', 'STUDENT', 'PARENT'] },
+    ],
+  },
+  {
     label: 'Quản trị hệ thống', // School Manager sees only the password reset requests here
     items: [
       // FE-13 System Administration
@@ -44,6 +51,7 @@ export const NAV_SECTIONS = [
     label: 'Hồ sơ',
     items: [
       { to: '/students', label: 'Học sinh', icon: 'school', roles: ['SCHOOL_MANAGER'] }, // FE-02 UC-07
+      { to: '/parents', label: 'Phụ huynh', icon: 'family_restroom', roles: ['SCHOOL_MANAGER'] }, // FE-14 UC-104, SCR-69
       { to: '/teachers', label: 'Giáo viên', icon: 'badge', roles: ['SCHOOL_MANAGER'] }, // SCR-14
       { to: '/departments', label: 'Tổ chuyên môn', icon: 'account_tree', roles: ['SCHOOL_MANAGER'] }, // UC-114
       { to: '/homeroom-assignments', label: 'Phân công chủ nhiệm', icon: 'assignment_ind', roles: ['SCHOOL_MANAGER'] }, // SCR-18
@@ -62,8 +70,9 @@ export function navFor(activeRole) {
 // Where each role lands after sign-in (the product has no dashboard). Update when the role's main screen exists.
 export const HOME_BY_ROLE = {
   SYSTEM_ADMIN: '/admin/accounts',
-  SCHOOL_MANAGER: '/profile',
-  TEACHER: '/profile',
-  STUDENT: '/profile',
-  PARENT: '/profile',
+  // FE-08: SCR-02 School Feed is the home screen of every role except System Admin.
+  SCHOOL_MANAGER: '/school-feed',
+  TEACHER: '/school-feed',
+  STUDENT: '/school-feed',
+  PARENT: '/school-feed',
 };
