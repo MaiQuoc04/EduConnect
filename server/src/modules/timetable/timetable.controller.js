@@ -1,6 +1,7 @@
 import * as timetableImport from './timetable.import.js';
+import * as periodTimes from './timetable.periods.js';
 import * as timetableService from './timetable.service.js';
-import { classIdParam, dateQuery, importRequest, listQuery, saveRequest } from './timetable.validation.js';
+import { classIdParam, dateQuery, importRequest, listQuery, periodTimesRequest, saveRequest } from './timetable.validation.js';
 
 // FE-10 timetable (Dung). Controllers check the request, call the service and send the result.
 
@@ -48,4 +49,14 @@ export async function classWeek(req, res) {
 // GET /api/v1/timetables/teaching-schedule/week?date=  (SCR-57 / SCR-58, UC-75)
 export async function teachingWeek(req, res) {
   res.json(await timetableService.teachingWeek(dateQuery(req), req.user));
+}
+
+// GET /api/v1/timetables/period-times  (School Manager: start of each session and period length)
+export async function getPeriodTimes(req, res) {
+  res.json(await periodTimes.getPeriodTimes());
+}
+
+// PUT /api/v1/timetables/period-times  { sessionStarts, duration, stamp }
+export async function updatePeriodTimes(req, res) {
+  res.json(await periodTimes.updatePeriodTimes(periodTimesRequest(req), req.user, req.ip));
 }

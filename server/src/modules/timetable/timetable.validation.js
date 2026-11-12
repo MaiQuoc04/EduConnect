@@ -93,3 +93,18 @@ export function importRequest(req) {
   const file = { ...req.file, originalname: Buffer.from(req.file.originalname ?? '', 'latin1').toString('utf8') };
   return { schoolYearId: String(b.schoolYearId), startDate, endDate, file };
 }
+
+// PUT /timetables/period-times – { sessionStarts: ['HH:MM', ...], duration: minutes, stamp }. Ranges are checked in
+// timetable.periods.js (they depend on the current sessions).
+export function periodTimesRequest(req) {
+  const b = req.body;
+  if (!isPlainObject(b)) throw badRequest(ERROR_CODES.INVALID_INPUT, 'Body must be an object.');
+  const extra = Object.keys(b).filter((k) => !['sessionStarts', 'duration', 'stamp'].includes(k));
+  if (extra.length) throw badRequest(ERROR_CODES.INVALID_INPUT, `Unknown field ${extra[0]}.`, { field: extra[0] });
+  if (!Array.isArray(b.sessionStarts) || b.sessionStarts.length === 0 || b.sessionStarts.length > 4) {
+    throw badRequest(ERROR_CODES.PERIOD_TIMES_INVALID, 'sessionStarts must be a list.', { field: 'sessionStarts', reason: 'FORMAT' });
+  }
+  const duration = typeof b.duration === 'string' && /^\d{1,3}$/.test(b.duration) ? Number(b.duration) : b.duration;
+  if (typeof b.stamp !== 'string' || b.stamp.length > 2000) throw badRequest(ERROR_CODES.INVALID_INPUT, 'stamp is required.', { field: 'stamp' });
+  return { sessionStarts: b.sessionStarts, duration, stamp: b.stamp };
+}

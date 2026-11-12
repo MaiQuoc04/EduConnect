@@ -80,3 +80,14 @@ export async function importTimetables(input) {
   const { data } = await api.post('/timetables/import', importForm(input));
   return data;
 }
+
+// Period times (School Manager): sessions, period length and the breaks kept between periods
+export async function getPeriodTimes() {
+  const { data } = await api.get('/timetables/period-times');
+  return data;
+}
+
+export async function savePeriodTimes({ sessionStarts, duration, stamp }) {
+  const { data } = await api.put('/timetables/period-times', { sessionStarts, duration, stamp });
+  return data;
+}

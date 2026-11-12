@@ -122,6 +122,7 @@ export default function TimetableManagementPage() {
           <p>Quản lý thời khoá biểu từng lớp theo năm học. Giáo viên từng tiết lấy theo phân công giảng dạy của ngày học.</p>
         </div>
         <div className="tt-head-actions">
+          <Link to="/timetables/period-times" className="btn btn-secondary"><Icon name="schedule" size="sm" /> Giờ học</Link>
           <button type="button" className="btn btn-secondary" onClick={() => setImport(true)} disabled={!openYears.length}>
             <Icon name="upload_file" size="sm" /> Nhập TKB từ file
           </button>

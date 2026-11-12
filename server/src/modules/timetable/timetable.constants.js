@@ -17,6 +17,17 @@ export const TIMETABLE_LIMITS = Object.freeze({
   REPORT_ITEMS: 10, // problems listed in one error answer
 });
 
+// Period times (13/11/2026, Dung's request): the School Manager sets the start of each session (morning, afternoon)
+// and one length for every period; the breaks between periods keep their current lengths.
+export const PERIOD_TIME_LIMITS = Object.freeze({
+  DURATION_MIN: 30, // ASSUMPTION: a period lasts 30..60 minutes (45 in the seed)
+  DURATION_MAX: 60,
+  SESSION_GAP: 45, // a break longer than this between two periods separates two sessions (morning / afternoon)
+  LUNCH_MIN: 60, // ASSUMPTION: at least 60 minutes between the end of a session and the start of the next one
+  DAY_START: '05:00', // ASSUMPTION: lessons between 05:00 and 22:00
+  DAY_END: '22:00',
+});
+
 export const ERROR_CODES = Object.freeze({
   INVALID_INPUT: 'MSG_INVALID_INPUT',
   INVALID_DATE: 'MSG_INVALID_DATE', // details: { field }
@@ -36,4 +47,7 @@ export const ERROR_CODES = Object.freeze({
   IMPORT_EMPTY: 'MSG_IMPORT_EMPTY',
   IMPORT_TOO_MANY_ROWS: 'MSG_IMPORT_TOO_MANY_ROWS', // details: { max }
   IMPORT_HAS_ERRORS: 'MSG_TIMETABLE_IMPORT_HAS_ERRORS', // the file still has errors – nothing was saved
+  PERIOD_TIMES_INVALID: 'MSG_PERIOD_TIMES_INVALID', // details: { field, reason, min?, max?, session? }
+  PERIOD_TIMES_CHANGED: 'MSG_PERIOD_TIMES_CHANGED', // 409 – someone else changed the period times meanwhile
+  PERIOD_TIMES_EMPTY: 'MSG_PERIOD_TIMES_EMPTY', // time_slots has no rows
 });

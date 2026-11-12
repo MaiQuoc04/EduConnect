@@ -480,3 +480,19 @@
 }
 .tt-detail-links { display: grid; gap: 8px; padding: 12px 24px 16px; }
 .tt-detail-links .btn { justify-content: flex-start; width: 100%; }
+
+/* Period times (School Manager) */
+.tt-pt-grid { display: grid; grid-template-columns: minmax(0, 380px) minmax(0, 1fr); gap: 20px; align-items: start; }
+.tt-pt-form { display: grid; gap: 16px; }
+.tt-pt-form .field { margin: 0; }
+.tt-pt-title { margin: 0; display: flex; align-items: center; gap: 8px; }
+.tt-pt-badge { font-size: 12px; font-weight: 500; padding: 2px 8px; border-radius: 999px; background: var(--amber-bg); color: var(--amber); }
+.tt-pt-actions { display: flex; justify-content: flex-end; gap: 8px; }
+.tt-pt-preview { display: grid; gap: 12px; }
+.tt-pt-table-wrap { overflow-x: auto; }
+.tt-pt-table td, .tt-pt-table th { white-space: nowrap; }
+.tt-pt-num { font-weight: 600; width: 56px; }
+.tt-pt-time { font-variant-numeric: tabular-nums; }
+.tt-pt-session td { background: var(--graphite-50); font-size: 12px; font-weight: 600; color: var(--graphite-600); text-transform: uppercase; letter-spacing: 0.04em; }
+.tt-pt-table tr.is-moved td:nth-child(3) { color: var(--ink-700); font-weight: 600; }
+@media (max-width: 900px) { .tt-pt-grid { grid-template-columns: 1fr; } }
