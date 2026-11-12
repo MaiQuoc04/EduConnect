@@ -19,6 +19,10 @@ import FeedGuard from './pages/groupfeed/FeedGuard.jsx';
 import GroupFeedPage from './pages/groupfeed/GroupFeedPage.jsx';
 import GroupPostDetailPage from './pages/groupfeed/GroupPostDetailPage.jsx';
 import GroupPostFormPage from './pages/groupfeed/GroupPostFormPage.jsx';
+import ActivityDetailPage from './pages/extracurricular/ActivityDetailPage.jsx';
+import ActivityFormPage from './pages/extracurricular/ActivityFormPage.jsx';
+import ActivityListPage from './pages/extracurricular/ActivityListPage.jsx';
+import RegistrationListPage from './pages/extracurricular/RegistrationListPage.jsx';
 import CreateSchoolPostPage from './pages/schoolfeed/CreateSchoolPostPage.jsx';
 import SchoolFeedPage from './pages/schoolfeed/SchoolFeedPage.jsx';
 import { SCHOOL_FEED_ROLES } from './pages/schoolfeed/schoolFeedShared.jsx';
@@ -280,6 +284,12 @@ export default function App() {
             </ProtectedRoute>
           }
         />
+        {/* FE-07 Extracurricular (Dung): list, SCR-66 create / update, UC-53 detail, SCR-67 registration list */}
+        <Route path="extracurricular" element={<ProtectedRoute roles={['TEACHER', 'STUDENT', 'PARENT']}><ActivityListPage /></ProtectedRoute>} />
+        <Route path="extracurricular/new" element={<ProtectedRoute roles={['TEACHER']}><ActivityFormPage /></ProtectedRoute>} />
+        <Route path="extracurricular/:eventId" element={<ProtectedRoute roles={['TEACHER', 'STUDENT', 'PARENT']}><ActivityDetailPage /></ProtectedRoute>} />
+        <Route path="extracurricular/:eventId/edit" element={<ProtectedRoute roles={['TEACHER']}><ActivityFormPage /></ProtectedRoute>} />
+        <Route path="extracurricular/:eventId/registrations" element={<ProtectedRoute roles={['TEACHER']}><RegistrationListPage /></ProtectedRoute>} />
         <Route
           path="groups"
           element={
