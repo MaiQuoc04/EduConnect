@@ -95,3 +95,17 @@
   .gf-form { padding: 16px; }
   .gf .btn-sm { height: 36px; } /* a larger touch target */
 }
+
+/* Files (12/11/2026): first picture + count in the feed, the full list (shared AttachmentList) on SCR-37 */
+.gf-image { display: block; margin: 0 -24px; background: var(--graphite-50); }
+.gf-image img { display: block; width: 100%; max-height: 420px; object-fit: cover; }
+.gf-file-count { justify-self: start; display: inline-flex; align-items: center; gap: 4px; color: var(--graphite-600); text-decoration: none; }
+.gf-file-count:hover { color: var(--ink-700); text-decoration: none; }
+.gf-files { display: grid; gap: 8px; }
+.gf-form-status { display: inline-flex; align-items: center; gap: 6px; margin-right: auto; }
+@media (max-width: 640px) {
+  .gf-image { margin: 0 -16px; }
+}
+.gf-draft-notice { align-items: center; }
+.gf-draft-notice p { flex: 1; }
+.gf-composer-placeholder.is-draft { color: var(--ink-700); font-style: italic; }

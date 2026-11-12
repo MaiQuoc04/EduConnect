@@ -100,7 +100,6 @@ const ERROR_MESSAGES = {
   // FE-05 Group Feed
   MSG_FEED_NOT_FOUND: 'Nhóm này không có bảng tin hoặc bạn không xem được bảng tin của nhóm.',
   MSG_POST_NOT_FOUND: 'Không tìm thấy bài viết. Bài có thể đã bị xoá hoặc không còn hiển thị với bạn.',
-  MSG_POST_HIDDEN: 'Bài viết đã bị ẩn nên không thể sửa. Bạn vẫn có thể xoá bài.',
   MSG_POST_NOT_INTERACTIVE: 'Chỉ thích và bình luận được bài đã duyệt và đang hiển thị.',
   MSG_POST_NOT_PENDING: 'Bài viết không còn chờ duyệt. Vui lòng tải lại.',
   MSG_POST_NOT_APPROVED: 'Chỉ ẩn được bài đã duyệt.',
@@ -108,6 +107,7 @@ const ERROR_MESSAGES = {
     `Đã đạt giới hạn ${max ?? 5} bài ghim. Vui lòng bỏ ghim bài cũ trước khi ghim bài mới.`,
   MSG_TEXT_TOO_LONG: ({ max } = {}) => `Nội dung tối đa ${(max ?? 5000).toLocaleString('vi-VN')} ký tự.`,
   MSG_COMMENT_NOT_FOUND: 'Không tìm thấy bình luận.',
+  MSG_TOO_MANY_ATTACHMENTS: ({ max } = {}) => `Mỗi bài viết có tối đa ${max ?? 10} tệp đính kèm.`,
   // FE-06 Messaging
   MSG_CHAT_NO_ACCESS: 'Quản lý trường không xem tin nhắn của nhóm lớp.',
   MSG_CHAT_NOT_MEMBER: 'Bạn không còn là thành viên của cuộc trò chuyện này.',

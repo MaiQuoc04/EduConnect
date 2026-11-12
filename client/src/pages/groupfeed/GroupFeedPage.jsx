@@ -8,6 +8,7 @@ import { useSocket } from '../../context/SocketContext.jsx';
 import { errorText } from '../../messages.js';
 import { useLiveRefresh } from '../schoolfeed/useLiveRefresh.js';
 import { feedPath, moderatorName, PostCard, useGroupFeedSignals, usePostActions } from './groupFeedShared.jsx';
+import { readDraft } from './postDraft.js';
 
 // SCR-35 Group Feed – UC-36 View Group Feed, with UC-43 (like), UC-44..UC-46 (moderator) and UC-40 (delete) on each
 // post. A tab of SCR-21 (GroupLayout); the group itself (g) comes from the layout. Tabs (business-rules §5):
@@ -27,6 +28,7 @@ export default function GroupFeedPage() {
 
 function Feed({ g }) {
   const { user } = useAuth();
+  const [draft] = useState(() => readDraft(user?.id, g.groupId)); // read when the feed opens
   const socket = useSocket();
   const [view, setView] = useState('feed');
   const [state, setState] = useState({ status: 'loading', data: null, items: [], error: '' });
@@ -130,7 +132,12 @@ function Feed({ g }) {
       {canPost && (
         <Link to={`${feedPath(g.groupId)}/new`} className="card card-outline gf-composer-open">
           <Avatar src={user?.avatarUrl} name={user?.fullName ?? ''} size={36} />
-          <span className="gf-composer-placeholder">Bạn muốn chia sẻ điều gì với nhóm?</span>
+          {/* A draft left in this browser (postDraft.js): say so, the form restores it. */}
+          {draft ? (
+            <span className="gf-composer-placeholder is-draft">Tiếp tục bản nháp: {draft.text.trim() || 'tệp đính kèm'}</span>
+          ) : (
+            <span className="gf-composer-placeholder">Bạn muốn chia sẻ điều gì với nhóm?</span>
+          )}
           <Icon name="edit_square" />
         </Link>
       )}

@@ -7,6 +7,7 @@ import {
   pinGroupPost,
   reviewGroupPost,
 } from '../../api/groupPosts.js';
+import AttachmentList from '../../components/AttachmentList.jsx';
 import Avatar from '../../components/Avatar.jsx';
 import Icon from '../../components/Icon.jsx';
 import { useToast } from '../../context/ToastContext.jsx';
@@ -56,7 +57,10 @@ function StatusNotice({ post, groupType }) {
     return (
       <div className="notice gf-status-notice">
         <Icon name="visibility_off" />
-        <p>Bài viết đã bị ẩn bởi {who}. Các thành viên khác không còn thấy bài này.</p>
+        <p>
+          Bài viết đã bị ẩn bởi {who}. Các thành viên khác không còn thấy bài này.
+          {post.can?.edit && ' Bạn có thể sửa bài để gửi duyệt lại, hoặc xoá bài.'}
+        </p>
       </div>
     );
   }
@@ -79,6 +83,18 @@ function StatusNotice({ post, groupType }) {
   return null;
 }
 
+// First picture of a post in the feed (firstImageUrl, signed by the server for one hour). Hidden when it cannot be
+// loaded (link expired on a page left open): the file count still shows and the next reload brings a new link.
+function PostImage({ src, to }) {
+  const [failed, setFailed] = useState(false);
+  if (!src || failed) return null;
+  return (
+    <Link to={to} className="gf-image" aria-label="Xem bài viết và tệp đính kèm">
+      <img src={src} alt="" loading="lazy" onError={() => setFailed(true)} />
+    </Link>
+  );
+}
+
 function Interactions({ post, detailLink, onLikeError }) {
   const like = useLike(post.postId, post.likedByMe, post.likeCount, onLikeError, groupPostLike);
   return (
@@ -96,10 +112,12 @@ function Interactions({ post, detailLink, onLikeError }) {
 }
 
 /**
- * One post. mode 'feed' cuts long text and links to the detail; 'detail' shows everything. onAction(kind, post) runs
- * the moderator / author actions (usePostActions). Buttons follow post.can, sent by the server.
+ * One post. mode 'feed' cuts long text, shows the first picture and the number of files, and links to the detail;
+ * 'detail' shows everything, files included (post.attachments; signedAt + onRefreshFiles renew expired links, see
+ * components/AttachmentList). onAction(kind, post) runs the moderator / author actions (usePostActions). Buttons
+ * follow post.can, sent by the server.
  */
-export function PostCard({ post, groupId, groupType, mode = 'feed', onAction, editState }) {
+export function PostCard({ post, groupId, groupType, mode = 'feed', onAction, editState, signedAt, onRefreshFiles }) {
   const toast = useToast();
   const detail = postPath(groupId, post.postId);
   const long = mode === 'feed' && post.content.length > PREVIEW_CHARS;
@@ -142,6 +160,22 @@ export function PostCard({ post, groupId, groupType, mode = 'feed', onAction, ed
           Xem tiếp
         </Link>
       )}
+
+      {mode === 'detail'
+        ? post.attachments?.length > 0 && (
+            <div className="gf-files">
+              <AttachmentList attachments={post.attachments} signedAt={signedAt} onRefresh={onRefreshFiles} />
+            </div>
+          )
+        : post.attachmentCount > 0 && (
+            <>
+              <PostImage src={post.firstImageUrl} to={detail} />
+              <Link to={detail} className="gf-file-count caption">
+                <Icon name="attach_file" size="sm" />
+                {post.attachmentCount} tệp đính kèm
+              </Link>
+            </>
+          )}
 
       {(can.interact || can.review) && (
         <footer className="gf-post-foot">

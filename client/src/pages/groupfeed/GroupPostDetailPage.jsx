@@ -26,6 +26,7 @@ export default function GroupPostDetailPage() {
   const [state, setState] = useState({ status: 'loading', post: null, error: '' });
   const [gone, setGone] = useState(false);
   const [commentsKey, setCommentsKey] = useState(0);
+  const [signedAt, setSignedAt] = useState(() => Date.now()); // when the file links were signed (they live one hour)
   const deleting = useRef(false);
   const back = feedPath(g.groupId);
 
@@ -41,6 +42,8 @@ export default function GroupPostDetailPage() {
           }
           setGone(false);
           setState({ status: 'ready', post, error: '' });
+          setSignedAt(Date.now());
+          return post;
         })
         .catch((err) => {
           if (err.status === 404) {
@@ -104,6 +107,9 @@ export default function GroupPostDetailPage() {
     setState((s) => (s.post && s.post.commentCount !== commentCount ? { ...s, post: { ...s.post, commentCount } } : s));
   }, []);
 
+  // AttachmentList asks for new links when the old ones expired: read the post again, give back its files.
+  const refreshFiles = useCallback(() => load(true).then((p) => p?.attachments ?? null), [load]);
+
   const post = state.post;
 
   return (
@@ -135,6 +141,8 @@ export default function GroupPostDetailPage() {
             mode="detail"
             onAction={actions.run}
             editState={{ from: 'detail' }}
+            signedAt={signedAt}
+            onRefreshFiles={refreshFiles}
           />
           {/* Read only (no composer) where commenting is not allowed: hidden post, last year's group. */}
           {!gone && (post.can.interact || post.commentCount > 0) && (
