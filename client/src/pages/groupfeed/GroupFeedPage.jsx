@@ -6,6 +6,7 @@ import Icon from '../../components/Icon.jsx';
 import { useAuth } from '../../context/AuthContext.jsx';
 import { useSocket } from '../../context/SocketContext.jsx';
 import { errorText } from '../../messages.js';
+import ActivityFeedActions from '../extracurricular/ActivityFeedActions.jsx'; // FE-07 (Dung)
 import { useLiveRefresh } from '../schoolfeed/useLiveRefresh.js';
 import { feedPath, moderatorName, PostCard, useGroupFeedSignals, usePostActions } from './groupFeedShared.jsx';
 
@@ -134,6 +135,7 @@ function Feed({ g }) {
           <Icon name="edit_square" />
         </Link>
       )}
+      <ActivityFeedActions group={g} info={info} />
       {canPost && info?.requireApproval && !info.isModerator && (
         <p className="caption muted gf-hint">
           <Icon name="verified" size="sm" />
