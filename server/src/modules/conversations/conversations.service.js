@@ -1,8 +1,12 @@
 import { pool, withTransaction } from '../../config/db.js';
 import { emitToUsers } from '../../sockets/index.js';
+import { env } from '../../config/env.js';
 import { AppError, badRequest, forbidden, notFound } from '../../utils/AppError.js';
+import * as files from '../../utils/attachments.js';
+import { uploadedFiles } from '../../utils/requestParsers.js';
 import { findGroupForUser, groupScopeSql } from '../groups/groupAccess.js';
 import { byRankThenName, memberRows } from '../groups/groups.service.js';
+import { getAttachmentLimits } from '../posts/posts.service.js';
 import { directPeer } from './direct.service.js';
 
 // FE-06 Messaging (owner: Khanh). UC-47 Chat in Group – SCR-43 Group Chat / SCR-50 Chat Room.
@@ -17,6 +21,9 @@ import { directPeer } from './direct.service.js';
 //     joined by then. Times are compared in SQL, so the client gets message ids instead of timestamps.
 // UC-110 reply, UC-111 reactions, UC-113 delete message (business-rules §6, agreed 07/11/2026). A message deleted for everyone stays as a placeholder without its content;
 // a message deleted for me (message_user_deletions) is left out for that person only.
+// Attachments (12/11/2026): files go up through the shared modules/uploads (target 'message' → messages/<groupId>/),
+// rows through utils/attachments.js (column message_id). A message may be files only (messages.content NULL, schema).
+// A message deleted for everyone hides its files (§6), like its text.
 
 const conflict = (code, message, details) => new AppError(409, code, message, details);
 const PAGE_DEFAULT = 30;
@@ -24,6 +31,21 @@ const PAGE_MAX = 100;
 // ASSUMPTION: no agreed limit for one message (plan question Q5); 2000 characters until the lead decides.
 export const MESSAGE_MAX_LENGTH = 2000;
 const FROM_LIMIT = 500; // the most messages one jump to a quoted message loads
+// ASSUMPTION: at most 10 files per message, as a group post (§5 sets sizes, not a number).
+export const MAX_MESSAGE_ATTACHMENTS = 10;
+const FILES = files.ATTACHMENT_COLUMNS.MESSAGE;
+const fileCountSql = (alias) =>
+  `(SELECT COUNT(*) FROM attachments fa WHERE fa.message_id = ${alias}.message_id AND fa.deleted_at IS NULL)`;
+
+/** Limits of the chat composer's file button (system_settings sizes, the 15 types of the bucket). */
+export const getMessageAttachmentLimits = () => getAttachmentLimits(MAX_MESSAGE_ATTACHMENTS);
+
+// The files of a page of messages (one query); none for a message deleted for everyone (§6).
+async function withFiles(messages, db = pool) {
+  const ids = messages.filter((m) => !m.isDeleted).map((m) => m.messageId);
+  const byId = await files.listAttachmentsOf(FILES, [...new Set(ids)], db);
+  return messages.map((m) => ({ ...m, attachments: m.isDeleted ? [] : (byId.get(m.messageId) ?? []) }));
+}
 
 // SQL: when the user first joined the message's group (alias m). All their membership rows count, left ones too:
 // UC-32 adds someone back with a new row, FE-02 / FE-04 reopen the old one (business-rules §6). Whether they are
@@ -50,7 +72,7 @@ const replyToSql = (viewer) => `(
            WHEN ${hiddenFor(viewer, 'rm')} THEN json_build_object('state', 'HIDDEN', 'messageId', rm.message_id)
            ELSE json_build_object('state', 'OK', 'messageId', rm.message_id, 'senderId', rm.sender_id,
                                   'senderName', ru.full_name, 'senderNickname', re.nickname,
-                                  'content', left(rm.content, 200))
+                                  'content', left(rm.content, 200), 'attachmentCount', ${fileCountSql('rm')})
          END
   FROM messages rm
   JOIN users ru ON ru.user_id = rm.sender_id
@@ -223,7 +245,7 @@ export async function listMessages(user, groupId, query) {
     );
     hasMore = older[0].hasMore;
   }
-  const page = { groupId: group.groupId, messages, hasMore };
+  const page = { groupId: group.groupId, messages: await withFiles(messages), hasMore };
   if (beforeId !== null) return page;
 
   const [members, reads] = await Promise.all([memberRows(pool, group.groupId), readStates(pool, group.groupId)]);
@@ -262,6 +284,7 @@ export async function listConversations(user) {
             lm.message_id AS "messageId", lm.is_deleted AS "isDeleted",
             CASE WHEN lm.is_deleted THEN NULL ELSE lm.content END AS content,
             lm.sent_at AS "sentAt", lm.sender_id AS "senderId",
+            CASE WHEN lm.is_deleted THEN 0 ELSE ${fileCountSql('lm')} END AS "attachmentCount",
             u.full_name AS "senderName", e.nickname AS "senderNickname",
             peer.user_id AS "peerId", peer.full_name AS "peerName", peer.avatar_url AS "peerAvatarUrl",
             peer.status AS "peerStatus",
@@ -307,6 +330,7 @@ export async function listConversations(user) {
           messageId: r.messageId,
           isDeleted: r.isDeleted,
           content: r.content,
+          attachmentCount: r.attachmentCount,
           sentAt: r.sentAt,
           senderId: r.senderId,
           senderName: r.senderName,
@@ -316,7 +340,11 @@ export async function listConversations(user) {
   }));
 }
 
-function cleanContent(content) {
+// The text of a message; with files it may be left empty (→ NULL, schema: a message of attachments only).
+function cleanContent(content, { hasFiles = false } = {}) {
+  if (hasFiles && (content === undefined || content === null || (typeof content === 'string' && !content.trim()))) {
+    return null;
+  }
   if (typeof content !== 'string' || !content.trim()) {
     throw badRequest('MSG_MESSAGE_EMPTY', 'The message is empty.');
   }
@@ -330,13 +358,20 @@ function cleanContent(content) {
   return text;
 }
 
-// UC-47: send a text message. The sender's own message counts as read for them. Every active member gets it in
-// real time ("message:new", all their tabs), the sender's other tabs included.
-// Attachments (images / files ≤ 10 MB, video ≤ 50 MB) come later with the upload shared with FE-05.
+// UC-47: send a message (text, files, or both). The sender's own message counts as read for them. Every active
+// member gets it in real time ("message:new", all their tabs), the sender's other tabs included.
+// attachments: the /uploads/confirm answers of target 'message' for THIS group (messages/<groupId>/…), at most
+// MAX_MESSAGE_ATTACHMENTS; the objects are checked before the transaction, the rows written with the message.
 export async function sendMessage(user, groupId, body) {
-  const content = cleanContent(body?.content);
   const group = await openChat(pool, user, groupId);
   assertCanSend(group);
+  const attached = uploadedFiles(body ?? {}, 'attachments', {
+    folder: `messages/${group.groupId}/`,
+    bucket: env.storage.buckets.attachments,
+    max: MAX_MESSAGE_ATTACHMENTS,
+  });
+  const content = cleanContent(body?.content, { hasFiles: attached.length > 0 });
+  const fileRows = await files.readUploadedFiles(attached);
   // Reply: one level; the original must be a message the sender can see in this chat, not deleted for everyone.
   let replyTo = null;
   if (body?.replyToMessageId !== undefined && body.replyToMessageId !== null) {
@@ -351,6 +386,11 @@ export async function sendMessage(user, groupId, body) {
        RETURNING message_id`,
       [group.groupId, user.userId, content, replyTo],
     );
+    await files.insertAttachments(
+      { column: FILES, id: rows[0].message_id },
+      fileRows.map((r) => ({ ...r, uploadedBy: user.userId })),
+      client,
+    );
     await client.query(
       `UPDATE group_members SET last_read_at = NOW() WHERE group_id = $1 AND user_id = $2 AND left_at IS NULL`,
       [group.groupId, user.userId],
@@ -360,7 +400,7 @@ export async function sendMessage(user, groupId, body) {
 
   // One payload per member: a quote may be hidden from someone who joined after the original (replyToSql).
   const memberIds = await activeMemberIds(pool, group.groupId);
-  const copies = await messageForViewers(pool, messageId, memberIds);
+  const copies = await withFiles(await messageForViewers(pool, messageId, memberIds)); // one query, signed once for every copy
   for (const { viewerId, ...message } of copies) {
     emitToUsers([viewerId], 'message:new', { groupId: group.groupId, message });
   }
