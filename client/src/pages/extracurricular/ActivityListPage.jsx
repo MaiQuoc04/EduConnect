@@ -80,6 +80,11 @@ export default function ActivityListPage() {
                 ))}
               </select>
             </label>
+            {cls?.groupId && (
+              <Link to={`/groups/${cls.groupId}/feed`} className="btn btn-secondary xa-feed-link">
+                <Icon name="forum" size="sm" /> Bảng tin lớp {cls.className}
+              </Link>
+            )}
             <div className="pill-tabs" role="tablist" aria-label="Thời gian">
               <button type="button" role="tab" aria-selected={status === 'upcoming'} className={`xa-tab${status === 'upcoming' ? ' is-on' : ''}`} onClick={() => setParam('status', '')}>
                 Sắp tới ({data.counts.upcoming})

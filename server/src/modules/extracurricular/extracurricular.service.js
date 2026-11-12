@@ -155,18 +155,18 @@ async function listClasses(db, user) {
   const role = user.activeRole;
   const sql = {
     TEACHER: `SELECT c.class_id AS "classId", c.class_name AS "className", NULL::text AS "childName",
-                (CURRENT_DATE > sy.end_date) AS "yearEnded", sy.start_date
+                (CURRENT_DATE > sy.end_date) AS "yearEnded", sy.start_date, c.class_id AS cid
               FROM classes c JOIN school_years sy ON sy.school_year_id = c.school_year_id
               JOIN teachers t ON t.teacher_id = c.homeroom_teacher_id
               WHERE t.user_id = $1 AND c.deleted_at IS NULL`,
     STUDENT: `SELECT c.class_id AS "classId", c.class_name AS "className", NULL::text AS "childName",
-                (CURRENT_DATE > sy.end_date) AS "yearEnded", sy.start_date
+                (CURRENT_DATE > sy.end_date) AS "yearEnded", sy.start_date, c.class_id AS cid
               FROM students s JOIN class_enrollments ce ON ce.student_id = s.student_id
               JOIN classes c ON c.class_id = ce.class_id AND c.deleted_at IS NULL
               JOIN school_years sy ON sy.school_year_id = c.school_year_id
               WHERE s.user_id = $1`,
     PARENT: `SELECT c.class_id AS "classId", c.class_name AS "className", su.full_name AS "childName",
-               (CURRENT_DATE > sy.end_date) AS "yearEnded", sy.start_date
+               (CURRENT_DATE > sy.end_date) AS "yearEnded", sy.start_date, c.class_id AS cid
              FROM parents pa JOIN student_parents sp ON sp.parent_id = pa.parent_id
              JOIN students s ON s.student_id = sp.student_id JOIN users su ON su.user_id = s.user_id
              JOIN class_enrollments ce ON ce.student_id = s.student_id
@@ -175,12 +175,20 @@ async function listClasses(db, user) {
              WHERE pa.user_id = $1`,
   }[role];
   if (!sql) return [];
-  const { rows } = await db.query(`SELECT * FROM (${sql}) x ORDER BY start_date DESC, "className", "childName"`, [user.userId]);
+  // groupId = the class feed (GENERAL group), for the "Bảng tin lớp" links.
+  const { rows } = await db.query(
+    `SELECT x.*, (SELECT g.group_id FROM groups g WHERE g.class_id = x.cid AND g.group_type = 'GENERAL'
+                  AND g.deleted_at IS NULL ORDER BY g.group_id LIMIT 1) AS "groupId"
+     FROM (${sql}) x ORDER BY start_date DESC, "className", "childName"`,
+    [user.userId],
+  );
   // One entry per class; a parent with two children in it sees both names.
   const byClass = new Map();
   for (const r of rows) {
     const k = String(r.classId);
-    if (!byClass.has(k)) byClass.set(k, { classId: r.classId, className: r.className, yearEnded: r.yearEnded, children: [] });
+    if (!byClass.has(k)) {
+      byClass.set(k, { classId: r.classId, className: r.className, groupId: r.groupId, yearEnded: r.yearEnded, children: [] });
+    }
     if (r.childName) byClass.get(k).children.push(r.childName);
   }
   return [...byClass.values()];
@@ -665,8 +673,8 @@ export async function formOptions(user) {
               (SELECT COUNT(DISTINCT pa.user_id)::int FROM class_enrollments ce JOIN student_parents sp ON sp.student_id = ce.student_id
                  JOIN parents pa ON pa.parent_id = sp.parent_id JOIN users pu ON pu.user_id = pa.user_id
                  WHERE ce.class_id = c.class_id AND ce.status = ${STUDYING} AND pu.status = 'ACTIVE') AS "parentCount",
-              EXISTS (SELECT 1 FROM groups g WHERE g.class_id = c.class_id AND g.group_type = 'GENERAL'
-                      AND g.deleted_at IS NULL) AS "hasFeed"
+(SELECT g.group_id FROM groups g WHERE g.class_id = c.class_id AND g.group_type = 'GENERAL'
+                 AND g.deleted_at IS NULL ORDER BY g.group_id LIMIT 1) AS "groupId"
        FROM classes c JOIN school_years sy ON sy.school_year_id = c.school_year_id
        JOIN teachers t ON t.teacher_id = c.homeroom_teacher_id
        WHERE t.user_id = $1 AND c.deleted_at IS NULL AND sy.end_date >= CURRENT_DATE
@@ -674,7 +682,8 @@ export async function formOptions(user) {
       [user.userId],
     );
     const { rows: now } = await pool.query(`SELECT ${LOCAL('NOW()')} AS now`);
-    return { classes: rows, now: now[0].now, limits: ACTIVITY_LIMITS };
+    const classes = rows.map((r) => ({ ...r, hasFeed: r.groupId != null }));
+    return { classes, now: now[0].now, limits: ACTIVITY_LIMITS };
   });
 }
 

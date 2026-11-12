@@ -381,6 +381,11 @@ Boundaries that are easy to get wrong:
     children not registered, once, within the last 24 h, for activities posted at least a day before the deadline:
     `sendActivityDeadlineReminders()` in `modules/extracurricular/extracurricular.reminders.js`, to be called by
     FE-09's scheduled job (UC-69, Quoc).
+  - **Links with the class feed (13/11/2026, Dung's request):** the homeroom teacher can start a new activity from the
+    class feed ("Tạo hoạt động ngoại khoá" above the posts, shown to the feed's moderator only, not in an ended year);
+    the form always shows the homeroom class (a choice when the teacher has several homeroom classes in open years)
+    with a link to that class feed; the "Ngoại khoá" list and the activity detail link to the class feed and to the
+    activity's post.
 
 ## 8. School feed (FE-08)
 - Only SM posts. Two post types:

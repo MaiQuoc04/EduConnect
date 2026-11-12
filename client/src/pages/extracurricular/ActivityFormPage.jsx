@@ -102,7 +102,7 @@ export default function ActivityFormPage() {
   const set = (k, v) => setForm((f) => ({ ...f, [k]: v }));
   const dirty = form !== null && JSON.stringify(form) !== initial;
   const cls = options?.classes.find((c) => String(c.classId) === form?.classId)
-    ?? (original ? { classId: original.classId, className: original.className, classSize: original.classSize } : null);
+    ?? (original ? { classId: original.classId, className: original.className, classSize: original.classSize, groupId: original.groupId } : null);
   const now = options?.now ?? '';
 
   // Leaving with unsaved changes: browser close / reload, and in-app links (sidebar, breadcrumb, Huỷ).
@@ -209,7 +209,11 @@ export default function ActivityFormPage() {
     registrationDeadline: deadline || startAt || now, capacity: form.capacity && Number(form.capacity) > 0 ? Number(form.capacity) : null,
     registeredCount: original?.registeredCount ?? 0, status: 'OPEN', beforeDeadline: true, started: false, ended: false,
   };
-  const back = editing ? `/extracurricular/${eventId}` : `/extracurricular${form.classId ? `?classId=${form.classId}` : ''}`;
+  // Opened from the class feed ("Tạo hoạt động ngoại khoá" in FE-05): Huỷ goes back to that feed.
+  const feedGroup = !editing && params.get('from') === 'feed'
+    ? options.classes.find((c) => String(c.classId) === params.get('classId'))?.groupId : null;
+  const back = editing ? `/extracurricular/${eventId}`
+    : feedGroup ? `/groups/${feedGroup}/feed` : `/extracurricular${form.classId ? `?classId=${form.classId}` : ''}`;
 
   return (
     <div className="xa-page">
@@ -240,14 +244,20 @@ export default function ActivityFormPage() {
 
       <div className="xa-form-grid">
         <form className="card card-outline xa-form" onSubmit={submit} noValidate>
-          {!editing && options.classes.length > 1 && (
-            <label className="field">
-              <span className="field-label">Lớp chủ nhiệm <span className="xa-req">*</span></span>
-              <select className="input" value={form.classId} onChange={(e) => set('classId', e.target.value)}>
-                {options.classes.map((c) => <option key={c.classId} value={c.classId}>{c.className}</option>)}
+          <div className="field">
+            <label className="field-label" htmlFor="xa-class">Lớp chủ nhiệm <span className="xa-req">*</span></label>
+            {!editing && options.classes.length > 1 ? (
+              <select id="xa-class" className="input" value={form.classId} onChange={(e) => set('classId', e.target.value)}>
+                {options.classes.map((c) => <option key={c.classId} value={c.classId}>{c.className}{c.hasFeed ? '' : ' (chưa có bảng tin lớp)'}</option>)}
               </select>
-            </label>
-          )}
+            ) : (
+              <input id="xa-class" className="input" value={cls?.className ?? ''} readOnly disabled />
+            )}
+            <span className="field-help xa-class-help">
+              {editing ? 'Không đổi được lớp của hoạt động đã đăng.' : options.classes.length > 1 ? `Bạn đang chủ nhiệm ${options.classes.length} lớp: chọn lớp sẽ đăng hoạt động.` : 'Hoạt động được đăng lên bảng tin lớp này.'}
+              {cls?.groupId && <Link to={`/groups/${cls.groupId}/feed`} className="xa-inline-link"><Icon name="forum" size="sm" /> Mở bảng tin lớp {cls.className}</Link>}
+            </span>
+          </div>
           {cls && cls.hasFeed === false && <div className="notice amber"><Icon name="warning" /><p>Lớp {cls.className} chưa có bảng tin lớp nên chưa đăng được hoạt động.</p></div>}
 
           <label className="field">

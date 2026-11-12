@@ -105,7 +105,7 @@ export default function ActivityDetailPage() {
       <nav className="xa-crumb" aria-label="Breadcrumb">
         <Link to={`/extracurricular?classId=${a.classId}`}>Ngoại khoá {a.className}</Link><span>/</span><strong>Chi tiết hoạt động</strong>
       </nav>
-      <Link to={`/groups/${a.groupId}`} className="xa-back"><Icon name="arrow_back" size="sm" /> Bảng tin lớp {a.className}</Link>
+      <Link to={`/groups/${a.groupId}/feed`} className="xa-back"><Icon name="arrow_back" size="sm" /> Bảng tin lớp {a.className}</Link>
 
       <header className="xa-hero">
         <div className="xa-hero-chips">
@@ -120,8 +120,7 @@ export default function ActivityDetailPage() {
           <div><dt><Icon name="location_on" size="sm" /> Địa điểm</dt><dd>{a.location}</dd></div>
           <div><dt><Icon name="group" size="sm" /> Chỉ tiêu</dt><dd>{a.capacity ? `${a.capacity} học sinh` : 'Không giới hạn'}</dd></div>
         </dl>
-        {(a.can.edit || a.can.cancel || a.can.viewRegistrations) && (
-          <div className="xa-hero-actions">
+        <div className="xa-hero-actions">
             {a.can.viewRegistrations && (
               <Link to={`/extracurricular/${a.eventId}/registrations`} className="btn btn-primary"><Icon name="table_view" size="sm" /> Danh sách đăng ký</Link>
             )}
@@ -131,8 +130,8 @@ export default function ActivityDetailPage() {
                 <Icon name="event_busy" size="sm" /> Huỷ hoạt động
               </button>
             )}
+            <Link to={`/groups/${a.groupId}/feed/${a.postId}`} className="btn btn-text"><Icon name="forum" size="sm" /> Xem bài trên bảng tin lớp</Link>
           </div>
-        )}
       </header>
 
       {a.status === 'CANCELLED' && (
