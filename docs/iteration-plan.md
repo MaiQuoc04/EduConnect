@@ -98,6 +98,29 @@ It2: Anh FE-08 + FE-14, Khanh FE-05 + FE-06).
   - FE-05 Group Feed (Khanh), FE-08 School Feed + FE-14 Parent Management + shared storage (Anh) merged 11/11, all
     through `feature/fe-05-group-feed` (it contains `feature/fe-08-school-feed`, `feature/fe-14-parent-management`
     and `feature/storage-supabase`). Details below.
+  - **On `feature/fe-05-group-feed`, not merged yet (12/11, Khanh): FE-05 attachments.** Group posts take files like
+    school posts: upload target `post` (folder `posts/`), `POST /groups/:groupId/posts` and `PATCH /posts/:postId`
+    accept `attachments` (and `removeAttachmentIds` on edit), `GET /posts/attachment-limits`, posts carry
+    `attachmentCount` / `firstImageUrl` in lists and `attachments` in the detail; deleting a post soft deletes its
+    files; a change of files is an edit (§5: may go back to PENDING). ASSUMPTION: at most 10 files per post, as FE-08.
+    New shared helpers in `utils/attachments.js` (`summarizeAttachments`, `readUploadedFiles`, `changeAttachments`:
+    the FE-08 logic its comment proposed to share; FE-08 code untouched, Anh may switch to them) and
+    `utils/requestParsers.js` (`uploadedFiles`, `idList`). Client: FE-08 `AttachmentPicker` / `AttachmentList` on
+    SCR-36/38 and SCR-37, first picture + file count on SCR-35. Tested on the local DB with local storage (24 steps +
+    the FE-05 suite); the browser → Supabase upload itself was not run (shared bucket).
+    Also: **draft of a new group post** (client only, `pages/groupfeed/postDraft.js`): text + uploaded files saved in
+    the browser's localStorage per account and group while typing, restored when the form opens again, removed when
+    the post is sent or "Huỷ" → "Bỏ bản nháp"; the feed's composer says "Tiếp tục bản nháp". ASSUMPTION: kept 30 days.
+    No schema change; a draft does not follow the user to another device.
+  - **On `feature/fe-05-group-feed`, not merged yet (12/11, Khanh): FE-06 chat attachments.** Upload target `message`
+    (folder `messages/<groupId>/`, only that chat's files accepted); `POST /conversations/:groupId/messages` takes
+    `attachments`; a message may be files only (`messages.content` NULL, as the schema says); every message carries
+    `attachments` (one query per page, links signed for one hour), quotes and the conversation list carry
+    `attachmentCount`; a message deleted for everyone hides its files (§6). `GET /conversations/attachment-limits`.
+    ASSUMPTION: at most 10 files per message. New shared helper `listAttachmentsOf` in `utils/attachments.js`. Client:
+    📎 button and picture paste in the composer (FE-08 upload queue), files in the bubble (`pages/chat/MessageFiles.jsx`),
+    expired links re-read per message; `ChatThread` is now keyed by group (a new chat starts with an empty composer).
+    Tested on the local DB with local storage (17 steps + the FE-05 suites).
 - **Not merged yet:** none of It1. It2 branches start from `develop`. Still open in It2: FE-10 timetable (Dung).
   - FE-14 Parent Management (Anh, It2) – merged 11/11: UC-104 parent list, UC-105 parent detail with the linked
     children, UC-106 update profile (`fullName`, `occupation`, `address` only; login identifiers are not touched).

@@ -290,6 +290,15 @@ Boundaries that are easy to get wrong:
   - **Hidden** (`is_hidden`): the author still sees it, labelled "Bài viết đã bị ẩn bởi người kiểm duyệt"; other
     members do not. The moderator sees the list of hidden posts and can **unhide** one (it comes back as a normal
     post). Only posts are hidden; comments are still only deleted.
+    The author may **edit a hidden post** (agreed by the lead 12/11/2026): saving unhides it and sends it to `PENDING`
+    **even when the group has approval off**, so it comes back to the feed only when the moderator approves it (a
+    moderator editing their own hidden post: approved at once). Saving without any change keeps it hidden.
+  - **Feed order** (Khanh, 12/11/2026): pinned posts first, then newest first by posting time. A post **edited and
+    sent again** (hidden, rejected, or approved then edited while approval is on) that the moderator approves again
+    **counts as a new post**: its posting time becomes the time of that approval (top of the feed, today's time) and
+    it no longer shows "Đã chỉnh sửa"; its likes and comments stay. A first approval, unhiding without an edit and an
+    edit with approval off keep the post's time and place. The pending queue is first sent, first shown (an edited
+    post counts from when it was sent again).
   - **Pin:** at most **5 pinned posts per group**; pinning a 6th is refused ("Đã đạt giới hạn 5 bài ghim. Vui lòng
     bỏ ghim bài cũ trước khi ghim bài mới."). Hiding a post unpins it; unhiding does not pin it again.
   - **Turning approval on / off** (`groups.require_approval`): the homeroom teacher for the class general group, the
