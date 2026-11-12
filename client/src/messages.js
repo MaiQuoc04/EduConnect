@@ -190,6 +190,36 @@ const ERROR_MESSAGES = {
   MSG_DEPARTMENT_INVALID: 'Tổ chuyên môn không còn trong danh sách. Vui lòng tải lại trang và chọn lại.',
   MSG_DEPARTMENTS_NOT_READY:
     'Danh sách tổ chuyên môn chưa được tạo đủ trong cơ sở dữ liệu (cần chạy database/patch_v0.3_departments.sql và patch_v0.3_department_subjects.sql).',
+  // FE-07 Extracurricular (Dung)
+  MSG_ACTIVITY_NOT_READY: 'Chức năng ngoại khoá chưa sẵn sàng: cơ sở dữ liệu cần chạy patch_v0.3_activity_title.sql.',
+  MSG_ACTIVITY_NOT_FOUND: 'Không tìm thấy hoạt động. Hoạt động có thể đã bị ẩn hoặc bạn không thuộc lớp này.',
+  MSG_ACTIVITY_NOT_HOMEROOM: 'Chỉ giáo viên chủ nhiệm hiện tại của lớp mới quản lý hoạt động ngoại khoá của lớp.',
+  MSG_ACTIVITY_NO_FEED: 'Lớp chưa có bảng tin lớp nên chưa đăng được hoạt động.',
+  MSG_ACTIVITY_TITLE: ({ reason, max } = {}) => (reason === 'TOO_LONG' ? `Tên hoạt động tối đa ${max} ký tự.` : 'Vui lòng nhập tên hoạt động.'),
+  MSG_ACTIVITY_DESCRIPTION: ({ reason, max } = {}) => (reason === 'TOO_LONG' ? `Mô tả tối đa ${max} ký tự.` : 'Vui lòng nhập mô tả hoạt động.'),
+  MSG_ACTIVITY_LOCATION: ({ reason, max } = {}) => (reason === 'TOO_LONG' ? `Địa điểm tối đa ${max} ký tự.` : 'Vui lòng nhập địa điểm tổ chức.'),
+  MSG_ACTIVITY_TIME: ({ reason, min, max } = {}) =>
+    ({
+      START_PAST: 'Thời gian bắt đầu phải sau thời điểm hiện tại.',
+      END_BEFORE_START: 'Thời gian kết thúc phải sau thời gian bắt đầu.',
+      DEADLINE_PAST: 'Hạn đăng ký phải sau thời điểm hiện tại.',
+      DEADLINE_AFTER_START: 'Hạn đăng ký không được sau giờ bắt đầu hoạt động.',
+    })[reason] ?? `Hoạt động phải nằm trong năm học (${formatVnDate(min)} – ${formatVnDate(max)}).`,
+  MSG_ACTIVITY_CAPACITY: ({ reason, max, registered } = {}) =>
+    reason === 'BELOW_REGISTERED'
+      ? `Đã có ${registered} học sinh đăng ký, chỉ tiêu không được nhỏ hơn.`
+      : `Chỉ tiêu là số nguyên từ 1 đến ${max}, hoặc để trống nếu không giới hạn.`,
+  MSG_ACTIVITY_CHANGED: 'Hoạt động vừa được lưu ở nơi khác sau khi bạn mở trang. Hãy tải lại để xem bản mới rồi sửa tiếp.',
+  MSG_ACTIVITY_CANCELLED: 'Hoạt động đã bị huỷ.',
+  MSG_ACTIVITY_STARTED: 'Hoạt động đã bắt đầu nên không thay đổi được nữa.',
+  MSG_ACTIVITY_CLOSED: 'Đã hết hạn đăng ký nên không đăng ký hay huỷ đăng ký được nữa.',
+  MSG_ACTIVITY_FULL: 'Hoạt động đã đủ chỉ tiêu.',
+  MSG_ACTIVITY_ALREADY_REGISTERED: 'Con bạn đã được đăng ký hoạt động này.',
+  MSG_ACTIVITY_NOT_REGISTERED: 'Con bạn chưa được đăng ký hoạt động này.',
+  MSG_ACTIVITY_CHILD: 'Bạn chỉ đăng ký được cho con mình đang học lớp này.',
+  MSG_ACTIVITY_EXPORT_TOO_MANY: ({ max } = {}) => `Danh sách quá dài để xuất (tối đa ${max} dòng).`,
+  MSG_POST_IS_ACTIVITY: 'Bài này là hoạt động ngoại khoá: hãy sửa hoặc huỷ trong mục Ngoại khoá.',
+
   // UC-114 Manage Departments
   MSG_DEPARTMENT_NOT_FOUND: 'Tổ chuyên môn này không còn tồn tại. Vui lòng tải lại trang.',
   MSG_DEPARTMENT_NAME_INVALID: ({ reason } = {}) =>

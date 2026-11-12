@@ -350,6 +350,37 @@ Boundaries that are easy to get wrong:
   re-registering reuses the row). Students do not register themselves.
 - The homeroom teacher views and exports the registration list (Excel) and can cancel the activity (registered
   parents are notified).
+- **As built (FE-07, Dung, 12/11/2026 – ASSUMPTIONs marked, waiting for the lead):**
+  - An activity = an `APPROVED` post in the class feed (GENERAL group; its text = the description, ≤ 5,000 characters as
+    §5) + an `extracurricular_events` row with a **title** (new column, `patch_v0.3_activity_title.sql`, proposed),
+    place, start, optional end (may be another day), registration deadline and optional capacity (1–1000,
+    ASSUMPTION). Title ≤ 120 characters (ASSUMPTION, Stitch form). No cover image or cost field: the cost goes in the
+    description (ASSUMPTION; group posts have no attachments yet).
+  - Managed by the class's **current** homeroom teacher (active role TEACHER), also activities posted by the previous
+    one. Start and deadline in the future, deadline ≤ start, the whole activity inside the class's school year; an
+    ended year is read only.
+  - **Update** while `OPEN` and not started; stale save → 409 `MSG_ACTIVITY_CHANGED`; capacity never below the number
+    registered; a deadline that already passed may stay (registration stays closed) or be moved to the future
+    (registration reopens). Changing time, place or deadline notifies the registered children's parents.
+  - **Cancel** while `OPEN` and not started: status `CANCELLED`, the post stays in the feed marked "Đã huỷ",
+    registrations are kept as they were; parents of registered children are notified. No delete.
+  - FE-05 edit / delete of an activity's post → 409 `MSG_POST_IS_ACTIVITY` (use the activity screens); the moderator
+    may still pin or hide it. A hidden activity is seen only by the homeroom teacher (as a hidden post) – parents can
+    neither see nor register.
+  - **Who sees an activity:** whoever sees its post in the class feed (FE-04 group scope + FE-05 live rule), so subject
+    teachers of the class see it too (read only, ASSUMPTION – permissions note 5 only lists the homeroom teacher). The
+    "Ngoại khoá" list: homeroom classes (teacher), own class (student), children's classes (parent).
+  - **Register / cancel** (parent, active role PARENT): own child studying (`STUDYING`) in the class, activity `OPEN`,
+    now ≤ deadline, year open. Capacity counts registered children still studying in the class (ASSUMPTION); the
+    capacity check locks the activity row so two parents cannot take the last place. Students only look.
+  - **Registration list / export** (homeroom): every child studying in the class with status Registered / Cancelled /
+    Not registered, plus children who registered and left the class (shown, not counted). Search name, student code,
+    parent name; the Excel file follows the chosen filter. Parent phone numbers are shown to the teacher only.
+  - **Notifications** (personal, until FE-09): new activity → parents (with the child) and students of the class;
+    change of time / place / deadline and cancel → parents of registered children; **deadline reminder** → parents of
+    children not registered, once, within the last 24 h, for activities posted at least a day before the deadline:
+    `sendActivityDeadlineReminders()` in `modules/extracurricular/extracurricular.reminders.js`, to be called by
+    FE-09's scheduled job (UC-69, Quoc).
 
 ## 8. School feed (FE-08)
 - Only SM posts. Two post types:
