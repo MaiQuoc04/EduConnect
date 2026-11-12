@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { getClassEvents } from '../../api/classEvents.js';
+import { getSchoolEvents } from '../../api/schoolEvents.js';
 import { getViewableClasses } from '../../api/timetables.js';
 import Icon from '../../components/Icon.jsx';
 import { useAuth } from '../../context/AuthContext.jsx';
@@ -9,13 +10,34 @@ import {
   addDays, dm, dmy, isoDate, longDate, mondayOf, styleOf, timeRange, WEEKDAY_SHORT, weekNumber,
 } from './calendarUtils.js';
 import './calendar.css';
+import './schoolCalendar.css';
 
 // SCR-39 Class Calendar – UC-76 (FE-10, Teacher / Student / Parent), Stitch design. Events appear automatically for
 // their audience (business rules §10); the server decides what each user sees. ?classId= &date= &view=week|day.
 
 const RELATION = { HOMEROOM: 'Chủ nhiệm', TEACHING: 'Giảng dạy' };
 
+// School calendar dates (whole school or the class's grade) – read only here, opened on /school-events.
+function SchoolEventCard({ ev }) {
+  return (
+    <Link to={`/school-events?event=${ev.schoolEventId}`} className="cal-card tone-green is-school">
+      <div className="cal-card-main">
+        <div className="cal-card-meta">
+          <span className="cal-cat tone-green">Lịch của trường</span>
+          <span className="cal-mono">{timeRange(ev)}</span>
+          <span className="cal-sep">·</span>
+          <span className="cal-card-class">{ev.audience}</span>
+        </div>
+        <h2 className="cal-card-title">{ev.title}</h2>
+        {ev.location && <div className="cal-card-foot"><span><Icon name="location_on" size="sm" />{ev.location}</span></div>}
+      </div>
+      {ev.started && <span className="cal-past-tag">Đã diễn ra</span>}
+    </Link>
+  );
+}
+
 function EventCard({ ev, isParent }) {
+  if (ev.school) return <SchoolEventCard ev={ev} />;
   const st = styleOf(ev.categoryCode);
   return (
     <Link to={`/calendar/events/${ev.eventId}`} className={`cal-card tone-${st.tone}`}>
@@ -72,7 +94,13 @@ export default function ClassCalendarPage() {
     setLoading(true);
     setError('');
     try {
-      setData(await getClassEvents({ from: weekStart, to: addDays(weekStart, 13), classId }));
+      const range = { from: weekStart, to: addDays(weekStart, 13), classId };
+      // School calendar: optional (table may not exist yet before patch_v0.3_school_events.sql) – never blocks the page.
+      const [cls, school] = await Promise.all([getClassEvents(range), getSchoolEvents(range).catch(() => ({ events: [] }))]);
+      const schoolItems = school.events.map((e) => ({
+        ...e, eventId: `s${e.eventId}`, schoolEventId: e.eventId, school: true, categoryCode: 'SCHOOL', categoryName: 'Lịch của trường',
+      }));
+      setData({ ...cls, events: [...cls.events, ...schoolItems].sort((a, b) => (a.startAt < b.startAt ? -1 : a.startAt > b.startAt ? 1 : 0)) });
     } catch (err) {
       setError(errorText(err));
     } finally {
@@ -117,7 +145,7 @@ export default function ClassCalendarPage() {
             <h1 className="headline-lg">Lịch lớp</h1>
             <span className="cal-class-tag">{current ? `Lớp ${current.className}` : 'Tất cả lớp của bạn'}</span>
           </div>
-          <p>Lịch kiểm tra, họp phụ huynh và các mốc sinh hoạt chung của lớp. Sự kiện tự hiện với người được xem.</p>
+          <p>Lịch kiểm tra, họp phụ huynh và các mốc sinh hoạt chung của lớp, kèm lịch chung của trường. Sự kiện tự hiện với người được xem.</p>
         </div>
         <div className="cal-head-actions">
           <div className="cal-seg" role="tablist" aria-label="Kiểu xem">
@@ -231,9 +259,9 @@ export default function ClassCalendarPage() {
                 {nextWeek.map((ev) => (
                   <li key={ev.eventId}>
                     <span className="cal-next-date">{dm(ev.startAt)}</span>
-                    <Link to={`/calendar/events/${ev.eventId}`}>
+                    <Link to={ev.school ? `/school-events?event=${ev.schoolEventId}` : `/calendar/events/${ev.eventId}`}>
                       <strong>{ev.title}</strong>
-                      <span>{ev.categoryName} · Lớp {ev.className} · {timeRange(ev)}</span>
+                      <span>{ev.categoryName} · {ev.school ? ev.audience : `Lớp ${ev.className}`} · {timeRange(ev)}</span>
                     </Link>
                   </li>
                 ))}

@@ -42,3 +42,26 @@ export const NOTIFICATION = Object.freeze({
   TYPE: 'CLASS_EVENT',
   TARGET: 'CLASS_EVENT',
 });
+
+// School calendar (13/11/2026, Dung) – school-wide dates set by the School Manager (table school_events, proposed
+// patch_v0.3_school_events.sql). Shown on the school feed ("Lịch sắp tới của trường"), on /school-events and in the
+// class calendar of the grade concerned.
+export const SCHOOL_EVENT_LIMITS = Object.freeze({
+  TITLE_MAX: 200, // ASSUMPTION (column is 255)
+  LOCATION_MAX: 255,
+  DESCRIPTION_MAX: 2000, // ASSUMPTION: same as class events
+  UPCOMING_MAX: 50, // ?limit= of the upcoming / past lists
+  RANGE_MAX_DAYS: 62,
+});
+
+export const SCHOOL_EVENT_CODES = Object.freeze({
+  NOT_FOUND: 'MSG_SCHOOL_EVENT_NOT_FOUND',
+  TITLE: 'MSG_SCHOOL_EVENT_TITLE', // details: { reason: REQUIRED | TOO_LONG, max }
+  LOCATION: 'MSG_SCHOOL_EVENT_LOCATION', // details: { max }
+  DESCRIPTION: 'MSG_SCHOOL_EVENT_DESCRIPTION', // details: { max }
+  TIME: 'MSG_SCHOOL_EVENT_TIME', // details: { reason: PAST | END_BEFORE_START | NO_YEAR | OUTSIDE_YEAR, min?, max? }
+  GRADE: 'MSG_SCHOOL_EVENT_GRADE', // unknown grade level
+  STARTED: 'MSG_SCHOOL_EVENT_STARTED', // 409 – already started: read only
+  CHANGED: 'MSG_SCHOOL_EVENT_CHANGED', // 409 – stale stamp
+  NOT_READY: 'MSG_SCHOOL_EVENTS_NOT_READY', // 503 – table school_events missing (patch not run)
+});

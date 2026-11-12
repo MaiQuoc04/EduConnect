@@ -204,6 +204,29 @@ const ERROR_MESSAGES = {
   MSG_TIMETABLE_TEACHER_CLASH: ({ className } = {}) =>
     `Trùng giờ: giáo viên đã có tiết ở lớp khác cùng giờ${className ? ` (khi xếp lớp ${className})` : ''}.`,
   MSG_TIMETABLE_IMPORT_HAS_ERRORS: 'File còn lỗi nên chưa lưu lớp nào. Hãy sửa theo kết quả kiểm tra rồi nhập lại.',
+  // FE-10 school calendar (Lịch của trường)
+  MSG_SCHOOL_EVENT_NOT_FOUND: 'Không tìm thấy sự kiện này. Sự kiện có thể đã bị xoá.',
+  MSG_SCHOOL_EVENT_TITLE: ({ reason, max } = {}) => (reason === 'TOO_LONG' ? `Tên sự kiện tối đa ${max} ký tự.` : 'Vui lòng nhập tên sự kiện.'),
+  MSG_SCHOOL_EVENT_LOCATION: ({ max } = {}) => `Địa điểm tối đa ${max} ký tự.`,
+  MSG_SCHOOL_EVENT_DESCRIPTION: ({ max } = {}) => `Ghi chú tối đa ${max} ký tự.`,
+  MSG_SCHOOL_EVENT_TIME: ({ reason, min, max } = {}) =>
+    reason === 'PAST' ? 'Thời gian bắt đầu phải sau thời điểm hiện tại.'
+      : reason === 'END_BEFORE_START' ? 'Thời gian kết thúc phải sau thời gian bắt đầu.'
+        : reason === 'NO_YEAR' ? 'Ngày này không thuộc năm học nào. Hãy tạo năm học trước.'
+          : `Sự kiện phải kết thúc trong năm học (${formatVnDate(min)} – ${formatVnDate(max)}).`,
+  MSG_SCHOOL_EVENT_GRADE: 'Khối lớp không hợp lệ. Vui lòng tải lại trang.',
+  MSG_SCHOOL_EVENT_STARTED: 'Sự kiện đã bắt đầu nên không sửa hoặc xoá được nữa.',
+  MSG_SCHOOL_EVENT_CHANGED: 'Sự kiện vừa được sửa ở nơi khác sau khi bạn mở. Hãy tải lại rồi sửa tiếp.',
+  MSG_SCHOOL_EVENTS_NOT_READY: 'Lịch của trường chưa sẵn sàng: cơ sở dữ liệu cần chạy patch_v0.3_school_events.sql.',
+  // FE-10 period times (School Manager)
+  MSG_PERIOD_TIMES_INVALID: ({ field, reason, min, max, earliest, gap, end } = {}) =>
+    field === 'duration' ? `Thời lượng một tiết từ ${min} đến ${max} phút.`
+      : reason === 'OVERLAP' ? `Buổi sau phải bắt đầu từ ${earliest} trở đi (nghỉ giữa hai buổi ít nhất ${gap} phút).`
+        : reason === 'DAY' ? `Giờ học phải nằm trong ${min} – ${max} (đang kết thúc lúc ${end}).`
+          : reason === 'COUNT' ? 'Số buổi học vừa thay đổi. Vui lòng tải lại trang.'
+            : 'Giờ bắt đầu không hợp lệ (giờ:phút).',
+  MSG_PERIOD_TIMES_CHANGED: 'Giờ học vừa được người khác thay đổi sau khi bạn mở trang. Hãy tải lại để xem giờ mới.',
+  MSG_PERIOD_TIMES_EMPTY: 'Chưa có tiết học nào trong cơ sở dữ liệu.',
   // FE-10 class calendar (UC-76..UC-80)
   MSG_CALENDAR_NOT_READY: 'Bảng lịch lớp chưa có trong cơ sở dữ liệu.',
   MSG_EVENT_RANGE: 'Chỉ xem được tối đa 62 ngày một lần.',

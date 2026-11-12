@@ -11,6 +11,7 @@ export const CATEGORY_STYLE = {
   PARENT_MEETING: { tone: 'blue', icon: 'groups' },
   CLASS_MEETING: { tone: 'ink', icon: 'diversity_3' },
   OTHER: { tone: 'grey', icon: 'event_note' },
+  SCHOOL: { tone: 'green', icon: 'school' }, // school calendar (school_events), shown read only in the class calendar
 };
 export const styleOf = (code) => CATEGORY_STYLE[code] ?? CATEGORY_STYLE.OTHER;
 
