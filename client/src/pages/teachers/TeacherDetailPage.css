@@ -178,3 +178,6 @@
   .td-schedule-head { flex-direction: column; align-items: flex-start; }
 }
 @media (prefers-reduced-motion: reduce) { .td-skeleton { animation: none; } }
+a.td-tag { text-decoration: none; }
+a.td-tag:hover { text-decoration: underline; }
+.td-card .security-actions { margin-top: 12px; }

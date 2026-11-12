@@ -6,6 +6,7 @@
 // an apostrophe or hyphen between letters ("H'Hen Niê"). No digits, no symbols, no emoji. Each word starts with a
 // capital letter.
 import { normalizePhone } from '../../utils/phone.js';
+import { foldVietnamese } from '../../utils/search.js';
 
 // Zero-width spaces/joiners, BOM, soft hyphen, bidi marks and control characters: invisible, never wanted.
 const INVISIBLE = /[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F-\u009F­​-‏‪-‮⁠-⁤﻿]/g;
@@ -33,6 +34,26 @@ export function cleanText(value) {
     .replace(/\s+/g, ' ')
     .trim();
 }
+
+// Department name (UC-114): letters, digits, spaces and . , - – ( ) & / ' – e.g. "Tổ Toán – Tin", "Tổ 1 (Khối 10)".
+// Dashes are kept as typed (the existing names use "–"); invisible characters and extra spaces are removed.
+const DEPARTMENT_ALLOWED = /^[\p{L}\p{M}\p{N} .,\-‐-―()&/']+$/u;
+
+/** Returns { value, reason }: value = the cleaned name, reason = a NAME_REASON code when the name is not usable. */
+export function checkDepartmentName(input, { min = 2, max = 100 } = {}) {
+  const value = typeof input === 'string'
+    ? input.normalize('NFC').replace(INVISIBLE, '').replace(APOSTROPHES, "'").replace(/\s+/g, ' ').trim()
+    : '';
+  if (!value) return { value, reason: NAME_REASON.REQUIRED };
+  if (!DEPARTMENT_ALLOWED.test(value)) return { value, reason: NAME_REASON.INVALID_CHAR };
+  if (!/\p{L}/u.test(value)) return { value, reason: NAME_REASON.NO_LETTER };
+  if (value.replace(/[^\p{L}\p{N}]/gu, '').length < min) return { value, reason: NAME_REASON.TOO_SHORT };
+  if (value.length > max) return { value, reason: NAME_REASON.TOO_LONG };
+  return { value, reason: null };
+}
+
+/** Key to compare department names: no accents, no case, every dash the same, single spaces. */
+export const departmentKey = (name) => foldVietnamese(String(name).replace(DASHES, '-')).replace(/\s+/g, ' ').trim();
 
 // "phạm  thu hà" -> "Phạm Thu Hà"; "h'hen niê" -> "H'hen Niê" (only the first letter of each word changes).
 function capitalizeWords(value) {

@@ -28,7 +28,21 @@ reactions, attachments) is merged into one place after both are on `develop`.
 
 ## Current status (read first; update after every merge, schema patch or new decision)
 
-Last updated: 07/11/2026 (FE-06 Messaging merged with UC-110..UC-113, patch run on the shared DB; FE-13 departments
+Last updated: 11/11/2026 – FE-05 Group Feed, FE-08 School Feed, FE-14 Parent Management and the shared storage merged
+(one merge of `feature/fe-05-group-feed`); FE-03 additions merged (UC-114..UC-116, assignments by date range); patches
+`department_subjects`, `school_post_roles`, `attachment_storage` on the shared DB; videos 1–50 MB (lead, §13).
+51 tables in `develop` (53 on the shared DB with FE-10), 116 use cases, 73 screens. It2 left: FE-10 timetable (Dung).
+Notes from the FE-05 branch (Khanh, 11/11): FE-05 Group Feed started on `feature/fe-05-group-feed`, FE-08 branch merged into it to
+reuse `feedInteractions.js` / `CommentThread.jsx`; lead agreed the FE-05 post-state rules, business rules §5:
+rejected / hidden / unhide / edit back to pending / max 5 pins / approval switch / no SM approval in classes / 5,000
+characters). FE-05 server done (`modules/posts`, UC-36..UC-46 + `PUT /groups/:groupId/post-approval`, signals
+`post:changed` / `post:comment` / `post:comment-deleted` / `feed:settings`; new shared `utils/requestParsers.js`),
+tested on the local DB. FE-05 client done: `pages/groupfeed/` (SCR-35 feed with tabs Bảng tin / Bài của tôi /
+Chờ duyệt / Đã ẩn, SCR-36/38 one form, SCR-37 detail, mobile layout), approval switch on SCR-21 (`canSetApproval` on
+GET /groups/:id). Two backward-compatible additions in FE-08 shared client code (Anh to confirm): `useLike(..., requests)`
+and `CommentThread canWrite` (read-only comments). Not yet clicked through in a browser. Note: `dev-local-db.js` cannot start from a folder whose path has
+accents (initdb fails on "Đồ Án"); copy `server/` + `database/` to an ASCII path to run it.
+Before: 07/11/2026 (FE-06 Messaging merged with UC-110..UC-113, patch run on the shared DB; FE-13 departments
 merged (It1 item #2 done); lead accepted Khanh's FE-06 decisions and assumptions (business rules §6) and the 1–1440
 min range of `chat.delete_for_everyone_minutes`;
 It2: Anh FE-08 + FE-14, Khanh FE-05 + FE-06).
@@ -41,7 +55,14 @@ It2: Anh FE-08 + FE-14, Khanh FE-05 + FE-06).
   `patch_v0.3_departments.sql` (FE-03, already run before review; kept by the lead 02/11: table `departments`) +
   `patch_v0.3_class_track_grade.sql` (FE-04, run by Khanh 02/11 before approval; accepted 03/11:
   `class_tracks.grade_level_id`) +
-  `patch_v0.3_message_actions.sql` (FE-06, run by Khanh 07/11 after the lead's OK: reply, delete, reactions). 50 tables.
+  `patch_v0.3_message_actions.sql` (FE-06, run by Khanh 07/11 after the lead's OK: reply, delete, reactions) +
+  `patch_v0.3_department_subjects.sql` (FE-03, run by Dung 11/11 after the lead's OK: table `department_subjects`
+  with the starting list, business rules §4) +
+  `patch_v0.3_school_post_roles.sql` (FE-08, Anh: column `school_posts.target_roles`) +
+  `patch_v0.3_attachment_storage.sql` (storage, Anh: `attachments.storage_key` / `bucket` + check). Both checked on the
+  shared DB by the lead 11/11. 51 tables in `develop`.
+  The shared DB also has `timetables` and `timetable_entries` from FE-10's `patch_v0.3_timetables.sql` (Dung, run
+  11/11, lead OK), so `npm run db:check` shows **53 tables** until FE-10 is merged.
 - **Sample data added to the shared DB (03/11, Anh, accepted by the lead 03/11), through the app API (UC-96, UC-14, UC-28),
   no SQL:** 90 student accounts `HS7001..HS7090` (no class yet), 90 parent accounts with phones
   `0977000001..0977000090` (all with `must_change_password`), 65 links (HS7001–7020 two parents, HS7021–7045 one,
@@ -69,10 +90,34 @@ It2: Anh FE-08 + FE-14, Khanh FE-05 + FE-06).
     finished by the lead (see "FE-02 (Anh)" below). No schema change.
   - FE-13 (Linh) commit "select a specialized department/team" merged 07/11 (create / import accounts pick a
     department, `admin/departments.js`).
+  - FE-03 additions (Dung) merged 11/11: UC-114 Manage Departments, UC-115 Export Teacher List, UC-116 Import
+    Teachers, UC-18 teaching assignments by date range, teacher list / detail fixes (details in "FE-03 additions" below).
   - FE-06 (Khanh) merged 07/11: UC-47 Chat in Group, UC-48 View Conversation List, UC-49 Send Private Message,
     UC-110..UC-113 message actions, UC-35 teacher teams; module `server/src/modules/conversations/`, screens in
     `client/src/pages/chat/`. Needs `patch_v0.3_message_actions.sql` (run on the shared DB 07/11).
-- **Not merged yet:** none of It1. It2 branches start from `develop`.
+  - FE-05 Group Feed (Khanh), FE-08 School Feed + FE-14 Parent Management + shared storage (Anh) merged 11/11, all
+    through `feature/fe-05-group-feed` (it contains `feature/fe-08-school-feed`, `feature/fe-14-parent-management`
+    and `feature/storage-supabase`). Details below.
+- **Not merged yet:** none of It1. It2 branches start from `develop`. Still open in It2: FE-10 timetable (Dung).
+  - FE-14 Parent Management (Anh, It2) – merged 11/11: UC-104 parent list, UC-105 parent detail with the linked
+    children, UC-106 update profile (`fullName`, `occupation`, `address` only; login identifiers are not touched).
+    Server `server/src/modules/parents/` (`GET /parents`, `GET /parents/:parentId`, `PATCH /parents/:parentId`,
+    School Manager only). The UC-13 screen now uses `GET /parents`; the temporary `GET /students/parents/lookup`
+    (server) and `lookupParentByPhone` (`client/src/api/students.js`, no longer called) are not removed yet.
+  - FE-08 School Feed (Anh, It2) – merged 11/11: UC-58..UC-66 (all 9 UC), screens SCR-02 School Feed, SCR-05
+    School Post Detail, SCR-31 Create School Post, SCR-06 Update School Post. The school feed is the home screen
+    (`HOME_BY_ROLE`) and the first menu item of every role except System Admin. Layout per Stitch: three tabs
+    Tất cả / Thông báo / Tin tức; the "Lịch sắp tới của trường" column is an empty frame until FE-10 (Dung).
+    Comments are a tree (top-level newest first, replies oldest first; `utils/feedInteractions.js`
+    `listComments`, shared with FE-05). Attachments: built 11/11 on the shared storage layer (Supabase Storage, UC-60..UC-62).
+  - FE-08 real time (approved by the lead 09/11): room `schoolpost:<id>` (client sends `schoolpost:join` /
+    `schoolpost:leave`, checked with UC-59's rule), events `schoolpost:comment` and `schoolpost:comment-deleted`
+    (to the room) and `schoolpost:changed` (to `user:<id>` of every reader). Signals carry ids only; the client
+    reloads through the API. No event for likes. Sent after COMMIT. Khanh's chat part of `sockets/index.js` is
+    unchanged.
+  - FE-08 role audience (approved by the lead 09/11): `school_posts.target_roles` (STUDENT / PARENT / TEACHER),
+    multiplied with the grade / class targets; NULL = every role. In the code, the homeroom teacher of a targeted
+    class or grade always gets the post (`homeroomMatchSql`, marked "Decision 2" in `schoolposts.service.js`). Needs `patch_v0.3_school_post_roles.sql` (run on the shared DB, see above).
 - **FE-03 review (02/11):** endpoints work and the client builds. Lead decisions: keep the `departments` table;
   Dung's assumptions became business rules §4 "Teachers" (homeroom max 1 class per year, no new assignment for a
   locked teacher, assignments never back-dated, at least one subject per teacher, no empty pair while lessons
@@ -127,11 +172,20 @@ It2: Anh FE-08 + FE-14, Khanh FE-05 + FE-06).
   | 2 | FE-13 departments: create / import pick from the `departments` list (details below) | Linh | **done**, merged 07/11 (the follow-up patch is still open) |
   | 3 | Replace the temporary `GET /students/parents/lookup` with FE-14 UC-104 | Anh | with FE-14 (It2) |
   | 4 | Shared Excel reading `utils/excel.js` for UC-96 / UC-14 / UC-27 (It2 clean-up, after the features merge) | Linh | It2 clean-up |
-  | 5 | Decide: who adds a new department (SQL only today, or a screen for SM / SA) | Quoc | before Linh starts #2 |
+  | 5 | Decide: who adds a new department (SQL only today, or a screen for SM / SA) | Quoc | **decided 07/11**: School Manager, Departments screen (UC-114, FE-03, merged 11/11) |
   | 6 | Decide: the empty test school years on the shared DB (2025-2026, 2028-2029, 2030-2031; no classes; `school_years` has no `deleted_at`) – keep or remove | Quoc | 07/11 |
   | 7 | Decide: daily job to sync class groups when an assignment ends later (see "Open" below; proposal: FE-09, It3) | Quoc | before It3 |
 
+- **FE-03 additions (Dung, 07/11, agreed with the lead; merged into `develop` 11/11):** UC-114 Manage Departments (`/departments`, SCR-72), UC-115 Export Teacher List
+  (`GET /teachers/export`), UC-116 Import Teachers (`/teachers/import…`, SCR-73, reuses FE-13's
+  `accountImport.service.js`), teaching assignments with start and end dates and history by range (UC-18,
+  `GET /teaching-assignments?from=&to=`, `PUT` body `{ startDate, endDate }`; `date` is still read as the start).
+  Rules in business rules §4 "Teachers". Touches FE-13 files (Linh, please review): `admin/departments.js`
+  (department names compared with FE-03's `departmentKey`, so "Tổ Toán - Tin" typed with "-" matches "Tổ Toán – Tin")
+  and `pages/admin/ImportAccountsPage.jsx` (optional `config` prop; System Admin page unchanged).
 - **Follow-ups owed:**
+  - FE-10 (Dung, It2): the timetable uses the date ranges of `teaching_assignments` – a period's teacher is the one
+    whose assignment covers that date (no substitute teaching outside an assignment).
   - FE-13 (Linh): pull `develop` and continue from it; do not run SQL patches on the shared DB before the lead
     approves them.
   - FE-13 (Linh), after FE-06 (owed since 07/11): the setting `chat.delete_for_everyone_minutes` is listed on the
@@ -193,6 +247,29 @@ It2: Anh FE-08 + FE-14, Khanh FE-05 + FE-06).
       `utils/excel.js` clean-up with FE-13 in It2.
   - FE-14 (Anh, It2 since 03/11): uses UC-104..UC-106; a parent's address is `users.address`, occupation stays
     `parents.occupation`.
+  - FE-08 / FE-14 (Anh), owed since 09/11 (both merged 11/11):
+    - Now that FE-14 is merged: remove the temporary `GET /students/parents/lookup` (`students.routes.js`,
+      `lookupParent` in `students.controller.js`) and the client's `lookupParentByPhone` (closing item #3).
+    - Error codes not in `client/src/messages.js` yet, waiting for the lead's OK (checked in the code 09/11; the
+      pages keep their own texts meanwhile):
+      - FE-08: `MSG_AUDIENCE_REQUIRED`, `MSG_CANNOT_PIN_NEWS`, `MSG_CANNOT_REACT_NEWS`, `MSG_CANNOT_COMMENT_NEWS`,
+        `MSG_SCHOOL_POST_NOT_FOUND`, `MSG_GRADE_NOT_FOUND`, `MSG_COMMENT_NOT_FOUND`, `MSG_INVALID_PARENT_COMMENT`,
+        `MSG_PARENT_COMMENT_DELETED`, `MSG_FIELD_NOT_EDITABLE`, `MSG_NO_FIELDS_TO_UPDATE`.
+      - FE-14: `MSG_FIELD_NOT_EDITABLE`, `MSG_NO_FIELDS_TO_UPDATE` (also thrown by FE-02 UC-09).
+      - `MSG_INVALID_PARAM` (both) stays a screen text, as for FE-02.
+    - `CLAUDE.md` says to push with ``io.to(`group:${id}`)``, but `sockets/index.js` has no `group:<id>` room: only
+      `user:<id>` (joined automatically) and, since FE-08, `schoolpost:<id>` (joined by the client).
+    - Import cycle `sockets/index.js` ↔ `schoolposts.service.js` (the socket imports `assertCanSeeSchoolPost`, the
+      service imports `emitToUsers` / `emitToSchoolPost`). It works (both are only used at run time), but Khanh
+      should know before adding top-level code to `sockets/index.js`.
+    - It2 clean-up (with closing item #4): `TARGETABLE_ROLES` is declared twice (`schoolposts.service.js` and
+      `client/src/pages/schoolfeed/schoolFeedShared.jsx`); `client/src/pages/schoolfeed/leaveGuard.jsx` is a copy of
+      the `useLeaveGuard` in `pages/students/UpdateStudentPage.jsx`; the query checks `optionalString`,
+      `optionalInt`, `optionalEnum`, `rejectUnknownKeys` are copied from `students.controller.js` into
+      `parents.controller.js`.
+    - Khanh (FE-05) can pull from `feature/fe-08-school-feed`: `server/src/utils/feedInteractions.js` (likes and
+      comment tree rows) and `client/src/components/CommentThread.jsx` (+ `.css`; gets its API calls and live
+      signals as props).
   - Done by the lead 04/11 (branch `fix/it1-follow-ups`):
     - Group sync for FE-03 saves: `homeroom.service.js` (UC-19) and `teaching.service.js` (UC-18) call
       `syncClassTeachers(conn, classId)` for every class they change, in the same transaction, after saving.

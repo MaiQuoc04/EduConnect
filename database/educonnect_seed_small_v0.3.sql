@@ -170,6 +170,17 @@ JOIN users u ON u.username = v.username;
 INSERT INTO departments (department_name)
 SELECT DISTINCT department FROM teachers WHERE department IS NOT NULL ORDER BY department;
 
+-- Subjects of each department (FE-03, 07/11): HĐTN belongs to no department
+INSERT INTO department_subjects (department_id, subject_id)
+SELECT d.department_id, s.subject_id
+FROM (VALUES
+  ('Tổ Toán – Khoa học tự nhiên', ARRAY['TOAN', 'LY', 'HOA', 'SINH', 'TIN', 'CN']),
+  ('Tổ Ngữ văn – Khoa học xã hội', ARRAY['VAN', 'SU', 'DIA', 'KTPL']),
+  ('Tổ Ngoại ngữ – Thể chất', ARRAY['ANH', 'GDTC', 'QPAN'])
+) AS m(department_name, codes)
+JOIN departments d ON d.department_name = m.department_name
+JOIN subjects s ON s.subject_code = ANY(m.codes);
+
 INSERT INTO students (user_id, student_code, dob, gender)
 SELECT u.user_id, v.code, v.dob::date, v.gender
 FROM (VALUES
