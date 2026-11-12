@@ -14,6 +14,7 @@ import { errorText } from '../../messages.js';
 import ConfirmDialog from '../groups/ConfirmDialog.jsx';
 import { CommentCount, formatDateTime, isEdited, LikeButton, useLike } from '../schoolfeed/schoolFeedShared.jsx';
 import './GroupFeed.css';
+import ActivityFeedCard from '../extracurricular/ActivityFeedCard.jsx';
 
 // FE-05 Group Feed (owner: Khanh): pieces shared by SCR-35 Group Feed, SCR-37 Group Post Detail and the form
 // (SCR-36 / SCR-38). Like button, comment count, date format and the comment tree come from FE-08 (shared feed code).
@@ -142,6 +143,8 @@ export function PostCard({ post, groupId, groupType, mode = 'feed', onAction, ed
           Xem tiếp
         </Link>
       )}
+      {/* FE-07 (Dung): a post that carries an extracurricular activity shows its card (title, time, registration). */}
+      {post.activity && <ActivityFeedCard activity={post.activity} />}
 
       {(can.interact || can.review) && (
         <footer className="gf-post-foot">

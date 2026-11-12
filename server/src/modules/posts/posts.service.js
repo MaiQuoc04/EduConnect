@@ -4,6 +4,7 @@ import * as feed from '../../utils/feedInteractions.js';
 import { emitToUsers } from '../../sockets/index.js';
 import { activeMemberIds } from '../conversations/conversations.service.js';
 import { findGroupForUser } from '../groups/groupAccess.js';
+import { activitiesOfPosts, assertNotActivity } from '../extracurricular/extracurricular.service.js';
 
 // FE-05 Group Feed (owner: Khanh), UC-36..UC-46. Rules: business-rules §5 (post states agreed by the lead 11/11/2026),
 // permissions.md "Group feed" rows (notes 4, 5, 6, 16).
@@ -83,17 +84,24 @@ function permissionsOf(post, user, group) {
 // Likes and comment counts of a page of posts: 2 queries for the whole page (no N+1).
 async function decorate(posts, user, group, db = pool) {
   const ids = posts.map((p) => p.postId);
-  const [likes, comments] = await Promise.all([
+  const [likes, comments, activities] = await Promise.all([
     feed.countLikes(POST, ids, user.userId, db),
     feed.countComments(POST, ids, db),
+    activitiesOfPosts(ids, db), // FE-07 (Dung): a post that carries an extracurricular activity
   ]);
-  return posts.map((post) => ({
-    ...post,
-    likeCount: likes.get(post.postId)?.likeCount ?? 0,
-    likedByMe: likes.get(post.postId)?.likedByMe ?? false,
-    commentCount: comments.get(post.postId) ?? 0,
-    can: permissionsOf(post, user, group),
-  }));
+  return posts.map((post) => {
+    const activity = activities.get(String(post.postId)) ?? null;
+    const can = permissionsOf(post, user, group);
+    return {
+      ...post,
+      likeCount: likes.get(post.postId)?.likeCount ?? 0,
+      likedByMe: likes.get(post.postId)?.likedByMe ?? false,
+      commentCount: comments.get(post.postId) ?? 0,
+      activity,
+      // FE-07: an activity's post is edited / cancelled through the activity screens (UC-51, UC-52), not here.
+      can: activity ? { ...can, edit: false, delete: false } : can,
+    };
+  });
 }
 
 /**
@@ -312,6 +320,7 @@ export async function updatePost(user, postId, { content }) {
     assertWritable(group);
     if (post.authorId !== user.userId) throw forbidden('FORBIDDEN', 'You can only edit your own posts.');
     if (post.isHidden) throw conflict('MSG_POST_HIDDEN', 'A hidden post cannot be edited.');
+    await assertNotActivity(client, post.postId); // FE-07: 409 MSG_POST_IS_ACTIVITY
     if (post.content === content) {
       return { group, before: post, changed: false, post: (await decorate([post], user, group, client))[0] };
     }
@@ -339,6 +348,7 @@ export async function deletePost(user, postId) {
     const opened = await openPost(client, user, postId, { lock: 'update' });
     assertWritable(opened.group);
     if (opened.post.authorId !== user.userId) throw forbidden('FORBIDDEN', 'You can only delete your own posts.');
+    await assertNotActivity(client, opened.post.postId); // FE-07: cancel the activity instead (UC-52)
     await client.query(`UPDATE posts SET deleted_at = NOW(), deleted_by = $2 WHERE post_id = $1`, [
       opened.post.postId,
       user.userId,
