@@ -21,8 +21,9 @@ const META = {
   'upload.max_file_mb': { group: 'Tải tệp lên', label: 'Dung lượng tối đa của ảnh và tệp', unit: 'MB' },
   'upload.max_video_mb': { group: 'Tải tệp lên', label: 'Dung lượng tối đa của video', unit: 'MB' },
   'attendance.edit_deadline_time': { group: 'Điểm danh', label: 'Giờ cuối giáo viên bộ môn được sửa điểm danh trong ngày', unit: '' },
+  'chat.delete_for_everyone_minutes': { group: 'Tin nhắn', label: 'Thời gian được thu hồi tin nhắn với mọi người', unit: 'phút' },
 };
-const GROUPS = ['Đăng nhập', 'Tải tệp lên', 'Điểm danh', 'Khác'];
+const GROUPS = ['Đăng nhập', 'Tải tệp lên', 'Tin nhắn', 'Điểm danh', 'Khác'];
 
 function errorFor(code, rule) {
   if (code === 'REQUIRED') return 'Vui lòng nhập giá trị.';

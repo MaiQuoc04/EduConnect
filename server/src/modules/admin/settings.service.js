@@ -15,6 +15,8 @@ const RULES = {
   'upload.max_video_mb': { type: 'int', min: 1, max: 50 },
   'otp.expiry_minutes': { type: 'int', min: 1, max: 30 },
   'password_reset.request_cooldown_minutes': { type: 'int', min: 1, max: 1440 },
+  // FE-06: how long after sending a message its sender can still delete it for everyone (business rules §13).
+  'chat.delete_for_everyone_minutes': { type: 'int', min: 1, max: 1440 },
   'attendance.edit_deadline_time': { type: 'time' },
 };
 
