@@ -149,6 +149,7 @@ export default function GroupPostDetailPage() {
                 refreshKey={commentsKey}
                 canWrite={post.can.interact}
                 enterToSend
+                showReplyTarget
               />
             </section>
           )}

@@ -40,6 +40,7 @@ export const MAX_COMMENT_LENGTH = 2000; // same limit as the server (ASSUMPTION 
 const COUNTER_FROM = 200; // the "characters left" counter shows when this close to the limit
 // Indent levels: level 1 (top-level) is flush, level 2 is indented once, level 3 twice; from level 4 on the indent
 // stays the same (deeper replies show "trả lời <tên>" instead), so a deep tree never squeezes the text on a phone.
+// With showReplyTarget (FE-05) every reply shows it, whatever its level.
 const MAX_INDENT_DEPTH = 2; // depth is 0-based: depth 2 = level 3
 
 // TODO FE-08 / FE-05: move these to messages.js once the lead approves the codes (waiting list in the FE-08 summary).
@@ -264,7 +265,7 @@ function CommentNode({ node, depth, parentName, reply, onDelete }) {
           <div className="ct-body">
             <div className="ct-meta">
               <span className="ct-author">{node.authorName}</span>
-              {depth > MAX_INDENT_DEPTH && (
+              {(reply.showTarget ? depth > 0 : depth > MAX_INDENT_DEPTH) && (
                 <span className="caption muted ct-to">
                   <Icon name="subdirectory_arrow_right" size="sm" />
                   trả lời {parentName ?? 'bình luận đã xoá'}
@@ -415,6 +416,7 @@ export default function CommentThread({
   refreshKey = 0,
   canWrite = true, // FE-05: false = read only (no composer, no "Trả lời"), e.g. a hidden post or last year's group
   enterToSend = false, // FE-05: Enter sends (Shift + Enter = new line); default Ctrl + Enter as FE-08 built it
+  showReplyTarget = false, // FE-05: every reply says "trả lời <tên>"; default only from level 4 on, as FE-08 built it
 }) {
   const toast = useToast();
   const { user } = useAuth();
@@ -763,6 +765,7 @@ export default function CommentThread({
   const reply = {
     enabled: canWrite,
     enterToSend,
+    showTarget: showReplyTarget,
     to: replyTo,
     text: replyText,
     setText: setReplyText,
