@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useId, useRef, useState } from 'react';
-import { useLocation, useNavigate, useOutletContext, useParams } from 'react-router-dom';
+import { Link, useLocation, useNavigate, useOutletContext, useParams } from 'react-router-dom';
 import {
   createGroupPost,
   getGroupPost,
@@ -9,14 +9,22 @@ import {
 } from '../../api/groupPosts.js';
 import { UPLOAD_TARGETS } from '../../api/uploads.js';
 import AttachmentPicker, { useAttachmentUploads } from '../../components/AttachmentPicker.jsx';
-import Avatar from '../../components/Avatar.jsx';
 import Icon from '../../components/Icon.jsx';
 import { useAuth } from '../../context/AuthContext.jsx';
 import { useToast } from '../../context/ToastContext.jsx';
 import { errorText } from '../../messages.js';
-import ConfirmDialog from '../groups/ConfirmDialog.jsx';
 import { LeaveDialog, useLeaveGuard } from '../schoolfeed/leaveGuard.jsx';
-import { feedPath, MAX_POST_LENGTH, moderatorName, postLength, postPath } from './groupFeedShared.jsx';
+// The form shell of the school feed (sheet with sections, footer bar, live preview): the same .spf-* rules, so both
+// forms look the same (14/11/2026). The page is wrapped in .school-post-form for the rules scoped to it.
+import '../schoolfeed/SchoolPostForm.css';
+import {
+  FeedConfirmDialog,
+  feedPath,
+  MAX_POST_LENGTH,
+  moderatorName,
+  postLength,
+  postPath,
+} from './groupFeedShared.jsx';
 import { clearDraft, readDraft, writeDraft } from './postDraft.js';
 
 // SCR-36 Create Group Post (UC-38) and SCR-38 Update Group Post (UC-39): one form, `postId` in the URL = edit.
@@ -244,13 +252,13 @@ export default function GroupPostFormPage() {
 
   if (loadError) {
     return (
-      <div className="card card-outline gf-empty">
+      <section className="feed-article feed-article-missing">
         <Icon name="edit_off" />
         <p className="muted">{loadError}</p>
         <button type="button" className="btn btn-secondary" onClick={() => navigate(back)}>
           Quay lại
         </button>
-      </div>
+      </section>
     );
   }
   if (g.readOnly) {
@@ -261,7 +269,15 @@ export default function GroupPostFormPage() {
       </div>
     );
   }
-  if (original === null) return <p className="loading">Đang tải bài viết…</p>;
+  if (original === null) {
+    return (
+      <div className="spf-skeleton" aria-hidden="true">
+        <span />
+        <span />
+        <span />
+      </div>
+    );
+  }
 
   const notice = !willWait
     ? null
@@ -270,141 +286,217 @@ export default function GroupPostFormPage() {
       : post?.isHidden
         ? `Bài đang bị ẩn. Sau khi lưu, bài sẽ được gửi để ${who} duyệt lại và chỉ hiện lại trên bảng tin khi được duyệt.`
         : post?.approvalStatus === 'REJECTED'
-        ? `Sau khi lưu, bài sẽ được gửi để ${who} duyệt lại.`
-        : post?.approvalStatus === 'APPROVED'
-          ? `Sau khi lưu, bài sẽ tạm rời bảng tin cho đến khi ${who} duyệt lại.`
-          : null;
+          ? `Sau khi lưu, bài sẽ được gửi để ${who} duyệt lại.`
+          : post?.approvalStatus === 'APPROVED'
+            ? `Sau khi lưu, bài sẽ tạm rời bảng tin cho đến khi ${who} duyệt lại.`
+            : null;
+  const submitLabel = saving
+    ? 'Đang lưu…'
+    : editing
+      ? resend && willWait
+        ? 'Gửi duyệt lại'
+        : 'Lưu thay đổi'
+      : willWait
+        ? 'Gửi duyệt'
+        : 'Đăng bài';
+  // What the post will carry, for the preview: kept files of the post / draft, then the new uploads.
+  const previewFiles = [
+    ...(editing ? existingFiles.filter((f) => !removedIds.has(f.attachmentId)).map((f) => ({ mimeType: f.mimeType, previewUrl: f.url })) : draftFiles),
+    ...uploads.items.filter((item) => item.status !== 'error'),
+  ];
 
   return (
-    <form className="card card-outline gf-form" onSubmit={submit} noValidate>
-      <h2 className="title-md gf-form-title">
-        <Icon name={editing ? 'edit' : 'edit_square'} />
-        {editing ? 'Sửa bài viết' : 'Tạo bài viết'}
-      </h2>
-
-      <div className="gf-form-who">
-        <Avatar src={user?.avatarUrl} name={user?.fullName ?? ''} size={36} />
-        <span>
-          <strong>{user?.fullName}</strong>
-          <span className="caption muted"> đăng trong {g.title}</span>
-        </span>
+    <div className="school-post-form gf-form-page">
+      <Link to={back} className="back-link">
+        <Icon name="arrow_back" size="sm" />
+        {back === feedPath(g.groupId) ? 'Bảng tin nhóm' : 'Bài viết'}
+      </Link>
+      <div className="page-header">
+        <div>
+          <h1 className="headline-xl">{editing ? 'Sửa bài viết' : 'Tạo bài viết'}</h1>
+          <p>Đăng trong {g.title}.</p>
+        </div>
       </div>
 
-      {showRestored && (
-        <div className="notice gf-draft-notice" role="status">
-          <Icon name="history" />
-          <p>Đã khôi phục bản nháp bạn soạn lúc {savedTime(restored.savedAt)}.</p>
-          <button type="button" className="btn btn-tertiary btn-sm" onClick={() => discardDraft({ thenLeave: false })}>
-            Bỏ bản nháp
-          </button>
-        </div>
-      )}
+      <div className="spf-layout">
+        <form className="card card-outline spf-sheet" onSubmit={submit} noValidate>
+          <section className="spf-section">
+            {showRestored && (
+              <div className="notice gf-draft-notice" role="status">
+                <Icon name="history" />
+                <p>Đã khôi phục bản nháp bạn soạn lúc {savedTime(restored.savedAt)}.</p>
+                <button type="button" className="btn btn-tertiary btn-sm" onClick={() => discardDraft({ thenLeave: false })}>
+                  Bỏ bản nháp
+                </button>
+              </div>
+            )}
+            {notice && (
+              <div className="notice amber">
+                <Icon name="verified" />
+                <p>{notice}</p>
+              </div>
+            )}
+            <div className={`field${tooLong ? ' invalid' : ''}`}>
+              <label htmlFor={fieldId} className="field-label spf-label">
+                <span>
+                  Nội dung <span className="spf-required">*</span>
+                </span>
+                {length >= COUNTER_FROM && (
+                  <span className={`spf-counter mono${tooLong ? ' is-over' : ''}`} aria-live="polite">
+                    {length.toLocaleString('vi-VN')}/{MAX_POST_LENGTH.toLocaleString('vi-VN')}
+                  </span>
+                )}
+              </label>
+              <textarea
+                id={fieldId}
+                className="input spf-content"
+                value={text}
+                onChange={(e) => setText(e.target.value)}
+                // Enter posts, Shift + Enter breaks the line (as the chat and the comments); never while an input method
+                // (Vietnamese Telex / VNI) is still composing a letter.
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) submit(e);
+                }}
+                placeholder="Bạn muốn chia sẻ điều gì với nhóm?"
+                rows={8}
+                autoFocus
+                disabled={saving}
+                aria-invalid={tooLong}
+              />
+              {tooLong ? (
+                <span className="field-error">Nội dung tối đa {MAX_POST_LENGTH.toLocaleString('vi-VN')} ký tự.</span>
+              ) : (
+                <span className="field-help">Enter để đăng, Shift + Enter để xuống dòng.</span>
+              )}
+            </div>
+          </section>
 
-      {notice && (
-        <div className="notice amber">
-          <Icon name="verified" />
-          <p>{notice}</p>
-        </div>
-      )}
+          <section className="spf-section">
+            <AttachmentPicker
+              uploads={uploads}
+              limits={fileLimits.limits}
+              limitsError={fileLimits.error}
+              onReloadLimits={fileLimits.reload}
+              existing={editing ? existingFiles : draftFiles.map((f) => ({ ...f, attachmentId: draftFileId(f) }))}
+              removedIds={removedIds}
+              onToggleExisting={toggleExisting}
+              disabled={saving}
+            />
+          </section>
 
-      <div className={`field${tooLong || error ? ' invalid' : ''}`}>
-        <label htmlFor={fieldId} className="field-label">
-          Nội dung
-          {length >= COUNTER_FROM && (
-            <span className={`caption mono${tooLong ? ' gf-over' : ''}`} aria-live="polite">
-              {length.toLocaleString('vi-VN')}/{MAX_POST_LENGTH.toLocaleString('vi-VN')}
-            </span>
+          {error && (
+            <p className="form-error spf-form-error" role="alert">
+              {error}
+            </p>
           )}
-        </label>
-        <textarea
-          id={fieldId}
-          className="input gf-textarea"
-          value={text}
-          onChange={(e) => setText(e.target.value)}
-          // Enter posts, Shift + Enter breaks the line (as the chat and the comments); never while an input method
-          // (Vietnamese Telex / VNI) is still composing a letter.
-          onKeyDown={(e) => {
-            if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) submit(e);
-          }}
-          placeholder="Bạn muốn chia sẻ điều gì với nhóm?"
-          rows={8}
-          autoFocus
-          disabled={saving}
-          aria-invalid={tooLong || Boolean(error)}
+
+          <div className="spf-footer">
+            {uploads.busy ? (
+              <span id="gpf-footer-note" className="caption spf-footer-note is-blocked" aria-live="polite">
+                <Icon name="cloud_upload" size="sm" />
+                {UPLOADING_HINT}
+              </span>
+            ) : !editing && savedAt ? (
+              <span id="gpf-footer-note" className="caption muted spf-footer-note" aria-live="polite">
+                <Icon name="cloud_done" size="sm" />
+                Đã lưu nháp lúc {savedTime(savedAt)}
+              </span>
+            ) : (
+              <span id="gpf-footer-note" className="caption muted spf-footer-note" aria-live="polite">
+                <Icon name="info" size="sm" />
+                {willWait ? `Bài sẽ hiện trên bảng tin sau khi ${who} duyệt.` : 'Bài hiện ngay trên bảng tin của nhóm.'}
+              </span>
+            )}
+            <div className="spf-footer-buttons">
+              <button type="button" className="btn btn-secondary" onClick={cancel} disabled={saving}>
+                Huỷ
+              </button>
+              <button
+                type="submit"
+                className="btn btn-primary"
+                disabled={saving || empty || tooLong || unchanged || uploads.busy}
+                title={uploads.busy ? UPLOADING_HINT : undefined}
+                aria-describedby="gpf-footer-note"
+              >
+                <Icon name={saving ? 'progress_activity' : 'send'} size="sm" className={saving ? 'sf-spin' : undefined} />
+                {submitLabel}
+              </button>
+            </div>
+          </div>
+        </form>
+
+        <GroupPostPreview
+          text={text}
+          authorName={user?.fullName}
+          groupTitle={g.title}
+          files={previewFiles}
+          waits={willWait}
+          who={who}
         />
-        {tooLong ? (
-          <span className="field-error">Nội dung tối đa {MAX_POST_LENGTH.toLocaleString('vi-VN')} ký tự.</span>
-        ) : (
-          <span className="field-help">Enter để đăng, Shift + Enter để xuống dòng.</span>
-        )}
-        {error && (
-          <span className="field-error" role="alert">
-            {error}
-          </span>
-        )}
       </div>
 
-      <AttachmentPicker
-        uploads={uploads}
-        limits={fileLimits.limits}
-        limitsError={fileLimits.error}
-        onReloadLimits={fileLimits.reload}
-        existing={editing ? existingFiles : draftFiles.map((f) => ({ ...f, attachmentId: draftFileId(f) }))}
-        removedIds={removedIds}
-        onToggleExisting={toggleExisting}
-        disabled={saving}
-      />
-
-      <div className="card-footer">
-        {uploads.busy ? (
-          <span className="caption muted gf-form-status">
-            <Icon name="cloud_upload" size="sm" />
-            {UPLOADING_HINT}
-          </span>
-        ) : (
-          !editing &&
-          savedAt && (
-            <span className="caption muted gf-form-status" aria-live="polite">
-              <Icon name="cloud_done" size="sm" />
-              Đã lưu nháp lúc {savedTime(savedAt)}
-            </span>
-          )
-        )}
-        <button type="button" className="btn btn-secondary" onClick={cancel} disabled={saving}>
-          Huỷ
-        </button>
-        <button
-          type="submit"
-          className="btn btn-primary"
-          disabled={saving || empty || tooLong || unchanged || uploads.busy}
-          title={uploads.busy ? UPLOADING_HINT : undefined}
-        >
-          <Icon name="send" size="sm" />
-          {saving
-            ? 'Đang lưu…'
-            : editing
-              ? resend && willWait
-                ? 'Gửi duyệt lại'
-                : 'Lưu thay đổi'
-              : willWait
-                ? 'Gửi duyệt'
-                : 'Đăng bài'}
-        </button>
-      </div>
       <LeaveDialog open={Boolean(asking)} onStay={stay} onLeave={confirmLeave} />
       {discarding && (
-        <ConfirmDialog
-          title="Bỏ bài đang soạn?"
-          confirmLabel="Bỏ bản nháp"
-          busyLabel="Đang xoá…"
-          icon="delete"
+        <FeedConfirmDialog
+          config={{
+            icon: 'delete',
+            title: 'Bỏ bài đang soạn?',
+            body: 'Nội dung và các tệp đã chọn sẽ bị xoá. Nếu chỉ muốn tạm rời đi, bạn cứ chuyển sang trang khác: bản nháp vẫn được giữ lại.',
+            label: 'Bỏ bản nháp',
+            busy: 'Đang xoá…',
+            keep: 'Tiếp tục soạn',
+            danger: true,
+          }}
+          quote={text.trim()}
+          busy={false}
           onCancel={() => setDiscarding(false)}
-          onConfirm={async () => discardDraft({ thenLeave: true })}
-        >
-          Nội dung và các tệp đã chọn sẽ bị xoá. Nếu chỉ muốn tạm rời đi, bạn cứ chuyển sang trang khác: bản nháp vẫn được
-          giữ lại.
-        </ConfirmDialog>
+          onConfirm={() => discardDraft({ thenLeave: true })}
+        />
       )}
-    </form>
+    </div>
+  );
+}
+
+// Live preview as the post will look in the group feed, in the school form's preview frame (.spf-preview*).
+function GroupPostPreview({ text, authorName, groupTitle, files, waits, who }) {
+  const clean = text.normalize('NFC').trim();
+  const picture = files.find((f) => f.mimeType?.startsWith('image/') && f.previewUrl)?.previewUrl;
+  return (
+    <aside className="spf-preview" aria-label="Xem trước trên bảng tin">
+      <div className="spf-preview-head">
+        <span className="title-sm">Xem trước trên bảng tin</span>
+        <span className="caption muted spf-preview-live">
+          <Icon name="visibility" size="sm" />
+          Cập nhật khi soạn
+        </span>
+      </div>
+      <article className="spf-preview-card">
+        <p className={`label-upper feed-kind${waits ? ' is-pending' : ''}`}>
+          <Icon name={waits ? 'hourglass_top' : 'article'} size="sm" />
+          {waits ? 'Chờ duyệt' : 'Bài viết'}
+        </p>
+        <p className={`spf-preview-text${clean ? '' : ' is-empty'}`}>{clean || 'Nội dung bài viết sẽ hiện ở đây.'}</p>
+        <p className="caption muted spf-preview-meta">
+          {authorName && <span>{authorName}</span>}
+          {authorName && <span aria-hidden="true"> · </span>}
+          <span>{groupTitle}</span>
+        </p>
+        {picture && (
+          <figure className="spf-preview-image">
+            <img src={picture} alt="" />
+          </figure>
+        )}
+        {files.length > 0 && (
+          <p className="caption muted spf-preview-files">
+            <Icon name="attach_file" size="sm" />
+            {files.length} tệp đính kèm
+          </p>
+        )}
+        <p className="caption spf-preview-foot">
+          <Icon name={waits ? 'hourglass_top' : 'favorite'} size="sm" />
+          {waits ? `Hiện trên bảng tin sau khi ${who} duyệt` : 'Thành viên thích và bình luận được'}
+        </p>
+      </article>
+    </aside>
   );
 }
