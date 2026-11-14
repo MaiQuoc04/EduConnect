@@ -1,12 +1,14 @@
 import { useState } from 'react';
-import { downloadGradeTemplate, importGrades, previewGradeImport } from '../../api/grades.js';
+import { downloadGradeTemplate, previewGradeImport } from '../../api/grades.js';
 import Icon from '../../components/Icon.jsx';
 import { errorText } from '../../messages.js';
 import Dialog from '../admin/Dialog.jsx';
 import { fmtScore } from './gradeFormat.js';
 
-// UC-84 Import Grades: download the grade book as Excel (current scores filled in), edit, upload, preview, import.
-// The import is all or nothing; an empty cell keeps the current score.
+// UC-84 Import Grades: download the grade book as Excel (current scores filled in), edit, upload and check. "Nhập điểm"
+// does NOT save: the checked scores are put into the grid as unsaved edits; the teacher can still correct them by hand
+// and saves with "Lưu điểm" (UC-83), which logs the changes like any other edit (FE-11 owner, 14/11/2026).
+// A file with any error cannot be applied; an empty cell keeps the current score.
 const ROW_ERROR = {
   CODE_REQUIRED: () => 'Thiếu mã học sinh.',
   CODE_UNKNOWN: (e) => `Mã ${e.value} không phải học sinh đang học của lớp.`,
@@ -14,7 +16,7 @@ const ROW_ERROR = {
   SCORE_INVALID: (e) => `Cột ${e.column}: "${e.value}" không phải điểm hợp lệ (0–10, tối đa 2 chữ số thập phân).`,
 };
 
-export default function GradeImportPanel({ book, onClose, onImported }) {
+export default function GradeImportPanel({ book, onClose, onApply }) {
   const { classId } = book.class;
   const { subjectId } = book.subject;
   const { semesterId } = book.semester;
@@ -29,10 +31,8 @@ export default function GradeImportPanel({ book, onClose, onImported }) {
     try {
       if (action === 'template') await downloadGradeTemplate(classId, subjectId, semesterId);
       if (action === 'preview') setPreview(await previewGradeImport(classId, subjectId, semesterId, file));
-      if (action === 'import') onImported(await importGrades(classId, subjectId, semesterId, file));
     } catch (err) {
       setError(errorText(err));
-      if (action === 'import' && err.code === 'MSG_IMPORT_HAS_ERRORS') setPreview(null);
     } finally {
       setBusy(false);
     }
@@ -54,10 +54,10 @@ export default function GradeImportPanel({ book, onClose, onImported }) {
             <button
               type="button"
               className="btn btn-primary"
-              onClick={() => run('import')}
+              onClick={() => onApply(preview.rows.flatMap((r) => r.changes))}
               disabled={busy || preview.errorCount > 0 || !preview.changeCount}
             >
-              {busy ? 'Đang nhập…' : `Nhập ${preview.changeCount} điểm`}
+              {`Nhập ${preview.changeCount} điểm vào bảng`}
             </button>
           ) : (
             <button type="button" className="btn btn-primary" onClick={() => run('preview')} disabled={busy || !file}>
@@ -90,7 +90,7 @@ export default function GradeImportPanel({ book, onClose, onImported }) {
               {preview.errorCount
                 ? `${preview.errorCount} dòng có lỗi. Sửa file rồi chọn lại – chưa có điểm nào được lưu.`
                 : preview.changeCount
-                  ? `${preview.changeCount} điểm sẽ được cập nhật.`
+                  ? `${preview.changeCount} điểm sẽ được đưa vào bảng (chưa lưu). Kiểm tra, sửa nếu cần rồi bấm Lưu điểm.`
                   : 'File không thay đổi điểm nào.'}
             </p>
             {changed.length > 0 && (

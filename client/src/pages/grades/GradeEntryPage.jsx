@@ -9,7 +9,8 @@ import '../admin/admin.css';
 import GradeBookTable from './GradeBookTable.jsx';
 import ExportButton from './ExportButton.jsx';
 import GradeImportPanel from './GradeImportPanel.jsx';
-import { BOOK_STATUS, formatDateTime, toApiScore, validScore } from './gradeFormat.js';
+import { BOOK_STATUS, fmtScore, formatDateTime, toApiScore, validScore } from './gradeFormat.js';
+import { cellKey } from './GradeBookTable.jsx';
 import SemesterSelect from './SemesterSelect.jsx';
 import useGradeOptions from './useGradeOptions.js';
 import './grades.css';
@@ -181,7 +182,7 @@ export default function GradeEntryPage() {
         {data && (
           <div className="actions">
             <ExportButton classId={data.class.classId} subjectId={data.subject.subjectId} semesterId={semesterId} disabled={!data.components.length} />
-            <button type="button" className="btn btn-secondary" onClick={() => setDialog('import')} disabled={!data.canEdit || changedKeys.length > 0}>
+            <button type="button" className="btn btn-secondary" onClick={() => setDialog('import')} disabled={!data.canEdit}>
               <Icon name="upload_file" size="sm" /> Nhập từ Excel
             </button>
             <button type="button" className="btn btn-secondary" onClick={() => { setFinalizeError(null); setDialog('finalize'); }} disabled={!data.canFinalize || changedKeys.length > 0}>
@@ -206,6 +207,11 @@ export default function GradeEntryPage() {
               {data.subject.subjectName} · Lớp {data.class.className} · Học kỳ {data.semester.semesterNo}, {data.semester.yearName}
             </h2>
             <span className={`gtag ${status.tone}`}>{status.label}</span>
+            {data.canEdit && (
+              <span className={`gtag ${changedKeys.length ? 'amber' : 'green'}`}>
+                {changedKeys.length ? `Chưa lưu · ${changedKeys.length} ô` : 'Đã lưu'}
+              </span>
+            )}
             {data.lock.status === 'LOCKED' && (
               <span className="caption muted">
                 Chốt lúc {formatDateTime(data.lock.lockedAt)} bởi {data.lock.lockedBy}
@@ -297,10 +303,15 @@ export default function GradeEntryPage() {
         <GradeImportPanel
           book={data}
           onClose={() => setDialog(null)}
-          onImported={(result) => {
-            setBook({ loading: false, data: result.book, error: '' });
+          onApply={(changes) => {
+            // Imported scores become unsaved edits (on top of any typed ones): checked, then saved with "Lưu điểm".
+            setEdits((prev) => {
+              const next = { ...prev };
+              for (const c of changes) next[cellKey(c.enrollmentId, c.componentId, c.attemptNo)] = fmtScore(c.score);
+              return next;
+            });
             setDialog(null);
-            toast(`Đã nhập ${result.changed} điểm từ file.`);
+            toast(`Đã đưa ${changes.length} điểm vào bảng. Kiểm tra rồi bấm Lưu điểm để lưu.`);
           }}
         />
       )}

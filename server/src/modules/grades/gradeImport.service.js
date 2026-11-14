@@ -206,7 +206,10 @@ const summary = (analysed) => ({
     studentCode,
     fullName,
     errors,
-    changes: changes.map(({ column, old, score }) => ({ column, old, score })),
+    // The cell of each change, so the grade entry screen can put the scores into the grid (unsaved) – UC-84.
+    changes: changes.map(({ column, old, score, enrollmentId, componentId, attemptNo }) => ({
+      column, old, score, enrollmentId, componentId, attemptNo,
+    })),
   })),
   errorCount: analysed.filter((r) => r.errors.length).length,
   changeCount: analysed.reduce((n, r) => n + r.changes.length, 0),
@@ -221,8 +224,9 @@ export async function previewImport(params, file, user) {
   return summary(analyse(rows, { components: book.components, enrollments: book.students, scores }));
 }
 
-// UC-84 step 3: import. The file is read first (ExcelJS is async), then checked again against the grade book INSIDE
-// the transaction (another save may have happened since the preview); any error = nothing is saved.
+// UC-84 direct import (API only – the grade entry screen now puts the previewed scores into the grid and saves them
+// with "Lưu điểm"). The file is read first (ExcelJS is async), then checked again against the grade book INSIDE the
+// transaction (another save may have happened since the preview); any error = nothing is saved.
 export async function importGrades(params, file, user) {
   const book = await getBook(params, user);
   assertEditable(book);
