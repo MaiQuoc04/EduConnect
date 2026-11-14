@@ -24,6 +24,7 @@ import {
   moderatorName,
   postLength,
   postPath,
+  postPopupPath,
 } from './groupFeedShared.jsx';
 import { clearDraft, readDraft, writeDraft } from './postDraft.js';
 
@@ -128,7 +129,11 @@ export default function GroupPostFormPage() {
     };
   }, [editing, saveDraft]);
 
-  const back = editing && location.state?.from === 'detail' ? postPath(g.groupId, postId) : feedPath(g.groupId);
+  // Where "Huỷ" and saving lead: the SCR-37 page when edited from it, the feed with the post's pop-up open when edited
+  // from the pop-up, else the feed.
+  const from = editing ? location.state?.from : null;
+  const back =
+    from === 'detail' ? postPath(g.groupId, postId) : from === 'popup' ? postPopupPath(g.groupId, postId) : feedPath(g.groupId);
 
   // Edit: the post as it is now. Create: whether the viewer moderates (their post is approved at once).
   useEffect(() => {
@@ -198,7 +203,14 @@ export default function GroupPostFormPage() {
             ? 'Đã lưu bài viết.'
             : 'Đã đăng bài viết.',
       );
-      leave(() => navigate(pending ? feedPath(g.groupId) : postPath(g.groupId, saved.postId), { replace: true }));
+      // A pending post goes to the feed (it shows under "Bài của tôi"); otherwise the post is opened to be seen.
+      const target =
+        from === 'detail'
+          ? postPath(g.groupId, saved.postId)
+          : pending
+            ? feedPath(g.groupId)
+            : postPopupPath(g.groupId, saved.postId);
+      leave(() => navigate(target, { replace: true }));
     } catch (err) {
       sending.current = false;
       setSaving(false);
