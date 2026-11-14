@@ -30,7 +30,8 @@
 .structure-subject.active { background: var(--ink-50); color: var(--ink-800); font-weight: 500; }
 .structure-subject .meta { font-size: 12px; color: var(--graphite-600); font-weight: 400; }
 .structure-subject.untaught { color: var(--graphite-500); }
-.component-table td { height: auto; padding-top: 8px; padding-bottom: 8px; vertical-align: top; }
+/* Same 52px rows when editing (36px inputs) and when read-only (text), text centred vertically. */
+.component-table td { height: 52px; padding-top: 8px; padding-bottom: 8px; vertical-align: middle; }
 .component-table .input { height: 36px; }
 .component-table .num { width: 110px; }
 
