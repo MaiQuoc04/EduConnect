@@ -137,3 +137,23 @@ describe('parseScore', () => {
     for (const bad of ['10.5', '11', '-1', 'abc', '8.123', '8..5', '1e1']) assert.equal(parseScore(bad).ok, false, bad);
   });
 });
+
+it('Circular 22 rounding: 1 decimal, second decimal 5-9 rounds up', () => {
+  assert.equal(roundScore(7.94), 7.9);
+  assert.equal(roundScore(7.95), 8);
+  assert.equal(roundScore(6.42), 6.4);
+  assert.equal(roundScore(6.48), 6.5);
+  assert.equal(roundScore(7.45), 7.5);
+  assert.equal(roundScore(8.05), 8.1);
+});
+
+it('Circular 22: the student average uses the rounded subject averages', () => {
+  // Maths 7.666… → 7.7 and Physics 7.166… → 7.2: shown average (7.7 + 7.2) / 2 = 7.45 → 7.5 (not 7.4 from 7.416…).
+  const maths = roundScore(23 / 3);
+  const physics = roundScore(21.5 / 3);
+  assert.equal(maths, 7.7);
+  assert.equal(physics, 7.2);
+  assert.equal(roundScore(overallAverage([maths, physics])), 7.5);
+  // Year: (HK1 6.5 + 2 × HK2 7.3) / 3 = 7.033… → 7.0
+  assert.equal(roundScore(yearAverage(6.5, 7.3)), 7);
+});

@@ -162,20 +162,21 @@ export async function computeClass(db, cls) {
               return hit ? hit.score : null;
             }),
           })),
-          average: comps.length ? semesterAverage(comps, scores) : null,
+          average: comps.length ? roundScore(semesterAverage(comps, scores)) : null, // rounded (Circular 22)
         };
       });
       const s1 = bySemester.find((b) => semesters.find((se) => se.semesterId === b.semesterId)?.semesterNo === 1);
       const s2 = bySemester.find((b) => semesters.find((se) => se.semesterId === b.semesterId)?.semesterNo === 2);
-      return { subjectId: sub.subjectId, bySemester, year: yearAverage(s1?.average ?? null, s2?.average ?? null) };
+      // Year average from the rounded semester averages, then rounded itself (Circular 22).
+      return { subjectId: sub.subjectId, bySemester, year: roundScore(yearAverage(s1?.average ?? null, s2?.average ?? null)) };
     });
     const overall = {};
     for (const se of semesters) {
-      overall[se.semesterId] = overallAverage(
-        perSubject.map((p) => p.bySemester.find((b) => b.semesterId === se.semesterId)?.average ?? null),
+      overall[se.semesterId] = roundScore(
+        overallAverage(perSubject.map((p) => p.bySemester.find((b) => b.semesterId === se.semesterId)?.average ?? null)),
       );
     }
-    overall.YEAR = overallAverage(perSubject.map((p) => p.year));
+    overall.YEAR = roundScore(overallAverage(perSubject.map((p) => p.year)));
     return { ...e, perSubject, overall };
   });
 

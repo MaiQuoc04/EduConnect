@@ -12,8 +12,10 @@ export function toNumber(value) {
   return Number.isFinite(n) ? n : null;
 }
 
-// ASSUMPTION (FE-11 owner, 10/11/2026, to confirm with the team lead): averages are shown with 1 decimal, rounded
-// half up (Circular 22). Ranking compares the unrounded values.
+// Circular 22/2021/TT-BGDĐT: every average is rounded to 1 decimal, half up (second decimal 0–4 down, 5–9 up:
+// 7,94 → 7,9; 7,95 → 8,0; 6,48 → 6,5). Each step uses the ROUNDED results of the step before (FE-11 owner,
+// 14/11/2026): subject semester average → subject year average = (HK1 + 2 × HK2) / 3 → student average of the
+// subjects. Ranking compares these rounded averages, so students with the same shown average share a rank.
 export const AVERAGE_DECIMALS = 1;
 
 export function roundScore(value, decimals = AVERAGE_DECIMALS) {
