@@ -2,12 +2,30 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { Link, useOutletContext } from 'react-router-dom';
 import { listGroupPosts } from '../../api/groupPosts.js';
 import Avatar from '../../components/Avatar.jsx';
+import {
+  FeedEmpty,
+  FeedError,
+  FeedPager,
+  FeedPanel,
+  FeedSkeleton,
+  FeedTabs,
+  NewContentPill,
+  useNewContent,
+} from '../../components/feed/Feed.jsx';
 import Icon from '../../components/Icon.jsx';
 import { useAuth } from '../../context/AuthContext.jsx';
 import { useSocket } from '../../context/SocketContext.jsx';
 import { errorText } from '../../messages.js';
+import { formatDateTime } from '../schoolfeed/schoolFeedShared.jsx';
 import { useLiveRefresh } from '../schoolfeed/useLiveRefresh.js';
-import { feedPath, moderatorName, PostCard, useGroupFeedSignals, usePostActions } from './groupFeedShared.jsx';
+import {
+  feedPath,
+  moderatorName,
+  PostCard,
+  postPath,
+  useGroupFeedSignals,
+  usePostActions,
+} from './groupFeedShared.jsx';
 import { readDraft } from './postDraft.js';
 
 // SCR-35 Group Feed – UC-36 View Group Feed, with UC-43 (like), UC-44..UC-46 (moderator) and UC-40 (delete) on each
@@ -15,11 +33,26 @@ import { readDraft } from './postDraft.js';
 //   Bảng tin   live posts, pinned first – everyone
 //   Bài của tôi  the viewer's posts that are pending, rejected or hidden – shown when there are some
 //   Chờ duyệt / Đã ẩn  the moderator's queues
-// Real time: the group's signals re-read the shown list quietly (no skeleton), as FE-08 does.
+// Layout and behaviour as the school feed (14/11/2026, shared components/feed): underline tabs, one page at a time
+// with the pager, the "Có nội dung mới — Tải lại" pill instead of changing the list under the reader, and a right-hand
+// column (pinned posts, approval).
 
-const PAGE_SIZE = 20;
-const MAX_PAGE_SIZE = 50; // server limit; a quiet refresh re-reads at most this many posts
-const SIGNAL_DELAY_MS = 300; // signals arriving together are read with one request
+// ASSUMPTION: 10 posts per page, as the school feed.
+const PAGE_SIZE = 10;
+
+const TAB_NOUN = { feed: 'bài viết', mine: 'bài của bạn', pending: 'bài chờ duyệt', hidden: 'bài đã ẩn' };
+const EMPTY_TEXT = {
+  feed: 'Chưa có bài viết nào trên bảng tin của nhóm.',
+  mine: 'Bạn không có bài nào đang chờ duyệt, bị từ chối hay bị ẩn.',
+  pending: 'Không có bài nào chờ duyệt.',
+  hidden: 'Không có bài nào bị ẩn.',
+};
+
+// What the reader would notice on the page: which posts, in which order and state (not the like / comment counts).
+const signature = (data) =>
+  `${data.total}|${data.items
+    .map((p) => `${p.postId}:${p.isPinned ? 1 : 0}:${p.isHidden ? 1 : 0}:${p.approvalStatus}:${p.updatedAt ?? ''}:${p.createdAt}`)
+    .join(',')}`;
 
 export default function GroupFeedPage() {
   const g = useOutletContext(); // FeedGuard already checked that this group has a feed the viewer may read
@@ -31,88 +64,77 @@ function Feed({ g }) {
   const [draft] = useState(() => readDraft(user?.id, g.groupId)); // read when the feed opens
   const socket = useSocket();
   const [view, setView] = useState('feed');
-  const [state, setState] = useState({ status: 'loading', data: null, items: [], error: '' });
-  const [loadingMore, setLoadingMore] = useState(false);
-  const shown = useRef({ view, count: 0 });
-  const timer = useRef(null);
+  const [page, setPage] = useState(1);
+  const [reloadKey, setReloadKey] = useState(0);
+  const [state, setState] = useState({ loading: true, data: null, error: '' });
+  const listTop = useRef(null);
 
+  // One page of one tab; a newer request always wins (the older one is cancelled).
   useEffect(() => {
-    shown.current = { view, count: state.items.length };
+    const controller = new AbortController();
+    setState((s) => ({ ...s, loading: true }));
+    listGroupPosts(g.groupId, { view, page, pageSize: PAGE_SIZE }, { signal: controller.signal })
+      .then((data) => setState({ loading: false, data, error: '' }))
+      .catch((err) => {
+        if (controller.signal.aborted) return;
+        // A tab the viewer no longer has (e.g. no longer moderator): back to the feed.
+        if (err.status === 403 && view !== 'feed') {
+          setView('feed');
+          setPage(1);
+          return;
+        }
+        setState({ loading: false, data: null, error: errorText(err) });
+      });
+    return () => controller.abort();
+  }, [g.groupId, view, page, reloadKey]);
+
+  const reload = useCallback(() => setReloadKey((n) => n + 1), []);
+  const openTab = (next) => {
+    setView(next);
+    setPage(1);
+  };
+
+  // Real time: a signal never changes the list under the reader; when the same page reads differently, the pill shows.
+  const latest = useRef({ view, page, state });
+  useEffect(() => {
+    latest.current = { view, page, state };
   });
+  const { hasNew, schedule, dismiss } = useNewContent(async () => {
+    const { view: v, page: p, state: s } = latest.current;
+    if (!s.data || s.loading) return false; // a load is on its way and will be fresh
+    const fresh = await listGroupPosts(g.groupId, { view: v, page: p, pageSize: PAGE_SIZE });
+    return latest.current.state === s && signature(fresh) !== signature(s.data);
+  }, state.data);
+  useGroupFeedSignals(socket, g.groupId, () => schedule());
+  useLiveRefresh(socket, () => schedule(0));
 
-  // First page of a view (view change, or "Thử lại").
-  const load = useCallback(
-    (nextView, { quiet = false } = {}) => {
-      if (!quiet) setState((s) => ({ ...s, status: 'loading', error: '' }));
-      const size = quiet ? Math.min(MAX_PAGE_SIZE, Math.max(PAGE_SIZE, shown.current.count)) : PAGE_SIZE;
-      return listGroupPosts(g.groupId, { view: nextView, page: 1, pageSize: size })
-        .then((data) => {
-          if (shown.current.view !== nextView && quiet) return;
-          setState({ status: 'ready', data, items: data.items, error: '' });
-        })
-        .catch((err) => {
-          if (quiet) return; // keep what is shown; the next signal / reconnect tries again
-          // A tab the viewer no longer has (e.g. no longer moderator): back to the feed.
-          if (err.status === 403 && nextView !== 'feed') {
-            setView('feed');
-            return;
-          }
-          setState((s) => ({ ...s, status: 'error', error: errorText(err) }));
-        });
-    },
-    [g.groupId],
-  );
-
-  useEffect(() => {
-    load(view);
-  }, [load, view]);
-
-  const refresh = useCallback(() => {
-    clearTimeout(timer.current);
-    timer.current = setTimeout(() => load(shown.current.view, { quiet: true }), SIGNAL_DELAY_MS);
-  }, [load]);
-  useEffect(() => () => clearTimeout(timer.current), []);
-
-  useGroupFeedSignals(socket, g.groupId, refresh);
-  useLiveRefresh(socket, refresh);
-
-  async function loadMore() {
-    const { data, items } = state;
-    setLoadingMore(true);
-    try {
-      const page = Math.floor(items.length / PAGE_SIZE) + 1;
-      const next = await listGroupPosts(g.groupId, { view, page, pageSize: PAGE_SIZE });
-      const seen = new Set(items.map((p) => p.postId));
-      setState((s) => ({
-        ...s,
-        data: { ...data, total: next.total, counts: next.counts },
-        items: [...s.items, ...next.items.filter((p) => !seen.has(p.postId))],
-      }));
-    } catch {
-      // the button stays; the reader can try again
-    } finally {
-      setLoadingMore(false);
+  function showNew() {
+    dismiss();
+    reload();
+    if (listTop.current && listTop.current.getBoundingClientRect().top < 0) {
+      listTop.current.scrollIntoView({ block: 'start', behavior: 'smooth' });
     }
   }
 
-  // After an action the list is read again: the post may leave this tab (approved, hidden, deleted…).
-  const actions = usePostActions(() => load(view, { quiet: true }));
+  // After the viewer's own action the page is read again at once (the post may leave this tab: approved, hidden…).
+  const actions = usePostActions(reload);
 
   const data = state.data;
   const info = data?.group;
   const counts = data?.counts ?? {};
   const tabs = [
-    { view: 'feed', label: 'Bảng tin' },
-    ...(counts.mine || view === 'mine' ? [{ view: 'mine', label: 'Bài của tôi', count: counts.mine }] : []),
+    { key: 'feed', label: 'Bảng tin' },
+    ...(counts.mine || view === 'mine' ? [{ key: 'mine', label: 'Bài của tôi', count: counts.mine }] : []),
     ...(info?.isModerator
       ? [
-          { view: 'pending', label: 'Chờ duyệt', count: counts.pending },
-          { view: 'hidden', label: 'Đã ẩn', count: counts.hidden },
+          { key: 'pending', label: 'Chờ duyệt', count: counts.pending },
+          { key: 'hidden', label: 'Đã ẩn', count: counts.hidden },
         ]
       : []),
   ];
   const canPost = info ? info.canPost : !g.readOnly;
   const who = moderatorName(g.groupType);
+  const items = data?.items ?? [];
 
   return (
     <div className="gf">
@@ -129,83 +151,118 @@ function Feed({ g }) {
         </div>
       )}
 
-      {canPost && (
-        <Link to={`${feedPath(g.groupId)}/new`} className="card card-outline gf-composer-open">
-          <Avatar src={user?.avatarUrl} name={user?.fullName ?? ''} size={36} />
-          {/* A draft left in this browser (postDraft.js): say so, the form restores it. */}
-          {draft ? (
-            <span className="gf-composer-placeholder is-draft">Tiếp tục bản nháp: {draft.text.trim() || 'tệp đính kèm'}</span>
-          ) : (
-            <span className="gf-composer-placeholder">Bạn muốn chia sẻ điều gì với nhóm?</span>
+      <div className="feed-toolbar gf-toolbar">
+        <FeedTabs tabs={tabs} active={view} onChange={openTab} label="Xem bài viết" />
+      </div>
+
+      <div className="feed-layout">
+        <section className="feed-main" aria-label={tabs.find((t) => t.key === view)?.label} ref={listTop}>
+          {canPost && view === 'feed' && (
+            <Link to={`${feedPath(g.groupId)}/new`} className="feed-card no-foot gf-composer-open">
+              <Avatar src={user?.avatarUrl} name={user?.fullName ?? ''} size={36} />
+              {/* A draft left in this browser (postDraft.js): say so, the form restores it. */}
+              {draft ? (
+                <span className="gf-composer-placeholder is-draft">Tiếp tục bản nháp: {draft.text.trim() || 'tệp đính kèm'}</span>
+              ) : (
+                <span className="gf-composer-placeholder">Bạn muốn chia sẻ điều gì với nhóm?</span>
+              )}
+              <Icon name="edit_square" />
+            </Link>
           )}
-          <Icon name="edit_square" />
-        </Link>
-      )}
-      {canPost && info?.requireApproval && !info.isModerator && (
-        <p className="caption muted gf-hint">
-          <Icon name="verified" size="sm" />
-          Nhóm đang bật duyệt bài: bài của bạn sẽ hiện sau khi {who} duyệt.
-        </p>
-      )}
 
-      {tabs.length > 1 && (
-        <div className="tabs gf-tabs" role="tablist" aria-label="Xem bài viết">
-          {tabs.map((t) => (
-            <button key={t.view} type="button" role="tab" aria-selected={view === t.view} onClick={() => setView(t.view)}>
-              {t.label}
-              {t.count > 0 && <span className="tab-count">{t.count}</span>}
-            </button>
-          ))}
-        </div>
-      )}
-
-      {state.status === 'loading' && !data ? (
-        <p className="loading">Đang tải bảng tin…</p>
-      ) : state.status === 'error' ? (
-        <div className="card card-outline gf-empty">
-          <p className="form-error">{state.error}</p>
-          <button type="button" className="btn btn-secondary" onClick={() => load(view)}>
-            Thử lại
-          </button>
-        </div>
-      ) : state.items.length === 0 ? (
-        <div className="card card-outline gf-empty">
-          <Icon name={view === 'feed' ? 'dynamic_feed' : 'inbox'} />
-          <p className="muted">{EMPTY_TEXT[view]}</p>
-        </div>
-      ) : (
-        <div className={`gf-list${state.status === 'loading' ? ' is-loading' : ''}`}>
-          {view === 'feed' && info?.isModerator && counts.pinned >= info.maxPinned && (
-            <p className="caption muted gf-hint">
-              <Icon name="push_pin" size="sm" />
-              Đã ghim {info.maxPinned} bài, mức tối đa của nhóm.
+          <NewContentPill show={hasNew} onClick={showNew} />
+          {data && !state.error && (
+            <p className="feed-total caption muted">
+              <span className="mono">{data.total.toLocaleString('vi-VN')}</span> {TAB_NOUN[view]}
+              {view === 'feed' && info?.isModerator && counts.pinned >= info.maxPinned && (
+                <> · đã ghim {info.maxPinned} bài, mức tối đa của nhóm</>
+              )}
             </p>
           )}
-          {state.items.map((post) => (
-            <PostCard
-              key={post.postId}
-              post={post}
-              groupId={g.groupId}
-              groupType={g.groupType}
-              onAction={actions.run}
-              editState={{ from: 'feed' }}
-            />
-          ))}
-          {state.items.length < data.total && (
-            <button type="button" className="btn btn-secondary gf-load-more" onClick={loadMore} disabled={loadingMore}>
-              {loadingMore ? 'Đang tải…' : 'Xem thêm bài viết'}
-            </button>
-          )}
-        </div>
-      )}
+          <div className={`feed-list${state.loading && data ? ' is-refreshing' : ''}`}>
+            {state.error ? (
+              <FeedError message={state.error} onRetry={reload} />
+            ) : !data ? (
+              <FeedSkeleton count={3} />
+            ) : items.length === 0 ? (
+              <FeedEmpty icon={view === 'feed' ? 'dynamic_feed' : 'inbox'}>{EMPTY_TEXT[view]}</FeedEmpty>
+            ) : (
+              items.map((post) => (
+                <PostCard key={post.postId} post={post} groupId={g.groupId} onAction={actions.run} listState={{ from: 'feed' }} />
+              ))
+            )}
+          </div>
+          {!state.error && data && <FeedPager page={page} total={data.total} pageSize={PAGE_SIZE} onPage={setPage} />}
+        </section>
+
+        <aside className="feed-side">
+          <PinnedPanel groupId={g.groupId} reloadKey={`${reloadKey}:${counts.pinned ?? ''}`} />
+          <ApprovalPanel info={info} who={who} canPost={canPost} pending={counts.pending} onPending={() => openTab('pending')} />
+        </aside>
+      </div>
       {actions.dialog}
     </div>
   );
 }
 
-const EMPTY_TEXT = {
-  feed: 'Chưa có bài viết nào trên bảng tin của nhóm.',
-  mine: 'Bạn không có bài nào đang chờ duyệt, bị từ chối hay bị ẩn.',
-  pending: 'Không có bài nào chờ duyệt.',
-  hidden: 'Không có bài nào bị ẩn.',
-};
+const PINNED_TEXT_CHARS = 90;
+
+// Right column: the posts pinned by the moderator (pinned posts come first in the feed, at most maxPinned of them).
+function PinnedPanel({ groupId, reloadKey }) {
+  const [pinned, setPinned] = useState(null);
+  useEffect(() => {
+    const controller = new AbortController();
+    listGroupPosts(groupId, { view: 'feed', page: 1, pageSize: 5 }, { signal: controller.signal })
+      .then((data) => setPinned(data.items.filter((p) => p.isPinned)))
+      .catch(() => !controller.signal.aborted && setPinned([]));
+    return () => controller.abort();
+  }, [groupId, reloadKey]);
+
+  return (
+    <FeedPanel icon="push_pin" title="Bài đã ghim" titleId="gf-pinned-title">
+      {pinned === null ? (
+        <p className="caption muted">Đang tải…</p>
+      ) : pinned.length === 0 ? (
+        <p className="feed-panel-empty caption">Chưa có bài nào được ghim.</p>
+      ) : (
+        <ul className="gf-pinned">
+          {pinned.map((p) => (
+            <li key={p.postId}>
+              <Link to={postPath(groupId, p.postId)} state={{ from: 'feed' }} className="gf-pinned-link">
+                <span className="gf-pinned-text">
+                  {p.content.length > PINNED_TEXT_CHARS ? `${p.content.slice(0, PINNED_TEXT_CHARS).trimEnd()}…` : p.content}
+                </span>
+                <span className="caption muted">
+                  {p.authorName} · {formatDateTime(p.createdAt)}
+                </span>
+              </Link>
+            </li>
+          ))}
+        </ul>
+      )}
+    </FeedPanel>
+  );
+}
+
+// Right column: whether posts wait for approval, and the moderator's queue.
+function ApprovalPanel({ info, who, canPost, pending, onPending }) {
+  if (!info) return null;
+  return (
+    <FeedPanel icon="verified" title="Duyệt bài" titleId="gf-approval-title">
+      <p className="caption gf-approval-text">
+        {info.requireApproval
+          ? info.isModerator
+            ? 'Nhóm đang bật duyệt bài. Bài của bạn được đăng ngay; bài của thành viên chờ bạn duyệt.'
+            : `Nhóm đang bật duyệt bài: bài của bạn sẽ hiện sau khi ${who} duyệt.`
+          : 'Nhóm đang tắt duyệt bài: bài đăng hiện ngay trên bảng tin.'}
+      </p>
+      {info.isModerator && (
+        <button type="button" className="btn btn-secondary gf-approval-queue" onClick={onPending}>
+          <Icon name="pending_actions" size="sm" />
+          {pending ? `${pending} bài chờ duyệt` : 'Không có bài chờ duyệt'}
+        </button>
+      )}
+      {!canPost && <p className="caption muted">Bảng tin chỉ còn để xem lại.</p>}
+    </FeedPanel>
+  );
+}
