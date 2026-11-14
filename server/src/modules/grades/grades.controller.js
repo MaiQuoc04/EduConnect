@@ -43,6 +43,10 @@ export async function importTemplate(req, res) {
   const { workbook, filename } = await gradeImport.buildTemplate(bookParams(req), req.user);
   await sendWorkbook(res, workbook, filename);
 }
+export async function exportBook(req, res) {
+  const { workbook, filename } = await gradeImport.buildExport(bookParams(req), req.user);
+  await sendWorkbook(res, workbook, filename);
+}
 export async function importPreview(req, res) {
   res.json(await gradeImport.previewImport(bookParams(req), req.file, req.user));
 }

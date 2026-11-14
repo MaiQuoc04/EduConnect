@@ -24,8 +24,8 @@ export const saveGrades = (classId, subjectId, semesterId, changes) =>
 export const finalizeBook = (classId, subjectId, semesterId) =>
   api.post(`${book(classId, subjectId)}/finalize`, null, { params: { semesterId } }).then((r) => r.data);
 
-export async function downloadGradeTemplate(classId, subjectId, semesterId) {
-  const res = await api.get(`${book(classId, subjectId)}/import/template`, { params: { semesterId }, responseType: 'blob' });
+async function downloadFile(path, params) {
+  const res = await api.get(path, { params, responseType: 'blob' });
   const name = /filename="([^"]+)"/.exec(res.headers['content-disposition'] ?? '')?.[1] ?? 'so-diem.xlsx';
   const url = URL.createObjectURL(res.data);
   const a = Object.assign(document.createElement('a'), { href: url, download: name });
@@ -34,6 +34,11 @@ export async function downloadGradeTemplate(classId, subjectId, semesterId) {
   a.remove();
   URL.revokeObjectURL(url);
 }
+
+export const downloadGradeTemplate = (classId, subjectId, semesterId) =>
+  downloadFile(`${book(classId, subjectId)}/import/template`, { semesterId });
+// The grade book as Excel (every student, scores, semester average) – teacher of the class or School Manager.
+export const exportGradeBook = (classId, subjectId, semesterId) => downloadFile(`${book(classId, subjectId)}/export`, { semesterId });
 
 const upload = (path, semesterId, file) => {
   const form = new FormData();

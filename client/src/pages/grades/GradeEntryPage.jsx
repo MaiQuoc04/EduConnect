@@ -1,12 +1,13 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { finalizeBook, getBook, listMyBooks, saveGrades } from '../../api/grades.js';
+import { exportGradeBook, finalizeBook, getBook, listMyBooks, saveGrades } from '../../api/grades.js';
 import Icon from '../../components/Icon.jsx';
 import { useToast } from '../../context/ToastContext.jsx';
 import { errorText } from '../../messages.js';
 import Dialog from '../admin/Dialog.jsx';
 import '../admin/admin.css';
 import GradeBookTable from './GradeBookTable.jsx';
+import ExportButton from './ExportButton.jsx';
 import GradeImportPanel from './GradeImportPanel.jsx';
 import { BOOK_STATUS, formatDateTime, toApiScore, validScore } from './gradeFormat.js';
 import SemesterSelect from './SemesterSelect.jsx';
@@ -179,6 +180,7 @@ export default function GradeEntryPage() {
         </label>
         {data && (
           <div className="actions">
+            <ExportButton classId={data.class.classId} subjectId={data.subject.subjectId} semesterId={semesterId} disabled={!data.components.length} />
             <button type="button" className="btn btn-secondary" onClick={() => setDialog('import')} disabled={!data.canEdit || changedKeys.length > 0}>
               <Icon name="upload_file" size="sm" /> Nhập từ Excel
             </button>

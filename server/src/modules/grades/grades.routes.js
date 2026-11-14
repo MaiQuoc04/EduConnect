@@ -27,6 +27,7 @@ router.get('/my-books', TEACHER, ctrl.myBooks); // ?semesterId
 router.get('/books/:classId/:subjectId', STAFF, ctrl.getBook); // ?semesterId
 router.put('/books/:classId/:subjectId', TEACHER, ctrl.saveGrades); // UC-83
 router.post('/books/:classId/:subjectId/finalize', TEACHER, ctrl.finalize); // UC-85
+router.get('/books/:classId/:subjectId/export', STAFF, ctrl.exportBook); // ?semesterId – the book as Excel (view scope)
 router.get('/books/:classId/:subjectId/import/template', TEACHER, ctrl.importTemplate); // UC-84
 router.post('/books/:classId/:subjectId/import/preview', TEACHER, uploadSingle('file'), ctrl.importPreview); // UC-84
 router.post('/books/:classId/:subjectId/import', TEACHER, uploadSingle('file'), ctrl.importRun); // UC-84

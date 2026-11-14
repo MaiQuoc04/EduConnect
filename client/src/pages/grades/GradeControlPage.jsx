@@ -6,6 +6,7 @@ import { useToast } from '../../context/ToastContext.jsx';
 import { errorText } from '../../messages.js';
 import Dialog from '../admin/Dialog.jsx';
 import '../admin/admin.css';
+import ExportButton from './ExportButton.jsx';
 import GradeBookTable from './GradeBookTable.jsx';
 import { BOOK_STATUS, formatDateTime } from './gradeFormat.js';
 import SemesterSelect from './SemesterSelect.jsx';
@@ -259,6 +260,7 @@ function BookViewDialog({ book, semesterId, onClose }) {
           {state.data && <GradeBookTable book={state.data} editable={false} />}
         </div>
         <div className="dialog-footer">
+          <ExportButton classId={book.classId} subjectId={book.subjectId} semesterId={semesterId} disabled={!state.data?.components.length} />
           <Link className="btn btn-secondary" to={`/grades/history?semesterId=${semesterId}&classId=${book.classId}&subjectId=${book.subjectId}`}>
             <Icon name="history" size="sm" /> Lịch sử sửa điểm
           </Link>

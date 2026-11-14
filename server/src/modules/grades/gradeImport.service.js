@@ -85,6 +85,74 @@ export async function buildTemplate(params, user) {
   return { workbook, filename };
 }
 
+// Export of a grade book (SCR-44 / SCR-68): every student of the class with each score, the semester average and a
+// note (left the class / missing scores). For reading and printing – to change scores use the import template above.
+// Allowed to everyone who can view the book (assigned teacher, the class's teachers, School Manager), finalized or not.
+const BOOK_STATUS_TEXT = { OPEN: 'Chưa chốt', LOCKED: 'Đã chốt', UNLOCKED: 'Đã mở khoá' };
+
+function vnNow() {
+  const p = Object.fromEntries(
+    new Intl.DateTimeFormat('en-GB', {
+      timeZone: 'Asia/Ho_Chi_Minh', year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hour12: false,
+    })
+      .formatToParts(new Date())
+      .map((x) => [x.type, x.value]),
+  );
+  return { text: `${p.hour}:${p.minute} ${p.day}/${p.month}/${p.year}`, stamp: `${p.year}${p.month}${p.day}` };
+}
+
+export async function buildExport(params, user) {
+  const book = await getBook(params, user);
+  if (!book.components.length) throw conflict('MSG_STRUCTURE_EMPTY', 'This subject has no grade structure yet.');
+  const columns = scoreColumns(book.components);
+  const now = vnNow();
+  const workbook = new ExcelJS.Workbook();
+  const sheet = workbook.addWorksheet('So diem');
+  const lastCol = 3 + columns.length + 2;
+
+  sheet.addRow([`Sổ điểm ${book.subject.subjectName} – Lớp ${book.class.className} – Học kỳ ${book.semester.semesterNo}, năm học ${book.semester.yearName}`]);
+  sheet.getRow(1).font = { bold: true, size: 14 };
+  sheet.addRow([`Trạng thái: ${BOOK_STATUS_TEXT[book.lock.status] ?? book.lock.status} · Xuất lúc ${now.text}`]);
+  sheet.addRow([`Cấu trúc: ${book.components.map((c) => `${c.name} hệ số ${c.weight} (${c.scoreCount} lần)`).join('; ')}`]);
+  sheet.getRow(2).font = { color: { argb: 'FF5F5E5A' } };
+  sheet.getRow(3).font = { color: { argb: 'FF5F5E5A' } };
+  for (const n of [1, 2, 3]) sheet.mergeCells(n, 1, n, lastCol);
+  sheet.addRow([]);
+
+  const header = sheet.addRow(['STT', 'Mã học sinh', 'Họ và tên', ...columns.map((c) => c.header), 'ĐTB học kỳ', 'Ghi chú']);
+  header.font = { bold: true };
+  header.alignment = { vertical: 'middle', horizontal: 'center', wrapText: true };
+  header.getCell(3).alignment = { vertical: 'middle', horizontal: 'left' };
+  header.eachCell((cell) => {
+    cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF4F1FA' } };
+  });
+
+  book.students.forEach((s, i) => {
+    const byKey = new Map(s.scores.map((sc) => [`s_${sc.componentId}_${sc.attemptNo}`, sc.score]));
+    const note = s.status !== 'STUDYING' ? 'Đã rời lớp' : s.missing ? `Thiếu ${s.missing} điểm` : '';
+    const row = sheet.addRow([
+      i + 1,
+      s.studentCode,
+      s.fullName,
+      ...columns.map((c) => byKey.get(c.key) ?? null),
+      s.average ?? null,
+      note,
+    ]);
+    for (let col = 4; col <= 3 + columns.length + 1; col += 1) row.getCell(col).alignment = { horizontal: 'center' };
+    row.getCell(3 + columns.length + 1).font = { bold: true };
+    if (s.status !== 'STUDYING') row.font = { color: { argb: 'FF888780' } };
+  });
+
+  sheet.columns.forEach((col, idx) => {
+    col.width = idx === 0 ? 6 : idx === 1 ? 14 : idx === 2 ? 28 : idx === lastCol - 1 ? 16 : 12;
+  });
+  sheet.views = [{ state: 'frozen', xSplit: 3, ySplit: 5 }];
+  sheet.pageSetup = { orientation: 'landscape', fitToPage: true, fitToWidth: 1, fitToHeight: 0 };
+
+  const filename = `so-diem-${slug(book.class.className)}-${slug(book.subject.subjectCode)}-hk${book.semester.semesterNo}-${now.stamp}.xlsx`;
+  return { workbook, filename };
+}
+
 // Reads the uploaded file against the grade book as it is now. Returns one entry per data row.
 function analyse(rows, { components, enrollments, scores }) {
   const columns = scoreColumns(components);
