@@ -101,3 +101,21 @@
   .grade-toolbar .field, .grade-toolbar .grow { min-width: 0; flex: 1 1 100%; }
   .grade-toolbar .actions { margin-left: 0; }
 }
+
+/* UC-82 copy dialog: target semester / grade side by side, then a checklist of subjects */
+.copy-targets { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin: 12px 0; }
+.copy-pick-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; flex-wrap: wrap; margin-bottom: 6px; }
+.copy-pick-actions { display: flex; gap: 2px; }
+.copy-pick-actions .btn { height: 28px; padding: 0 8px; font-size: 13px; }
+.copy-pick-list {
+  list-style: none; margin: 0; padding: 4px 0; max-height: 280px; overflow: auto;
+  border: 1px solid var(--graphite-200); border-radius: var(--radius-control);
+}
+.copy-pick-list.is-loading { opacity: 0.5; }
+.copy-pick-list label { display: flex; align-items: center; gap: 10px; padding: 7px 12px; cursor: pointer; }
+.copy-pick-list label:hover { background: var(--graphite-50); }
+.copy-pick-list label.disabled { cursor: default; color: var(--graphite-500); }
+.copy-pick-list label.disabled:hover { background: transparent; }
+.copy-pick-list .grow { flex: 1; }
+.copy-warn { display: flex; align-items: center; gap: 6px; margin-top: 10px; color: var(--amber); }
+@media (max-width: 520px) { .copy-targets { grid-template-columns: 1fr; } }

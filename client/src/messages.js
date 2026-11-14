@@ -262,6 +262,7 @@ const ERROR_MESSAGES = {
   MSG_STRUCTURE_LOCKED: 'Cấu trúc điểm này đã có điểm nên không thể sửa.',
   MSG_STRUCTURE_EMPTY: 'Môn này chưa có cấu trúc điểm.',
   MSG_COPY_SAME: 'Hãy chọn học kỳ, khối hoặc môn khác với bản gốc.',
+  MSG_COPY_TARGETS: 'Hãy chọn ít nhất một môn để sao chép sang (tối đa 50 môn).',
   MSG_GRADES_NOT_ASSIGNED: 'Bạn không được phân công dạy môn này ở lớp này.',
   MSG_GRADES_FINALIZED: 'Sổ điểm đã chốt. Hãy đề nghị quản lý nhà trường mở khoá.',
   MSG_GRADES_NOT_FINALIZED: 'Sổ điểm này chưa được chốt.',

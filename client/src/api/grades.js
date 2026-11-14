@@ -12,6 +12,7 @@ export const getStructure = (semesterId, gradeLevelId, subjectId) =>
   api.get(`/grades/structures/${semesterId}/${gradeLevelId}/${subjectId}`).then((r) => r.data);
 export const saveStructure = (semesterId, gradeLevelId, subjectId, components) =>
   api.put(`/grades/structures/${semesterId}/${gradeLevelId}/${subjectId}`, { components }).then((r) => r.data);
+// to = { semesterId, gradeLevelId, subjectIds: [...] }
 export const copyStructure = (from, to) => api.post('/grades/structures/copy', { from, to }).then((r) => r.data);
 
 // UC-83, UC-84, UC-85 (teacher)

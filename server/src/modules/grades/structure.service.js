@@ -131,8 +131,22 @@ export async function saveStructure({ semesterId, gradeLevelId, subjectId }, bod
   return getStructure({ semesterId, gradeLevelId, subjectId });
 }
 
-// UC-82 Copy Grade Structure: semester 1 → semester 2 of the same subject, or one subject → another, as an
-// independent copy (later edits of one do not change the other). The target's components are replaced.
+// UC-82 Copy Grade Structure: the shown structure → one or several subjects of a semester × grade level, each an
+// independent copy (later edits of one do not change the others). Each target's components are replaced.
+// `to.subjectIds` lists the subjects (`to.subjectId` = one subject, as before). All or nothing, in one transaction:
+// if any target already has grades the whole copy is refused (MSG_STRUCTURE_LOCKED) and nothing changes.
+// ASSUMPTION (FE-11 owner, 14/11/2026): at most 50 subjects per copy (a grade has about 15).
+const MAX_COPY_TARGETS = 50;
+
+function readSubjectIds(to) {
+  const raw = Array.isArray(to.subjectIds) ? to.subjectIds : to.subjectId !== undefined ? [to.subjectId] : [];
+  const ids = [...new Set(raw.map((v) => Number(v)))];
+  if (!ids.length || ids.length > MAX_COPY_TARGETS || ids.some((id) => !Number.isInteger(id) || id <= 0)) {
+    throw badRequest('MSG_COPY_TARGETS', `Choose 1 to ${MAX_COPY_TARGETS} subjects to copy to.`);
+  }
+  return ids.sort((x, y) => x - y); // a fixed order of the advisory locks, so two copies cannot deadlock
+}
+
 export async function copyStructure(body) {
   const from = body?.from ?? {};
   const to = body?.to ?? {};
@@ -141,18 +155,28 @@ export async function copyStructure(body) {
   const fromSubject = await loadSubject(pool, from.subjectId);
   const toSemester = await loadSemester(pool, to.semesterId);
   const toGrade = await loadGradeLevel(pool, to.gradeLevelId);
-  const toSubject = await loadSubject(pool, to.subjectId);
+  const targets = [];
+  for (const id of readSubjectIds(to)) targets.push(await loadSubject(pool, id));
   if (
     fromSemester.semesterId === toSemester.semesterId &&
     fromGrade.gradeLevelId === toGrade.gradeLevelId &&
-    fromSubject.subjectId === toSubject.subjectId
+    targets.some((t) => t.subjectId === fromSubject.subjectId)
   ) {
     throw badRequest('MSG_COPY_SAME', 'Choose a different semester, grade level or subject to copy to.');
   }
   if (toSemester.yearEnded) throw conflict('MSG_YEAR_ENDED', 'This school year has ended.');
   const components = await loadComponents(pool, fromSubject.subjectId, fromGrade.gradeLevelId, fromSemester.semesterId);
   if (!components.length) throw badRequest('MSG_STRUCTURE_EMPTY', 'The structure to copy has no components.');
-  const key = { subjectId: toSubject.subjectId, gradeLevelId: toGrade.gradeLevelId, semesterId: toSemester.semesterId };
-  await withTransaction((client) => replaceComponents(client, key, components));
-  return getStructure({ semesterId: toSemester.semesterId, gradeLevelId: toGrade.gradeLevelId, subjectId: toSubject.subjectId });
+  await withTransaction(async (client) => {
+    for (const t of targets) {
+      const key = { subjectId: t.subjectId, gradeLevelId: toGrade.gradeLevelId, semesterId: toSemester.semesterId };
+      await replaceComponents(client, key, components);
+    }
+  });
+  return {
+    semesterId: toSemester.semesterId,
+    gradeLevelId: toGrade.gradeLevelId,
+    subjectIds: targets.map((t) => t.subjectId),
+    copied: targets.length,
+  };
 }

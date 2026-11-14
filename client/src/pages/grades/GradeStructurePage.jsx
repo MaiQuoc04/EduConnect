@@ -321,14 +321,18 @@ export default function GradeStructurePage() {
         <CopyDialog
           options={options}
           source={{ semesterId, gradeLevelId, subjectId }}
-          subjects={list.data?.subjects ?? []}
+          sourceName={detail.subject?.subjectName ?? ''}
           onClose={() => setCopyOpen(false)}
-          onDone={(target) => {
+          onDone={(result) => {
             setCopyOpen(false);
-            toast('Đã sao chép cấu trúc điểm.');
-            setSemesterId(String(target.semesterId));
-            setGradeLevelId(String(target.gradeLevelId));
-            setSubjectId(String(target.subjectId));
+            toast(result.copied > 1 ? `Đã sao chép cấu trúc điểm sang ${result.copied} môn.` : 'Đã sao chép cấu trúc điểm.');
+            // Stay on the shown subject when the copy went to the same semester and grade; else open the first target.
+            const sameView = String(result.semesterId) === semesterId && String(result.gradeLevelId) === gradeLevelId;
+            if (!sameView) {
+              setSemesterId(String(result.semesterId));
+              setGradeLevelId(String(result.gradeLevelId));
+              setSubjectId(String(result.subjectIds[0]));
+            }
             loadList();
           }}
         />
@@ -337,28 +341,61 @@ export default function GradeStructurePage() {
   );
 }
 
-// UC-82: copy the shown structure to semester 2 of the same subject, or to another subject (any semester / grade).
-function CopyDialog({ options, source, subjects, onClose, onDone }) {
+// UC-82: copy the shown structure to one or several subjects of a semester × grade level (default: semester 2 of the
+// same subject). Subjects that already have grades cannot be chosen; configured ones are replaced (shown as a warning).
+function CopyDialog({ options, source, sourceName, onClose, onDone }) {
   const sourceSemester = options.semesters.find((s) => String(s.semesterId) === source.semesterId);
   const sameYear = options.semesters.filter((s) => s.schoolYearId === sourceSemester?.schoolYearId);
   const otherSemester = sameYear.find((s) => String(s.semesterId) !== source.semesterId);
-  const [target, setTarget] = useState({
-    semesterId: String(otherSemester?.semesterId ?? source.semesterId),
-    gradeLevelId: source.gradeLevelId,
-    subjectId: source.subjectId,
-  });
+  const [semester, setSemester] = useState(String(otherSemester?.semesterId ?? source.semesterId));
+  const [grade, setGrade] = useState(source.gradeLevelId);
+  const [subjects, setSubjects] = useState({ loading: true, items: [], error: '' });
+  const [picked, setPicked] = useState(() => new Set(otherSemester ? [source.subjectId] : []));
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
-  const same =
-    target.semesterId === source.semesterId && target.gradeLevelId === source.gradeLevelId && target.subjectId === source.subjectId;
-  const set = (key) => (e) => setTarget((t) => ({ ...t, [key]: e.target.value }));
+  const sameView = semester === source.semesterId && grade === source.gradeLevelId;
+
+  // The subjects of the chosen semester × grade, with their state there (configured / has grades).
+  useEffect(() => {
+    let alive = true;
+    setSubjects((s) => ({ ...s, loading: true, error: '' }));
+    listStructures(semester, grade)
+      .then((d) => alive && setSubjects({ loading: false, items: d.subjects, error: '' }))
+      .catch((err) => alive && setSubjects({ loading: false, items: [], error: errorText(err) }));
+    return () => {
+      alive = false;
+    };
+  }, [semester, grade]);
+
+  const blockReason = (s) => {
+    if (sameView && String(s.subjectId) === source.subjectId) return 'bản gốc';
+    if (s.locked) return 'đã có điểm';
+    return '';
+  };
+  const selectable = subjects.items.filter((s) => !blockReason(s));
+  // Only subjects that can be chosen here count (a choice kept from another semester or grade is ignored).
+  const chosen = selectable.filter((s) => picked.has(String(s.subjectId)));
+  const replaced = chosen.filter((s) => s.componentCount > 0);
+
+  const toggle = (id) =>
+    setPicked((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  const pickAll = (list) => setPicked(new Set(list.map((s) => String(s.subjectId))));
 
   async function run() {
     setBusy(true);
     setError('');
     try {
-      await copyStructure(source, target);
-      onDone(target);
+      const result = await copyStructure(source, {
+        semesterId: semester,
+        gradeLevelId: grade,
+        subjectIds: chosen.map((s) => s.subjectId),
+      });
+      onDone(result);
     } catch (err) {
       setError(errorText(err));
     } finally {
@@ -376,35 +413,69 @@ function CopyDialog({ options, source, subjects, onClose, onDone }) {
           <button type="button" className="btn btn-secondary" onClick={onClose} disabled={busy}>
             Huỷ
           </button>
-          <button type="button" className="btn btn-primary" onClick={run} disabled={busy || same}>
-            {busy ? 'Đang sao chép…' : 'Sao chép'}
+          <button type="button" className="btn btn-primary" onClick={run} disabled={busy || !chosen.length}>
+            {busy ? 'Đang sao chép…' : chosen.length ? `Sao chép sang ${chosen.length} môn` : 'Sao chép'}
           </button>
         </>
       }
     >
-      <p>Bản sao độc lập với bản gốc. Cấu trúc đang có ở nơi nhận (nếu chưa có điểm) sẽ được thay thế.</p>
-      <SemesterSelect id="copy-semester" semesters={options.semesters} value={target.semesterId} onChange={(v) => setTarget((t) => ({ ...t, semesterId: v }))} label="Sang học kỳ" />
-      <label className="field" htmlFor="copy-grade">
-        <span className="field-label">Khối</span>
-        <select id="copy-grade" className="input" value={target.gradeLevelId} onChange={set('gradeLevelId')}>
-          {options.data.gradeLevels.map((g) => (
-            <option key={g.gradeLevelId} value={g.gradeLevelId}>
-              Khối {g.gradeLevelName}
-            </option>
-          ))}
-        </select>
-      </label>
-      <label className="field" htmlFor="copy-subject">
-        <span className="field-label">Môn</span>
-        <select id="copy-subject" className="input" value={target.subjectId} onChange={set('subjectId')}>
-          {subjects.map((s) => (
-            <option key={s.subjectId} value={s.subjectId}>
-              {s.subjectName}
-            </option>
-          ))}
-        </select>
-      </label>
-      {same && <p className="caption muted">Chọn học kỳ, khối hoặc môn khác với bản gốc.</p>}
+      <p>
+        Sao chép cấu trúc của <strong>{sourceName}</strong> sang các môn được chọn. Mỗi bản sao độc lập với bản gốc.
+      </p>
+      <div className="copy-targets">
+        <SemesterSelect id="copy-semester" semesters={options.semesters} value={semester} onChange={setSemester} label="Sang học kỳ" />
+        <label className="field" htmlFor="copy-grade">
+          <span className="field-label">Khối</span>
+          <select id="copy-grade" className="input" value={grade} onChange={(e) => setGrade(e.target.value)}>
+            {options.data.gradeLevels.map((g) => (
+              <option key={g.gradeLevelId} value={g.gradeLevelId}>
+                Khối {g.gradeLevelName}
+              </option>
+            ))}
+          </select>
+        </label>
+      </div>
+
+      <div className="copy-pick-head">
+        <span className="field-label">Môn ({chosen.length} đã chọn)</span>
+        <div className="copy-pick-actions">
+          <button type="button" className="btn btn-tertiary" onClick={() => pickAll(selectable.filter((s) => !s.componentCount))}>
+            Môn chưa cấu hình
+          </button>
+          <button type="button" className="btn btn-tertiary" onClick={() => pickAll(selectable)}>
+            Tất cả
+          </button>
+          <button type="button" className="btn btn-tertiary" onClick={() => setPicked(new Set())}>
+            Bỏ chọn
+          </button>
+        </div>
+      </div>
+      <ul className={`copy-pick-list${subjects.loading ? ' is-loading' : ''}`}>
+        {subjects.items.map((s) => {
+          const id = String(s.subjectId);
+          const reason = blockReason(s);
+          return (
+            <li key={id}>
+              <label className={reason ? 'disabled' : undefined}>
+                <input type="checkbox" checked={!reason && picked.has(id)} disabled={!!reason || busy} onChange={() => toggle(id)} />
+                <span className="grow">{s.subjectName}</span>
+                <span className="caption muted">
+                  {reason ||
+                    (s.componentCount
+                      ? `${s.componentCount} thành phần${picked.has(id) ? ' · sẽ bị thay thế' : ''}`
+                      : 'chưa cấu hình')}
+                </span>
+              </label>
+            </li>
+          );
+        })}
+      </ul>
+      {subjects.error && <p className="form-error">{subjects.error}</p>}
+      {replaced.length > 0 && (
+        <p className="caption copy-warn">
+          <Icon name="warning" size="sm" /> {replaced.length} môn đã có cấu trúc sẽ bị thay thế bằng cấu trúc của {sourceName}.
+        </p>
+      )}
       {error && (
         <p className="form-error" role="alert">
           <Icon name="error" size="sm" />
