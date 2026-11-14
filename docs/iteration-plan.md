@@ -130,6 +130,10 @@ It2: Anh FE-08 + FE-14, Khanh FE-05 + FE-06).
     pager (10 per page), "Có nội dung mới — Tải lại" pill, right column "Bài đã ghim" + "Duyệt bài"; SCR-37 as the
     school reading canvas with the actions at the top; SCR-36/38 in the school form shell (`SchoolPostForm.css`
     `.spf-*`) with a live preview; confirm dialogs in the `.sf-dialog` style.
+  - **14/11 (Khanh, not committed yet): FE-05 pop-up and long posts.** A click on a card opens the post in a pop-up
+    over the feed (`PostDialog.jsx`, address `?post=<id>`: Back closes it, a copied link opens it); the SCR-37 page
+    stays for old links (both show `PostDetail.jsx`). Editing from the pop-up comes back to it. Cards cut posts after
+    about 280 characters or 6 lines with "Hiển thị thêm" / "Ẩn bớt".
 - **Not merged yet:** none of It1. It2 branches start from `develop`. Still open in It2: FE-10 timetable (Dung).
   - FE-14 Parent Management (Anh, It2) – merged 11/11: UC-104 parent list, UC-105 parent detail with the linked
     children, UC-106 update profile (`fullName`, `occupation`, `address` only; login identifiers are not touched).
