@@ -3,7 +3,6 @@ import { downloadGradeTemplate, previewGradeImport } from '../../api/grades.js';
 import Icon from '../../components/Icon.jsx';
 import { errorText } from '../../messages.js';
 import Dialog from '../admin/Dialog.jsx';
-import { fmtScore } from './gradeFormat.js';
 
 // UC-84 Import Grades: download the grade book as Excel (current scores filled in), edit, upload and check. "Nhập điểm"
 // does NOT save: the checked scores are put into the grid as unsaved edits; the teacher can still correct them by hand
@@ -38,7 +37,8 @@ export default function GradeImportPanel({ book, onClose, onApply }) {
     }
   }
 
-  const changed = preview?.rows.filter((r) => r.changes.length || r.errors.length) ?? [];
+  // Only the rows with errors are listed; a valid file shows one line (the scores are checked in the grid).
+  const errorRows = preview?.rows.filter((r) => r.errors.length) ?? [];
 
   return (
     <Dialog
@@ -57,7 +57,7 @@ export default function GradeImportPanel({ book, onClose, onApply }) {
               onClick={() => onApply(preview.rows.flatMap((r) => r.changes))}
               disabled={busy || preview.errorCount > 0 || !preview.changeCount}
             >
-              {`Nhập ${preview.changeCount} điểm vào bảng`}
+              Nhập điểm
             </button>
           ) : (
             <button type="button" className="btn btn-primary" onClick={() => run('preview')} disabled={busy || !file}>
@@ -88,23 +88,23 @@ export default function GradeImportPanel({ book, onClose, onApply }) {
           <>
             <p className={preview.errorCount ? 'form-error' : 'caption muted'}>
               {preview.errorCount
-                ? `${preview.errorCount} dòng có lỗi. Sửa file rồi chọn lại – chưa có điểm nào được lưu.`
+                ? `${preview.errorCount} dòng có lỗi. Sửa file rồi chọn lại.`
                 : preview.changeCount
-                  ? `${preview.changeCount} điểm sẽ được đưa vào bảng (chưa lưu). Kiểm tra, sửa nếu cần rồi bấm Lưu điểm.`
+                  ? 'File hợp lệ. Bấm Nhập điểm để đưa điểm vào bảng, kiểm tra rồi bấm Lưu điểm.'
                   : 'File không thay đổi điểm nào.'}
             </p>
-            {changed.length > 0 && (
+            {errorRows.length > 0 && (
               <div className="import-preview">
                 <table className="table">
                   <thead>
                     <tr>
                       <th>Dòng</th>
                       <th>Học sinh</th>
-                      <th>Thay đổi / lỗi</th>
+                      <th>Lỗi</th>
                     </tr>
                   </thead>
                   <tbody>
-                    {changed.map((r) => (
+                    {errorRows.map((r) => (
                       <tr key={r.row}>
                         <td>{r.row}</td>
                         <td>
@@ -117,8 +117,6 @@ export default function GradeImportPanel({ book, onClose, onApply }) {
                               {ROW_ERROR[e.code]?.(e) ?? e.code}
                             </div>
                           ))}
-                          {!r.errors.length &&
-                            r.changes.map((c) => `${c.column}: ${c.old === null ? '–' : fmtScore(c.old)} → ${fmtScore(c.score)}`).join('; ')}
                         </td>
                       </tr>
                     ))}
