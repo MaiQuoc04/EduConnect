@@ -1,0 +1,330 @@
+/* Shared feed UI (14/11/2026): FE-08 School Feed (SCR-34 / SCR-35, owner Anh) and FE-05 Group Feed (SCR-35 / SCR-37,
+   owner Khanh) look the same. Values taken from the FE-08 screens (Stitch "SCR-34 School Feed" / "SCR-35 School Post
+   Detail", Ink & Paper); the components are in components/feed/Feed.jsx. Screen-only rules stay in each screen's CSS.
+   Breakpoints as the other screens: 1080px, 900px (app shell becomes a drawer; side column hidden), 640px. */
+
+/* ---------- toolbar: underline tabs (+ optional search) ---------- */
+.feed-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 12px 24px;
+  margin-bottom: 20px;
+  border-bottom: 1px solid var(--graphite-200);
+}
+.feed-tabs { display: flex; gap: 24px; } /* no overflow: the tabs' -1px margin would add a vertical scrollbar */
+.feed-tabs button {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 44px;
+  padding: 0 2px;
+  margin-bottom: -1px;
+  border: 0;
+  border-bottom: 2px solid transparent;
+  background: transparent;
+  font: 500 15px/20px var(--font-ui);
+  color: var(--graphite-600);
+  white-space: nowrap;
+  cursor: pointer;
+  transition: color 0.15s, border-color 0.15s;
+}
+.feed-tabs button:hover { color: var(--graphite-900); }
+.feed-tabs button[aria-selected='true'] { color: var(--ink-700); border-bottom-color: var(--ink-600); }
+.feed-tabs button:focus-visible { outline: 2px solid var(--ink-400); outline-offset: -2px; }
+.feed-tab-count {
+  min-width: 20px;
+  padding: 0 6px;
+  border-radius: 999px;
+  background: var(--graphite-100);
+  font-size: 12px;
+  line-height: 18px;
+  color: var(--graphite-700);
+  font-variant-numeric: tabular-nums;
+  text-align: center;
+}
+.feed-tabs button[aria-selected='true'] .feed-tab-count { background: var(--ink-50); color: var(--ink-700); }
+
+/* ---------- list + side column ---------- */
+.feed-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 280px;
+  gap: 32px;
+  align-items: start;
+}
+.feed-main { min-width: 0; }
+.feed-total { margin-bottom: 8px; }
+.feed-list { display: grid; gap: 12px; transition: opacity 0.15s; }
+.feed-list.is-refreshing { opacity: 0.55; }
+
+/* ---------- card ---------- */
+.feed-card {
+  min-width: 0;
+  padding: 16px 20px 8px;
+  border-radius: var(--radius-card);
+  background: var(--white);
+  outline: 1px solid var(--graphite-200);
+  cursor: pointer;
+  transition: outline-color 0.15s;
+}
+.feed-card:hover { outline-color: var(--graphite-300); }
+.feed-card.is-pinned { background: var(--ink-50); outline-color: var(--ink-200); }
+.feed-card.is-pinned:hover { outline-color: var(--ink-400); }
+.feed-card.no-foot { padding-bottom: 16px; }
+/* A bar on the left edge tells a kind / state at a glance: news (blue, FE-08); pending (amber), rejected (red) and
+   hidden (grey) group posts (FE-05). */
+.feed-card.is-news { box-shadow: inset 3px 0 0 var(--blue); }
+.feed-card.is-pending { box-shadow: inset 3px 0 0 var(--amber); }
+.feed-card.is-rejected { box-shadow: inset 3px 0 0 var(--red-pen); }
+.feed-card.is-hidden { box-shadow: inset 3px 0 0 var(--graphite-400); background: var(--graphite-50); }
+.feed-card-top { display: flex; align-items: center; justify-content: space-between; gap: 8px; min-height: 28px; }
+.feed-kind { display: inline-flex; align-items: center; gap: 4px; color: var(--ink-700); }
+.feed-kind.is-news { color: var(--blue); }
+.feed-kind.is-pending { color: var(--amber); }
+.feed-kind.is-rejected { color: var(--red-pen); }
+.feed-kind.is-hidden { color: var(--graphite-600); }
+.feed-card-tool.btn { width: 44px; height: 44px; margin: -8px -12px -8px 0; color: var(--graphite-500); }
+.feed-card-tool.btn:hover { background: var(--ink-50); color: var(--ink-700); }
+.feed-card.is-pinned .feed-card-tool.btn:hover { background: var(--ink-100); }
+
+.feed-card-body { display: flex; gap: 20px; align-items: flex-start; margin-top: 4px; }
+.feed-card-text { flex: 1; min-width: 0; display: grid; gap: 6px; }
+.feed-title {
+  font-family: var(--font-serif);
+  font-size: 20px;
+  line-height: 27px;
+  font-weight: 600;
+  letter-spacing: -0.005em;
+  overflow-wrap: anywhere;
+}
+.feed-title a { color: var(--graphite-900); }
+.feed-preview {
+  margin: 0;
+  color: var(--graphite-700);
+  overflow-wrap: anywhere;
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+/* A group post has no title: its text is the body of the card, a little larger, line breaks kept. */
+.feed-preview.is-body { -webkit-line-clamp: 5; white-space: pre-wrap; font-size: 15px; line-height: 23px; color: var(--graphite-900); }
+.feed-meta { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 6px; margin: 0; color: var(--graphite-600); }
+.feed-meta .author { color: var(--graphite-700); font-weight: 500; }
+.feed-meta .chip { font-size: 11px; }
+.feed-image {
+  flex: 0 0 200px;
+  height: 132px;
+  margin: 0;
+  border-radius: var(--radius-control);
+  overflow: hidden;
+  background: var(--graphite-100);
+}
+.feed-image img { width: 100%; height: 100%; object-fit: cover; }
+.feed-card-foot {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 16px;
+  margin-top: 8px;
+  padding-top: 4px;
+  border-top: 1px solid var(--graphite-100);
+}
+.feed-card.is-pinned .feed-card-foot { border-top-color: var(--ink-100); }
+.feed-card-actions { margin-left: auto; display: flex; flex-wrap: wrap; gap: 6px; padding: 4px 0; }
+
+/* ---------- side column panel ---------- */
+.feed-side { min-width: 0; display: grid; gap: 16px; }
+.feed-panel {
+  padding: 20px;
+  border-radius: var(--radius-card);
+  background: var(--white);
+  outline: 1px solid var(--graphite-200);
+}
+.feed-panel-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding-bottom: 12px;
+  margin-bottom: 12px;
+  border-bottom: 1px solid var(--graphite-200);
+  font-size: 16px;
+  line-height: 22px;
+  font-weight: 600;
+  color: var(--graphite-900);
+}
+.feed-panel-title .icon { color: var(--ink-700); }
+.feed-panel-empty {
+  padding: 24px 12px;
+  border-radius: var(--radius-control);
+  outline: 1px dashed var(--graphite-300);
+  background: var(--graphite-50);
+  color: var(--graphite-600);
+  text-align: center;
+}
+
+/* ---------- states ---------- */
+.feed-empty {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 20px;
+  border-radius: var(--radius-card);
+  background: var(--graphite-50);
+  outline: 1px dashed var(--graphite-300);
+  color: var(--graphite-600);
+}
+.feed-empty .icon { color: var(--graphite-400); }
+.feed-error { display: grid; justify-items: start; gap: 8px; }
+.feed-skeleton {
+  display: grid;
+  gap: 10px;
+  padding: 20px;
+  border-radius: var(--radius-card);
+  background: var(--white);
+  outline: 1px solid var(--graphite-200);
+}
+.feed-skeleton span { height: 12px; border-radius: 4px; background: var(--graphite-100); animation: feed-pulse 1.2s ease-in-out infinite; }
+.feed-skeleton span:first-child { width: 30%; }
+.feed-skeleton span:nth-child(2) { width: 85%; height: 18px; }
+.feed-skeleton span:last-child { width: 60%; }
+@keyframes feed-pulse { 50% { opacity: 0.5; } }
+@media (prefers-reduced-motion: reduce) { .feed-skeleton span, .feed-article-skeleton span { animation: none; } }
+
+.feed-pager { display: flex; align-items: center; justify-content: center; gap: 12px; margin-top: 16px; }
+.feed-pager .btn { width: 44px; height: 44px; padding: 0; }
+
+/* ---------- real time: "Có nội dung mới — Tải lại" ----------
+   Zero-height sticky wrapper, always in the DOM: the pill floats over the top of the list while the reader scrolls and
+   showing it never moves a card. */
+.feed-new-wrap {
+  position: sticky;
+  top: 12px;
+  z-index: 3;
+  height: 0;
+  display: flex;
+  justify-content: center;
+  overflow: visible;
+}
+.feed-new {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 44px;
+  padding: 0 18px;
+  border: 0;
+  border-radius: 999px;
+  background: var(--ink-700);
+  color: #fff;
+  font: 500 14px/20px var(--font-ui);
+  box-shadow: var(--shadow-menu);
+  cursor: pointer;
+  white-space: nowrap;
+}
+.feed-new:hover { background: var(--ink-800); }
+.feed-new:focus-visible { outline: 2px solid var(--ink-400); outline-offset: 2px; }
+
+/* ---------- one post: the reading canvas (SCR-05 school post, SCR-37 group post) ---------- */
+.feed-article-page { min-width: 0; max-width: 896px; margin: 0 auto; }
+.feed-article-top {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+.feed-article-page .back-link { min-height: 32px; }
+.feed-article-page .breadcrumb { margin-bottom: 0; }
+.feed-article-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.feed-article {
+  position: relative;
+  min-width: 0;
+  padding: 32px 32px 28px;
+  border-radius: var(--radius-card);
+  background: var(--white);
+  outline: 1px solid var(--graphite-200);
+}
+/* Notebook margin rule (Ink & Paper). */
+.feed-article::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 24px;
+  width: 1px;
+  background: var(--ink-200);
+  pointer-events: none;
+}
+.feed-article-inner { min-width: 0; padding-left: 24px; display: grid; gap: 12px; }
+.feed-article-title { color: var(--graphite-900); overflow-wrap: anywhere; }
+.feed-article-meta { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; color: var(--graphite-600); }
+.feed-article-meta .author { color: var(--graphite-700); font-weight: 500; }
+.feed-article-content {
+  margin-top: 8px;
+  font-size: 16px;
+  line-height: 26px;
+  color: var(--graphite-700);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.feed-article-content.is-body { color: var(--graphite-900); }
+.feed-article-files { margin-top: 16px; padding-top: 20px; border-top: 1px solid var(--graphite-200); }
+.feed-article-interactions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px 16px;
+  margin-top: 16px;
+  padding-top: 12px;
+  border-top: 1px solid var(--graphite-200);
+}
+.feed-article-comments { margin-top: 8px; min-width: 0; }
+.feed-article-error { display: grid; justify-items: start; gap: 8px; margin-bottom: 16px; }
+.feed-article-skeleton { display: grid; gap: 14px; padding-left: 24px; }
+.feed-article-skeleton span { height: 14px; border-radius: 4px; background: var(--graphite-100); animation: feed-pulse 1.2s ease-in-out infinite; }
+.feed-article-skeleton span:first-child { width: 20%; }
+.feed-article-skeleton span:nth-child(2) { width: 75%; height: 30px; }
+.feed-article-skeleton span:nth-child(3) { width: 40%; }
+.feed-article-skeleton span:last-child { height: 120px; }
+.feed-article-missing { display: grid; justify-items: center; gap: 10px; padding: 48px 24px; text-align: center; }
+.feed-article-missing > .icon { font-size: 40px; color: var(--graphite-400); }
+.feed-article-missing .btn { margin-top: 8px; }
+
+/* ---------- responsive ---------- */
+@media (max-width: 1080px) {
+  .feed-layout { grid-template-columns: minmax(0, 1fr) 240px; gap: 20px; }
+  .feed-image { flex-basis: 150px; height: 108px; }
+}
+@media (max-width: 900px) {
+  .feed-layout { grid-template-columns: minmax(0, 1fr); }
+  .feed-side { display: none; }
+  .feed-article { padding: 24px 20px 20px; }
+  .feed-article-actions .btn { min-height: 44px; }
+}
+@media (max-width: 640px) {
+  .feed-toolbar { flex-direction: column-reverse; align-items: stretch; gap: 10px; }
+  /* Many tabs on a phone: scroll sideways only (overflow-y hidden, the underline stays inside). */
+  .feed-tabs { gap: 0; overflow-x: auto; overflow-y: hidden; scrollbar-width: none; }
+  .feed-tabs button { margin-bottom: 0; }
+  .feed-tabs button { flex: 1; justify-content: center; padding: 0 8px; }
+  .feed-title a { display: block; padding: 10px 0; margin: -10px 0; }
+  .feed-card { padding: 14px 14px 6px; }
+  .feed-card.no-foot { padding-bottom: 14px; }
+  .feed-card-body { flex-direction: column-reverse; gap: 12px; }
+  .feed-image { flex: none; width: 100%; height: auto; aspect-ratio: 16 / 9; }
+  .feed-title { font-size: 18px; line-height: 24px; }
+  .feed-card-actions { margin-left: 0; width: 100%; }
+  .feed-card-actions .btn { flex: 1; min-height: 44px; }
+  .feed-article-top { align-items: flex-start; }
+  .feed-article-page .back-link { min-height: 44px; margin-bottom: 0; }
+  .feed-article-page .breadcrumb { display: none; }
+  .feed-article-actions { width: 100%; }
+  .feed-article-actions .btn { flex: 1; min-height: 44px; }
+  .feed-article { padding: 20px 14px 16px; }
+  .feed-article::before { left: 12px; }
+  .feed-article-inner { padding-left: 12px; }
+  .feed-article-title { font-size: 24px; line-height: 31px; }
+}
