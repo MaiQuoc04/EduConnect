@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Link, useOutletContext } from 'react-router-dom';
+import { Link, useLocation, useNavigate, useOutletContext, useSearchParams } from 'react-router-dom';
 import { listGroupPosts } from '../../api/groupPosts.js';
 import Avatar from '../../components/Avatar.jsx';
 import {
@@ -21,11 +21,13 @@ import { useLiveRefresh } from '../schoolfeed/useLiveRefresh.js';
 import {
   feedPath,
   moderatorName,
+  POPUP_STATE,
   PostCard,
-  postPath,
+  postPopupPath,
   useGroupFeedSignals,
   usePostActions,
 } from './groupFeedShared.jsx';
+import PostDialog from './PostDialog.jsx';
 import { readDraft } from './postDraft.js';
 
 // SCR-35 Group Feed – UC-36 View Group Feed, with UC-43 (like), UC-44..UC-46 (moderator) and UC-40 (delete) on each
@@ -36,6 +38,8 @@ import { readDraft } from './postDraft.js';
 // Layout and behaviour as the school feed (14/11/2026, shared components/feed): underline tabs, one page at a time
 // with the pager, the "Có nội dung mới — Tải lại" pill instead of changing the list under the reader, and a right-hand
 // column (pinned posts, approval).
+// A post opens in a pop-up over the feed (PostDialog, ?post=<id> in the address), not on another page; long posts are
+// cut on their card ("Hiển thị thêm" / "Ẩn bớt").
 
 // ASSUMPTION: 10 posts per page, as the school feed.
 const PAGE_SIZE = 10;
@@ -68,6 +72,26 @@ function Feed({ g }) {
   const [reloadKey, setReloadKey] = useState(0);
   const [state, setState] = useState({ loading: true, data: null, error: '' });
   const listTop = useRef(null);
+  const navigate = useNavigate();
+  const location = useLocation();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const postParam = searchParams.get('post') ?? '';
+  const openPostId = /^\d{1,16}$/.test(postParam) && Number(postParam) > 0 ? Number(postParam) : null;
+
+  // Open: the post id goes into the address (Back closes the pop-up). Close: one step back when the feed opened it,
+  // else (a copied link) the parameter is simply removed.
+  const openPost = (post) => navigate(postPopupPath(g.groupId, post.postId), { state: POPUP_STATE });
+  const closePost = () => {
+    if (location.state?.fromFeed) navigate(-1);
+    else
+      setSearchParams(
+        (p) => {
+          p.delete('post');
+          return p;
+        },
+        { replace: true },
+      );
+  };
 
   // One page of one tab; a newer request always wins (the older one is cancelled).
   useEffect(() => {
@@ -188,7 +212,7 @@ function Feed({ g }) {
               <FeedEmpty icon={view === 'feed' ? 'dynamic_feed' : 'inbox'}>{EMPTY_TEXT[view]}</FeedEmpty>
             ) : (
               items.map((post) => (
-                <PostCard key={post.postId} post={post} groupId={g.groupId} onAction={actions.run} listState={{ from: 'feed' }} />
+                <PostCard key={post.postId} post={post} groupId={g.groupId} onAction={actions.run} onOpen={openPost} />
               ))
             )}
           </div>
@@ -201,6 +225,7 @@ function Feed({ g }) {
         </aside>
       </div>
       {actions.dialog}
+      {openPostId && <PostDialog key={openPostId} g={g} postId={openPostId} onClose={closePost} onChanged={reload} />}
     </div>
   );
 }
@@ -228,7 +253,7 @@ function PinnedPanel({ groupId, reloadKey }) {
         <ul className="gf-pinned">
           {pinned.map((p) => (
             <li key={p.postId}>
-              <Link to={postPath(groupId, p.postId)} state={{ from: 'feed' }} className="gf-pinned-link">
+              <Link to={postPopupPath(groupId, p.postId)} state={POPUP_STATE} className="gf-pinned-link">
                 <span className="gf-pinned-text">
                   {p.content.length > PINNED_TEXT_CHARS ? `${p.content.slice(0, PINNED_TEXT_CHARS).trimEnd()}…` : p.content}
                 </span>

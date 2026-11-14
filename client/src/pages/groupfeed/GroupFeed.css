@@ -109,3 +109,63 @@
   .gf .btn-sm { height: 36px; } /* a larger touch target */
   .gf-composer-open { padding: 10px 12px; }
 }
+
+/* Long post on a card: "Hiển thị thêm" / "Ẩn bớt" (14/11/2026) */
+.gf-text { display: grid; gap: 2px; justify-items: start; min-width: 0; }
+.gf-more {
+  padding: 4px 0;
+  border: 0;
+  background: none;
+  font: 500 14px/20px var(--font-ui);
+  color: var(--ink-700);
+  cursor: pointer;
+}
+.gf-more:hover { text-decoration: underline; }
+.gf-more:focus-visible { outline: 2px solid var(--ink-400); outline-offset: 2px; border-radius: 2px; }
+
+/* A post in a pop-up over the feed (PostDialog) – the reading canvas inside a native <dialog> */
+.gf-post-dialog {
+  width: min(896px, calc(100vw - 32px));
+  max-width: none;
+  max-height: calc(100dvh - 48px);
+  padding: 0;
+  border: 0;
+  border-radius: var(--radius-dialog);
+  background: var(--paper);
+  color: var(--graphite-900);
+  box-shadow: var(--shadow-dialog);
+  overflow: hidden;
+}
+.gf-post-dialog::backdrop { background: rgba(28, 27, 25, 0.45); }
+.gf-post-dialog-body { max-height: calc(100dvh - 48px); overflow-y: auto; padding: 0 24px 24px; }
+.gf-post-dialog .feed-article-top {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  align-items: center;
+  margin: 0 -24px 16px;
+  padding: 10px 12px 10px 24px;
+  background: var(--paper);
+  border-bottom: 1px solid var(--graphite-200);
+}
+.gf-post-dialog-title { color: var(--graphite-900); }
+.gf-post-dialog-close.btn,
+.gf-dialog-menu.btn { width: 40px; height: 40px; }
+.gf-post-dialog .gf-menu-list { top: calc(100% + 4px); right: 0; }
+.gf-post-dialog .feed-article-missing { padding: 32px 24px; }
+
+@media (max-width: 640px) {
+  .gf-more { padding: 10px 0; margin: -6px 0; } /* a 44px tap height without moving the text */
+  .gf-post-dialog { width: 100vw; height: 100dvh; max-height: 100dvh; border-radius: 0; }
+  .gf-post-dialog-body { max-height: 100dvh; height: 100%; padding: 0 12px 16px; }
+  .gf-post-dialog .feed-article-top { margin: 0 -12px 12px; padding: 8px 8px 8px 16px; gap: 8px; }
+  /* Title and × on the first row, the action buttons under them. */
+  .gf-post-dialog .feed-article-actions { display: contents; }
+  /* the title leaves room for "⋮" and × (2 × 44px + gaps) on the same row */
+  .gf-post-dialog-title { flex: 1 0 calc(100% - 104px); order: 0; }
+  .gf-post-dialog .gf-menu { order: 1; }
+  .gf-dialog-menu.btn { width: 44px; height: 44px; }
+  .gf-post-dialog .gf-post-dialog-close.btn { order: 1; flex: 0 0 44px; width: 44px; height: 44px; min-height: 44px; }
+  .gf-post-dialog .feed-article-actions > .btn:not(.gf-post-dialog-close) { order: 2; flex: 1 1 auto; min-height: 44px; }
+  .gf-post-dialog .feed-article-actions .gf-dialog-menu.btn { flex: none; }
+}

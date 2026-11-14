@@ -108,8 +108,9 @@
   -webkit-box-orient: vertical;
   overflow: hidden;
 }
-/* A group post has no title: its text is the body of the card, a little larger, line breaks kept. */
-.feed-preview.is-body { -webkit-line-clamp: 5; white-space: pre-wrap; font-size: 15px; line-height: 23px; color: var(--graphite-900); }
+/* A group post has no title: its text is the body of the card, a little larger, line breaks kept. It is cut by the
+   page itself (about 280 characters, "Hiển thị thêm" / "Ẩn bớt"), so no line clamp here. */
+.feed-preview.is-body { display: block; overflow: visible; white-space: pre-wrap; font-size: 15px; line-height: 23px; color: var(--graphite-900); }
 .feed-meta { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 6px; margin: 0; color: var(--graphite-600); }
 .feed-meta .author { color: var(--graphite-700); font-weight: 500; }
 .feed-meta .chip { font-size: 11px; }
