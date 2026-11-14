@@ -1,5 +1,5 @@
 import { useEffect, useId, useRef, useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link } from 'react-router-dom';
 import {
   deleteGroupPost,
   groupPostLike,
@@ -8,7 +8,7 @@ import {
   reviewGroupPost,
 } from '../../api/groupPosts.js';
 import Avatar from '../../components/Avatar.jsx';
-import { FeedCardImage, openOnClick } from '../../components/feed/Feed.jsx';
+import { FeedCardImage } from '../../components/feed/Feed.jsx';
 import Icon from '../../components/Icon.jsx';
 import { useToast } from '../../context/ToastContext.jsx';
 import { errorText } from '../../messages.js';
@@ -24,6 +24,26 @@ export const MAX_POST_LENGTH = 5000; // business-rules §5 (11/11/2026), same as
 export const postLength = (text) => [...text.normalize('NFC').trim()].length;
 export const feedPath = (groupId) => `/groups/${groupId}/feed`;
 export const postPath = (groupId, postId) => `${feedPath(groupId)}/${postId}`;
+// The feed with one post open in the pop-up (GroupFeedPage reads ?post=). state.fromFeed: opened from the feed, so
+// closing goes back one step instead of adding one.
+export const postPopupPath = (groupId, postId) => `${feedPath(groupId)}?post=${postId}`;
+export const POPUP_STATE = { fromFeed: true };
+
+// Long posts on a card (14/11/2026): cut after about 280 characters (or 6 lines) at a word boundary, with "…" and a
+// "Hiển thị thêm" button; "Ẩn bớt" cuts it again.
+const EXCERPT_CHARS = 280;
+const EXCERPT_LINES = 6;
+export function excerptOf(text) {
+  const lines = text.split('\n');
+  let cut = text;
+  if (lines.length > EXCERPT_LINES) cut = lines.slice(0, EXCERPT_LINES).join('\n');
+  if (cut.length > EXCERPT_CHARS) {
+    cut = cut.slice(0, EXCERPT_CHARS);
+    const space = cut.search(/\s\S*$/); // last whitespace: do not cut a word in two
+    if (space > EXCERPT_CHARS * 0.6) cut = cut.slice(0, space);
+  }
+  return cut.length < text.length ? `${cut.trimEnd()}…` : null;
+}
 
 // Who moderates, in words, for the hints (business-rules §5).
 export const moderatorName = (groupType) =>
@@ -55,7 +75,7 @@ export function PostKind({ post }) {
 }
 
 /** Author, time and "Đã chỉnh sửa" – the school feed's meta line. */
-export function PostMeta({ post, avatarSize = 20, timeTo, className = 'feed-meta caption' }) {
+export function PostMeta({ post, avatarSize = 20, timeTo, timeState, className = 'feed-meta caption' }) {
   const time = formatDateTime(post.createdAt);
   return (
     <p className={className}>
@@ -64,7 +84,7 @@ export function PostMeta({ post, avatarSize = 20, timeTo, className = 'feed-meta
       {post.authorStatus === 'LOCKED' && <span className="pill red gf-locked">Đã khoá</span>}
       <span aria-hidden="true">·</span>
       {timeTo ? (
-        <Link to={timeTo} className="gf-time">
+        <Link to={timeTo} state={timeState} className="gf-time">
           <time dateTime={post.createdAt}>{time}</time>
         </Link>
       ) : (
@@ -124,14 +144,16 @@ export function PostInteractions({ post, onLikeError }) {
 }
 
 /**
- * One post in the feed (SCR-35), laid out like a school feed card: kind line with the "⋮" menu, the text (a few lines)
- * with the meta line under it and the first picture on the right, then likes / comments / files and, for the
- * moderator, "Duyệt" / "Từ chối". The whole card opens SCR-37. Buttons follow post.can, sent by the server.
+ * One post in the feed (SCR-35), laid out like a school feed card: kind line with the "⋮" menu, the text (long posts
+ * cut, "Hiển thị thêm" / "Ẩn bớt") with the meta line under it and the first picture on the right, then likes /
+ * comments / files and, for the moderator, "Duyệt" / "Từ chối". A click on the card opens the post in the pop-up
+ * (onOpen); links and buttons inside keep their own action. Buttons follow post.can, sent by the server.
  */
-export function PostCard({ post, groupId, onAction, listState }) {
+export function PostCard({ post, groupId, onAction, onOpen }) {
   const toast = useToast();
-  const navigate = useNavigate();
+  const [expanded, setExpanded] = useState(false);
   const detail = postPath(groupId, post.postId);
+  const excerpt = excerptOf(post.content);
   const { can } = post;
   const kind = postKind(post);
   const onLikeError = (err) => toast(errorText(err), { type: 'error' });
@@ -141,7 +163,10 @@ export function PostCard({ post, groupId, onAction, listState }) {
   return (
     <article
       className={classes.filter(Boolean).join(' ')}
-      onClick={openOnClick(navigate, detail, listState)}
+      onClick={(e) => {
+        if (e.target.closest('a, button, [role="menu"]') || window.getSelection()?.toString()) return;
+        onOpen(post);
+      }}
       aria-label={`Bài của ${authorLabel(post)}`}
     >
       <div className="feed-card-top">
@@ -150,8 +175,20 @@ export function PostCard({ post, groupId, onAction, listState }) {
       </div>
       <div className="feed-card-body">
         <div className="feed-card-text">
-          <p className="feed-preview is-body">{post.content}</p>
-          <PostMeta post={post} timeTo={detail} />
+          <div className="gf-text">
+            <p className="feed-preview is-body">{excerpt && !expanded ? excerpt : post.content}</p>
+            {excerpt && (
+              <button
+                type="button"
+                className="gf-more"
+                onClick={() => setExpanded((v) => !v)}
+                aria-expanded={expanded}
+              >
+                {expanded ? 'Ẩn bớt' : 'Hiển thị thêm'}
+              </button>
+            )}
+          </div>
+          <PostMeta post={post} timeTo={postPopupPath(groupId, post.postId)} timeState={POPUP_STATE} />
         </div>
         <FeedCardImage src={post.firstImageUrl} />
       </div>
@@ -200,11 +237,12 @@ export function postActions(post) {
 }
 
 /**
- * The "⋮" menu at the top right of a card, where the school feed has its pin button: pin, hide, edit, delete – only
+ * The "⋮" menu at the top right of a card (where the school feed has its pin button) and of the pop-up: pin, hide, edit,
+ * delete – only
  * the items post.can allows (review stays as buttons in the foot); nothing when none is allowed. Closes on a click
  * outside, Esc (focus back on the button) and after choosing.
  */
-function PostMenu({ post, editTo, editState, onAction }) {
+export function PostMenu({ post, editTo, editState, onAction, triggerClass = 'btn btn-icon feed-card-tool' }) {
   const [open, setOpen] = useState(false);
   const ref = useRef(null);
   const button = useRef(null);
@@ -240,7 +278,7 @@ function PostMenu({ post, editTo, editState, onAction }) {
       <button
         ref={button}
         type="button"
-        className="btn btn-icon feed-card-tool gf-menu-trigger"
+        className={`${triggerClass} gf-menu-trigger`}
         aria-label="Thao tác với bài viết"
         aria-haspopup="menu"
         aria-expanded={open}
