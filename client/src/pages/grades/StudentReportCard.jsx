@@ -107,7 +107,9 @@ function ReportTables({ d, detail, setDetail, detailSemester }) {
                 <tr key={sub.subjectId}>
                   <td>{sub.subjectName}</td>
                   {sub.semesters.map((s) => (
-                    <td key={s.semesterId}>{fmtScore(s.average) || <span className="muted">–</span>}</td>
+                    <td key={s.semesterId}>
+                      {s.published === false ? <span className="caption muted">Chưa công bố</span> : fmtScore(s.average) || <span className="muted">–</span>}
+                    </td>
                   ))}
                   <td>
                     <strong>{fmtScore(sub.year) || <span className="muted">–</span>}</strong>
@@ -154,7 +156,9 @@ function ReportTables({ d, detail, setDetail, detailSemester }) {
                     <tr key={sub.subjectId}>
                       <td>{sub.subjectName}</td>
                       <td className="scores">
-                        {sem?.components.length
+                        {sem?.published === false ? (
+                          <span className="muted">Giáo viên chưa chốt điểm môn này</span>
+                        ) : sem?.components.length
                           ? sem.components.map((c) => (
                               <div key={c.componentId} className="score-line">
                                 <span className="score-label">{c.name}</span>
@@ -166,10 +170,11 @@ function ReportTables({ d, detail, setDetail, detailSemester }) {
                                 ))}
                               </div>
                             ))
-                          : <span className="muted">Chưa có cấu trúc điểm học kỳ {detailSemester?.semesterNo}</span>}
+                          : <span className="muted">Chưa có cấu trúc điểm học kỳ {detailSemester?.semesterNo}</span>
+                        }
                       </td>
                       <td>
-                        <strong>{fmtScore(sem?.average) || <span className="muted">–</span>}</strong>
+                        <strong>{sem?.published === false ? <span className="muted">–</span> : fmtScore(sem?.average) || <span className="muted">–</span>}</strong>
                       </td>
                     </tr>
                   );

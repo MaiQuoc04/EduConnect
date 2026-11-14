@@ -79,7 +79,10 @@ export async function myStudents(user) {
  * ASSUMPTION (FE-11 owner, 10/11/2026): scores a student got in another class of the same year (moved by UC-10
  * Transfer) count too; when both classes have the same score slot, the score of this class wins.
  */
-export async function computeClass(db, cls) {
+// finalizedOnly (students and parents, FE-11 owner 14/11/2026): only grade books that the teacher has finalized
+// (grade_locks LOCKED) count – a book still being entered, or unlocked for corrections, is "not published": its
+// scores are left out of every average and ranking, so nothing of it can be read or worked out.
+export async function computeClass(db, cls, { finalizedOnly = false } = {}) {
   const { rows: semesters } = await db.query(
     `SELECT semester_id AS "semesterId", semester_no AS "semesterNo" FROM semesters
      WHERE school_year_id = $1 ORDER BY semester_no`,
@@ -109,9 +112,18 @@ export async function computeClass(db, cls) {
       )
     : { rows: [] };
 
+  const { rows: locks } = await db.query(
+    'SELECT subject_id AS "subjectId", semester_id AS "semesterId", status FROM grade_locks WHERE class_id = $1',
+    [cls.classId],
+  );
+  const finalized = (subjectId, semesterId) =>
+    locks.some((l) => String(l.subjectId) === String(subjectId) && String(l.semesterId) === String(semesterId) && l.status === 'LOCKED');
+  const published = (subjectId, semesterId) => !finalizedOnly || finalized(subjectId, semesterId);
+  const counted = usable.filter((c) => published(c.subjectId, c.semesterId));
+
   const enrollments = await classEnrollments(db, cls.classId);
   const studentIds = enrollments.map((e) => e.studentId);
-  const componentIds = usable.map((c) => c.componentId);
+  const componentIds = counted.map((c) => c.componentId);
   const { rows: gradeRows } =
     studentIds.length && componentIds.length
       ? await db.query(
@@ -125,10 +137,6 @@ export async function computeClass(db, cls) {
           [studentIds, cls.schoolYearId, componentIds],
         )
       : { rows: [] };
-  const { rows: locks } = await db.query(
-    'SELECT subject_id AS "subjectId", semester_id AS "semesterId", status FROM grade_locks WHERE class_id = $1',
-    [cls.classId],
-  );
 
   // Scores per student and slot; this class wins over another class of the year.
   const slots = new Map(); // studentId -> Map("componentId:attempt" -> { score, here })
@@ -142,7 +150,9 @@ export async function computeClass(db, cls) {
   }
 
   const componentsOf = (subjectId, semesterId) =>
-    usable.filter((c) => String(c.subjectId) === String(subjectId) && String(c.semesterId) === String(semesterId));
+    counted.filter((c) => String(c.subjectId) === String(subjectId) && String(c.semesterId) === String(semesterId));
+  const configured = (subjectId, semesterId) =>
+    usable.some((c) => String(c.subjectId) === String(subjectId) && String(c.semesterId) === String(semesterId));
 
   const students = enrollments.map((e) => {
     const mine = [...(slots.get(String(e.studentId))?.values() ?? [])];
@@ -152,6 +162,8 @@ export async function computeClass(db, cls) {
         const scores = mine.filter((m) => comps.some((c) => String(c.componentId) === String(m.componentId)));
         return {
           semesterId: se.semesterId,
+          // false: configured but not finalized yet (students / parents only) – shown as "not published".
+          published: !configured(sub.subjectId, se.semesterId) || published(sub.subjectId, se.semesterId),
           components: comps.map((c) => ({
             componentId: c.componentId,
             name: c.name,
@@ -191,8 +203,6 @@ export async function computeClass(db, cls) {
   }
 
   // Provisional while a subject's grade book of the period is not finalized.
-  const finalized = (subjectId, semesterId) =>
-    locks.some((l) => String(l.subjectId) === String(subjectId) && String(l.semesterId) === String(semesterId) && l.status === 'LOCKED');
   const provisional = {};
   for (const se of semesters) {
     provisional[se.semesterId] = subjects.some(
@@ -275,7 +285,9 @@ export async function studentResults(studentIdParam, query, user) {
   if (!classId) return { student: who[0], class: null, semesters: [], subjects: [] };
 
   const cls = await loadClass(pool, classId);
-  const data = await computeClass(pool, cls);
+  // Students and parents see a grade book only once the teacher has finalized it (FE-11 owner, 14/11/2026).
+  const finalizedOnly = user.activeRole === 'STUDENT' || user.activeRole === 'PARENT';
+  const data = await computeClass(pool, cls, { finalizedOnly });
   const me = data.students.find((s) => String(s.studentId) === String(studentId));
   const studying = me?.status === 'STUDYING';
   const rankOf = (period) => ({
