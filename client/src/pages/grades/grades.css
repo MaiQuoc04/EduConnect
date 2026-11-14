@@ -119,3 +119,8 @@
 .copy-pick-list .grow { flex: 1; }
 .copy-warn { display: flex; align-items: center; gap: 6px; margin-top: 10px; color: var(--amber); }
 @media (max-width: 520px) { .copy-targets { grid-template-columns: 1fr; } }
+
+/* SCR-68 book view: Học kỳ 1 | Học kỳ 2 | Cả năm, each semester tab with its status */
+.book-tabs { margin-bottom: 12px; }
+.book-tabs button { display: inline-flex; align-items: center; gap: 6px; }
+.book-tabs .gtag { font-size: 11px; padding: 1px 6px; }

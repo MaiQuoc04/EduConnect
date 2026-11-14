@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { getBook, listGradeBooks, unlockBook } from '../../api/grades.js';
 import Icon from '../../components/Icon.jsx';
@@ -8,7 +8,7 @@ import Dialog from '../admin/Dialog.jsx';
 import '../admin/admin.css';
 import ExportButton from './ExportButton.jsx';
 import GradeBookTable from './GradeBookTable.jsx';
-import { BOOK_STATUS, formatDateTime } from './gradeFormat.js';
+import { BOOK_STATUS, fmtScore, formatDateTime, yearAverage } from './gradeFormat.js';
 import SemesterSelect from './SemesterSelect.jsx';
 import useGradeOptions from './useGradeOptions.js';
 import './grades.css';
@@ -50,6 +50,12 @@ export default function GradeControlPage() {
   useEffect(load, [load]);
 
   const items = state.data?.items ?? [];
+  // The semesters of the chosen semester's school year (for the book view tabs).
+  const chosen = options.semesters.find((s) => String(s.semesterId) === semesterId);
+  const yearSemesters = useMemo(
+    () => options.semesters.filter((s) => s.schoolYearId === chosen?.schoolYearId).sort((a, b) => a.semesterNo - b.semesterNo),
+    [options.semesters, chosen?.schoolYearId],
+  );
   const classes = [...new Map(items.map((b) => [String(b.classId), b.className])).entries()];
   const shown = classFilter ? items.filter((b) => String(b.classId) === classFilter) : items;
   const counts = items.reduce((acc, b) => ({ ...acc, [b.status]: (acc[b.status] ?? 0) + 1 }), {});
@@ -170,7 +176,14 @@ export default function GradeControlPage() {
           }}
         />
       )}
-      {viewing && <BookViewDialog book={viewing} semesterId={semesterId} onClose={() => setViewing(null)} />}
+      {viewing && (
+        <BookViewDialog
+          book={viewing}
+          semesterId={semesterId}
+          semesters={yearSemesters}
+          onClose={() => setViewing(null)}
+        />
+      )}
     </div>
   );
 }
@@ -236,13 +249,26 @@ function UnlockDialog({ book, semesterId, onClose, onDone }) {
   );
 }
 
-function BookViewDialog({ book, semesterId, onClose }) {
-  const [state, setState] = useState({ data: null, error: '' });
+// Read-only view of one class × subject for the whole school year: tabs Học kỳ 1 | Học kỳ 2 | Cả năm (FE-11 owner,
+// 14/11/2026). The tab of the semester chosen in the filter opens first. "Cả năm" = per student the two semester
+// averages and the year average (HK1 + 2 × HK2) / 3, rounded like the server (Circular 22).
+function BookViewDialog({ book, semesterId, semesters, onClose }) {
+  const [tab, setTab] = useState(String(semesterId));
+  const [books, setBooks] = useState({}); // semesterId -> { data, error }
   useEffect(() => {
-    getBook(book.classId, book.subjectId, semesterId)
-      .then((data) => setState({ data, error: '' }))
-      .catch((err) => setState({ data: null, error: errorText(err) }));
-  }, [book, semesterId]);
+    let alive = true;
+    for (const se of semesters) {
+      getBook(book.classId, book.subjectId, se.semesterId)
+        .then((data) => alive && setBooks((b) => ({ ...b, [se.semesterId]: { data, error: '' } })))
+        .catch((err) => alive && setBooks((b) => ({ ...b, [se.semesterId]: { data: null, error: errorText(err) } })));
+    }
+    return () => {
+      alive = false;
+    };
+  }, [book, semesters]);
+
+  const current = tab === 'YEAR' ? null : books[tab];
+  const historySemester = tab === 'YEAR' ? semesterId : tab;
   return (
     <div className="dialog-backdrop" role="presentation" onMouseDown={(e) => e.target === e.currentTarget && onClose()}>
       <div className="dialog" role="dialog" aria-modal="true" aria-label="Sổ điểm" style={{ width: 'min(1100px, 100%)' }}>
@@ -255,13 +281,33 @@ function BookViewDialog({ book, semesterId, onClose }) {
           </button>
         </div>
         <div className="dialog-body">
-          {state.error && <p className="form-error">{state.error}</p>}
-          {!state.data && !state.error && <p className="muted">Đang tải…</p>}
-          {state.data && <GradeBookTable book={state.data} editable={false} />}
+          <div className="pill-tabs book-tabs" role="tablist">
+            {[...semesters.map((se) => [String(se.semesterId), `Học kỳ ${se.semesterNo}`]), ['YEAR', 'Cả năm']].map(([value, label]) => {
+              const st = value !== 'YEAR' && books[value]?.data ? BOOK_STATUS[books[value].data.lock.status ?? 'OPEN'] : null;
+              return (
+                <button key={value} type="button" role="tab" aria-selected={tab === value} onClick={() => setTab(value)}>
+                  {label}
+                  {st && <span className={`gtag ${st.tone}`}>{st.label}</span>}
+                </button>
+              );
+            })}
+          </div>
+          {tab === 'YEAR' ? (
+            <YearTable semesters={semesters} books={books} />
+          ) : (
+            <>
+              {current?.error && <p className="form-error">{current.error}</p>}
+              {!current && <p className="muted">Đang tải…</p>}
+              {current?.data && !current.data.components.length && <p className="muted">Học kỳ này chưa có cấu trúc điểm.</p>}
+              {current?.data?.components.length > 0 && <GradeBookTable book={current.data} editable={false} />}
+            </>
+          )}
         </div>
         <div className="dialog-footer">
-          <ExportButton classId={book.classId} subjectId={book.subjectId} semesterId={semesterId} disabled={!state.data?.components.length} />
-          <Link className="btn btn-secondary" to={`/grades/history?semesterId=${semesterId}&classId=${book.classId}&subjectId=${book.subjectId}`}>
+          {tab !== 'YEAR' && (
+            <ExportButton classId={book.classId} subjectId={book.subjectId} semesterId={tab} disabled={!current?.data?.components.length} />
+          )}
+          <Link className="btn btn-secondary" to={`/grades/history?semesterId=${historySemester}&classId=${book.classId}&subjectId=${book.subjectId}`}>
             <Icon name="history" size="sm" /> Lịch sử sửa điểm
           </Link>
           <button type="button" className="btn btn-primary" onClick={onClose}>
@@ -269,6 +315,53 @@ function BookViewDialog({ book, semesterId, onClose }) {
           </button>
         </div>
       </div>
+    </div>
+  );
+}
+
+// "Cả năm": one row per student of the class with each semester average and the year average.
+function YearTable({ semesters, books }) {
+  const loaded = semesters.every((se) => books[se.semesterId]);
+  if (!loaded) return <p className="muted">Đang tải…</p>;
+  const [s1, s2] = semesters.map((se) => books[se.semesterId]?.data ?? null);
+  const students = (s1 ?? s2)?.students ?? [];
+  const averageOf = (bk, enrollmentId) => bk?.students.find((x) => String(x.enrollmentId) === String(enrollmentId))?.average ?? null;
+  return (
+    <div className="table-scroll">
+        <table className="table report-table">
+          <thead>
+            <tr>
+              <th>Học sinh</th>
+              {semesters.map((se) => (
+                <th key={se.semesterId}>ĐTB HK{se.semesterNo}</th>
+              ))}
+              <th>ĐTB cả năm</th>
+            </tr>
+          </thead>
+          <tbody>
+            {students.map((st) => {
+              const a1 = averageOf(s1, st.enrollmentId);
+              const a2 = averageOf(s2, st.enrollmentId);
+              const year = semesters.length === 2 ? yearAverage(a1, a2) : null;
+              return (
+                <tr key={st.enrollmentId} className={st.status !== 'STUDYING' ? 'muted' : undefined}>
+                  <td>
+                    {st.fullName}
+                    <div className="caption muted mono">
+                      {st.studentCode}
+                      {st.status !== 'STUDYING' && ' · đã rời lớp'}
+                    </div>
+                  </td>
+                  <td>{fmtScore(a1) || <span className="muted">–</span>}</td>
+                  {semesters.length === 2 && <td>{fmtScore(a2) || <span className="muted">–</span>}</td>}
+                  <td>
+                    <strong>{fmtScore(year) || <span className="muted">–</span>}</strong>
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
     </div>
   );
 }

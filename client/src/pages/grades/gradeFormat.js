@@ -15,6 +15,15 @@ export function validScore(text) {
   return /^\d{1,2}(\.\d{1,2})?$/.test(t) && Number(t) <= 10;
 }
 
+// Same rounding as the server (grades.calc.js roundScore, Circular 22): 1 decimal, half up, without binary noise.
+export function roundScore(value) {
+  if (value === null || value === undefined) return null;
+  return Math.round(Number((value * 10).toPrecision(12))) / 10;
+}
+
+// Subject year average from the two (already rounded) semester averages: (HK1 + 2 × HK2) / 3, rounded.
+export const yearAverage = (s1, s2) => (s1 === null || s1 === undefined || s2 === null || s2 === undefined ? null : roundScore((s1 + 2 * s2) / 3));
+
 export const semesterLabel = (s) => (s ? `Học kỳ ${s.semesterNo}` : '');
 
 export const BOOK_STATUS = {
