@@ -79,9 +79,10 @@ export async function myStudents(user) {
  * ASSUMPTION (FE-11 owner, 10/11/2026): scores a student got in another class of the same year (moved by UC-10
  * Transfer) count too; when both classes have the same score slot, the score of this class wins.
  */
-// finalizedOnly (students and parents, FE-11 owner 14/11/2026): only grade books that the teacher has finalized
-// (grade_locks LOCKED) count – a book still being entered, or unlocked for corrections, is "not published": its
-// scores are left out of every average and ranking, so nothing of it can be read or worked out.
+// finalizedOnly (students and parents, FE-11 owner 14/11/2026): only finalized grade books count. A book still being
+// entered (never finalized) is "not published": its scores are left out of every average and ranking. A book that
+// the School Manager unlocked for a correction (grade review) keeps showing the scores AS FINALIZED until the teacher
+// finalizes it again – see finalizedScores().
 export async function computeClass(db, cls, { finalizedOnly = false } = {}) {
   const { rows: semesters } = await db.query(
     `SELECT semester_id AS "semesterId", semester_no AS "semesterNo" FROM semesters
@@ -113,12 +114,17 @@ export async function computeClass(db, cls, { finalizedOnly = false } = {}) {
     : { rows: [] };
 
   const { rows: locks } = await db.query(
-    'SELECT subject_id AS "subjectId", semester_id AS "semesterId", status FROM grade_locks WHERE class_id = $1',
+    `SELECT subject_id AS "subjectId", semester_id AS "semesterId", status, unlocked_at AS "unlockedAt"
+     FROM grade_locks WHERE class_id = $1`,
     [cls.classId],
   );
-  const finalized = (subjectId, semesterId) =>
-    locks.some((l) => String(l.subjectId) === String(subjectId) && String(l.semesterId) === String(semesterId) && l.status === 'LOCKED');
-  const published = (subjectId, semesterId) => !finalizedOnly || finalized(subjectId, semesterId);
+  const lockOf = (subjectId, semesterId) =>
+    locks.find((l) => String(l.subjectId) === String(subjectId) && String(l.semesterId) === String(semesterId));
+  const finalized = (subjectId, semesterId) => lockOf(subjectId, semesterId)?.status === 'LOCKED';
+  // Unlocked = finalized before, now being corrected: students / parents keep seeing the finalized scores.
+  const underReview = (subjectId, semesterId) => lockOf(subjectId, semesterId)?.status === 'UNLOCKED';
+  const published = (subjectId, semesterId) =>
+    !finalizedOnly || finalized(subjectId, semesterId) || underReview(subjectId, semesterId);
   const counted = usable.filter((c) => published(c.subjectId, c.semesterId));
 
   const enrollments = await classEnrollments(db, cls.classId);
@@ -127,20 +133,26 @@ export async function computeClass(db, cls, { finalizedOnly = false } = {}) {
   const { rows: gradeRows } =
     studentIds.length && componentIds.length
       ? await db.query(
-          `SELECT e.student_id AS "studentId", e.class_id AS "classId", g.component_id AS "componentId",
-                  g.attempt_no AS "attemptNo", g.score
+          `SELECT g.grade_id AS "gradeId", e.student_id AS "studentId", e.class_id AS "classId",
+                  g.component_id AS "componentId", g.attempt_no AS "attemptNo", g.score, g.entered_at AS "enteredAt"
            FROM grades g
            JOIN class_enrollments e ON e.enrollment_id = g.enrollment_id
            JOIN classes c ON c.class_id = e.class_id
-           WHERE e.student_id = ANY($1::bigint[]) AND c.school_year_id = $2 AND g.component_id = ANY($3::bigint[])
-             AND g.score IS NOT NULL`,
+           WHERE e.student_id = ANY($1::bigint[]) AND c.school_year_id = $2 AND g.component_id = ANY($3::bigint[])`,
           [studentIds, cls.schoolYearId, componentIds],
         )
       : { rows: [] };
+  const reviewLock = (g) => {
+    if (!finalizedOnly || String(g.classId) !== String(cls.classId)) return null;
+    const comp = usable.find((c) => String(c.componentId) === String(g.componentId));
+    const lock = comp && lockOf(comp.subjectId, comp.semesterId);
+    return lock?.status === 'UNLOCKED' && lock.unlockedAt ? lock : null;
+  };
+  const shownRows = (await finalizedScores(db, gradeRows, reviewLock)).filter((g) => g.score !== null);
 
   // Scores per student and slot; this class wins over another class of the year.
   const slots = new Map(); // studentId -> Map("componentId:attempt" -> { score, here })
-  for (const g of gradeRows) {
+  for (const g of shownRows) {
     const key = String(g.studentId);
     if (!slots.has(key)) slots.set(key, new Map());
     const slot = `${g.componentId}:${g.attemptNo}`;
@@ -206,12 +218,39 @@ export async function computeClass(db, cls, { finalizedOnly = false } = {}) {
   const provisional = {};
   for (const se of semesters) {
     provisional[se.semesterId] = subjects.some(
-      (sub) => componentsOf(sub.subjectId, se.semesterId).length && !finalized(sub.subjectId, se.semesterId),
+      // For students / parents a book under review shows its finalized scores, so it is not provisional.
+      (sub) =>
+        componentsOf(sub.subjectId, se.semesterId).length &&
+        !finalized(sub.subjectId, se.semesterId) &&
+        !(finalizedOnly && underReview(sub.subjectId, se.semesterId)),
     );
   }
   provisional.YEAR = semesters.some((se) => provisional[se.semesterId]) || semesters.length < 2;
 
   return { semesters, subjects, students, ranks, provisional };
+}
+
+// Scores of books under review (reviewLock(g) = the UNLOCKED lock) as they were when finalized, rebuilt from
+// grade_histories: the first change after the unlock holds the finalized value in old_score; a score created after the
+// unlock did not exist then. Every finalized score was complete and is never deleted, so this is exact.
+async function finalizedScores(db, rows, reviewLock) {
+  const affected = rows.filter((g) => reviewLock(g));
+  if (!affected.length) return rows;
+  const since = new Date(Math.min(...affected.map((g) => new Date(reviewLock(g).unlockedAt).getTime())));
+  const { rows: changes } = await db.query(
+    `SELECT grade_id AS "gradeId", old_score AS "oldScore", changed_at AS "changedAt"
+     FROM grade_histories WHERE grade_id = ANY($1::bigint[]) AND changed_at >= $2
+     ORDER BY changed_at, history_id`,
+    [affected.map((g) => g.gradeId), since],
+  );
+  return rows.flatMap((g) => {
+    const lock = reviewLock(g);
+    if (!lock) return [g];
+    const unlockedAt = new Date(lock.unlockedAt).getTime();
+    if (new Date(g.enteredAt).getTime() >= unlockedAt) return []; // entered during the review: not finalized yet
+    const first = changes.find((h) => String(h.gradeId) === String(g.gradeId) && new Date(h.changedAt).getTime() >= unlockedAt);
+    return [first ? { ...g, score: first.oldScore } : g];
+  });
 }
 
 // 'YEAR' or a semester id of the class's year.
@@ -285,7 +324,8 @@ export async function studentResults(studentIdParam, query, user) {
   if (!classId) return { student: who[0], class: null, semesters: [], subjects: [] };
 
   const cls = await loadClass(pool, classId);
-  // Students and parents see a grade book only once the teacher has finalized it (FE-11 owner, 14/11/2026).
+  // Students and parents see a grade book only once the teacher has finalized it, and during a correction (unlocked)
+  // still the finalized scores (FE-11 owner, 14/11/2026).
   const finalizedOnly = user.activeRole === 'STUDENT' || user.activeRole === 'PARENT';
   const data = await computeClass(pool, cls, { finalizedOnly });
   const me = data.students.find((s) => String(s.studentId) === String(studentId));
