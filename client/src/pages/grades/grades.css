@@ -80,7 +80,7 @@
 .table.report-table th.scores, .table.report-table td.scores { text-align: left; }
 .table.report-table td.scores { padding-top: 8px; padding-bottom: 8px; }
 .score-line { display: flex; align-items: center; gap: 6px; padding: 2px 0; }
-.score-label { width: 32px; flex: none; color: var(--graphite-600); font-size: 12px; font-weight: 600; }
+.score-label { width: 96px; flex: none; color: var(--graphite-600); font-size: 12px; font-weight: 600; }
 .score-cell {
   min-width: 40px; padding: 2px 6px; border: 1px solid var(--graphite-200); border-radius: 6px;
   background: var(--graphite-50); text-align: center; font-size: 13px; font-variant-numeric: tabular-nums;

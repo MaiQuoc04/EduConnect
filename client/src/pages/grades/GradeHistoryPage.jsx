@@ -148,7 +148,7 @@ export default function GradeHistoryPage() {
                   <td>
                     {h.className} – {h.subjectName}
                   </td>
-                  <td>{h.scoreCount > 1 ? `${h.componentName}${h.attemptNo}` : h.componentName}</td>
+                  <td>{h.scoreCount > 1 ? `${h.componentName} ${h.attemptNo}` : h.componentName}</td>
                   <td className="mono">
                     {h.oldScore === null ? <span className="muted">(trống)</span> : fmtScore(h.oldScore)} →{' '}
                     {h.newScore === null ? <span className="muted">(xoá)</span> : <strong>{fmtScore(h.newScore)}</strong>}

@@ -23,9 +23,9 @@ export const BOOK_STATUS = {
   UNLOCKED: { label: 'Đã mở khoá', tone: 'amber' },
 };
 
-// Column header of one score slot: "TX1".."TX4" when the component has several scores, else its name.
+// Full name of one score slot: "Thường xuyên 1".."Thường xuyên 4" when the component has several scores, else its name.
 export const slotLabel = (component, attemptNo) =>
-  component.scoreCount > 1 ? `${component.name}${attemptNo}` : component.name;
+  component.scoreCount > 1 ? `${component.name} ${attemptNo}` : component.name;
 
 // The server sends times already in Vietnam time ("2026-11-10 10:32:34.796202+07"): read the parts as they are.
 export function formatDateTime(value) {

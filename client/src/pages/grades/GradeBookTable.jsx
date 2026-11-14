@@ -21,7 +21,8 @@ export default function GradeBookTable({ book, edits = {}, onEdit, editable }) {
               Học sinh
             </th>
             {components.map((c) => (
-              <th key={c.componentId} colSpan={c.scoreCount} className="group-start">
+              // A component with one score spans both header rows; one with several gets "Lần 1".."Lần n" below it.
+              <th key={c.componentId} colSpan={c.scoreCount} rowSpan={c.scoreCount > 1 ? 1 : 2} className="group-start">
                 {c.name} <span className="muted">(hệ số {fmtScore(c.weight)})</span>
               </th>
             ))}
@@ -31,11 +32,13 @@ export default function GradeBookTable({ book, edits = {}, onEdit, editable }) {
           </tr>
           <tr className="sub">
             {components.flatMap((c) =>
-              Array.from({ length: c.scoreCount }, (_, i) => (
-                <th key={`${c.componentId}-${i}`} className={i === 0 ? 'group-start' : undefined}>
-                  {slotLabel(c, i + 1)}
-                </th>
-              )),
+              c.scoreCount > 1
+                ? Array.from({ length: c.scoreCount }, (_, i) => (
+                    <th key={`${c.componentId}-${i}`} className={i === 0 ? 'group-start' : undefined}>
+                      Lần {i + 1}
+                    </th>
+                  ))
+                : [],
             )}
           </tr>
         </thead>

@@ -14,9 +14,9 @@ import './grades.css';
 // (Circular 22: TX ×1, GK ×2, CK ×3); it locks once the structure has grades.
 
 const DEFAULT_COMPONENTS = [
-  { name: 'TX', weight: '1', scoreCount: '4' },
-  { name: 'GK', weight: '2', scoreCount: '1' },
-  { name: 'CK', weight: '3', scoreCount: '1' },
+  { name: 'Thường xuyên', weight: '1', scoreCount: '4' },
+  { name: 'Giữa kỳ', weight: '2', scoreCount: '1' },
+  { name: 'Cuối kỳ', weight: '3', scoreCount: '1' },
 ];
 const ROW_TEXT = {
   REQUIRED: 'Nhập tên thành phần.',
