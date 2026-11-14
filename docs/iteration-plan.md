@@ -121,6 +121,15 @@ It2: Anh FE-08 + FE-14, Khanh FE-05 + FE-06).
     📎 button and picture paste in the composer (FE-08 upload queue), files in the bubble (`pages/chat/MessageFiles.jsx`),
     expired links re-read per message; `ChatThread` is now keyed by group (a new chat starts with an empty composer).
     Tested on the local DB with local storage (17 steps + the FE-05 suites).
+  - **14/11 (Khanh, not committed yet): one look for both feeds.** New shared `client/src/components/feed/`
+    (`Feed.jsx`: FeedTabs, FeedSkeleton, FeedEmpty, FeedError, FeedPager, FeedCardImage, FeedPanel, NewContentPill,
+    useNewContent, openOnClick; `feed.css`: `.feed-*` cards, tabs, side panels, states, pager, reading canvas
+    `.feed-article*`), values taken from the FE-08 screens. FE-08 `SchoolFeedPage` / `SchoolPostDetailPage` now use it
+    (same look; their CSS keeps only search, pin colour, news padding and the audience line) – **Anh to check**.
+    FE-05 rebuilt on it: cards with a kind line (Bài viết / Đã ghim / Chờ duyệt / Đã bị từ chối / Đã ẩn + left bar),
+    pager (10 per page), "Có nội dung mới — Tải lại" pill, right column "Bài đã ghim" + "Duyệt bài"; SCR-37 as the
+    school reading canvas with the actions at the top; SCR-36/38 in the school form shell (`SchoolPostForm.css`
+    `.spf-*`) with a live preview; confirm dialogs in the `.sf-dialog` style.
 - **Not merged yet:** none of It1. It2 branches start from `develop`. Still open in It2: FE-10 timetable (Dung).
   - FE-14 Parent Management (Anh, It2) – merged 11/11: UC-104 parent list, UC-105 parent detail with the linked
     children, UC-106 update profile (`fullName`, `occupation`, `address` only; login identifiers are not touched).
