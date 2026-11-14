@@ -1,7 +1,19 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { listSchoolPosts, setSchoolPostPinned } from '../../api/schoolPosts.js';
 import Avatar from '../../components/Avatar.jsx';
+import {
+  FeedCardImage,
+  FeedEmpty,
+  FeedError,
+  FeedPager,
+  FeedPanel,
+  FeedSkeleton,
+  FeedTabs,
+  NewContentPill,
+  openOnClick,
+  useNewContent,
+} from '../../components/feed/Feed.jsx';
 import Icon from '../../components/Icon.jsx';
 import { useAuth } from '../../context/AuthContext.jsx';
 import { useSocket } from '../../context/SocketContext.jsx';
@@ -20,6 +32,8 @@ import './SchoolFeedPage.css';
 // SCR-02 School Feed (FE-08, owner Anh): UC-58 View School Feed & News, UC-63 Pin / Unpin, UC-64 Like.
 // Layout: Stitch "SCR-34 School Feed" (team decision 08/11/2026, replaces the Report 3 2/3 + 1/3 split): one list
 // with three tabs (Tất cả / Thông báo / Tin tức) and the "Lịch sắp tới" block on the right.
+// Tabs, cards, pager, empty / loading states and the "Có nội dung mới" pill are the shared components/feed (14/11/2026,
+// shared with FE-05 Group Feed so both feeds look the same).
 
 const SEARCH_DELAY_MS = 350; // same as the FE-02 lists
 // ASSUMPTION: 10 posts per page (the API allows up to 50; a feed page stays short to read).
@@ -73,67 +87,6 @@ function usePosts(tab, q, page, reloadKey) {
   return { ...state, retry: () => setRetry((n) => n + 1) };
 }
 
-function Pager({ page, total, onPage }) {
-  const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
-  if (totalPages <= 1) return null;
-  return (
-    <nav className="school-feed-pager" aria-label="Phân trang">
-      <button
-        type="button"
-        className="btn btn-secondary"
-        disabled={page <= 1}
-        onClick={() => onPage(page - 1)}
-        aria-label="Trang trước"
-      >
-        <Icon name="chevron_left" size="sm" />
-      </button>
-      <span className="caption muted mono">
-        Trang {page} / {totalPages}
-      </span>
-      <button
-        type="button"
-        className="btn btn-secondary"
-        disabled={page >= totalPages}
-        onClick={() => onPage(page + 1)}
-        aria-label="Trang sau"
-      >
-        <Icon name="chevron_right" size="sm" />
-      </button>
-    </nav>
-  );
-}
-
-function SkeletonCards({ count }) {
-  return Array.from({ length: count }, (_, i) => (
-    <div key={i} className="school-feed-skeleton" aria-hidden="true">
-      <span />
-      <span />
-      <span />
-    </div>
-  ));
-}
-
-// Image of the card (UC-58 firstImageUrl: the post's first picture, signed by the server for one hour). Hidden when it
-// cannot be loaded (link expired on a page left open, object missing): the card still shows the attachment count, and
-// the next reload of the list brings a new link.
-function CardImage({ src }) {
-  const [failed, setFailed] = useState(false);
-  if (!src || failed) return null;
-  return (
-    <figure className="school-feed-image">
-      <img src={src} alt="" loading="lazy" onError={() => setFailed(true)} />
-    </figure>
-  );
-}
-
-// The card is a link to SCR-05 (the title is the real link); buttons inside handle their own clicks.
-function openOnClick(navigate, to, state) {
-  return (e) => {
-    if (e.target.closest('a, button')) return;
-    navigate(to, { state });
-  };
-}
-
 // Like and comment count of an announcement (UC-64). Its own component so the hook only exists for announcements.
 function AnnouncementFoot({ post, onLikeError }) {
   const like = useLike(post.schoolPostId, post.likedByMe, post.likeCount, onLikeError);
@@ -155,11 +108,11 @@ function PostCard({ post, canPin, pinBusy, onPin, listState, onLikeError }) {
   const to = `/school-feed/${post.schoolPostId}`;
   const announcement = post.postType === 'ANNOUNCEMENT';
   const pinned = announcement && post.isPinned;
-  const classes = ['school-feed-card', announcement ? 'is-announcement' : 'is-news', pinned && 'is-pinned'];
+  const classes = ['feed-card', announcement ? 'is-announcement' : 'is-news', pinned && 'is-pinned'];
   return (
     <article className={classes.filter(Boolean).join(' ')} onClick={openOnClick(navigate, to, listState)}>
-      <div className="school-feed-card-top">
-        <span className="label-upper school-feed-kind">
+      <div className="feed-card-top">
+        <span className={`label-upper feed-kind${announcement ? '' : ' is-news'}`}>
           <Icon name={pinned ? 'push_pin' : announcement ? 'campaign' : 'newspaper'} size="sm" filled={pinned} />
           {announcement ? 'Thông báo' : 'Tin tức'}
           {pinned && ' · Đã ghim'}
@@ -167,7 +120,7 @@ function PostCard({ post, canPin, pinBusy, onPin, listState, onLikeError }) {
         {canPin && announcement && (
           <button
             type="button"
-            className={`btn btn-icon school-feed-pin${post.isPinned ? ' is-on' : ''}`}
+            className={`btn btn-icon feed-card-tool school-feed-pin${post.isPinned ? ' is-on' : ''}`}
             onClick={() => onPin(post)}
             disabled={pinBusy}
             aria-label={post.isPinned ? `Bỏ ghim “${post.title}”` : `Ghim “${post.title}”`}
@@ -177,15 +130,15 @@ function PostCard({ post, canPin, pinBusy, onPin, listState, onLikeError }) {
           </button>
         )}
       </div>
-      <div className="school-feed-card-body">
-        <div className="school-feed-card-text">
-          <h3 className="school-feed-title">
+      <div className="feed-card-body">
+        <div className="feed-card-text">
+          <h3 className="feed-title">
             <Link to={to} state={listState}>
               {post.title}
             </Link>
           </h3>
-          <p className="school-feed-preview">{post.contentPreview}</p>
-          <p className="school-feed-meta caption">
+          <p className="feed-preview">{post.contentPreview}</p>
+          <p className="feed-meta caption">
             <Avatar src={post.authorAvatarUrl} name={post.authorName} size={20} />
             <span className="author">{post.authorName}</span>
             <span aria-hidden="true">·</span>
@@ -196,10 +149,10 @@ function PostCard({ post, canPin, pinBusy, onPin, listState, onLikeError }) {
             </span>
           </p>
         </div>
-        <CardImage src={post.firstImageUrl} />
+        <FeedCardImage src={post.firstImageUrl} />
       </div>
       {(announcement || post.attachmentCount > 0) && (
-        <div className="school-feed-card-foot">
+        <div className="feed-card-foot">
           {announcement && <AnnouncementFoot post={post} onLikeError={onLikeError} />}
           {post.attachmentCount > 0 && (
             <span className="sf-attachments caption">
@@ -214,42 +167,20 @@ function PostCard({ post, canPin, pinBusy, onPin, listState, onLikeError }) {
 }
 
 function ListState({ list, emptyText }) {
-  if (list.error) {
-    return (
-      <div className="school-feed-error">
-        <p className="form-error" role="alert">
-          {list.error}
-        </p>
-        <button type="button" className="btn btn-secondary" onClick={list.retry}>
-          Thử lại
-        </button>
-      </div>
-    );
-  }
-  if (!list.result) return <SkeletonCards count={3} />;
-  if (!list.result.items.length) {
-    return (
-      <p className="school-feed-empty">
-        <Icon name="article" />
-        {emptyText}
-      </p>
-    );
-  }
+  if (list.error) return <FeedError message={list.error} onRetry={list.retry} />;
+  if (!list.result) return <FeedSkeleton count={3} />;
+  if (!list.result.items.length) return <FeedEmpty icon="article">{emptyText}</FeedEmpty>;
   return null;
 }
 
 // Right column of Stitch SCR-34. The school calendar belongs to FE-10 Schedule (not built yet): only the frame.
 function UpcomingCalendar() {
   return (
-    <aside className="school-feed-side" aria-labelledby="sf-calendar-title">
-      <section className="school-feed-calendar">
-        <h2 id="sf-calendar-title" className="school-feed-calendar-title">
-          <Icon name="event_upcoming" />
-          Lịch sắp tới của trường
-        </h2>
+    <aside className="feed-side">
+      <FeedPanel icon="event_upcoming" title="Lịch sắp tới của trường" titleId="sf-calendar-title">
         {/* TODO FE-10 Schedule: upcoming school events. No API call and no sample data until FE-10 exists. */}
-        <p className="school-feed-calendar-empty caption">{NOT_BUILT}</p>
-      </section>
+        <p className="feed-panel-empty caption">{NOT_BUILT}</p>
+      </FeedPanel>
     </aside>
   );
 }
@@ -327,35 +258,18 @@ export default function SchoolFeedPage() {
   // the reader's eyes or loses an optimistic like.
   // "schoolpost:changed" comes on the user's own room (user:<id>): no join for this page.
   const socket = useSocket();
-  const [hasNew, setHasNew] = useState(false);
   const latest = useRef({ params, result: list.result, loading: list.loading });
   useEffect(() => {
     latest.current = { params, result: list.result, loading: list.loading };
   });
-  useEffect(() => setHasNew(false), [list.result]); // a fresh list is shown: nothing new any more
-
-  const checkTimer = useRef(null);
-  const checkForNew = useCallback(async () => {
-    checkTimer.current = null;
+  // ASSUMPTION: a signal is read after 0.8–2 s (random, shared useNewContent), so a post sent to the whole school does
+  // not make every open feed call the API in the same instant; signals meanwhile join that one read.
+  const { hasNew, schedule: scheduleCheck, dismiss } = useNewContent(async () => {
     const { params: p, result, loading } = latest.current;
-    if (!result || loading) return; // a load is on its way and will be fresh
-    try {
-      const fresh = await listSchoolPosts({ postType: p.tab.postType, q: p.q.trim(), page: p.page, pageSize: PAGE_SIZE });
-      if (latest.current.result === result && feedSignature(fresh) !== feedSignature(result)) setHasNew(true);
-    } catch {
-      // quiet: the next signal, reconnect or poll tries again
-    }
-  }, []);
-  // ASSUMPTION: a signal is read after 0.8–2 s (random), so a post sent to the whole school does not make every open
-  // feed call the API in the same instant; signals meanwhile join that one read.
-  const scheduleCheck = useCallback(
-    (delay = 800 + Math.random() * 1200) => {
-      if (checkTimer.current) return;
-      checkTimer.current = setTimeout(checkForNew, delay);
-    },
-    [checkForNew],
-  );
-  useEffect(() => () => clearTimeout(checkTimer.current), []);
+    if (!result || loading) return false; // a load is on its way and will be fresh
+    const fresh = await listSchoolPosts({ postType: p.tab.postType, q: p.q.trim(), page: p.page, pageSize: PAGE_SIZE });
+    return latest.current.result === result && feedSignature(fresh) !== feedSignature(result);
+  }, list.result); // a fresh list is shown: nothing new any more
 
   useEffect(() => {
     if (!socket) return undefined;
@@ -369,7 +283,7 @@ export default function SchoolFeedPage() {
 
   const listTop = useRef(null);
   function showNew() {
-    setHasNew(false);
+    dismiss();
     setReloadKey((n) => n + 1);
     if (listTop.current && listTop.current.getBoundingClientRect().top < 0) {
       listTop.current.scrollIntoView({ block: 'start', behavior: 'smooth' });
@@ -405,20 +319,13 @@ export default function SchoolFeedPage() {
         )}
       </div>
 
-      <div className="school-feed-toolbar">
-        <div className="school-feed-tabs" role="tablist" aria-label="Loại bài viết">
-          {TABS.map((t) => (
-            <button
-              key={t.key}
-              type="button"
-              role="tab"
-              aria-selected={tab.key === t.key}
-              onClick={() => tab.key !== t.key && updateParams({ tab: t.key, page: 1 })}
-            >
-              {t.label}
-            </button>
-          ))}
-        </div>
+      <div className="feed-toolbar">
+        <FeedTabs
+          tabs={TABS}
+          active={tab.key}
+          onChange={(key) => updateParams({ tab: key, page: 1 })}
+          label="Loại bài viết"
+        />
         <div className="school-feed-search">
           <Icon name="search" size="sm" />
           <input
@@ -433,23 +340,15 @@ export default function SchoolFeedPage() {
         </div>
       </div>
 
-      <div className="school-feed-layout">
-        <section className="school-feed-main" aria-label={tab.label} ref={listTop}>
-          {/* Always rendered with zero height and sticky: the pill floats over the list and never moves it. */}
-          <div className="school-feed-new-wrap" aria-live="polite">
-            {hasNew && (
-              <button type="button" className="school-feed-new" onClick={showNew}>
-                <Icon name="refresh" size="sm" />
-                Có nội dung mới — Tải lại
-              </button>
-            )}
-          </div>
+      <div className="feed-layout">
+        <section className="feed-main" aria-label={tab.label} ref={listTop}>
+          <NewContentPill show={hasNew} onClick={showNew} />
           {list.result && !list.error && (
-            <p className="school-feed-total caption muted">
+            <p className="feed-total caption muted">
               <span className="mono">{number(list.result.total)}</span> {tab.noun}
             </p>
           )}
-          <div className={`school-feed-list${list.loading && list.result ? ' is-refreshing' : ''}`}>
+          <div className={`feed-list${list.loading && list.result ? ' is-refreshing' : ''}`}>
             <ListState list={list} emptyText={emptyText} />
             {!list.error &&
               items.map((post) => (
@@ -465,7 +364,12 @@ export default function SchoolFeedPage() {
               ))}
           </div>
           {!list.error && list.result && (
-            <Pager page={params.page} total={list.result.total} onPage={(page) => updateParams({ page })} />
+            <FeedPager
+              page={params.page}
+              total={list.result.total}
+              pageSize={PAGE_SIZE}
+              onPage={(page) => updateParams({ page })}
+            />
           )}
         </section>
         <UpcomingCalendar />

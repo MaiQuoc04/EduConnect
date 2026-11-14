@@ -29,6 +29,7 @@ import {
   targetScopeLabels,
   useLike,
 } from './schoolFeedShared.jsx';
+import '../../components/feed/feed.css';
 import './SchoolPostDetailPage.css';
 
 // SCR-05 School Post Detail (FE-08, owner Anh): UC-59 View, UC-63 Pin / Unpin, UC-64 Like, and the School Manager's
@@ -50,8 +51,8 @@ const COMMENT_MESSAGES = {
 // or the audience changed and the reader is no longer in it – real time "schoolpost:changed").
 function NotFound({ backTo, gone = false }) {
   return (
-    <div className="school-post-detail">
-      <section className="card card-outline school-post-detail-missing" role={gone ? 'status' : undefined}>
+    <div className="feed-article-page school-post-detail">
+      <section className="card card-outline feed-article-missing" role={gone ? 'status' : undefined}>
         <Icon name={gone ? 'article_shortcut' : 'article'} />
         <h1 className="title-md">{gone ? 'Bài viết không còn tồn tại' : 'Không tìm thấy bài viết'}</h1>
         <p className="muted">
@@ -121,7 +122,7 @@ function DeleteDialog({ open, post, busy, onCancel, onConfirm }) {
 function Interactions({ post, onLikeError }) {
   const like = useLike(post.schoolPostId, post.likedByMe, post.likeCount, onLikeError);
   return (
-    <div className="school-post-detail-interactions">
+    <div className="feed-article-interactions">
       <LikeButton liked={like.likedByMe} count={like.likeCount} onClick={like.toggle} />
       <CommentCount count={post.commentCount} />
     </div>
@@ -326,8 +327,8 @@ export default function SchoolPostDetailPage() {
   const announcement = post?.postType === 'ANNOUNCEMENT';
 
   return (
-    <div className="school-post-detail">
-      <div className="school-post-detail-top">
+    <div className="feed-article-page school-post-detail">
+      <div className="feed-article-top">
         <div>
           <Link to={backTo} className="back-link">
             <Icon name="arrow_back" size="sm" />
@@ -341,7 +342,7 @@ export default function SchoolPostDetailPage() {
           </nav>
         </div>
         {isManager && post && (
-          <div className="actions-row school-post-detail-actions">
+          <div className="actions-row feed-article-actions">
             {announcement && (
               <button type="button" className="btn btn-secondary" onClick={handlePin} disabled={pinning}>
                 <Icon name="push_pin" size="sm" filled={post.isPinned} />
@@ -365,7 +366,7 @@ export default function SchoolPostDetailPage() {
       </div>
 
       {state.error && (
-        <div className="school-post-detail-error">
+        <div className="feed-article-error">
           <p className="form-error" role="alert">
             {state.error}
           </p>
@@ -376,8 +377,8 @@ export default function SchoolPostDetailPage() {
       )}
 
       {!post && state.loading && (
-        <article className="school-post-detail-article is-loading" aria-busy="true">
-          <div className="school-post-detail-skeleton" aria-hidden="true">
+        <article className="feed-article is-loading" aria-busy="true">
+          <div className="feed-article-skeleton" aria-hidden="true">
             <span />
             <span />
             <span />
@@ -387,9 +388,9 @@ export default function SchoolPostDetailPage() {
       )}
 
       {post && (
-        <article className="school-post-detail-article">
-          <div className="school-post-detail-inner">
-            <p className={`label-upper school-post-detail-kind${announcement ? '' : ' is-news'}`}>
+        <article className="feed-article">
+          <div className="feed-article-inner">
+            <p className={`label-upper feed-kind${announcement ? '' : ' is-news'}`}>
               <Icon name={announcement ? 'campaign' : 'newspaper'} size="sm" />
               {typeLabel}
               {post.isPinned && (
@@ -400,8 +401,8 @@ export default function SchoolPostDetailPage() {
                 </>
               )}
             </p>
-            <h1 className="headline-xl school-post-detail-title">{post.title}</h1>
-            <div className="school-post-detail-meta caption">
+            <h1 className="headline-xl feed-article-title">{post.title}</h1>
+            <div className="feed-article-meta caption">
               <Avatar src={post.authorAvatarUrl} name={post.authorName} size={24} />
               <span className="author">{post.authorName}</span>
               <span aria-hidden="true">·</span>
@@ -418,11 +419,11 @@ export default function SchoolPostDetailPage() {
             </div>
 
             {/* The server keeps the line breaks; pre-wrap shows them. */}
-            <div className="school-post-detail-content">{post.content}</div>
+            <div className="feed-article-content">{post.content}</div>
 
             {attachments.length > 0 && (
               // Links signed by the server for one hour; an expired one is refreshed through UC-59 (refreshPost).
-              <div className="school-post-detail-files">
+              <div className="feed-article-files">
                 <AttachmentList
                   attachments={attachments}
                   signedAt={signedAt}
@@ -436,7 +437,7 @@ export default function SchoolPostDetailPage() {
             {post.canInteract && (
               <>
                 <Interactions post={post} onLikeError={onLikeError} />
-                <div className="school-post-detail-comments">
+                <div className="feed-article-comments">
                   <CommentThread
                     key={post.schoolPostId}
                     api={commentApi}
