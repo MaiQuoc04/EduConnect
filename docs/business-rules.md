@@ -240,8 +240,15 @@ Boundaries that are easy to get wrong:
   to the members of the class's groups and to the School Manager (never in the teacher group or outside the class).
 - **Teams in detail** (agreed 03/11/2026): the creator picks the members when creating it – the creator plus 2–49
   others from the same class (3–50 people), no locked accounts; name 2–100 characters, not unique. After that
-  **nobody adds or removes members** and a team has **no admin**. **Anyone can leave a team**, the creator too;
-  when the last member leaves, the team is closed (soft-deleted). The three class groups cannot be left (membership
+  **nobody adds or removes members**. **Team leader** (agreed by the lead 15/11/2026, replaces "a team has no admin"):
+  the creator is the leader (`groups.leader_id`); the leader's only rights are to **hand the leadership over** to
+  another member (any time) and the duty to do so **before leaving while others remain** (a locked member may be
+  chosen, with a warning). When the system takes the leader out (transfer, promotion, assignment change), the member
+  who joined first and is still in becomes leader. **Any member can rename the team** (same name rules).
+  **Anyone can leave a team**; when the last member leaves, the team is closed (soft-deleted) and leaves every list.
+  **System lines** in the team chat (`messages.message_type = 'SYSTEM'`): "A đã tạo nhóm", "A đã đổi tên nhóm thành …",
+  "A đã rời nhóm", "A không còn trong nhóm" (taken out by a class change), "A đã chuyển quyền trưởng nhóm cho B". They
+  count as unread and move the chat up like a message, but cannot be answered, reacted to or deleted. The three class groups cannot be left (membership
   follows the class). Not possible once the school year has ended.
 - **Teacher teams** (agreed by the lead 05/11/2026, e.g. a head of department with the department's teachers): a team
   with no class (`class_id` NULL), created by a teacher (active role) who is in the teacher group. Members are

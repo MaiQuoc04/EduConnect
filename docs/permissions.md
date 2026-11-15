@@ -26,6 +26,8 @@ Source: Report 3 section 4.4 (draft v1.3). Full = all records; Restricted (n) = 
 | Student nickname | Set | No | No | Restricted (5) | No | No | No |
 | Team | Create | No | No | Restricted (4) | Restricted (4) | Restricted (4) | Restricted (4) |
 | Team | Leave (own membership) | No | No | Restricted (4) | Restricted (4) | Restricted (4) | Restricted (4) |
+| Team | Rename (any member, 15/11/2026) | No | No | Restricted (4) | Restricted (4) | Restricted (4) | Restricted (4) |
+| Team | Hand the leadership over (team leader only, 15/11/2026) | No | No | Restricted (4) | Restricted (4) | Restricted (4) | Restricted (4) |
 | Group feed post | View / create / comment / react | No | Restricted (6) | Restricted (4) | Restricted (4) | Restricted (4) | Restricted (4) |
 | Group feed post | Edit / delete own | No | Restricted (6) | Restricted (4) | Restricted (4) | Restricted (4) | Restricted (4) |
 | Group feed post | Pin / hide / unhide / approve / reject | No | Restricted (6) | Restricted (5) | No | No | No |

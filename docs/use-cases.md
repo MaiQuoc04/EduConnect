@@ -61,7 +61,7 @@ Source: Report 3 section 4.2 (draft v1.3). Actor "User" = any signed-in account.
 | UC-32 | Add Group Member | School Manager, Homeroom Teacher | Class Groups | Add members of the same class to a group. |
 | UC-33 | Remove Group Member | School Manager, Homeroom Teacher | Class Groups | Remove a member from a group. |
 | UC-34 | Set Student Nickname | Homeroom Teacher | Class Groups | Set a nickname shown only inside that class. |
-| UC-35 | Create Team Chat | Teacher, Student, Parent | Teams | Create a chat-only team with members of one class; a teacher can also create a teacher team with teachers of the school (no class). Members can leave it later (the last one leaving closes it); nobody adds or removes members after creation. |
+| UC-35 | Create Team Chat | Teacher, Student, Parent | Teams | Create a chat-only team with members of one class; a teacher can also create a teacher team with teachers of the school (no class). Members can leave it later (the last one leaving closes it); nobody adds or removes members after creation. The creator is the team leader, who hands the leadership over (at any time, and before leaving while others remain); any member can rename the team; leaving, renaming and handing over show as system lines in the team chat (15/11/2026). |
 
 ## FE-05 Group Feed
 

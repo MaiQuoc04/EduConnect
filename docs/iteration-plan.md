@@ -61,6 +61,10 @@ It2: Anh FE-08 + FE-14, Khanh FE-05 + FE-06).
   `patch_v0.3_school_post_roles.sql` (FE-08, Anh: column `school_posts.target_roles`) +
   `patch_v0.3_attachment_storage.sql` (storage, Anh: `attachments.storage_key` / `bucket` + check). Both checked on the
   shared DB by the lead 11/11. 51 tables in `develop`.
+  **+ `patch_v0.3_team_leader_system_messages.sql` (FE-04 / FE-06, run by Khanh 15/11 after the lead's OK):**
+  `groups.leader_id` (the 5 active teams got their leader) and `messages.message_type` / `system_event` /
+  `target_user_id` with two checks. **Code on `feature/fe-05-group-feed` needs it; branches without that code are
+  not affected** (new columns only, with defaults). Still 51 tables.
   The shared DB also has `timetables` and `timetable_entries` from FE-10's `patch_v0.3_timetables.sql` (Dung, run
   11/11, lead OK), so `npm run db:check` shows **53 tables** until FE-10 is merged.
 - **Sample data added to the shared DB (03/11, Anh, accepted by the lead 03/11), through the app API (UC-96, UC-14, UC-28),
@@ -134,6 +138,15 @@ It2: Anh FE-08 + FE-14, Khanh FE-05 + FE-06).
     over the feed (`PostDialog.jsx`, address `?post=<id>`: Back closes it, a copied link opens it); the SCR-37 page
     stays for old links (both show `PostDetail.jsx`). Editing from the pop-up comes back to it. Cards cut posts after
     about 280 characters or 6 lines with "Hiển thị thêm" / "Ẩn bớt".
+  - **15/11 (Khanh): team leader and system lines** (lead OK; business-rules §4 / §6, UC-35, permissions). Server:
+    `groups/teamEvents.js` (system lines, leader hand-over when the system takes the leader out, real-time
+    `message:new` / `group:changed` / `group:removed`), `teams.service.js` (leader on create, "đã tạo nhóm" line,
+    `POST /groups/:id/leave { newLeaderId }` with 409 `MSG_TEAM_LEADER_MUST_TRANSFER`, `PUT /groups/:id/leader`,
+    `PATCH /groups/:id` rename), chat API returns `type` / `event` / `targetName`, system lines cannot be answered /
+    reacted to / deleted. `syncClassTeachers` (FE-04) and the transfer in `students.service.js` (**FE-02, Anh: one
+    call added**) write "không còn trong nhóm" lines and hand the leadership over. Client: `groups/TeamActions.jsx`
+    (rename, hand over, leave with the new-leader picker) on SCR-21 and in the chat header "⋮", "Trưởng nhóm" chip,
+    system lines centred in the chat. Tested on the local DB (25 steps + the chat / feed suites).
 - **Not merged yet:** none of It1. It2 branches start from `develop`. Still open in It2: FE-10 timetable (Dung).
   - FE-14 Parent Management (Anh, It2) – merged 11/11: UC-104 parent list, UC-105 parent detail with the linked
     children, UC-106 update profile (`fullName`, `occupation`, `address` only; login identifiers are not touched).
