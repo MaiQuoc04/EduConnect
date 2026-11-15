@@ -16,7 +16,6 @@ import Icon from '../../components/Icon.jsx';
 import { useAuth } from '../../context/AuthContext.jsx';
 import { useSocket } from '../../context/SocketContext.jsx';
 import { errorText } from '../../messages.js';
-import { formatDateTime } from '../schoolfeed/schoolFeedShared.jsx';
 import { useLiveRefresh } from '../schoolfeed/useLiveRefresh.js';
 import {
   feedPath,
@@ -37,7 +36,7 @@ import { readDraft } from './postDraft.js';
 //   Chờ duyệt / Đã ẩn  the moderator's queues
 // Layout and behaviour as the school feed (14/11/2026, shared components/feed): underline tabs, one page at a time
 // with the pager, the "Có nội dung mới — Tải lại" pill instead of changing the list under the reader, and a right-hand
-// column (pinned posts, approval).
+// column (approval; the pinned list was dropped 15/11/2026: pinned posts already lead the feed).
 // A post opens in a pop-up over the feed (PostDialog, ?post=<id> in the address), not on another page; long posts are
 // cut on their card ("Hiển thị thêm" / "Ẩn bớt").
 
@@ -220,52 +219,12 @@ function Feed({ g }) {
         </section>
 
         <aside className="feed-side">
-          <PinnedPanel groupId={g.groupId} reloadKey={`${reloadKey}:${counts.pinned ?? ''}`} />
           <ApprovalPanel info={info} who={who} canPost={canPost} pending={counts.pending} onPending={() => openTab('pending')} />
         </aside>
       </div>
       {actions.dialog}
       {openPostId && <PostDialog key={openPostId} g={g} postId={openPostId} onClose={closePost} onChanged={reload} />}
     </div>
-  );
-}
-
-const PINNED_TEXT_CHARS = 90;
-
-// Right column: the posts pinned by the moderator (pinned posts come first in the feed, at most maxPinned of them).
-function PinnedPanel({ groupId, reloadKey }) {
-  const [pinned, setPinned] = useState(null);
-  useEffect(() => {
-    const controller = new AbortController();
-    listGroupPosts(groupId, { view: 'feed', page: 1, pageSize: 5 }, { signal: controller.signal })
-      .then((data) => setPinned(data.items.filter((p) => p.isPinned)))
-      .catch(() => !controller.signal.aborted && setPinned([]));
-    return () => controller.abort();
-  }, [groupId, reloadKey]);
-
-  return (
-    <FeedPanel icon="push_pin" title="Bài đã ghim" titleId="gf-pinned-title">
-      {pinned === null ? (
-        <p className="caption muted">Đang tải…</p>
-      ) : pinned.length === 0 ? (
-        <p className="feed-panel-empty caption">Chưa có bài nào được ghim.</p>
-      ) : (
-        <ul className="gf-pinned">
-          {pinned.map((p) => (
-            <li key={p.postId}>
-              <Link to={postPopupPath(groupId, p.postId)} state={POPUP_STATE} className="gf-pinned-link">
-                <span className="gf-pinned-text">
-                  {p.content.length > PINNED_TEXT_CHARS ? `${p.content.slice(0, PINNED_TEXT_CHARS).trimEnd()}…` : p.content}
-                </span>
-                <span className="caption muted">
-                  {p.authorName} · {formatDateTime(p.createdAt)}
-                </span>
-              </Link>
-            </li>
-          ))}
-        </ul>
-      )}
-    </FeedPanel>
   );
 }
 

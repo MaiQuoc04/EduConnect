@@ -86,13 +86,7 @@
 .gf-menu-item.is-danger:hover,
 .gf-menu-item.is-danger:focus-visible { background: var(--red-bg); }
 
-/* Right column: pinned posts, approval */
-.gf-pinned { display: grid; margin: 0; padding: 0; list-style: none; }
-.gf-pinned li + li { border-top: 1px solid var(--graphite-100); }
-.gf-pinned-link { display: grid; gap: 2px; padding: 10px 0; color: inherit; text-decoration: none; }
-.gf-pinned li:first-child .gf-pinned-link { padding-top: 0; }
-.gf-pinned-link:hover .gf-pinned-text { color: var(--ink-700); }
-.gf-pinned-text { font-size: 14px; line-height: 20px; color: var(--graphite-900); overflow-wrap: anywhere; }
+/* Right column: approval */
 .gf-approval-text { margin: 0 0 12px; color: var(--graphite-700); }
 .gf-approval-queue { width: 100%; justify-content: center; }
 
