@@ -20,5 +20,7 @@ router.post('/:id/members', ctrl.addMembers); // UC-32 Add Group Member
 router.delete('/:id/members/:userId', ctrl.removeMember); // UC-33 Remove Group Member
 router.put('/:id/members/:userId/nickname', ctrl.setNickname); // UC-34 Set Student Nickname
 router.post('/:id/leave', ctrl.leave); // leave a team (teams only, see teams.service.js)
+router.put('/:id/leader', ctrl.setLeader); // team leader hands over (15/11/2026)
+router.patch('/:id', ctrl.rename); // rename a team, any member (15/11/2026)
 
 export default router;

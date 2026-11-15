@@ -60,7 +60,8 @@ export async function findGroupForUser(db, user, groupId) {
     `SELECT g.group_id AS "groupId", g.group_name AS "groupName", g.group_type AS "groupType",
             g.require_approval AS "requireApproval", g.created_at AS "createdAt", g.class_id AS "classId",
             COALESCE(CURRENT_DATE > sy.end_date, FALSE) AS "readOnly",
-            COALESCE(ht.user_id = $2, FALSE) AS "isHomeroom", cb.full_name AS "createdByName"
+            COALESCE(ht.user_id = $2, FALSE) AS "isHomeroom", cb.full_name AS "createdByName",
+            g.leader_id AS "leaderId"
      FROM groups g
      LEFT JOIN users cb ON cb.user_id = g.created_by
      LEFT JOIN classes c ON c.class_id = g.class_id

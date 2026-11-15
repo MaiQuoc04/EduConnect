@@ -3,11 +3,15 @@ import { AppError, badRequest, forbidden } from '../../utils/AppError.js';
 import { classPeopleSql } from '../classes/classGroups.js';
 import { findGroupForUser } from './groupAccess.js';
 import { byRankThenName } from './groups.service.js';
+import { EVENTS, insertSystemLine, publish } from './teamEvents.js';
 
 // FE-04 Class & Group Management – teams (owner: Khanh). UC-35 Create Team Chat: a chat-only group (TEAM_CHAT) with
 // people of one class, created by a teacher, student or parent (business-rules §4; never SM or SA). The chat itself
-// is FE-06. Members are fixed at creation (no use case yet to rename a team or add people); a member can leave.
+// is FE-06. Members are fixed at creation (nobody adds people); a member can leave.
 // Teacher team (lead OK 05/11/2026): no class, created by a teacher from the teachers of the teacher group.
+// Leader and system lines (lead OK 15/11/2026, business-rules §4): the creator is the team leader; the leader can hand
+// it over at any time and must hand it over before leaving while others remain; any member can rename the team. Each
+// of these writes a system line in the team chat (teamEvents.js), sent in real time after COMMIT.
 
 const conflict = (code, message, details) => new AppError(409, code, message, details);
 
@@ -107,8 +111,8 @@ async function teacherTeamOptions(db, user) {
 // One new team and its members, inside the caller's transaction. classId is null for a teacher team.
 async function insertTeam(client, user, classId, teamName, memberIds) {
   const { rows } = await client.query(
-    `INSERT INTO groups (class_id, group_name, group_type, require_approval, created_by)
-     VALUES ($1, $2, 'TEAM_CHAT', FALSE, $3)
+    `INSERT INTO groups (class_id, group_name, group_type, require_approval, created_by, leader_id)
+     VALUES ($1, $2, 'TEAM_CHAT', FALSE, $3, $3)
      RETURNING group_id AS "groupId"`,
     [classId, teamName, user.userId],
   );
@@ -117,6 +121,8 @@ async function insertTeam(client, user, classId, teamName, memberIds) {
     groupId,
     [user.userId, ...memberIds],
   ]);
+  // "A đã tạo nhóm" opens the chat (written after the members, so everyone sees it: history starts at joining).
+  await insertSystemLine(client, { groupId, actorId: user.userId, event: EVENTS.CREATED });
   return { groupId, groupName: teamName, memberCount: memberIds.length + 1 };
 }
 
@@ -223,31 +229,116 @@ export async function createTeam(user, input) {
   });
 }
 
-// Leave a team (UC-35, business-rules §4 "Teams in detail", agreed 03/11/2026): only teams can be left; the
-// three class groups cannot (membership follows the class, UC-33 removes people). Anyone may leave, the creator too
-// (the team stays, still "created by" them); when the last member leaves, the team is soft-deleted. Sets left_at like
-// UC-33, so the row stays for chat history. Not possible once the school year has ended (read only).
-export async function leaveTeam(user, groupId) {
-  return withTransaction(async (client) => {
-    const group = await findGroupForUser(client, user, groupId);
-    if (group.groupType !== 'TEAM_CHAT') {
-      throw forbidden('MSG_GROUP_CANNOT_LEAVE', 'Class groups cannot be left; only teams can.');
+// A team the user is in, locked for a change (FOR UPDATE), with its leader. Class groups → 403; an ended year → 409.
+async function openTeam(client, user, groupId) {
+  const group = await findGroupForUser(client, user, groupId);
+  if (group.groupType !== 'TEAM_CHAT') {
+    throw forbidden('MSG_GROUP_CANNOT_LEAVE', 'Class groups cannot be changed this way; only teams can.');
+  }
+  if (group.readOnly) throw conflict('MSG_GROUP_READ_ONLY', 'The school year has ended; the group is read only.');
+  const { rows } = await client.query(
+    `SELECT leader_id AS "leaderId", group_name AS "groupName" FROM groups WHERE group_id = $1 FOR UPDATE`,
+    [group.groupId],
+  );
+  const { rows: members } = await client.query(
+    `SELECT user_id AS "userId" FROM group_members WHERE group_id = $1 AND left_at IS NULL`,
+    [group.groupId],
+  );
+  const memberIds = members.map((m) => m.userId);
+  if (!memberIds.includes(user.userId)) throw forbidden('MSG_GROUP_MEMBER_NOT_FOUND', 'You are not in this team.');
+  return { ...group, ...rows[0], memberIds };
+}
+
+// The new leader must be another member still in the team (a locked account may be chosen: business-rules §4, Q4).
+function checkNewLeader(team, user, value) {
+  const id = Number(value);
+  if (!Number.isSafeInteger(id) || id <= 0 || id === user.userId || !team.memberIds.includes(id)) {
+    throw badRequest('MSG_TEAM_LEADER_INVALID', 'Please choose another member of the team.');
+  }
+  return id;
+}
+
+async function handOver(client, team, fromId, toId) {
+  await client.query('UPDATE groups SET leader_id = $2 WHERE group_id = $1', [team.groupId, toId]);
+  return insertSystemLine(client, { groupId: team.groupId, actorId: fromId, event: EVENTS.LEADER, targetUserId: toId });
+}
+
+/**
+ * Leave a team (UC-35, business-rules §4 "Teams in detail"; leader rules agreed by the lead 15/11/2026). Only teams can
+ * be left; the three class groups cannot (membership follows the class, UC-33 removes people). Not possible once the
+ * school year has ended (read only).
+ * - The leader leaving while others remain must name the new leader (newLeaderId): without it 409
+ *   MSG_TEAM_LEADER_MUST_TRANSFER, someone not in the team 400 MSG_TEAM_LEADER_INVALID. The hand-over and the leaving
+ *   are one transaction ("A đã chuyển quyền trưởng nhóm cho B", then "A đã rời nhóm").
+ * - The last member leaving closes the team (soft delete); no line then, nobody is left to read it.
+ * Sets left_at like UC-33, so the row stays for chat history.
+ */
+export async function leaveTeam(user, groupId, { newLeaderId } = {}) {
+  const result = await withTransaction(async (client) => {
+    const team = await openTeam(client, user, groupId);
+    const others = team.memberIds.filter((id) => id !== user.userId);
+    const messageIds = [];
+    if (team.leaderId === user.userId && others.length) {
+      if (newLeaderId === undefined || newLeaderId === null) {
+        throw conflict('MSG_TEAM_LEADER_MUST_TRANSFER', 'Choose the new team leader before leaving.');
+      }
+      messageIds.push(await handOver(client, team, user.userId, checkNewLeader(team, user, newLeaderId)));
     }
-    if (group.readOnly) throw conflict('MSG_GROUP_READ_ONLY', 'The school year has ended; the group is read only.');
-    await client.query('SELECT 1 FROM groups WHERE group_id = $1 FOR UPDATE', [group.groupId]);
-    const { rowCount } = await client.query(
-      'UPDATE group_members SET left_at = NOW() WHERE group_id = $1 AND user_id = $2 AND left_at IS NULL',
-      [group.groupId, user.userId],
-    );
-    if (!rowCount) throw forbidden('MSG_GROUP_MEMBER_NOT_FOUND', 'You are not in this team.');
-    const { rows } = await client.query(
-      `UPDATE groups SET deleted_at = NOW()
-       WHERE group_id = $1
-         AND NOT EXISTS (SELECT 1 FROM group_members WHERE group_id = $1 AND left_at IS NULL)
-       RETURNING group_id`,
-      [group.groupId],
-    );
-    // FE-06 (Messaging) should drop the user's socket from room `group:<id>` once it keeps group rooms.
-    return { groupId: group.groupId, teamClosed: rows.length > 0 };
+    await client.query('UPDATE group_members SET left_at = NOW() WHERE group_id = $1 AND user_id = $2 AND left_at IS NULL', [
+      team.groupId,
+      user.userId,
+    ]);
+    if (!others.length) {
+      await client.query('UPDATE groups SET deleted_at = NOW() WHERE group_id = $1', [team.groupId]);
+      return { groupId: team.groupId, teamClosed: true, messageIds };
+    }
+    messageIds.push(await insertSystemLine(client, { groupId: team.groupId, actorId: user.userId, event: EVENTS.LEFT }));
+    return { groupId: team.groupId, teamClosed: false, messageIds };
   });
+  publish({
+    lines: [{ groupId: result.groupId, messageIds: result.messageIds }],
+    changed: result.teamClosed ? [] : [{ groupId: result.groupId, change: 'member-left' }],
+    removed: [{ groupId: result.groupId, userId: user.userId }],
+    closed: result.teamClosed ? [result.groupId] : [],
+  });
+  return { groupId: result.groupId, teamClosed: result.teamClosed };
+}
+
+/** Hand the leadership over without leaving (business-rules §4, 15/11/2026): the leader only (403 otherwise). */
+export async function transferLeader(user, groupId, newLeaderId) {
+  const result = await withTransaction(async (client) => {
+    const team = await openTeam(client, user, groupId);
+    if (team.leaderId !== user.userId) throw forbidden('MSG_TEAM_NOT_LEADER', 'Only the team leader can do this.');
+    const to = checkNewLeader(team, user, newLeaderId);
+    return { groupId: team.groupId, leaderId: to, messageIds: [await handOver(client, team, user.userId, to)] };
+  });
+  publish({
+    lines: [{ groupId: result.groupId, messageIds: result.messageIds }],
+    changed: [{ groupId: result.groupId, change: 'leader' }],
+  });
+  return { groupId: result.groupId, leaderId: result.leaderId };
+}
+
+/** Rename a team (business-rules §4, 15/11/2026): any member, same name rules as UC-35. The same name → nothing written. */
+export async function renameTeam(user, groupId, value) {
+  const name = parseName(value);
+  const result = await withTransaction(async (client) => {
+    const team = await openTeam(client, user, groupId);
+    if (team.groupName === name) return { groupId: team.groupId, groupName: name, messageIds: [] };
+    await client.query('UPDATE groups SET group_name = $2 WHERE group_id = $1', [team.groupId, name]);
+    const messageId = await insertSystemLine(client, {
+      groupId: team.groupId,
+      actorId: user.userId,
+      event: EVENTS.RENAMED,
+      content: name,
+    });
+    return { groupId: team.groupId, groupName: name, messageIds: [messageId] };
+  });
+  if (result.messageIds.length) {
+    publish({
+      lines: [{ groupId: result.groupId, messageIds: result.messageIds }],
+      changed: [{ groupId: result.groupId, change: 'renamed' }],
+    });
+  }
+  return { groupId: result.groupId, groupName: result.groupName };
 }

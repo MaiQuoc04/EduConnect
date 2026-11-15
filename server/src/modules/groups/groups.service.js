@@ -224,6 +224,11 @@ export async function getGroup(user, groupId) {
     classGroups: row?.classGroups ?? [],
     teams: row?.teams ?? (group.classId === null ? await listTeacherTeams(user) : []),
     createdByName: group.groupType === 'TEAM_CHAT' ? group.createdByName : null,
+    // Team leader (15/11/2026, business-rules §4): leaderId, and what the viewer may do with the team.
+    leaderId: group.groupType === 'TEAM_CHAT' ? group.leaderId : null,
+    isLeader: group.groupType === 'TEAM_CHAT' && group.leaderId === user.userId,
+    canRename: group.groupType === 'TEAM_CHAT' && !group.readOnly,
+    canTransfer: group.groupType === 'TEAM_CHAT' && !group.readOnly && group.leaderId === user.userId,
     counts: countKinds(members),
     readOnly: group.readOnly,
     canSeeContent: group.canSeeContent,
