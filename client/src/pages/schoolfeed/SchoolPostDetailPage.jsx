@@ -446,6 +446,7 @@ export default function SchoolPostDetailPage() {
                     messages={COMMENT_MESSAGES}
                     live={liveComments}
                     refreshKey={commentsRefreshKey}
+                    enterToSend
                   />
                 </div>
               </>
