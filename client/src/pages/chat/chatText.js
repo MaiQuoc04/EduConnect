@@ -40,6 +40,7 @@ export function shortTime(sentAt) {
 // in a 1-1 chat (UC-49) the other person's messages need no name. The line is cut with "…" by CSS.
 export function previewText(message, myId, direct = false) {
   if (!message) return 'Chưa có tin nhắn';
+  if (message.type === 'SYSTEM') return systemText(message, myId);
   if (message.isDeleted) {
     if (message.senderId === myId) return 'Bạn đã xoá một tin nhắn';
     return direct ? 'Tin nhắn đã được xoá' : `${message.senderNickname || message.senderName} đã xoá một tin nhắn`;
@@ -47,6 +48,27 @@ export function previewText(message, myId, direct = false) {
   const text = (message.content ?? '').replace(/\s+/g, ' ').trim() || filesText(message.attachmentCount ?? message.attachments?.length); // list: count; socket: the files
   if (message.senderId === myId) return `Bạn: ${text}`;
   return direct ? text : `${message.senderNickname || message.senderName}: ${text}`;
+}
+
+// A team's system line (15/11/2026, business-rules §4 / §6): "Bạn đã rời nhóm", "Lan đã chuyển quyền trưởng nhóm
+// cho bạn"… message: { event, senderId, senderName, targetUserId, targetName, content }.
+export function systemText(message, myId) {
+  const who = message.senderId === myId ? 'Bạn' : message.senderNickname || message.senderName || 'Một thành viên';
+  const target = message.targetUserId === myId ? 'bạn' : message.targetName || 'một thành viên';
+  switch (message.event) {
+    case 'TEAM_CREATED':
+      return `${who} đã tạo nhóm`;
+    case 'TEAM_RENAMED':
+      return `${who} đã đổi tên nhóm thành “${message.content ?? ''}”`;
+    case 'MEMBER_LEFT':
+      return `${who} đã rời nhóm`;
+    case 'MEMBER_REMOVED':
+      return message.senderId === myId ? 'Bạn không còn trong nhóm' : `${who} không còn trong nhóm`;
+    case 'LEADER_CHANGED':
+      return `${who} đã chuyển quyền trưởng nhóm cho ${target}`;
+    default:
+      return 'Nhóm có thay đổi';
+  }
 }
 
 // A message that is only files: "Đã gửi một tệp" / "Đã gửi 3 tệp" (previews, quotes).

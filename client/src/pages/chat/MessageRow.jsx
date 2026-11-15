@@ -1,6 +1,6 @@
 import Avatar from '../../components/Avatar.jsx';
 import Icon from '../../components/Icon.jsx';
-import { dayLabel, dayOf, filesText, REACTIONS, REACTION_EMOJI, timeOf } from './chatText.js';
+import { dayLabel, dayOf, filesText, REACTIONS, REACTION_EMOJI, systemText, timeOf } from './chatText.js';
 import MessageFiles from './MessageFiles.jsx';
 
 // One message of a chat: a day separator when needed, the sender, the quote of the message it answers, the text, the
@@ -41,6 +41,24 @@ export default function MessageRow({
   onJump,
   onFilesExpired,
 }) {
+  // A team's system line (15/11/2026): centred, no bubble, no action.
+  if (m.type === 'SYSTEM') {
+    return (
+      <>
+        {newDay && (
+          <li className="msg-day">
+            <span className="caption">{dayLabel(dayOf(m.sentAt))}</span>
+          </li>
+        )}
+        <li id={`msg-${m.messageId}`} className="msg-system">
+          <span className="caption">
+            {systemText(m, me)}
+            <time dateTime={m.sentAt}> · {timeOf(m.sentAt)}</time>
+          </span>
+        </li>
+      </>
+    );
+  }
   const mine = m.senderId === me;
   const name = m.senderNickname ? `${m.senderNickname} (${m.senderName})` : m.senderName;
   const reply = !m.isDeleted && m.replyTo ? replyText(m.replyTo, me) : null;

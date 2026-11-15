@@ -473,7 +473,7 @@ export default function ChatThread({ groupId, onPeer }) {
             {messages.map((m, i) => {
               const prev = messages[i - 1];
               const newDay = !prev || dayOf(prev.sentAt) !== dayOf(m.sentAt);
-              const firstOfRun = newDay || prev.senderId !== m.senderId;
+              const firstOfRun = newDay || prev.senderId !== m.senderId || prev.type === 'SYSTEM';
               const member = memberById.get(m.senderId);
               return (
                 <MessageRow
