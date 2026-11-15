@@ -344,10 +344,17 @@ Boundaries that are easy to get wrong:
     per message, another one replaces it, the same one removes it. They do not count as unread or move the chat up.
   - **Emoji:** the system's own emoji in the text; no stickers.
   - **Delete for everyone:** own message only, within `chat.delete_for_everyone_minutes` (default 15, from sending).
-    It stays as "Tin nhắn đã được xoá" with its reactions and attachments hidden, no longer counts as unread, and cannot
-    be answered or reacted to. The database keeps the content; the API never returns it and no screen shows it.
-  - **Delete for me:** any message one can see, no time limit; others see no change. It stays hidden after leaving a
-    group and coming back. The preview falls back to the last message still visible; a 1-1 chat with none left drops
+    It stays as "Tin nhắn đã được xoá" ("Bạn đã xoá một tin nhắn" for the sender) with its reactions and attachments
+    hidden, and cannot be answered, reacted to **or deleted again** – not even "for me"
+    (Khanh's decision 15/11/2026: it is already gone for everybody). The database keeps the content; the API never
+    returns it and no screen shows it.
+    **The deletion is shown like a new message** (Khanh's decision 15/11/2026): the other members' conversation list
+    shows "<name> đã xoá một tin nhắn" as the preview (bold), counts it as one unread (the message itself is not
+    counted again), uses the deletion time, and a 1-1 chat moves to the top. Seeing the open chat clears it.
+  - **Delete for me:** any message one can see that is not deleted for everyone, no time limit; others see no change. It stays hidden after leaving a
+    group and coming back. It leaves nothing behind – no "Bạn đã xoá một tin nhắn" line, not in the chat and not in the
+    list (15/11/2026): the preview falls back to the last ordinary message still visible (a deleted-for-everyone line
+    older than one's latest delete-for-me is skipped); a 1-1 chat with none left drops
     off the list until a new message arrives.
   - Neither can be undone. In an ended school year or a closed 1-1 chat only delete for me is possible. Group moderators
     cannot delete other people's messages.

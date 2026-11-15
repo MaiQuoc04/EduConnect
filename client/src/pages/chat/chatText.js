@@ -8,6 +8,15 @@ const today = () => VN_DAY.format(new Date());
 const yesterday = () => VN_DAY.format(new Date(Date.now() - 86_400_000));
 
 export const dayOf = (sentAt) => sentAt.slice(0, 10);
+
+// A Vietnam-time string from the API as milliseconds, only to ORDER chats (latest activity first): a new message, or
+// a message deleted for everyone (15/11/2026, business-rules §6).
+export function timeKey(value) {
+  if (!value) return 0;
+  const iso = value.replace(' ', 'T').replace(/(\.\d{3})\d+/, '$1').replace(/([+-]\d{2})$/, '$1:00');
+  return Date.parse(iso) || 0;
+}
+export const activityOf = (message) => message?.activityAt ?? message?.sentAt ?? null;
 export const timeOf = (sentAt) => sentAt.slice(11, 16);
 
 // Day separator in a chat: "Hôm nay", "Hôm qua" or "04/11/2026".

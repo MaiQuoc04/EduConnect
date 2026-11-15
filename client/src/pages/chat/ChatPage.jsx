@@ -11,7 +11,7 @@ import { fold } from '../subjects/subjectText.js';
 import { GROUP_TYPE_ICONS, GROUP_TYPE_LABELS } from '../groups/groupLabels.js';
 import TeamCreatePanel from '../groups/TeamCreatePanel.jsx';
 import ChatThread from './ChatThread.jsx';
-import { contactLabel, previewText, shortTime, unreadLabel } from './chatText.js';
+import { activityOf, contactLabel, previewText, shortTime, timeKey, unreadLabel } from './chatText.js';
 
 const NOT_FOUND_PERSON = 'Không phải thành viên trong nhóm mà bạn đã tham gia hoặc không tồn tại.';
 
@@ -151,7 +151,8 @@ export default function ChatPage() {
     };
     socket.on('message:new', onNew);
     socket.on('message:read', onRead);
-    // A deleted message changes the preview and maybe the unread count: the server recounts.
+    // A message deleted for everyone counts as new activity (preview, one unread for the others, the chat goes up):
+    // the server recounts.
     socket.on('message:deleted', loadSummaries);
     socket.on('message:hidden', loadSummaries);
     socket.io.on('reconnect', loadSummaries);
@@ -188,11 +189,15 @@ export default function ChatPage() {
         ),
       });
     }
-    // UC-49: 1-1 chats first, newest message first. A chat without a message is not listed: it can be open on the
+    // UC-49: 1-1 chats first, latest activity first (a new message, or one deleted for everyone). A chat without a message is not listed: it can be open on the
     // right, it appears with its first message, and nothing stays behind when the user moves on without writing.
     const direct = Object.values(summaries)
       .filter((c) => c.groupType === 'DIRECT' && c.peer && c.lastMessage && keep(c.peer.fullName))
-      .sort((a, b) => b.lastMessage.messageId - a.lastMessage.messageId)
+      .sort(
+        (a, b) =>
+          timeKey(activityOf(b.lastMessage)) - timeKey(activityOf(a.lastMessage)) ||
+          b.lastMessage.messageId - a.lastMessage.messageId,
+      )
       .map((c) => ({ groupId: c.groupId, groupType: 'DIRECT', title: c.peer.fullName, peer: c.peer }));
     if (direct.length) result.unshift({ key: 'direct', title: 'Tin nhắn riêng', items: direct });
     return result.filter((s) => s.items.length);
@@ -288,7 +293,7 @@ export default function ChatPage() {
                             <span className="chat-item-text">
                               <span className="chat-item-row">
                                 <span className="chat-item-name">{g.title}</span>
-                                {last && <span className="caption chat-item-time">{shortTime(last.sentAt)}</span>}
+                                {last && <span className="caption chat-item-time">{shortTime(activityOf(last))}</span>}
                               </span>
                               <span className="chat-item-row">
                                 <span className={`caption chat-item-last${unread ? ' unread' : ''}`}>

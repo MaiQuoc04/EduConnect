@@ -205,7 +205,9 @@ export default function ChatThread({ groupId, onPeer }) {
       setMessages((list) => list.map((m) => (m.messageId === messageId ? { ...m, reactions } : m)));
     };
     const onDeleted = ({ groupId: gid, messageId }) => {
-      if (gid === id) markDeleted(messageId);
+      if (gid !== id) return;
+      markDeleted(messageId);
+      markRead(); // seen here, as a new message would be: it does not stay unread in the list
     };
     const onHidden = ({ groupId: gid, messageId }) => {
       if (gid === id) removeFromView(messageId);
@@ -319,6 +321,7 @@ export default function ChatThread({ groupId, onPeer }) {
   // UC-113: only the choices open to this message right now.
   function startDelete(message) {
     setMenu(null);
+    if (message.isDeleted) return; // already deleted for everyone: nothing left to delete
     const own = message.senderId === me && !message.isDeleted;
     const inTime = own && message.deleteUntil > Date.now();
     setDeleting({ message, forEveryone: inTime && state.canSend, expired: own && !inTime });

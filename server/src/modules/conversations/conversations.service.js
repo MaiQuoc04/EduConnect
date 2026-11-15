@@ -278,32 +278,46 @@ export async function listMessages(user, groupId, query) {
 // UC-49: 1-1 chats too, with the other person (`peer`). An empty 1-1 chat is returned to both its members so it can
 // be opened (lastMessage null); the client does not list it until it has a message.
 // The client lays the chats out from GET /groups and fills in these summaries by groupId.
+// Delete for everyone counts as new activity, like a new message (Khanh's decision 15/11/2026, business-rules §6): a
+// message's activity time is when it was sent, or when it was deleted for everyone. The preview is the message with the
+// latest activity ("Lan đã xoá một tin nhắn"), a deletion by someone else after one last read counts as one unread, and
+// activityKey (seconds) lets the client put the chat on top.
+// "Xoá ở phía tôi" leaves nothing behind (15/11/2026): a deleted-for-everyone placeholder older than the viewer's latest
+// delete-for-me in that chat is no longer the preview – the latest ordinary message is (a chat left with placeholders
+// only still shows one, so a 1-1 chat does not drop off the list).
 export async function listConversations(user) {
   const { rows } = await pool.query(
     `SELECT g.group_id AS "groupId", g.group_type AS "groupType",
             lm.message_id AS "messageId", lm.is_deleted AS "isDeleted",
             CASE WHEN lm.is_deleted THEN NULL ELSE lm.content END AS content,
-            lm.sent_at AS "sentAt", lm.sender_id AS "senderId",
+            lm.sent_at AS "sentAt", lm.activity_at AS "activityAt",
+            EXTRACT(EPOCH FROM lm.activity_at)::float8 AS "activityKey", lm.sender_id AS "senderId",
             CASE WHEN lm.is_deleted THEN 0 ELSE ${fileCountSql('lm')} END AS "attachmentCount",
             u.full_name AS "senderName", e.nickname AS "senderNickname",
             peer.user_id AS "peerId", peer.full_name AS "peerName", peer.avatar_url AS "peerAvatarUrl",
             peer.status AS "peerStatus",
             (SELECT COUNT(*) FROM messages x
              WHERE x.group_id = g.group_id AND x.deleted_at IS NULL AND x.sender_id <> $1
-               AND x.deleted_for_everyone_at IS NULL AND NOT ${hiddenFor('$1', 'x')}
+               AND NOT ${hiddenFor('$1', 'x')}
                AND x.sent_at >= gm.joined_at
-               AND (gm.last_read_at IS NULL OR x.sent_at > gm.last_read_at)) AS "unreadCount"
+               AND (gm.last_read_at IS NULL
+                    OR COALESCE(x.deleted_for_everyone_at, x.sent_at) > gm.last_read_at)) AS "unreadCount"
      FROM groups g
      JOIN LATERAL (SELECT MIN(vm.joined_at) AS joined_at, MAX(vm.last_read_at) AS last_read_at
                    FROM group_members vm
                    WHERE vm.group_id = g.group_id AND vm.user_id = $1
                    HAVING bool_or(vm.left_at IS NULL)) gm ON TRUE
      LEFT JOIN LATERAL (SELECT m.message_id, m.content, m.sent_at, m.sender_id,
-                               m.deleted_for_everyone_at IS NOT NULL AS is_deleted
+                               m.deleted_for_everyone_at IS NOT NULL AS is_deleted,
+                               COALESCE(m.deleted_for_everyone_at, m.sent_at) AS activity_at
                         FROM messages m
                         WHERE m.group_id = g.group_id AND m.deleted_at IS NULL AND m.sent_at >= gm.joined_at
                           AND NOT ${hiddenFor('$1')}
-                        ORDER BY m.message_id DESC LIMIT 1) lm ON TRUE
+                        ORDER BY (m.deleted_for_everyone_at IS NOT NULL AND m.deleted_for_everyone_at <= COALESCE(
+                                    (SELECT MAX(d.deleted_at) FROM message_user_deletions d
+                                     JOIN messages dm ON dm.message_id = d.message_id
+                                     WHERE d.user_id = $1 AND dm.group_id = g.group_id), '-infinity')) ASC,
+                                 COALESCE(m.deleted_for_everyone_at, m.sent_at) DESC, m.message_id DESC LIMIT 1) lm ON TRUE
      LEFT JOIN users u ON u.user_id = lm.sender_id
      LEFT JOIN students st ON st.user_id = lm.sender_id
      LEFT JOIN class_enrollments e ON e.student_id = st.student_id AND e.class_id = g.class_id
@@ -332,6 +346,8 @@ export async function listConversations(user) {
           content: r.content,
           attachmentCount: r.attachmentCount,
           sentAt: r.sentAt,
+          activityAt: r.activityAt,
+          activityKey: r.activityKey,
           senderId: r.senderId,
           senderName: r.senderName,
           senderNickname: r.senderNickname,
