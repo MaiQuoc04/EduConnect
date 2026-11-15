@@ -5,7 +5,8 @@ import MessageFiles from './MessageFiles.jsx';
 
 // One message of a chat: a day separator when needed, the sender, the quote of the message it answers, the text, the
 // reactions and the actions (react, reply, delete). The thread (ChatThread.jsx) holds the state and calls the server.
-// A message deleted for everyone shows only a placeholder, which the user can still remove from their own view.
+// A message deleted for everyone shows only a placeholder ("Bạn đã xoá một tin nhắn" / "Tin nhắn đã được xoá") with no
+// action at all: it is already gone for everybody, so it cannot be deleted again (15/11/2026, business-rules §6).
 function replyText(reply, me) {
   if (reply.state === 'BEFORE_JOIN') return { who: '', text: 'Tin nhắn trước khi bạn vào nhóm' };
   if (reply.state === 'DELETED') return { who: '', text: 'Tin nhắn đã được xoá' };
@@ -52,6 +53,7 @@ export default function MessageRow({
       if (!window.getSelection()?.toString()) onJump(m.replyTo.messageId);
       return;
     }
+    if (m.isDeleted) return; // a deleted message has no actions
     toggle('tools')(e);
   };
   const myReaction = (m.reactions ?? []).find((r) => r.userIds.includes(me))?.code;
@@ -131,9 +133,11 @@ export default function MessageRow({
                   </button>
                 </>
               )}
-              <button type="button" className="msg-tool" onClick={() => onDelete(m)} aria-label="Xoá tin nhắn" title="Xoá tin nhắn">
-                <Icon name="delete" size="sm" />
-              </button>
+              {!m.isDeleted && (
+                <button type="button" className="msg-tool" onClick={() => onDelete(m)} aria-label="Xoá tin nhắn" title="Xoá tin nhắn">
+                  <Icon name="delete" size="sm" />
+                </button>
+              )}
               {open === 'react' && (
                 <div className="msg-react-bar" role="menu" aria-label="Chọn cảm xúc">
                   {REACTIONS.map((r) => (

@@ -85,6 +85,9 @@ async function deleteForEveryone(user, group, message) {
 }
 
 async function deleteForMe(user, group, message) {
+  // A message deleted for everyone is already gone for everybody (only its placeholder stays): nothing left to delete
+  // for oneself (Khanh's decision 15/11/2026, business-rules §6).
+  if (message.isDeleted) throw conflict('MSG_MESSAGE_DELETED', 'This message has been deleted.');
   await pool.query(
     `INSERT INTO message_user_deletions (message_id, user_id) VALUES ($1, $2)
      ON CONFLICT (message_id, user_id) DO NOTHING`,
