@@ -261,6 +261,13 @@ export default function GroupMembersPage() {
                   )}
                   <td className="gm-role">
                     <span className="chips">
+                      {/* Team leader (15/11/2026, business-rules §4) */}
+                      {group.leaderId === m.userId && (
+                        <span className="chip ink">
+                          <Icon name="star" size="sm" />
+                          Trưởng nhóm
+                        </span>
+                      )}
                       {m.kinds.map((k) => (
                         <span key={k} className={`chip${k === 'HOMEROOM' || k === 'MANAGER' ? ' ink' : ''}`}>
                           {MEMBER_KIND_LABELS[k]}

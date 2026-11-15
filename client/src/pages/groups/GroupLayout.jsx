@@ -3,24 +3,26 @@ import { Link, NavLink, Outlet, useNavigate, useParams } from 'react-router-dom'
 import { api } from '../../api/client.js';
 import Icon from '../../components/Icon.jsx';
 import { useAuth } from '../../context/AuthContext.jsx';
+import { useSocket } from '../../context/SocketContext.jsx';
 import { useToast } from '../../context/ToastContext.jsx';
 import { errorText } from '../../messages.js';
 import { yearLabel } from '../school-years/schoolYearLabels.js';
-import ConfirmDialog from './ConfirmDialog.jsx';
 import { chatBackFromGroup, GROUP_TYPE_ICONS, GROUP_TYPE_LABELS, groupHasFeed } from './groupLabels.js';
+import { useTeamActions } from './TeamActions.jsx';
 
 // SCR-21 Group Detail – UC-30 View Group Detail: the group (or team, UC-35) header and its tabs. The overview and members tabs are
 // FE-04; FE-05 (Group Feed) and FE-06 (Messaging) add their tabs here as nested routes, shown only when the group's
-// `canSeeContent` is true (never for the School Manager in class groups). Teams can be left from here; the three
-// class groups cannot.
+// `canSeeContent` is true (never for the School Manager in class groups). Teams (15/11/2026): rename (any member),
+// hand the leadership over (leader) and leave – the leader first picks the new leader (TeamActions.jsx); the three class
+// groups cannot be left. Real time: group:changed re-reads the header, group:removed leaves the page.
 export default function GroupLayout() {
   const { id } = useParams();
   const { activeRole } = useAuth();
   const [state, setState] = useState({ loading: true, group: null, error: '' });
   const [version, setVersion] = useState(0); // bumped after member changes (UC-32..34) to refresh the counts
-  const [leaving, setLeaving] = useState(false);
   const navigate = useNavigate();
   const toast = useToast();
+  const socket = useSocket();
 
   useEffect(() => {
     let alive = true;
@@ -40,11 +42,26 @@ export default function GroupLayout() {
   // "10A1 – Nhóm chung"; teams and the teacher group keep their own name.
   const title = g && (g.class && !team ? `${g.class.className} – ${GROUP_TYPE_LABELS[g.groupType]}` : g.groupName);
 
-  async function leaveTeam() {
-    const { data } = await api.post(`/groups/${g.groupId}/leave`);
-    toast(data.teamClosed ? `Bạn đã rời ${g.groupName}. Team không còn thành viên nên đã đóng.` : `Bạn đã rời ${g.groupName}.`);
-    navigate('/groups', { replace: true });
-  }
+  const teamActions = useTeamActions(g, {
+    onLeft: (data) => {
+      toast(data.teamClosed ? `Bạn đã rời ${g.groupName}. Nhóm không còn thành viên nên đã đóng.` : `Bạn đã rời ${g.groupName}.`);
+      navigate('/groups', { replace: true });
+    },
+    onChanged: () => setVersion((v) => v + 1),
+  });
+
+  // Another member renamed the team, handed over or left: read the header again. Out of the team: leave the page.
+  useEffect(() => {
+    if (!socket) return undefined;
+    const onChanged = ({ groupId }) => groupId === Number(id) && setVersion((v) => v + 1);
+    const onRemoved = ({ groupId }) => groupId === Number(id) && navigate('/groups', { replace: true });
+    socket.on('group:changed', onChanged);
+    socket.on('group:removed', onRemoved);
+    return () => {
+      socket.off('group:changed', onChanged);
+      socket.off('group:removed', onRemoved);
+    };
+  }, [socket, id, navigate]);
 
   return (
     <>
@@ -83,6 +100,7 @@ export default function GroupLayout() {
                   ? g.createdByName && (
                       <span>
                         <Icon name="edit" size="sm" /> Do {g.createdByName} tạo
+                        {g.isLeader && <span className="chip ink team-leader-pill">Bạn là trưởng nhóm</span>}
                       </span>
                     )
                   : g.class &&
@@ -103,28 +121,20 @@ export default function GroupLayout() {
                 <Icon name="group" size="sm" />
                 Thành viên ({g.counts.total})
               </Link>
-              {g.canLeave && (
-                <button type="button" className="btn btn-secondary btn-danger" onClick={() => setLeaving(true)}>
-                  <Icon name="logout" size="sm" />
-                  Rời team
+              {teamActions.items.map((item) => (
+                <button
+                  key={item.key}
+                  type="button"
+                  className={`btn btn-secondary${item.danger ? ' btn-danger' : ''}`}
+                  onClick={item.run}
+                >
+                  <Icon name={item.icon} size="sm" />
+                  {item.key === 'transfer' ? 'Chuyển quyền' : item.label}
                 </button>
-              )}
+              ))}
             </div>
           </header>
-          {leaving && (
-            <ConfirmDialog
-              title={`Rời ${g.groupName}?`}
-              confirmLabel="Rời team"
-              busyLabel="Đang rời…"
-              icon="logout"
-              onConfirm={leaveTeam}
-              onCancel={() => setLeaving(false)}
-            >
-              {g.counts.total <= 1
-                ? 'Bạn là thành viên cuối cùng. Rời đi thì team sẽ đóng và không ai xem được nữa.'
-                : 'Bạn sẽ không xem được tin nhắn của team nữa và không thể tự quay lại. Các thành viên khác vẫn ở lại team.'}
-            </ConfirmDialog>
-          )}
+          {teamActions.dialogs}
 
           <div className="gd-tabbar">
             <nav className="group-tabs" aria-label="Mục của nhóm">

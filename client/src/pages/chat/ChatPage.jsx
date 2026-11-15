@@ -10,6 +10,7 @@ import { errorText } from '../../messages.js';
 import { fold } from '../subjects/subjectText.js';
 import { GROUP_TYPE_ICONS, GROUP_TYPE_LABELS } from '../groups/groupLabels.js';
 import TeamCreatePanel from '../groups/TeamCreatePanel.jsx';
+import { TeamMenu, useTeamActions } from '../groups/TeamActions.jsx';
 import ChatThread from './ChatThread.jsx';
 import { activityOf, contactLabel, previewText, shortTime, timeKey, unreadLabel } from './chatText.js';
 
@@ -156,14 +157,31 @@ export default function ChatPage() {
     socket.on('message:deleted', loadSummaries);
     socket.on('message:hidden', loadSummaries);
     socket.io.on('reconnect', loadSummaries);
+    // Teams (15/11/2026): renamed, leader handed over, someone left → lists read again. Out of a team (left, or the
+    // last one and it closed) → it leaves the lists, and its chat closes if it is open here.
+    const onGroupChanged = () => {
+      loadGroups();
+      loadSummaries();
+    };
+    const onGroupRemoved = ({ groupId: gid, closed }) => {
+      onGroupChanged();
+      if (gid === openRef.current) {
+        toast(closed ? 'Nhóm không còn thành viên nên đã đóng.' : 'Bạn không còn trong nhóm này.');
+        navigate('/chat', { replace: true, state: backState });
+      }
+    };
+    socket.on('group:changed', onGroupChanged);
+    socket.on('group:removed', onGroupRemoved);
     return () => {
+      socket.off('group:changed', onGroupChanged);
+      socket.off('group:removed', onGroupRemoved);
       socket.off('message:new', onNew);
       socket.off('message:read', onRead);
       socket.off('message:deleted', loadSummaries);
       socket.off('message:hidden', loadSummaries);
       socket.io.off('reconnect', loadSummaries);
     };
-  }, [socket, me, loadGroups, loadSummaries]);
+  }, [socket, me, loadGroups, loadSummaries, toast, navigate, backState]);
 
   // One section per class (its groups, then my teams), then the school-wide teacher group.
   const sections = useMemo(() => {
@@ -416,13 +434,34 @@ function DirectRoom({ summary, backState }) {
 // Right pane: the chosen group's header, then the chat (FE-06).
 function ChatRoom({ groupId, backState }) {
   const [state, setState] = useState({ loading: true, group: null, error: '' });
+  const [version, setVersion] = useState(0);
+  const socket = useSocket();
+  const navigate = useNavigate();
+  const toast = useToast();
 
   useEffect(() => {
     api
       .get(`/groups/${groupId}`)
       .then(({ data }) => setState({ loading: false, group: data, error: '' }))
       .catch((err) => setState({ loading: false, group: null, error: errorText(err) }));
-  }, [groupId]);
+  }, [groupId, version]);
+
+  // Team renamed / leader handed over / someone left: the header (name, count, menu) is read again.
+  useEffect(() => {
+    if (!socket) return undefined;
+    const onChanged = ({ groupId: gid }) => gid === Number(groupId) && setVersion((v) => v + 1);
+    socket.on('group:changed', onChanged);
+    return () => socket.off('group:changed', onChanged);
+  }, [socket, groupId]);
+
+  // Team actions in the header's "⋮" menu (rename, hand over, leave – business-rules §4, 15/11/2026).
+  const teamActions = useTeamActions(state.group, {
+    onLeft: (data) => {
+      toast(data.teamClosed ? 'Bạn đã rời nhóm. Nhóm không còn thành viên nên đã đóng.' : 'Bạn đã rời nhóm.');
+      navigate('/chat', { replace: true, state: backState });
+    },
+    onChanged: () => setVersion((v) => v + 1),
+  });
 
   const g = state.group;
   if (state.loading) return <p className="loading chat-list-note">Đang tải nhóm…</p>;
@@ -452,7 +491,9 @@ function ChatRoom({ groupId, backState }) {
           <Icon name="info" size="sm" />
           Thông tin nhóm
         </Link>
+        <TeamMenu items={teamActions.items} />
       </header>
+      {teamActions.dialogs}
       {g.canSeeContent ? (
         <ChatThread key={g.groupId} groupId={g.groupId} />
       ) : (
