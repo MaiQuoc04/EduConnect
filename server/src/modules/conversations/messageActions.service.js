@@ -38,6 +38,7 @@ async function openForChange(user, groupId, messageId) {
   const group = await openChat(pool, user, groupId);
   assertCanSend(group);
   const message = await findVisibleMessage(pool, user, group.groupId, messageId);
+  if (message.isSystem) throw badRequest('MSG_SYSTEM_MESSAGE', 'A system line cannot be changed.');
   if (message.isDeleted) throw conflict('MSG_MESSAGE_DELETED', 'This message has been deleted.');
   return { group, message };
 }
@@ -104,6 +105,7 @@ export async function deleteMessage(user, groupId, messageId, scope) {
   const group = await openChat(pool, user, groupId);
   if (scope === 'everyone') assertCanSend(group);
   const message = await findVisibleMessage(pool, user, group.groupId, messageId);
+  if (message.isSystem) throw badRequest('MSG_SYSTEM_MESSAGE', 'A system line cannot be deleted.');
   if (scope === 'everyone') await deleteForEveryone(user, group, message);
   else await deleteForMe(user, group, message);
   return { groupId: group.groupId, messageId: message.messageId, scope };

@@ -24,6 +24,10 @@ import { directPeer } from './direct.service.js';
 // Attachments (12/11/2026): files go up through the shared modules/uploads (target 'message' → messages/<groupId>/),
 // rows through utils/attachments.js (column message_id). A message may be files only (messages.content NULL, schema).
 // A message deleted for everyone hides its files (§6), like its text.
+// System lines (15/11/2026, team chats, business-rules §4 / §6): messages.message_type = 'SYSTEM' with system_event
+// TEAM_CREATED | TEAM_RENAMED (content = new name) | MEMBER_LEFT | MEMBER_REMOVED | LEADER_CHANGED (target = new
+// leader); sender_id = the member the line is about. They count as unread like a message, but cannot be answered,
+// reacted to or deleted. Written by modules/groups/teamEvents.js, sent with publishNewMessages().
 
 const conflict = (code, message, details) => new AppError(409, code, message, details);
 const PAGE_DEFAULT = 30;
@@ -72,7 +76,8 @@ const replyToSql = (viewer) => `(
            WHEN ${hiddenFor(viewer, 'rm')} THEN json_build_object('state', 'HIDDEN', 'messageId', rm.message_id)
            ELSE json_build_object('state', 'OK', 'messageId', rm.message_id, 'senderId', rm.sender_id,
                                   'senderName', ru.full_name, 'senderNickname', re.nickname,
-                                  'content', left(rm.content, 200), 'attachmentCount', ${fileCountSql('rm')})
+                                  'content', left(rm.content, 200), 'attachmentCount', ${fileCountSql('rm')},
+                                  'type', rm.message_type)
          END
   FROM messages rm
   JOIN users ru ON ru.user_id = rm.sender_id
@@ -99,12 +104,15 @@ const messageSelect = (viewer, viewerFrom = '', columns = '') => `
          m.sent_at AS "sentAt", u.full_name AS "senderName", u.avatar_url AS "senderAvatarUrl",
          u.status AS "senderStatus", e.nickname AS "senderNickname",
          ${replyToSql(viewer)} AS "replyTo", ${reactionsSql()} AS reactions,
-         (CASE WHEN m.sender_id = ${viewer} AND m.deleted_for_everyone_at IS NULL
+         m.message_type AS "type", m.system_event AS "event", m.target_user_id AS "targetUserId",
+         tu.full_name AS "targetName",
+         (CASE WHEN m.sender_id = ${viewer} AND m.deleted_for_everyone_at IS NULL AND m.message_type = 'TEXT'
                THEN GREATEST(0, CEIL(EXTRACT(EPOCH FROM (m.sent_at + make_interval(mins => ${DELETE_MINUTES_SQL}) - NOW()))))
                ELSE 0 END)::int AS "deleteSecondsLeft"${columns}
   FROM messages m ${viewerFrom}
   JOIN groups g ON g.group_id = m.group_id
   JOIN users u ON u.user_id = m.sender_id
+  LEFT JOIN users tu ON tu.user_id = m.target_user_id
   LEFT JOIN students st ON st.user_id = m.sender_id
   LEFT JOIN class_enrollments e ON e.student_id = st.student_id AND e.class_id = g.class_id`;
 
@@ -115,7 +123,7 @@ export async function findVisibleMessage(db, user, groupId, messageId) {
   if (Number.isSafeInteger(id) && id > 0) {
     const { rows } = await db.query(
       `SELECT m.message_id AS "messageId", m.sender_id AS "senderId",
-              m.deleted_for_everyone_at IS NOT NULL AS "isDeleted"
+              m.deleted_for_everyone_at IS NOT NULL AS "isDeleted", m.message_type = 'SYSTEM' AS "isSystem"
        FROM messages m
        WHERE m.message_id = $1 AND m.group_id = $2 AND m.deleted_at IS NULL
          AND m.sent_at >= ${visibleFrom('$3')} AND NOT ${hiddenFor('$3')}`,
@@ -288,7 +296,8 @@ export async function listMessages(user, groupId, query) {
 export async function listConversations(user) {
   const { rows } = await pool.query(
     `SELECT g.group_id AS "groupId", g.group_type AS "groupType",
-            lm.message_id AS "messageId", lm.is_deleted AS "isDeleted",
+            lm.message_id AS "messageId", lm.is_deleted AS "isDeleted", lm.message_type AS "type",
+            lm.system_event AS "event", lt.full_name AS "targetName",
             CASE WHEN lm.is_deleted THEN NULL ELSE lm.content END AS content,
             lm.sent_at AS "sentAt", lm.activity_at AS "activityAt",
             EXTRACT(EPOCH FROM lm.activity_at)::float8 AS "activityKey", lm.sender_id AS "senderId",
@@ -307,8 +316,8 @@ export async function listConversations(user) {
                    FROM group_members vm
                    WHERE vm.group_id = g.group_id AND vm.user_id = $1
                    HAVING bool_or(vm.left_at IS NULL)) gm ON TRUE
-     LEFT JOIN LATERAL (SELECT m.message_id, m.content, m.sent_at, m.sender_id,
-                               m.deleted_for_everyone_at IS NOT NULL AS is_deleted,
+     LEFT JOIN LATERAL (SELECT m.message_id, m.content, m.sent_at, m.sender_id, m.message_type, m.system_event,
+                               m.target_user_id, m.deleted_for_everyone_at IS NOT NULL AS is_deleted,
                                COALESCE(m.deleted_for_everyone_at, m.sent_at) AS activity_at
                         FROM messages m
                         WHERE m.group_id = g.group_id AND m.deleted_at IS NULL AND m.sent_at >= gm.joined_at
@@ -319,6 +328,7 @@ export async function listConversations(user) {
                                      WHERE d.user_id = $1 AND dm.group_id = g.group_id), '-infinity')) ASC,
                                  COALESCE(m.deleted_for_everyone_at, m.sent_at) DESC, m.message_id DESC LIMIT 1) lm ON TRUE
      LEFT JOIN users u ON u.user_id = lm.sender_id
+     LEFT JOIN users lt ON lt.user_id = lm.target_user_id
      LEFT JOIN students st ON st.user_id = lm.sender_id
      LEFT JOIN class_enrollments e ON e.student_id = st.student_id AND e.class_id = g.class_id
      LEFT JOIN LATERAL (SELECT pu.user_id, pu.full_name, pu.avatar_url, pu.status
@@ -343,6 +353,9 @@ export async function listConversations(user) {
       ? {
           messageId: r.messageId,
           isDeleted: r.isDeleted,
+          type: r.type,
+          event: r.event,
+          targetName: r.targetName,
           content: r.content,
           attachmentCount: r.attachmentCount,
           sentAt: r.sentAt,
@@ -392,7 +405,9 @@ export async function sendMessage(user, groupId, body) {
   let replyTo = null;
   if (body?.replyToMessageId !== undefined && body.replyToMessageId !== null) {
     const original = await findVisibleMessage(pool, user, group.groupId, body.replyToMessageId).catch(() => null);
-    if (!original || original.isDeleted) throw badRequest('MSG_REPLY_INVALID', 'This message can no longer be answered.');
+    if (!original || original.isDeleted || original.isSystem) {
+      throw badRequest('MSG_REPLY_INVALID', 'This message can no longer be answered.');
+    }
     replyTo = original.messageId;
   }
 
@@ -427,6 +442,21 @@ export async function sendMessage(user, groupId, body) {
   });
   const { viewerId: _viewerId, ...mine } = copies.find((c) => c.viewerId === user.userId);
   return mine;
+}
+
+/**
+ * Sends messages written by someone else's action (team system lines, teamEvents.js) to every active member, after
+ * COMMIT: "message:new" with the message as each viewer sees it, as sendMessage does. Errors are only logged.
+ */
+export function publishNewMessages(groupId, messageIds) {
+  if (!messageIds?.length) return;
+  (async () => {
+    const memberIds = await activeMemberIds(pool, groupId);
+    for (const messageId of messageIds) {
+      const copies = await withFiles(await messageForViewers(pool, messageId, memberIds));
+      for (const { viewerId, ...message } of copies) emitToUsers([viewerId], 'message:new', { groupId, message });
+    }
+  })().catch((err) => console.error(`[conversations] system lines of group #${groupId} not sent:`, err?.message));
 }
 
 // UC-47: the user has read the chat up to now (opening it, or a new message arriving while it is open).
