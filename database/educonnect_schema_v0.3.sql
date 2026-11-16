@@ -408,6 +408,8 @@ CREATE TABLE messages (
   message_type   VARCHAR(10) NOT NULL DEFAULT 'TEXT',
   system_event   VARCHAR(30) NULL,
   target_user_id BIGINT NULL,
+  -- 17/11/2026: the sender's random id for the message (FE-06): sending it again returns the saved message, no copy
+  client_message_id UUID NULL,
   FOREIGN KEY (group_id)  REFERENCES groups(group_id),
   FOREIGN KEY (sender_id) REFERENCES users(user_id),
   FOREIGN KEY (target_user_id) REFERENCES users(user_id),
@@ -778,6 +780,8 @@ CREATE TABLE password_reset_requests (
 
 CREATE INDEX idx_group_members_group_id_user_id ON group_members (group_id, user_id);
 CREATE INDEX idx_messages_group_id_sent_at ON messages (group_id, sent_at);
+CREATE UNIQUE INDEX uq_messages_client_message_id
+  ON messages (group_id, sender_id, client_message_id) WHERE client_message_id IS NOT NULL;
 CREATE INDEX idx_notification_recipients_user_id_read_at ON notification_recipients (user_id, read_at);
 CREATE INDEX idx_activity_logs_created_at ON activity_logs (created_at);
 CREATE INDEX idx_password_reset_otps_user_id_expires_at ON password_reset_otps (user_id, expires_at);
