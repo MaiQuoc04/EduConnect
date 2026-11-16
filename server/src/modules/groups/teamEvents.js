@@ -1,6 +1,7 @@
 import { emitToUsers } from '../../sockets/index.js';
 import { activeMemberIds, publishNewMessages } from '../conversations/conversations.service.js';
 import { pool } from '../../config/db.js';
+import { signalWhenSaved } from '../conversations/chatSignals.js';
 
 // Team leader and system lines (FE-04 teams / FE-06 chat, owner Khanh; approved by the lead 15/11/2026, business-rules
 // §4 "Teams in detail" and §6). Shared by teams.service.js (create, rename, leave, hand over) and by the code that takes
@@ -48,8 +49,9 @@ async function firstMember(client, groupId) {
  * After the system took people out of groups ([{ groupId, userId }], left_at already set, in the caller's transaction):
  * for each TEAM_CHAT among them, a MEMBER_REMOVED line per person, the leadership handed to the first member still in
  * when the leader was one of them (LEADER_CHANGED), and the team closed when nobody is left (no line then).
- * Returns what to send after COMMIT: { lines: [{ groupId, messageIds }], closed: [groupId], removed } – pass it to
- * publish(). Class groups in the list are ignored.
+ * Returns { lines: [{ groupId, messageIds }], closed: [groupId], removed }. Class groups in the list are ignored.
+ * Real time (17/11/2026): the lines, group:removed / group:changed and chat:access-changed go out by themselves once the
+ * caller's transaction is saved (chatSignals.signalWhenSaved) – callers send nothing.
  */
 export async function afterRemovedFromTeams(client, removed) {
   const result = { lines: [], closed: [], removed: [] };
@@ -86,6 +88,7 @@ export async function afterRemovedFromTeams(client, removed) {
     }
     result.lines.push({ groupId: team.groupId, messageIds });
   }
+  signalWhenSaved(result);
   return result;
 }
 

@@ -157,5 +157,10 @@ export async function syncClassTeachers(client, classId) {
   // Imported here, not at the top: teamEvents → conversations → groups would come back to this module (import cycle).
   const { afterRemovedFromTeams } = await import('../groups/teamEvents.js');
   await afterRemovedFromTeams(client, leftTeams);
+  // Class groups (17/11/2026, FE-06 real time): the teacher who is out sees the group leave their lists and its chat
+  // close, the one who is in sees it join; members' counts and 1-1 chats are re-read. Sent once the caller's
+  // transaction is saved (the teams above send theirs the same way).
+  const { signalWhenSaved } = await import('../conversations/chatSignals.js');
+  signalWhenSaved({ removed: leftGroups, added: [...back, ...fresh] });
   return { added: [...back, ...fresh], left: [...leftGroups, ...leftTeams] };
 }
