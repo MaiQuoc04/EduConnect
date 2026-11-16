@@ -1,5 +1,4 @@
 import { useEffect, useId, useMemo, useRef, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
 import { api } from '../../api/client.js';
 import Avatar from '../../components/Avatar.jsx';
 import Icon from '../../components/Icon.jsx';
@@ -12,7 +11,6 @@ import { MEMBER_KIND_LABELS } from './groupLabels.js';
 // Team actions (FE-04 teams, business-rules §4, lead OK 15/11/2026), shared by SCR-21 Group Detail and the chat header:
 //   Đổi tên nhóm           any member                         PATCH /groups/:id { groupName }
 //   Chuyển quyền trưởng nhóm  the leader                      PUT /groups/:id/leader { userId }
-//   Thêm / xoá thành viên  the leader (17/11/2026)            opens SCR-22, where the leader adds and removes members
 //   Rời nhóm               any member; the leader while others remain first picks the new leader
 //                          (POST /groups/:id/leave { newLeaderId }); the last member closes the team.
 // g = GET /groups/:id (groupId, groupName, counts, isLeader, canRename, canTransfer, canLeave).
@@ -23,19 +21,12 @@ const NAME_MAX = 100;
 
 export function useTeamActions(g, { onLeft, onChanged }) {
   const [open, setOpen] = useState(null); // 'rename' | 'transfer' | 'leave-pick' | 'leave'
-  const navigate = useNavigate();
   const team = g?.groupType === 'TEAM_CHAT';
   const others = (g?.counts?.total ?? 1) - 1;
 
   const items = team
     ? [
         g.canRename && { key: 'rename', label: 'Đổi tên nhóm', icon: 'edit', run: () => setOpen('rename') },
-        g.canAddMembers && {
-          key: 'members',
-          label: 'Thêm / xoá thành viên',
-          icon: 'group_add',
-          run: () => navigate(`/groups/${g.groupId}/members`),
-        },
         g.canTransfer && others > 0 && {
           key: 'transfer',
           label: 'Chuyển quyền trưởng nhóm',

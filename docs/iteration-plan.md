@@ -163,7 +163,7 @@ It2: Anh FE-08 + FE-14, Khanh FE-05 + FE-06).
     class (the homeroom teacher no longer adds or removes). Teams: the leader adds (same class / teachers, active, up to
     50) and removes members through the same routes (`/groups/:id/candidates`, `POST|DELETE /groups/:id/members`),
     system lines `MEMBER_ADDED` / `MEMBER_KICKED`, real time (group:changed / group:removed). New flags
-    `canAddMembers` / `canRemoveMembers`; "Thêm / xoá thành viên" in the team menu. No schema change. Tested on the
+    `canAddMembers` / `canRemoveMembers`; adding and removing on the Members tab (SCR-22). No schema change. Tested on the
     local DB (28 steps + the team / chat suites).
 - **Not merged yet:** none of It1. It2 branches start from `develop`. Still open in It2: FE-10 timetable (Dung).
   - FE-14 Parent Management (Anh, It2) – merged 11/11: UC-104 parent list, UC-105 parent detail with the linked
