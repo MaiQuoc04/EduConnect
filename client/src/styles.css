@@ -917,6 +917,15 @@ a.link-row .icon:last-child { color: var(--graphite-400); }
 .group-dialog:not([open]) { display: none; }
 .group-dialog::backdrop { background: rgba(28, 27, 25, 0.32); }
 .group-dialog p { color: var(--graphite-700); }
+/* SCR-26 subject create / update as a pop-up (17/11/2026) */
+.subject-dialog { width: min(520px, calc(100vw - 32px)); max-height: calc(100vh - 48px); overflow-y: auto; }
+.subject-dialog-form { display: grid; gap: 20px; }
+.subject-dialog-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
+.subject-dialog-head h2 { margin: 0 0 4px; }
+.subject-dialog-head .caption { margin: 0; }
+.subject-dialog-head .btn-icon { flex: none; margin: -6px -8px 0 0; }
+.subject-dialog .card-footer { margin: 0; padding: 0; border: 0; }
+@media (max-width: 640px) { .subject-dialog { padding: 20px 16px; } }
 .team-form-grid { display: grid; grid-template-columns: 220px minmax(0, 1fr); gap: 16px; align-items: start; }
 .team-form-grid.one { grid-template-columns: minmax(0, 1fr); }
 .team-filter { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 12px; align-items: center; }
