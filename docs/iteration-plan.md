@@ -158,6 +158,13 @@ It2: Anh FE-08 + FE-14, Khanh FE-05 + FE-06).
     **DB: `patch_v0.3_message_client_id.sql` approved by the lead and run on the shared DB 17/11 (column + unique
     index checked; old messages keep NULL).** Tested on the
     local DB (17 new steps, with and without the column, + the del / act / files / team suites).
+  - **17/11 (Khanh): group members** (business-rules §4, permissions, UC-32 / UC-33; Khanh's decision). Class groups:
+    nobody removes anyone (403 `MSG_GROUP_MEMBER_CLASS_FIXED`), only the School Manager adds missing people of the
+    class (the homeroom teacher no longer adds or removes). Teams: the leader adds (same class / teachers, active, up to
+    50) and removes members through the same routes (`/groups/:id/candidates`, `POST|DELETE /groups/:id/members`),
+    system lines `MEMBER_ADDED` / `MEMBER_KICKED`, real time (group:changed / group:removed). New flags
+    `canAddMembers` / `canRemoveMembers`; "Thêm / xoá thành viên" in the team menu. No schema change. Tested on the
+    local DB (28 steps + the team / chat suites).
 - **Not merged yet:** none of It1. It2 branches start from `develop`. Still open in It2: FE-10 timetable (Dung).
   - FE-14 Parent Management (Anh, It2) – merged 11/11: UC-104 parent list, UC-105 parent detail with the linked
     children, UC-106 update profile (`fullName`, `occupation`, `address` only; login identifiers are not touched).

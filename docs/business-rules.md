@@ -240,7 +240,10 @@ Boundaries that are easy to get wrong:
   to the members of the class's groups and to the School Manager (never in the teacher group or outside the class).
 - **Teams in detail** (agreed 03/11/2026): the creator picks the members when creating it – the creator plus 2–49
   others from the same class (3–50 people), no locked accounts; name 2–100 characters, not unique. After that
-  **nobody adds or removes members**. **Team leader** (agreed by the lead 15/11/2026, replaces "a team has no admin"):
+  **only the leader adds and removes members** (Khanh's decision 17/11/2026, replaces "nobody adds or removes
+  members"): people of the team's class (a teacher team: teachers of the teacher group), active accounts, up to 50; a
+  removed member loses the team at once and can be added again (then sees the whole history, §6); the leader cannot
+  remove themselves (they leave). Lines "A đã thêm B vào nhóm" / "A đã xoá B khỏi nhóm". **Team leader** (agreed by the lead 15/11/2026, replaces "a team has no admin"):
   the creator is the leader (`groups.leader_id`); the leader's only rights are to **hand the leadership over** to
   another member (any time) and the duty to do so **before leaving while others remain** (a locked member may be
   chosen, with a warning). When the system takes the leader out (transfer, promotion, assignment change), the member
@@ -253,13 +256,15 @@ Boundaries that are easy to get wrong:
 - **Teacher teams** (agreed by the lead 05/11/2026, e.g. a head of department with the department's teachers): a team
   with no class (`class_id` NULL), created by a teacher (active role) who is in the teacher group. Members are
   picked from the teachers of the teacher group, whatever their class; School Managers cannot be picked, cannot create
-  one and do not see it. Same size, name, leave and no-admin rules as above. It has no school year, so it never
+  one and do not see it. Same size, name, leave and leader rules as above (the leader adds teachers of the teacher group). It has no school year, so it never
   becomes read only. A teacher whose account is locked later stays in it with the "Locked" label.
 - **Group moderator = the current homeroom teacher**, read from `classes.homeroom_teacher_id` (nothing stored per
   group), so the rights move at once when the homeroom teacher changes, posts waiting for approval included.
-- **Removing members** (UC-33): the homeroom teacher removes students and parents only; teachers are removed by the
-  School Manager (who also makes the teaching assignments). A teacher removed while still assigned to the class
-  comes back at the next membership sync (membership follows the class); to take a teacher out, end the assignment.
+- **Class group members** (UC-32 / UC-33, Khanh's decision 17/11/2026, replaces "the homeroom teacher removes students
+  and parents, the School Manager removes teachers"): **nobody removes anyone** from the three class groups – their
+  members follow the class (transfer, promotion, teaching and homeroom assignments, below). Only the **School
+  Manager adds** people of the class who are missing (e.g. a student who transferred in before the sync); the
+  homeroom teacher can no longer add or remove. To take a teacher out, end the assignment.
 - **Class group membership follows the class** (agreed 03/11/2026), in the same transaction as the change that
   causes it:
   - Transfer (UC-10) / promotion (UC-11): the student leaves every group and team of the old class and joins GENERAL

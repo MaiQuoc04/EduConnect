@@ -22,12 +22,14 @@ Source: Report 3 section 4.4 (draft v1.3). Full = all records; Restricted (n) = 
 | School year, semester, subject, class type | Create / update / close (reopen a semester) | No | Full | No | No | No | No |
 | Class group | Create / import | No | Full | No | No | No | No |
 | Class group | View list, detail, members | No | Full (3) | Restricted (4) | Restricted (4) | Restricted (4) | Restricted (4) |
-| Class group | Add / remove member | No | Full | Restricted (5) | No | No | No |
+| Class group | Add a missing member of the class (17/11/2026) | No | Full | No | No | No | No |
+| Class group | Remove a member (17/11/2026: nobody – membership follows the class) | No | No | No | No | No | No |
 | Student nickname | Set | No | No | Restricted (5) | No | No | No |
 | Team | Create | No | No | Restricted (4) | Restricted (4) | Restricted (4) | Restricted (4) |
 | Team | Leave (own membership) | No | No | Restricted (4) | Restricted (4) | Restricted (4) | Restricted (4) |
 | Team | Rename (any member, 15/11/2026) | No | No | Restricted (4) | Restricted (4) | Restricted (4) | Restricted (4) |
 | Team | Hand the leadership over (team leader only, 15/11/2026) | No | No | Restricted (4) | Restricted (4) | Restricted (4) | Restricted (4) |
+| Team | Add / remove members (team leader only, 17/11/2026) | No | No | Restricted (4) | Restricted (4) | Restricted (4) | Restricted (4) |
 | Group feed post | View / create / comment / react | No | Restricted (6) | Restricted (4) | Restricted (4) | Restricted (4) | Restricted (4) |
 | Group feed post | Edit / delete own | No | Restricted (6) | Restricted (4) | Restricted (4) | Restricted (4) | Restricted (4) |
 | Group feed post | Pin / hide / unhide / approve / reject | No | Restricted (6) | Restricted (5) | No | No | No |
@@ -67,7 +69,7 @@ Notes:
 2. Name and class only, inside groups they belong to; phone number and email visible to teachers and School Manager only.
 3. Lists and members only; School Manager does not see class feeds or chats.
 4. Only the classes, groups and teams the user belongs to.
-5. Only the class they are homeroom teacher of. Removing a member: the homeroom teacher removes students and parents only; teachers are removed by the School Manager.
+5. Only the class they are homeroom teacher of. (Until 17/11/2026 the homeroom teacher could also add and remove members of the class groups; since then nobody removes anyone from them and only the School Manager adds missing people of the class.)
 6. School-wide teacher group only.
 7. Own data, or the selected child's data.
 8. Within the audience chosen by the author.
