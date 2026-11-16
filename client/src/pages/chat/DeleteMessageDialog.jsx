@@ -24,7 +24,11 @@ export default function DeleteMessageDialog({ forEveryone, expired, onDelete, on
   }
 
   return (
-    <dialog ref={ref} className="group-dialog" onCancel={onCancel} aria-labelledby="delete-message-title">
+    <dialog ref={ref} className="group-dialog" onCancel={(e) => {
+        e.preventDefault(); // Esc: closes through onCancel, and never while deleting
+        if (!saving) onCancel();
+      }}
+      aria-labelledby="delete-message-title">
       <h2 id="delete-message-title" className="title-md">
         Xoá tin nhắn
       </h2>

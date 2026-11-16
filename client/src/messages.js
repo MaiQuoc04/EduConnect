@@ -4,6 +4,7 @@ import { DEPARTMENT_REASON_TEXT, NAME_REASON_TEXT } from './utils/teacherValidat
 // Add a line here whenever a module introduces a new error code.
 const ERROR_MESSAGES = {
   NETWORK_ERROR: 'Không kết nối được máy chủ. Vui lòng thử lại.',
+  NETWORK_TIMEOUT: 'Máy chủ không phản hồi. Vui lòng thử lại.',
   SERVER_ERROR: 'Đã có lỗi xảy ra. Vui lòng thử lại.',
   NOT_FOUND: 'Không tìm thấy dữ liệu.',
   FORBIDDEN: 'Bạn không có quyền thực hiện thao tác này.',

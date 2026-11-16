@@ -201,3 +201,62 @@ export default function MessageRow({
     </>
   );
 }
+
+// One of my messages not confirmed by the server yet (17/11/2026, business-rules §6 "Sending"), after the real ones:
+//   sending – dim, "Đang gửi…";
+//   failed  – the reason, then "Thử lại" (when sending again can help and I may still send), "Sửa" (back into the box)
+//             and "Xoá" (only drops this copy; a message that was maybe saved after all shows up at the next load).
+export function OutboxRow({ message: m, me, canSend, onRetry, onEdit, onDrop }) {
+  const failed = m.status === 'failed';
+  const reply = m.replyTo;
+  const replyWho = reply ? (reply.senderId === me ? 'chính bạn' : reply.senderNickname || reply.senderName) : '';
+  return (
+    <li className={`msg mine first msg-outbox${failed ? ' is-failed' : ' is-sending'}`} aria-busy={!failed}>
+      <div className="msg-body">
+        {reply && (
+          <p className="msg-reply-note caption">
+            <Icon name="reply" size="sm" />
+            Bạn đang trả lời {replyWho}
+          </p>
+        )}
+        <div className="msg-line">
+          <div className="msg-bubble">
+            {m.files.length > 0 && (
+              <p className="msg-outbox-files caption">
+                <Icon name="attach_file" size="sm" />
+                {m.files.length === 1 ? m.files[0].fileName : `${m.files.length} tệp`}
+              </p>
+            )}
+            {m.content && <p className="msg-text">{m.content}</p>}
+          </div>
+        </div>
+        <p className="msg-outbox-state caption" role={failed ? 'alert' : undefined}>
+          {failed ? (
+            <>
+              <Icon name="error" size="sm" />
+              <span>{m.unsure ? 'Chưa rõ đã gửi được chưa.' : m.error || 'Không gửi được.'}</span>
+              {m.retryable && canSend && (
+                <button type="button" className="link-button" onClick={() => onRetry(m.clientMessageId)}>
+                  Thử lại
+                </button>
+              )}
+              {canSend && (
+                <button type="button" className="link-button" onClick={() => onEdit(m.clientMessageId)}>
+                  Sửa
+                </button>
+              )}
+              <button type="button" className="link-button" onClick={() => onDrop(m.clientMessageId)}>
+                Xoá
+              </button>
+            </>
+          ) : (
+            <>
+              <Icon name="schedule" size="sm" />
+              Đang gửi…
+            </>
+          )}
+        </p>
+      </div>
+    </li>
+  );
+}

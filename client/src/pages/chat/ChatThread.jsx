@@ -4,15 +4,16 @@ import { UPLOAD_TARGETS } from '../../api/uploads.js';
 import { fileIcon, useAttachmentUploads } from '../../components/AttachmentPicker.jsx';
 import Icon from '../../components/Icon.jsx';
 import { useAuth } from '../../context/AuthContext.jsx';
-import { useSocket } from '../../context/SocketContext.jsx';
+import { useSocket, useSocketStatus } from '../../context/SocketContext.jsx';
 import { useToast } from '../../context/ToastContext.jsx';
 import { errorText } from '../../messages.js';
 import { MEMBER_KIND_LABELS } from '../groups/groupLabels.js';
 import { memberSubline } from '../groups/memberText.js';
+import { readChatDraft, writeChatDraft } from './chatDraft.js';
 import { dayOf, filesText } from './chatText.js';
 import DeleteMessageDialog from './DeleteMessageDialog.jsx';
 import EmojiPicker from './EmojiPicker.jsx';
-import MessageRow from './MessageRow.jsx';
+import MessageRow, { OutboxRow } from './MessageRow.jsx';
 
 // UC-47 Chat in Group (FE-06, Khanh) – SCR-43 Group Chat / SCR-50 Chat Room: the messages of one group and the
 // composer. The server decides who may read or send (active role, data scope, read-only year) and sends only the
@@ -23,17 +24,36 @@ import MessageRow from './MessageRow.jsx';
 // Files (12/11/2026): the 📎 button (or pasting a picture) uploads each file straight to storage with the shared FE-08
 // upload queue (target 'message', images compressed first); "Gửi" waits until they are up. A message may be files
 // only. Links live one hour: a picture that no longer loads asks for that message again (refreshFiles).
-const MESSAGE_MAX = 2000; // same limit as the server (ASSUMPTION there, plan question Q5)
+//
+// 17/11/2026 (business-rules §6 "Sending", "Drafts", "Real time"):
+//   * Sending: a message shows at once in the outbox (dim, "Đang gửi…") and is sent in order, one at a time, with a
+//     random clientMessageId; the server never saves the same id twice, so "Thử lại" after a timeout or a lost
+//     connection is safe. A failed message stays with "Thử lại" / "Sửa" / "Xoá"; no answer in time = "maybe sent".
+//   * Draft: the text, the reply, the uploaded files and the unsent messages are kept per chat (chatDraft.js).
+//   * Connection: a bar after 3 s without the socket; on every (re)connection the chat reads what it missed (catchUp):
+//     the messages after the last one shown plus the latest page merged in (deletions, reactions), keeping the older
+//     messages already loaded and the scroll position.
+//   * Reading: new messages while the user reads older ones do not move the list; "↓ n tin nhắn mới" takes them down.
+//     The chat counts as read only when its end is on screen in a visible tab.
+//   * chat:access-changed: who may write changed (a class change, a 1-1 chat out of reach) → canSend is read again.
+const MESSAGE_MAX = 2000; // same limit and count as the server (UTF-16 length after trim)
 const SEEN_NAMES = 3;
 const FILE_RETRY_MS = 15_000; // one new link per message at most this often
+const SEND_TIMEOUT_MS = 15_000; // business-rules §6 (Khanh 17/11/2026)
+const LOAD_TIMEOUT_MS = 20_000;
+const CATCH_UP_MAX = 100; // more missed than this: the latest page replaces the list
+const DRAFT_SAVE_MS = 500;
 
 // Limits of the file button (count, sizes from system_settings, types): read once per page load, shared by every chat.
 let limitsRequest = null;
 function loadFileLimits() {
-  limitsRequest ??= api.get('/conversations/attachment-limits').then((r) => r.data).catch((err) => {
-    limitsRequest = null; // try again next time
-    throw err;
-  });
+  limitsRequest ??= api
+    .get('/conversations/attachment-limits', { timeout: LOAD_TIMEOUT_MS })
+    .then((r) => r.data)
+    .catch((err) => {
+      limitsRequest = null; // try again next time
+      throw err;
+    });
   return limitsRequest;
 }
 const NEAR_BOTTOM_PX = 120;
@@ -43,6 +63,46 @@ const INPUT_MAX_PX = 136; // about six lines of 20px
 // When the user's own message can no longer be deleted for everyone, from the seconds left the server sent. Only
 // decides which choices to show; the server checks the time again.
 const stamp = (m) => ({ ...m, deleteUntil: Date.now() + (m.deleteSecondsLeft ?? 0) * 1000 });
+
+// Messages by id, oldest first: socket and API answers may arrive in any order.
+function mergeMessages(list, incoming) {
+  if (!incoming.length) return list;
+  const byId = new Map(list.map((m) => [m.messageId, m]));
+  for (const m of incoming) byId.set(m.messageId, m);
+  return [...byId.values()].sort((a, b) => a.messageId - b.messageId);
+}
+
+// The latest page read again: from its first message on, it replaces what is shown (a message deleted for me is gone,
+// one deleted for everyone shows its placeholder, reactions are current); older messages stay as they are.
+function mergeLatest(list, page) {
+  if (!page.length) return list;
+  const from = page[0].messageId;
+  return mergeMessages(
+    list.filter((m) => m.messageId < from),
+    page,
+  );
+}
+
+// A random UUID v4 for clientMessageId (crypto.randomUUID needs https or localhost; getRandomValues works everywhere).
+function newClientId() {
+  if (globalThis.crypto?.randomUUID) return globalThis.crypto.randomUUID();
+  const b = globalThis.crypto.getRandomValues(new Uint8Array(16));
+  b[6] = (b[6] & 0x0f) | 0x40;
+  b[8] = (b[8] & 0x3f) | 0x80;
+  const h = [...b].map((x) => x.toString(16).padStart(2, '0')).join('');
+  return `${h.slice(0, 8)}-${h.slice(8, 12)}-${h.slice(12, 16)}-${h.slice(16, 20)}-${h.slice(20)}`;
+}
+
+// What the reply bar and an outbox message keep of the message being answered.
+const replyPart = (m) =>
+  m && {
+    messageId: m.messageId,
+    senderId: m.senderId,
+    senderName: m.senderName,
+    senderNickname: m.senderNickname,
+    content: m.content,
+    attachments: m.attachments ?? [],
+  };
 
 function memberLabel(member) {
   if (!member) return '';
@@ -56,18 +116,35 @@ const BLOCKED_TEXT = {
   READ_ONLY: 'Nhóm chỉ còn để xem lại',
   OUT_OF_SCOPE: 'Bạn không còn nhắn tin được với người này',
   LOCKED: 'Tài khoản này đã bị khoá',
+  NOT_MEMBER: 'Bạn không còn trong cuộc trò chuyện này',
 };
 const BLOCKED_BY_CODE = {
   MSG_GROUP_READ_ONLY: 'READ_ONLY',
   MSG_DIRECT_OUT_OF_SCOPE: 'OUT_OF_SCOPE',
   MSG_DIRECT_LOCKED: 'LOCKED',
+  MSG_CHAT_NOT_MEMBER: 'NOT_MEMBER',
 };
+
+// Why a message was not sent, and whether sending it again can help.
+function sendFailure(err) {
+  if (BLOCKED_BY_CODE[err.code]) return { error: errorText(err), retryable: false, unsure: false };
+  if (err.status === 0) {
+    // No answer: the server may have saved it. "Thử lại" sends the same clientMessageId, so never twice.
+    return { error: 'Chưa rõ đã gửi được chưa.', retryable: true, unsure: true };
+  }
+  if (err.status >= 500 || err.status === 429) return { error: errorText(err), retryable: true, unsure: false };
+  return { error: errorText(err), retryable: err.code === 'MSG_REPLY_INVALID', unsure: false };
+}
 
 export default function ChatThread({ groupId, onPeer }) {
   const { user } = useAuth();
   const me = user?.id;
   const socket = useSocket();
+  const socketStatus = useSocketStatus();
   const toast = useToast();
+  const id = Number(groupId);
+  const url = `/conversations/${id}/messages`;
+  const [restored] = useState(() => readChatDraft(me, id));
   const [state, setState] = useState({ loading: true, error: '', canSend: false, blockedReason: null, direct: false });
   const onPeerRef = useRef(onPeer);
   onPeerRef.current = onPeer;
@@ -75,13 +152,16 @@ export default function ChatThread({ groupId, onPeer }) {
   const [members, setMembers] = useState([]);
   const [hasMore, setHasMore] = useState(false);
   const [olderLoading, setOlderLoading] = useState(false);
-  const [text, setText] = useState('');
-  const [sending, setSending] = useState(false);
-  const [replyTo, setReplyTo] = useState(null); // the message being answered
+  const [text, setText] = useState(restored?.text ?? '');
+  const [replyTo, setReplyTo] = useState(restored?.replyTo ?? null); // the message being answered
+  const [draftFiles, setDraftFiles] = useState(restored?.files ?? []); // uploaded before, kept by the draft
+  const [outbox, setOutbox] = useState(restored?.outbox ?? []); // my messages not confirmed by the server yet
   const [menu, setMenu] = useState(null); // { id, kind: 'react' | 'who' } popup of one message
   const [emojiOpen, setEmojiOpen] = useState(false);
   const [deleting, setDeleting] = useState(null); // { message, forEveryone, expired }
   const [fileLimits, setFileLimits] = useState(null);
+  const [unseen, setUnseen] = useState(0); // new messages below while reading older ones
+  const [syncError, setSyncError] = useState(false); // catching up failed; trying again
   const fileInput = useRef(null);
   const fileRefresh = useRef(new Map()); // messageId -> last time new links were asked for
   const jumpTo = useRef(null); // message to scroll to once it is loaded
@@ -90,27 +170,64 @@ export default function ChatThread({ groupId, onPeer }) {
   const stickToBottom = useRef(true);
   const prepend = useRef(null); // scroll position kept while older messages are added on top
   const readTimer = useRef(null);
-  const id = Number(groupId);
-  const uploads = useAttachmentUploads({ target: UPLOAD_TARGETS.MESSAGE, groupId: id, limits: fileLimits });
+  const readOwed = useRef(false); // something arrived that is not read yet (end of the chat not on screen)
+  const loaded = useRef(false);
+  const messagesRef = useRef(messages);
+  messagesRef.current = messages;
+  const outboxRef = useRef(outbox);
+  outboxRef.current = outbox;
+  const sendQueue = useRef(Promise.resolve());
+  const sendLock = useRef(false);
+  const reacting = useRef(new Set());
+  const olderLock = useRef(false);
+  const catchUpTimer = useRef(null);
+  const catchUpDelay = useRef(2000);
+  const alive = useRef(true);
+  const uploads = useAttachmentUploads({
+    target: UPLOAD_TARGETS.MESSAGE,
+    groupId: id,
+    limits: fileLimits,
+    existingCount: draftFiles.length,
+  });
 
   useEffect(() => {
-    let alive = true;
-    loadFileLimits().then((limits) => alive && setFileLimits(limits)).catch(() => {});
+    alive.current = true;
+    loadFileLimits()
+      .then((limits) => alive.current && setFileLimits(limits))
+      .catch(() => {});
     return () => {
-      alive = false;
+      alive.current = false;
+      clearTimeout(catchUpTimer.current);
     };
   }, []);
+
+  // ---- draft (chatDraft.js) -------------------------------------------------------------------------------------
+  const draft = { text, replyTo, files: [...draftFiles, ...uploads.uploaded], outbox };
+  const draftRef = useRef(draft);
+  draftRef.current = draft;
+  const draftJson = JSON.stringify(draft);
+  useEffect(() => {
+    const timer = setTimeout(() => writeChatDraft(me, id, JSON.parse(draftJson)), DRAFT_SAVE_MS);
+    return () => clearTimeout(timer);
+  }, [draftJson, me, id]);
+  // Leaving the chat (another chat, another page): saved at once, what is still on its way included.
+  useEffect(() => () => writeChatDraft(me, id, draftRef.current), [me, id]);
+  useEffect(() => {
+    const save = () => writeChatDraft(me, id, draftRef.current);
+    window.addEventListener('pagehide', save);
+    return () => window.removeEventListener('pagehide', save);
+  }, [me, id]);
 
   function addFiles(list) {
     const notice = uploads.add(list);
     if (notice) toast(notice.replace('Mỗi bài', 'Mỗi tin nhắn'));
   }
 
-  // A picture pasted into the message box is attached (text pastes as usual).
+  // A picture pasted into the message box is attached; text pasted with it (Word, a web page) still goes in the box.
   function onPaste(e) {
     const pasted = [...(e.clipboardData?.files ?? [])];
     if (!pasted.length || !fileLimits || !state.canSend) return;
-    e.preventDefault();
+    if (!e.clipboardData.getData('text/plain')) e.preventDefault();
     addFiles(pasted);
   }
 
@@ -121,7 +238,7 @@ export default function ChatThread({ groupId, onPeer }) {
       if (Date.now() - last < FILE_RETRY_MS) return;
       fileRefresh.current.set(messageId, Date.now());
       try {
-        const { data } = await api.get(`/conversations/${id}/messages`, { params: { before: messageId + 1, limit: 1 } });
+        const { data } = await api.get(url, { params: { before: messageId + 1, limit: 1 }, timeout: LOAD_TIMEOUT_MS });
         const fresh = data.messages.find((m) => m.messageId === messageId);
         if (!fresh) return;
         setMessages((list) => list.map((m) => (m.messageId === messageId ? { ...m, attachments: fresh.attachments } : m)));
@@ -129,43 +246,133 @@ export default function ChatThread({ groupId, onPeer }) {
         // keep what is shown; the next reload brings new links
       }
     },
-    [id],
+    [url],
   );
 
-  // Tell the server the chat is read up to now – only while the tab is visible, at most once per second.
+  // ---- reading --------------------------------------------------------------------------------------------------
+  const nearBottom = useCallback(() => {
+    const box = listRef.current;
+    return !box || box.scrollHeight - box.scrollTop - box.clientHeight < NEAR_BOTTOM_PX;
+  }, []);
+
+  // Tell the server the chat is read up to now – only while the tab is visible and the end of the chat is on screen
+  // (or about to be), at most once per second. Otherwise it is owed until the user gets there.
   const markRead = useCallback(() => {
-    if (document.visibilityState !== 'visible' || readTimer.current) return;
+    if (document.visibilityState !== 'visible' || !(stickToBottom.current || nearBottom())) {
+      readOwed.current = true;
+      return;
+    }
+    readOwed.current = false;
+    if (readTimer.current) return;
     readTimer.current = setTimeout(() => {
       readTimer.current = null;
-      api.post(`/conversations/${id}/read`).catch(() => {});
+      api.post(`/conversations/${id}/read`, null, { timeout: LOAD_TIMEOUT_MS }).catch(() => {});
     }, 1000);
-  }, [id]);
+  }, [id, nearBottom]);
+
+  function onScroll() {
+    const near = nearBottom();
+    stickToBottom.current = near; // a later update (reaction, deletion) does not pull a reader down
+    if (near) {
+      setUnseen(0);
+      if (readOwed.current) markRead();
+    }
+  }
+
+  function scrollDown() {
+    const box = listRef.current;
+    stickToBottom.current = true;
+    setUnseen(0);
+    if (box) box.scrollTop = box.scrollHeight;
+    markRead();
+  }
+
+  // ---- loading --------------------------------------------------------------------------------------------------
+  // Messages of the outbox the server already has (a reload after "maybe sent") leave it.
+  const dropSaved = useCallback((list) => {
+    const saved = new Set(list.map((m) => m.clientMessageId).filter(Boolean));
+    if (saved.size) setOutbox((box) => box.filter((m) => !saved.has(m.clientMessageId)));
+  }, []);
+
+  const applyHeader = useCallback((data) => {
+    setMembers(data.members);
+    setState({
+      loading: false,
+      error: '',
+      canSend: data.canSend,
+      blockedReason: data.blockedReason,
+      direct: data.groupType === 'DIRECT',
+    });
+    if (data.peer) onPeerRef.current?.(data.peer);
+  }, []);
 
   const loadLatest = useCallback(async () => {
     try {
-      const { data } = await api.get(`/conversations/${id}/messages`);
+      const { data } = await api.get(url, { timeout: LOAD_TIMEOUT_MS });
       stickToBottom.current = true;
+      setUnseen(0);
       setMessages(data.messages.map(stamp));
-      setMembers(data.members);
       setHasMore(data.hasMore);
-      setState({
-        loading: false,
-        error: '',
-        canSend: data.canSend,
-        blockedReason: data.blockedReason,
-        direct: data.groupType === 'DIRECT',
-      });
-      if (data.peer) onPeerRef.current?.(data.peer);
+      applyHeader(data);
+      dropSaved(data.messages);
+      loaded.current = true;
       markRead();
     } catch (err) {
       setState((s) => ({ ...s, loading: false, error: errorText(err) }));
     }
-  }, [id, markRead]);
+  }, [url, applyHeader, dropSaved, markRead]);
 
   useEffect(() => {
     loadLatest();
     return () => clearTimeout(readTimer.current);
   }, [loadLatest]);
+
+  // After a lost connection (or a role switch, or the socket connecting after the first load): what was missed.
+  // Never replaces the chat with an error: on failure it tries again later (2 s, 4 s … 30 s) while showing a note.
+  const catchUp = useCallback(async () => {
+    if (!loaded.current) return;
+    clearTimeout(catchUpTimer.current);
+    try {
+      const list = messagesRef.current;
+      const lastId = list.at(-1)?.messageId ?? 0;
+      const { data: latest } = await api.get(url, { timeout: LOAD_TIMEOUT_MS });
+      let missed = [];
+      let reset = false;
+      // A gap between what is shown and the latest page: the messages in between, or the latest page alone.
+      if (list.length && latest.messages.length && latest.messages[0].messageId > lastId + 1 && latest.hasMore) {
+        const { data: after } = await api.get(url, {
+          params: { after: lastId, limit: CATCH_UP_MAX },
+          timeout: LOAD_TIMEOUT_MS,
+        });
+        if (after.hasMore) reset = true;
+        else missed = after.messages;
+      }
+      if (!alive.current) return;
+      const page = latest.messages.map(stamp);
+      const fresh = [...missed, ...latest.messages].filter((m) => m.messageId > lastId);
+      const near = nearBottom();
+      stickToBottom.current = reset || near;
+      if (reset) {
+        setMessages(page);
+        setHasMore(latest.hasMore);
+        setUnseen(0);
+      } else {
+        setMessages((cur) => mergeLatest(mergeMessages(cur, missed.map(stamp)), page));
+        const fromOthers = fresh.filter((m) => m.senderId !== me).length;
+        if (!near && fromOthers) setUnseen((n) => n + fromOthers);
+      }
+      applyHeader(latest);
+      dropSaved(fresh);
+      if (fresh.some((m) => m.senderId !== me)) markRead();
+      setSyncError(false);
+      catchUpDelay.current = 2000;
+    } catch {
+      if (!alive.current) return;
+      setSyncError(true);
+      catchUpTimer.current = setTimeout(() => catchUp(), catchUpDelay.current);
+      catchUpDelay.current = Math.min(catchUpDelay.current * 2, 30_000);
+    }
+  }, [url, me, nearBottom, applyHeader, dropSaved, markRead]);
 
   // A message deleted for everyone: only the placeholder is left, and quotes of it no longer show its text.
   const markDeleted = useCallback((messageId) => {
@@ -189,16 +396,22 @@ export default function ChatThread({ groupId, onPeer }) {
     setReplyTo((r) => (r?.messageId === messageId ? null : r));
   }, []);
 
-  // Real time: new messages of this group, read receipts, and a reload after a lost connection comes back.
+  // ---- real time ------------------------------------------------------------------------------------------------
   useEffect(() => {
     if (!socket) return undefined;
     const onNew = ({ groupId: gid, message }) => {
       if (gid !== id) return;
-      const box = listRef.current;
-      stickToBottom.current =
-        message.senderId === me || !box || box.scrollHeight - box.scrollTop - box.clientHeight < NEAR_BOTTOM_PX;
-      setMessages((list) => (list.some((m) => m.messageId === message.messageId) ? list : [...list, stamp(message)]));
-      if (message.senderId !== me) markRead();
+      // Sent from this tab: it replaces its outbox copy and the list goes down. From another tab or person: the list
+      // goes down only when the end was already on screen.
+      const ownHere = Boolean(message.clientMessageId) && outboxRef.current.some((m) => m.clientMessageId === message.clientMessageId);
+      const near = nearBottom();
+      stickToBottom.current = ownHere || near;
+      setMessages((list) => mergeMessages(list, [stamp(message)]));
+      if (ownHere) setOutbox((box) => box.filter((m) => m.clientMessageId !== message.clientMessageId));
+      if (message.senderId !== me) {
+        if (!near) setUnseen((n) => n + 1);
+        markRead();
+      }
     };
     const onReaction = ({ groupId: gid, messageId, reactions }) => {
       if (gid !== id) return;
@@ -216,21 +429,24 @@ export default function ChatThread({ groupId, onPeer }) {
       if (gid !== id) return;
       setMembers((list) => list.map((m) => (m.userId === userId ? { ...m, lastReadMessageId } : m)));
     };
+    const onAccess = ({ groupId: gid }) => gid === id && catchUp();
     socket.on('message:new', onNew);
     socket.on('message:read', onRead);
     socket.on('message:reaction', onReaction);
     socket.on('message:deleted', onDeleted);
     socket.on('message:hidden', onHidden);
-    socket.io.on('reconnect', loadLatest);
+    socket.on('chat:access-changed', onAccess);
+    socket.on('connect', catchUp);
     return () => {
       socket.off('message:new', onNew);
       socket.off('message:read', onRead);
       socket.off('message:reaction', onReaction);
       socket.off('message:deleted', onDeleted);
       socket.off('message:hidden', onHidden);
-      socket.io.off('reconnect', loadLatest);
+      socket.off('chat:access-changed', onAccess);
+      socket.off('connect', catchUp);
     };
-  }, [socket, id, me, markRead, loadLatest, markDeleted, removeFromView]);
+  }, [socket, id, me, nearBottom, markRead, catchUp, markDeleted, removeFromView]);
 
   // A click anywhere else closes the small popups.
   useEffect(() => {
@@ -243,9 +459,9 @@ export default function ChatThread({ groupId, onPeer }) {
     return () => document.removeEventListener('click', close);
   }, [menu, emojiOpen]);
 
-  // Coming back to the tab counts as reading what arrived meanwhile.
+  // Coming back to the tab counts as reading what arrived meanwhile – when the end of the chat is on screen.
   useEffect(() => {
-    const onVisible = () => document.visibilityState === 'visible' && markRead();
+    const onVisible = () => document.visibilityState === 'visible' && readOwed.current && markRead();
     document.addEventListener('visibilitychange', onVisible);
     return () => document.removeEventListener('visibilitychange', onVisible);
   }, [markRead]);
@@ -263,7 +479,7 @@ export default function ChatThread({ groupId, onPeer }) {
       showMessage(jumpTo.current);
       jumpTo.current = null;
     }
-  }, [messages]);
+  }, [messages, outbox]);
 
   function showMessage(messageId) {
     const row = document.getElementById(`msg-${messageId}`);
@@ -283,8 +499,9 @@ export default function ChatThread({ groupId, onPeer }) {
   async function jump(messageId) {
     if (showMessage(messageId) || !messages.length) return;
     try {
-      const { data } = await api.get(`/conversations/${id}/messages`, {
+      const { data } = await api.get(url, {
         params: { before: messages[0].messageId, from: messageId },
+        timeout: LOAD_TIMEOUT_MS,
       });
       if (!data.messages.some((m) => m.messageId === messageId)) {
         toast(errorText({ code: 'MSG_MESSAGE_NOT_FOUND' }));
@@ -292,29 +509,36 @@ export default function ChatThread({ groupId, onPeer }) {
       }
       stickToBottom.current = false;
       jumpTo.current = messageId;
-      setMessages((list) => [...data.messages.map(stamp), ...list]);
+      setMessages((list) => mergeMessages(list, data.messages.map(stamp)));
       setHasMore(data.hasMore);
     } catch (err) {
       toast(errorText(err));
     }
   }
 
-  // UC-111: choosing the reaction one already has removes it; another one replaces it.
+  // UC-111: choosing the reaction one already has removes it; another one replaces it. One request per message at a
+  // time (quick clicks are ignored until the answer is back).
   async function react(message, code) {
     setMenu(null);
+    if (reacting.current.has(message.messageId)) return;
+    reacting.current.add(message.messageId);
     const mine = (message.reactions ?? []).find((r) => r.userIds.includes(me))?.code;
-    const url = `/conversations/${id}/messages/${message.messageId}/reaction`;
+    const reactionUrl = `${url}/${message.messageId}/reaction`;
     try {
-      const { data } = await (mine === code ? api.delete(url) : api.put(url, { code }));
+      const { data } = await (mine === code
+        ? api.delete(reactionUrl, { timeout: SEND_TIMEOUT_MS })
+        : api.put(reactionUrl, { code }, { timeout: SEND_TIMEOUT_MS }));
       setMessages((list) => list.map((m) => (m.messageId === message.messageId ? { ...m, reactions: data.reactions } : m)));
     } catch (err) {
       toast(errorText(err));
+    } finally {
+      reacting.current.delete(message.messageId);
     }
   }
 
   function startReply(message) {
     setMenu(null);
-    setReplyTo(message);
+    setReplyTo(replyPart(message));
     inputRef.current?.focus();
   }
 
@@ -329,7 +553,7 @@ export default function ChatThread({ groupId, onPeer }) {
 
   async function confirmDelete(scope) {
     const { messageId } = deleting.message;
-    await api.delete(`/conversations/${id}/messages/${messageId}`, { params: { scope } });
+    await api.delete(`${url}/${messageId}`, { params: { scope }, timeout: SEND_TIMEOUT_MS });
     if (scope === 'everyone') markDeleted(messageId);
     else removeFromView(messageId);
     setDeleting(null);
@@ -349,25 +573,65 @@ export default function ChatThread({ groupId, onPeer }) {
   }
 
   async function loadOlder() {
-    if (!messages.length || olderLoading) return;
+    if (!messages.length || olderLock.current) return;
+    olderLock.current = true;
     setOlderLoading(true);
     try {
-      const { data } = await api.get(`/conversations/${id}/messages`, { params: { before: messages[0].messageId } });
+      const { data } = await api.get(url, { params: { before: messages[0].messageId }, timeout: LOAD_TIMEOUT_MS });
       const box = listRef.current;
       prepend.current = { height: box.scrollHeight, top: box.scrollTop };
-      setMessages((list) => [...data.messages.map(stamp), ...list]);
+      setMessages((list) => mergeMessages(list, data.messages.map(stamp)));
       setHasMore(data.hasMore);
     } catch (err) {
       toast(errorText(err));
     } finally {
+      olderLock.current = false;
       setOlderLoading(false);
     }
   }
 
-  async function send() {
-    const content = text.trim();
-    const files = uploads.uploaded;
-    if ((!content && !files.length) || sending) return;
+  // ---- sending --------------------------------------------------------------------------------------------------
+  // One message on its way (the queue keeps them in the order they were written).
+  async function deliver(item) {
+    try {
+      const { data: message } = await api.post(
+        url,
+        {
+          ...(item.content ? { content: item.content } : {}),
+          ...(item.files.length ? { attachments: item.files } : {}),
+          ...(item.replyTo ? { replyToMessageId: item.replyTo.messageId } : {}),
+          clientMessageId: item.clientMessageId,
+        },
+        { timeout: SEND_TIMEOUT_MS },
+      );
+      if (!alive.current) return; // the draft keeps it as "maybe sent"; the next load clears it (dropSaved)
+      stickToBottom.current = true;
+      setMessages((list) => mergeMessages(list, [stamp(message)]));
+      setOutbox((box) => box.filter((m) => m.clientMessageId !== item.clientMessageId));
+    } catch (err) {
+      if (!alive.current) return;
+      const failure = sendFailure(err);
+      setOutbox((box) =>
+        box.map((m) =>
+          m.clientMessageId === item.clientMessageId
+            ? { ...m, status: 'failed', ...failure, replyTo: err.code === 'MSG_REPLY_INVALID' ? null : m.replyTo }
+            : m,
+        ),
+      );
+      if (BLOCKED_BY_CODE[err.code]) {
+        setState((s) => ({ ...s, canSend: false, blockedReason: BLOCKED_BY_CODE[err.code] }));
+      }
+    }
+  }
+
+  function enqueue(item) {
+    sendQueue.current = sendQueue.current.then(() => deliver(item));
+  }
+
+  function send() {
+    const content = text.normalize('NFC').trim();
+    const files = [...draftFiles, ...uploads.uploaded];
+    if (sendLock.current || (!content && !files.length) || !state.canSend) return;
     if (uploads.busy) {
       toast('Đang tải tệp lên. Vui lòng chờ tải xong rồi gửi.');
       return;
@@ -376,29 +640,47 @@ export default function ChatThread({ groupId, onPeer }) {
       toast(errorText({ code: 'MSG_MESSAGE_TOO_LONG', details: { max: MESSAGE_MAX } }));
       return;
     }
-    setSending(true);
-    try {
-      const { data: message } = await api.post(`/conversations/${id}/messages`, {
-        ...(content ? { content } : {}),
-        ...(files.length ? { attachments: files } : {}),
-        ...(replyTo ? { replyToMessageId: replyTo.messageId } : {}),
-      });
-      uploads.items.forEach((item) => uploads.remove(item.id)); // sent (failed ones are dropped too)
-      stickToBottom.current = true;
-      setMessages((list) => (list.some((m) => m.messageId === message.messageId) ? list : [...list, stamp(message)]));
-      setText('');
-      setReplyTo(null);
-    } catch (err) {
-      toast(errorText(err));
-      if (err.code === 'MSG_REPLY_INVALID') setReplyTo(null);
-      if (BLOCKED_BY_CODE[err.code]) {
-        setState((s) => ({ ...s, canSend: false, blockedReason: BLOCKED_BY_CODE[err.code] }));
-      }
-    } finally {
-      setSending(false);
-      inputRef.current?.focus();
-    }
+    // Two Enter presses (or clicks) handled before React has emptied the box send one message.
+    sendLock.current = true;
+    setTimeout(() => {
+      sendLock.current = false;
+    }, 0);
+    const item = { clientMessageId: newClientId(), content, files, replyTo, status: 'sending' };
+    setOutbox((box) => [...box, item]);
+    setText('');
+    setReplyTo(null);
+    setDraftFiles([]);
+    uploads.items.forEach((i) => uploads.remove(i.id)); // in the message now (failed uploads are dropped too)
+    stickToBottom.current = true;
+    setUnseen(0);
+    enqueue(item);
+    inputRef.current?.focus();
   }
+
+  function retry(clientMessageId) {
+    const item = outbox.find((m) => m.clientMessageId === clientMessageId);
+    if (!item || item.status === 'sending' || !state.canSend) return;
+    const again = { ...item, status: 'sending', error: '' };
+    setOutbox((box) => box.map((m) => (m.clientMessageId === clientMessageId ? again : m)));
+    enqueue(again);
+  }
+
+  // "Sửa": an unsent message goes back into the box to be changed (only when the box is empty, nothing is lost).
+  function editUnsent(clientMessageId) {
+    const item = outbox.find((m) => m.clientMessageId === clientMessageId);
+    if (!item) return;
+    if (text.trim() || draftFiles.length || uploads.items.length) {
+      toast('Hãy gửi hoặc xoá nội dung đang soạn trước.');
+      return;
+    }
+    setOutbox((box) => box.filter((m) => m.clientMessageId !== clientMessageId));
+    setText(item.content);
+    setDraftFiles(item.files);
+    setReplyTo(item.replyTo);
+    inputRef.current?.focus();
+  }
+
+  const dropUnsent = (clientMessageId) => setOutbox((box) => box.filter((m) => m.clientMessageId !== clientMessageId));
 
   function onKeyDown(e) {
     // Enter sends, Shift+Enter starts a new line; never while a Vietnamese input method is still composing.
@@ -416,7 +698,7 @@ export default function ChatThread({ groupId, onPeer }) {
     const needed = box.scrollHeight + 2; // + top and bottom border (border-box)
     box.style.height = `${Math.min(Math.max(needed, INPUT_MIN_PX), INPUT_MAX_PX)}px`;
     box.style.overflowY = needed > INPUT_MAX_PX ? 'auto' : 'hidden';
-  }, [text]);
+  }, [text, state.loading]);
 
   const memberById = useMemo(() => new Map(members.map((m) => [m.userId, m])), [members]);
   const nameOf = (userId) => {
@@ -425,7 +707,7 @@ export default function ChatThread({ groupId, onPeer }) {
   };
 
   // "Seen by" under the last message: members other than its sender (and me) who had joined before it was sent
-  // and have read up to it.
+  // and have read up to it. Not while a message of mine is still in the outbox (it would sit under that one).
   const last = messages.at(-1);
   const seenBy = last
     ? members.filter(
@@ -449,59 +731,83 @@ export default function ChatThread({ groupId, onPeer }) {
     );
   }
 
+  const trimmedLength = text.trim().length;
+  const tooLong = trimmedLength > MESSAGE_MAX;
+  const nothingToSend = !text.trim() && !draftFiles.length && !uploads.uploaded.length;
+
   return (
     <>
-      <div className="chat-messages" ref={listRef}>
-        {!messages.length ? (
-          <div className="chat-empty">
-            <span className="gd-pending-icon" aria-hidden="true">
-              <Icon name="forum" />
-            </span>
-            <p className="muted">Chưa có tin nhắn nào{state.canSend ? '. Hãy gửi lời chào đầu tiên.' : '.'}</p>
-          </div>
-        ) : (
-          <ol className="msg-list" aria-label="Tin nhắn">
-            <li className="msg-top">
-              {hasMore ? (
-                <button type="button" className="btn btn-tertiary" onClick={loadOlder} disabled={olderLoading}>
-                  {olderLoading ? 'Đang tải…' : 'Xem tin nhắn cũ hơn'}
-                </button>
-              ) : (
-                <span className="caption muted">Tin nhắn từ khi bạn vào nhóm</span>
+      <ConnectionBar status={socket ? socketStatus : 'connected'} syncError={syncError} />
+      <div className="chat-messages-wrap">
+        <div className="chat-messages" ref={listRef} onScroll={onScroll}>
+          {!messages.length && !outbox.length ? (
+            <div className="chat-empty">
+              <span className="gd-pending-icon" aria-hidden="true">
+                <Icon name="forum" />
+              </span>
+              <p className="muted">Chưa có tin nhắn nào{state.canSend ? '. Hãy gửi lời chào đầu tiên.' : '.'}</p>
+            </div>
+          ) : (
+            <ol className="msg-list" aria-label="Tin nhắn">
+              <li className="msg-top">
+                {hasMore ? (
+                  <button type="button" className="btn btn-tertiary" onClick={loadOlder} disabled={olderLoading}>
+                    {olderLoading ? 'Đang tải…' : 'Xem tin nhắn cũ hơn'}
+                  </button>
+                ) : (
+                  <span className="caption muted">Tin nhắn từ khi bạn vào nhóm</span>
+                )}
+              </li>
+              {messages.map((m, i) => {
+                const prev = messages[i - 1];
+                const newDay = !prev || dayOf(prev.sentAt) !== dayOf(m.sentAt);
+                const firstOfRun = newDay || prev.senderId !== m.senderId || prev.type === 'SYSTEM';
+                const member = memberById.get(m.senderId);
+                return (
+                  <MessageRow
+                    key={m.messageId}
+                    message={m}
+                    me={me}
+                    newDay={newDay}
+                    firstOfRun={firstOfRun}
+                    label={memberLabel(member)}
+                    direct={state.direct}
+                    canAct={state.canSend}
+                    menu={menu}
+                    nameOf={nameOf}
+                    onMenu={setMenu}
+                    onReact={react}
+                    onReply={startReply}
+                    onDelete={startDelete}
+                    onJump={jump}
+                    onFilesExpired={refreshFiles}
+                  />
+                );
+              })}
+              {last && !outbox.length && (seenBy.length > 0 || last.senderId === me) && (
+                <li className={`msg-seen caption muted${last.senderId === me ? ' mine' : ''}`}>
+                  {!seenBy.length ? 'Đã gửi' : state.direct ? <><Icon name="done_all" size="sm" /> Đã xem</> : <SeenBy people={seenBy} />}
+                </li>
               )}
-            </li>
-            {messages.map((m, i) => {
-              const prev = messages[i - 1];
-              const newDay = !prev || dayOf(prev.sentAt) !== dayOf(m.sentAt);
-              const firstOfRun = newDay || prev.senderId !== m.senderId || prev.type === 'SYSTEM';
-              const member = memberById.get(m.senderId);
-              return (
-                <MessageRow
-                  key={m.messageId}
+              {outbox.map((m) => (
+                <OutboxRow
+                  key={m.clientMessageId}
                   message={m}
                   me={me}
-                  newDay={newDay}
-                  firstOfRun={firstOfRun}
-                  label={memberLabel(member)}
-                  direct={state.direct}
-                  canAct={state.canSend}
-                  menu={menu}
-                  nameOf={nameOf}
-                  onMenu={setMenu}
-                  onReact={react}
-                  onReply={startReply}
-                  onDelete={startDelete}
-                  onJump={jump}
-                  onFilesExpired={refreshFiles}
+                  canSend={state.canSend}
+                  onRetry={retry}
+                  onEdit={editUnsent}
+                  onDrop={dropUnsent}
                 />
-              );
-            })}
-            {last && (seenBy.length > 0 || last.senderId === me) && (
-              <li className={`msg-seen caption muted${last.senderId === me ? ' mine' : ''}`}>
-                {!seenBy.length ? 'Đã gửi' : state.direct ? <><Icon name="done_all" size="sm" /> Đã xem</> : <SeenBy people={seenBy} />}
-              </li>
-            )}
-          </ol>
+              ))}
+            </ol>
+          )}
+        </div>
+        {unseen > 0 && (
+          <button type="button" className="chat-new-pill" onClick={scrollDown}>
+            <Icon name="arrow_downward" size="sm" />
+            {unseen === 1 ? '1 tin nhắn mới' : `${unseen > 99 ? '99+' : unseen} tin nhắn mới`}
+          </button>
         )}
       </div>
       {replyTo && (
@@ -517,8 +823,25 @@ export default function ChatThread({ groupId, onPeer }) {
           </button>
         </div>
       )}
-      {uploads.items.length > 0 && (
+      {(draftFiles.length > 0 || uploads.items.length > 0) && (
         <ul className="chat-files" aria-label="Tệp sẽ gửi kèm">
+          {draftFiles.map((f) => (
+            <li key={f.storageKey} className="chat-file is-done" title={f.fileName}>
+              <span className="chat-file-thumb">
+                <Icon name={fileIcon(f.mimeType)} />
+              </span>
+              <span className="chat-file-name caption">{f.fileName}</span>
+              <button
+                type="button"
+                className="btn btn-icon"
+                onClick={() => setDraftFiles((list) => list.filter((x) => x.storageKey !== f.storageKey))}
+                aria-label={`Gỡ ${f.fileName}`}
+                title="Gỡ tệp"
+              >
+                <Icon name="close" size="sm" />
+              </button>
+            </li>
+          ))}
           {uploads.items.map((item) => (
             <li key={item.id} className={`chat-file is-${item.status}`} title={item.error || item.name}>
               <span className="chat-file-thumb">
@@ -569,7 +892,9 @@ export default function ChatThread({ groupId, onPeer }) {
           type="button"
           className="btn btn-icon"
           onClick={() => fileInput.current?.click()}
-          disabled={!state.canSend || !fileLimits || uploads.items.length >= (fileLimits?.maxFiles ?? 0)}
+          disabled={
+            !state.canSend || !fileLimits || draftFiles.length + uploads.items.length >= (fileLimits?.maxFiles ?? 0)
+          }
           aria-label="Gửi tệp"
           title={
             fileLimits
@@ -601,17 +926,18 @@ export default function ChatThread({ groupId, onPeer }) {
           placeholder={state.canSend ? 'Nhập tin nhắn…' : BLOCKED_TEXT[state.blockedReason] ?? BLOCKED_TEXT.READ_ONLY}
           disabled={!state.canSend}
           aria-label="Nhập tin nhắn"
+          aria-invalid={tooLong || undefined}
         />
-        {text.length > MESSAGE_MAX - 200 && (
-          <span className={`caption chat-count${text.length > MESSAGE_MAX ? ' over' : ''}`}>
-            {text.length}/{MESSAGE_MAX}
+        {trimmedLength > MESSAGE_MAX - 200 && (
+          <span className={`caption chat-count${tooLong ? ' over' : ''}`} aria-live="polite">
+            {trimmedLength}/{MESSAGE_MAX}
           </span>
         )}
         <button
           type="submit"
           className="btn btn-primary"
-          disabled={!state.canSend || sending || uploads.busy || (!text.trim() && !uploads.uploaded.length)}
-          title={uploads.busy ? 'Đang tải tệp lên…' : undefined}
+          disabled={!state.canSend || uploads.busy || nothingToSend || tooLong}
+          title={uploads.busy ? 'Đang tải tệp lên…' : tooLong ? `Tin nhắn có tối đa ${MESSAGE_MAX} ký tự` : undefined}
         >
           <Icon name="send" size="sm" />
           Gửi
@@ -627,6 +953,54 @@ export default function ChatThread({ groupId, onPeer }) {
       )}
     </>
   );
+}
+
+// "Mất kết nối…" after 3 s without the socket (short drops do not flash), "Đã kết nối lại" for 2 s after it comes back.
+const LOST_AFTER_MS = 3000;
+const BACK_FOR_MS = 2000;
+function ConnectionBar({ status, syncError }) {
+  const [shown, setShown] = useState(null); // null | 'lost' | 'back'
+  const wasLost = useRef(false);
+  useEffect(() => {
+    if (status === 'connected') {
+      if (!wasLost.current) return undefined;
+      wasLost.current = false;
+      setShown('back');
+      const timer = setTimeout(() => setShown(null), BACK_FOR_MS);
+      return () => clearTimeout(timer);
+    }
+    const timer = setTimeout(() => {
+      wasLost.current = true;
+      setShown('lost');
+    }, LOST_AFTER_MS);
+    return () => clearTimeout(timer);
+  }, [status]);
+
+  if (shown === 'lost') {
+    return (
+      <p className="chat-conn is-lost" role="status">
+        <Icon name="wifi_off" size="sm" />
+        Mất kết nối. Đang thử kết nối lại… Tin nhắn mới sẽ hiện khi có kết nối.
+      </p>
+    );
+  }
+  if (syncError) {
+    return (
+      <p className="chat-conn is-lost" role="status">
+        <Icon name="sync_problem" size="sm" />
+        Chưa tải được tin nhắn mới. Đang thử lại…
+      </p>
+    );
+  }
+  if (shown === 'back') {
+    return (
+      <p className="chat-conn is-back" role="status">
+        <Icon name="wifi" size="sm" />
+        Đã kết nối lại
+      </p>
+    );
+  }
+  return null;
 }
 
 function SeenBy({ people }) {

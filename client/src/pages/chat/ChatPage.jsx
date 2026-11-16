@@ -11,6 +11,7 @@ import { fold } from '../subjects/subjectText.js';
 import { GROUP_TYPE_ICONS, GROUP_TYPE_LABELS } from '../groups/groupLabels.js';
 import TeamCreatePanel from '../groups/TeamCreatePanel.jsx';
 import { TeamMenu, useTeamActions } from '../groups/TeamActions.jsx';
+import { DRAFT_EVENT, draftPreview, readChatDraft } from './chatDraft.js';
 import ChatThread from './ChatThread.jsx';
 import { activityOf, contactLabel, previewText, shortTime, timeKey, unreadLabel } from './chatText.js';
 
@@ -29,6 +30,8 @@ const NOT_FOUND_PERSON = 'Không phải thành viên trong nhóm mà bạn đã 
 // The School Manager sees no class chat (business-rules §2): the list keeps only the school-wide teacher group.
 // Opened from a group or from "Nhóm của tôi", the router state { backTo, backLabel } (groupLabels.js) adds a
 // "Quay lại" button at the top left; it is passed on while the user switches chats so the way back stays.
+// 17/11/2026 (business-rules §6): a chat with a draft that is not open and has nothing unread shows "Bản nháp: …";
+// the list is read again on every socket (re)connection and when who may write in a chat changed (chat:access-changed).
 export default function ChatPage() {
   const { groupId } = useParams();
   const navigate = useNavigate();
@@ -52,6 +55,18 @@ export default function ChatPage() {
   const openId = groupId ? Number(groupId) : null;
   const openRef = useRef(openId);
   openRef.current = openId;
+  // Drafts are in localStorage (chatDraft.js): re-render when one changes, here or in another tab.
+  const [, setDraftVersion] = useState(0);
+  useEffect(() => {
+    const bump = () => setDraftVersion((v) => v + 1);
+    const onStorage = (e) => e.key?.startsWith('educonnect:chat-draft:') && bump();
+    window.addEventListener(DRAFT_EVENT, bump);
+    window.addEventListener('storage', onStorage);
+    return () => {
+      window.removeEventListener(DRAFT_EVENT, bump);
+      window.removeEventListener('storage', onStorage);
+    };
+  }, []);
 
   const loadGroups = useCallback(() => {
     return api
@@ -156,7 +171,8 @@ export default function ChatPage() {
     // the server recounts.
     socket.on('message:deleted', loadSummaries);
     socket.on('message:hidden', loadSummaries);
-    socket.io.on('reconnect', loadSummaries);
+    socket.on('chat:access-changed', loadSummaries);
+    socket.on('connect', loadSummaries); // first connection, every reconnection, a role switch: what was missed
     // Teams (15/11/2026): renamed, leader handed over, someone left → lists read again. Out of a team (left, or the
     // last one and it closed) → it leaves the lists, and its chat closes if it is open here.
     const onGroupChanged = () => {
@@ -179,7 +195,8 @@ export default function ChatPage() {
       socket.off('message:read', onRead);
       socket.off('message:deleted', loadSummaries);
       socket.off('message:hidden', loadSummaries);
-      socket.io.off('reconnect', loadSummaries);
+      socket.off('chat:access-changed', loadSummaries);
+      socket.off('connect', loadSummaries);
     };
   }, [socket, me, loadGroups, loadSummaries, toast, navigate, backState]);
 
@@ -294,6 +311,7 @@ export default function ChatPage() {
                       const last = summary?.lastMessage ?? null;
                       const unread = summary?.unreadCount ?? 0;
                       const direct = g.groupType === 'DIRECT';
+                      const draft = g.groupId !== openId && !unread ? readChatDraft(me, g.groupId) : null;
                       return (
                         <li key={g.groupId}>
                           <NavLink
@@ -315,7 +333,13 @@ export default function ChatPage() {
                               </span>
                               <span className="chat-item-row">
                                 <span className={`caption chat-item-last${unread ? ' unread' : ''}`}>
-                                  {previewText(last, me, direct)}
+                                  {draft ? (
+                                    <>
+                                      <span className="chat-item-draft">Bản nháp:</span> {draftPreview(draft)}
+                                    </>
+                                  ) : (
+                                    previewText(last, me, direct)
+                                  )}
                                 </span>
                                 {unread > 0 && (
                                   <span className="chat-badge" aria-label={`${unread} tin nhắn chưa đọc`}>

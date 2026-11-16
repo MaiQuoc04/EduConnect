@@ -1374,3 +1374,18 @@ textarea.input.chat-input { display: block; height: 36px; min-height: 36px; max-
 @media (max-width: 640px) {
   .team-pick-item { min-height: 48px; }
 }
+
+/* FE-06 17/11/2026 (business-rules §6): connection bar, "n tin nhắn mới", messages on their way, drafts in the list */
+.chat-messages-wrap { position: relative; flex: 1; display: flex; flex-direction: column; min-height: 0; }
+.chat-conn { display: flex; align-items: center; gap: 8px; margin: 0; padding: 6px 16px; font-size: 13px; line-height: 18px; border-bottom: 1px solid var(--graphite-200); }
+.chat-conn.is-lost { background: var(--amber-bg); color: var(--amber); }
+.chat-conn.is-back { background: var(--green-bg); color: var(--green); }
+.chat-new-pill { position: absolute; left: 50%; bottom: 12px; transform: translateX(-50%); display: inline-flex; align-items: center; gap: 6px; padding: 6px 14px; border: 0; border-radius: 999px; background: var(--ink-600); color: var(--white); font: inherit; font-size: 13px; font-weight: 600; box-shadow: var(--shadow-dialog); cursor: pointer; }
+.chat-new-pill:hover { filter: brightness(1.08); }
+.msg-outbox.is-sending .msg-bubble { opacity: 0.6; }
+.msg-outbox.is-failed .msg-bubble { outline-color: var(--red-pen); }
+.msg-outbox-state { display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: 4px 10px; margin: 2px 0 0; color: var(--graphite-500); }
+.msg-outbox.is-failed .msg-outbox-state { color: var(--red-pen); }
+.msg-outbox-state .link-button { font-size: inherit; }
+.msg-outbox-files { display: flex; align-items: center; gap: 4px; margin: 0 0 2px; color: var(--graphite-600); overflow-wrap: anywhere; }
+.chat-item-draft { color: var(--red-pen); font-weight: 600; }
