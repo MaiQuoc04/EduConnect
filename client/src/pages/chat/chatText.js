@@ -66,6 +66,10 @@ export function systemText(message, myId) {
       return message.senderId === myId ? 'Bạn không còn trong nhóm' : `${who} không còn trong nhóm`;
     case 'LEADER_CHANGED':
       return `${who} đã chuyển quyền trưởng nhóm cho ${target}`;
+    case 'MEMBER_ADDED': // 17/11/2026: the leader added someone
+      return `${who} đã thêm ${target} vào nhóm`;
+    case 'MEMBER_KICKED': // 17/11/2026: the leader removed someone
+      return `${who} đã xoá ${target} khỏi nhóm`;
     default:
       return 'Nhóm có thay đổi';
   }
