@@ -22,8 +22,8 @@ export async function list(req, res) {
 }
 
 export async function messages(req, res) {
-  const { before, limit, from } = req.query;
-  res.json(await service.listMessages(req.user, req.params.groupId, { before, limit, from }));
+  const { before, limit, from, after } = req.query;
+  res.json(await service.listMessages(req.user, req.params.groupId, { before, limit, from, after }));
 }
 
 export async function send(req, res) {

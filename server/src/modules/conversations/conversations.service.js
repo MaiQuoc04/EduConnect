@@ -28,6 +28,11 @@ import { directPeer } from './direct.service.js';
 // TEAM_CREATED | TEAM_RENAMED (content = new name) | MEMBER_LEFT | MEMBER_REMOVED | LEADER_CHANGED (target = new
 // leader); sender_id = the member the line is about. They count as unread like a message, but cannot be answered,
 // reacted to or deleted. Written by modules/groups/teamEvents.js, sent with publishNewMessages().
+// Sending again (17/11/2026, business-rules §6): the client gives each message a random UUID (clientMessageId); the same
+// sender sending the same UUID in the same chat again gets the saved message back, never a second copy. Only the sender
+// sees the UUID (to match the copy shown at once with the saved one). The column comes with
+// patch_v0.3_message_client_id.sql: until it has run, messages are sent as before, without that check.
+// Catching up (17/11/2026): GET …/messages?after=<id> – the messages after the last one the client has.
 
 const conflict = (code, message, details) => new AppError(409, code, message, details);
 const PAGE_DEFAULT = 30;
@@ -40,6 +45,30 @@ export const MAX_MESSAGE_ATTACHMENTS = 10;
 const FILES = files.ATTACHMENT_COLUMNS.MESSAGE;
 const fileCountSql = (alias) =>
   `(SELECT COUNT(*) FROM attachments fa WHERE fa.message_id = ${alias}.message_id AND fa.deleted_at IS NULL)`;
+
+// patch_v0.3_message_client_id.sql run on this database? Asked once (true / false); null until then.
+let clientIdColumn = null;
+const UUID_TEXT = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+async function hasClientIdColumn() {
+  if (clientIdColumn === null) {
+    const { rows } = await pool.query(
+      `SELECT EXISTS (SELECT 1 FROM information_schema.columns
+                      WHERE table_schema = current_schema() AND table_name = 'messages'
+                        AND column_name = 'client_message_id') AS "has"`,
+    );
+    clientIdColumn = rows[0].has;
+  }
+  return clientIdColumn;
+}
+
+/** The optional clientMessageId of a new message: a UUID, lower case; null when not given. */
+function parseClientId(value) {
+  if (value === undefined || value === null || value === '') return null;
+  if (typeof value !== 'string' || !UUID_TEXT.test(value)) {
+    throw badRequest('MSG_INVALID_INPUT', 'clientMessageId must be a UUID.');
+  }
+  return value.toLowerCase();
+}
 
 /** Limits of the chat composer's file button (system_settings sizes, the 15 types of the bucket). */
 export const getMessageAttachmentLimits = () => getAttachmentLimits(MAX_MESSAGE_ATTACHMENTS);
@@ -108,7 +137,8 @@ const messageSelect = (viewer, viewerFrom = '', columns = '') => `
          tu.full_name AS "targetName",
          (CASE WHEN m.sender_id = ${viewer} AND m.deleted_for_everyone_at IS NULL AND m.message_type = 'TEXT'
                THEN GREATEST(0, CEIL(EXTRACT(EPOCH FROM (m.sent_at + make_interval(mins => ${DELETE_MINUTES_SQL}) - NOW()))))
-               ELSE 0 END)::int AS "deleteSecondsLeft"${columns}
+               ELSE 0 END)::int AS "deleteSecondsLeft",
+         ${clientIdColumn ? `CASE WHEN m.sender_id = ${viewer} THEN m.client_message_id::text END` : 'NULL::text'} AS "clientMessageId"${columns}
   FROM messages m ${viewerFrom}
   JOIN groups g ON g.group_id = m.group_id
   JOIN users u ON u.user_id = m.sender_id
@@ -151,6 +181,20 @@ async function messageForViewers(db, messageId, viewerIds) {
     [messageId, viewerIds],
   );
   return rows;
+}
+
+// The message this sender already saved with this clientMessageId in this chat, as they see it now; null if none.
+async function savedByClientId(groupId, senderId, clientId) {
+  const { rows } = await pool.query(
+    `SELECT message_id AS "messageId" FROM messages
+     WHERE group_id = $1 AND sender_id = $2 AND client_message_id = $3 AND deleted_at IS NULL`,
+    [groupId, senderId, clientId],
+  );
+  if (!rows.length) return null;
+  const [copy] = await withFiles(await messageForViewers(pool, rows[0].messageId, [senderId]));
+  if (!copy) return null;
+  const { viewerId: _viewerId, ...message } = copy;
+  return message;
 }
 
 // The group if the user may chat in it (else 404 / 403), plus canSend and, when sending is not possible, why:
@@ -214,10 +258,14 @@ export const activeMemberIds = async (db, groupId) =>
     ])
   ).rows.map((r) => r.userId);
 
-function parsePage({ before, limit, from }) {
+function parsePage({ before, limit, from, after }) {
   const beforeId = before === undefined || before === '' ? null : Number(before);
   if (beforeId !== null && (!Number.isSafeInteger(beforeId) || beforeId <= 0)) {
     throw badRequest('MSG_INVALID_INPUT', 'before must be a message id.');
+  }
+  const afterId = after === undefined || after === '' ? null : Number(after);
+  if (afterId !== null && (!Number.isSafeInteger(afterId) || afterId < 0 || beforeId !== null || from !== undefined)) {
+    throw badRequest('MSG_INVALID_INPUT', 'after must be a message id (0 or more), without before or from.');
   }
   const size = limit === undefined || limit === '' ? PAGE_DEFAULT : Number(limit);
   if (!Number.isSafeInteger(size) || size < 1 || size > PAGE_MAX) {
@@ -227,15 +275,38 @@ function parsePage({ before, limit, from }) {
   if (fromId !== null && (!Number.isSafeInteger(fromId) || fromId <= 0 || beforeId === null)) {
     throw badRequest('MSG_INVALID_INPUT', 'from must be a message id, together with before.');
   }
-  return { beforeId, fromId, size: fromId === null ? size : FROM_LIMIT };
+  return { beforeId, fromId, afterId, size: fromId === null ? size : FROM_LIMIT };
+}
+
+// Catching up after a lost connection (17/11/2026): the messages after `afterId`, oldest first, at most `size`
+// (hasMore: more are waiting – the client then reloads the latest page), plus whether the user may still send.
+async function messagesAfter(user, group, afterId, size) {
+  const { rows } = await pool.query(
+    `${messageSelect('$2')}
+     WHERE m.group_id = $1 AND m.deleted_at IS NULL AND m.sent_at >= ${visibleFrom('$2')} AND NOT ${hiddenFor('$2')}
+       AND m.message_id > $3
+     ORDER BY m.message_id
+     LIMIT $4`,
+    [group.groupId, user.userId, afterId, size + 1],
+  );
+  return {
+    groupId: group.groupId,
+    messages: await withFiles(rows.slice(0, size)),
+    hasMore: rows.length > size,
+    readOnly: group.readOnly,
+    canSend: group.canSend,
+    blockedReason: group.blockedReason,
+  };
 }
 
 // UC-47: one page of messages, oldest first. Without `before` (first page) the response also carries the chat's
 // header data and its active members with their read state, so the client can show labels and "seen by".
 // `from` (with `before`): everything from that message up to `before`, to jump to a quoted message that is not loaded.
 export async function listMessages(user, groupId, query) {
-  const { beforeId, fromId, size } = parsePage(query);
+  const { beforeId, fromId, afterId, size } = parsePage(query);
   const group = await openChat(pool, user, groupId);
+  await hasClientIdColumn();
+  if (afterId !== null) return messagesAfter(user, group, afterId, size);
   const visible = `m.group_id = $1 AND m.deleted_at IS NULL AND m.sent_at >= ${visibleFrom('$2')} AND NOT ${hiddenFor('$2')}`;
   const { rows } = await pool.query(
     `${messageSelect('$2')}
@@ -378,7 +449,8 @@ function cleanContent(content, { hasFiles = false } = {}) {
     throw badRequest('MSG_MESSAGE_EMPTY', 'The message is empty.');
   }
   // Keep the line breaks the user typed; only drop blank space around the whole message.
-  const text = content.replace(/\r\n?/g, '\n').trim();
+  // NFC (17/11/2026): Vietnamese typed as base letter + combining marks is stored as composed letters, like posts.
+  const text = content.normalize('NFC').replace(/\r\n?/g, '\n').trim();
   if (text.length > MESSAGE_MAX_LENGTH) {
     throw badRequest('MSG_MESSAGE_TOO_LONG', `A message has at most ${MESSAGE_MAX_LENGTH} characters.`, {
       max: MESSAGE_MAX_LENGTH,
@@ -393,6 +465,13 @@ function cleanContent(content, { hasFiles = false } = {}) {
 // MAX_MESSAGE_ATTACHMENTS; the objects are checked before the transaction, the rows written with the message.
 export async function sendMessage(user, groupId, body) {
   const group = await openChat(pool, user, groupId);
+  const clientId = (await hasClientIdColumn()) ? parseClientId(body?.clientMessageId) : null;
+  // Sent again with the same clientMessageId (the first answer was lost): the message saved the first time, as it is
+  // now, with nothing written or sent again. Checked before canSend: the message already exists.
+  if (clientId) {
+    const saved = await savedByClientId(group.groupId, user.userId, clientId);
+    if (saved) return saved;
+  }
   assertCanSend(group);
   const attached = uploadedFiles(body ?? {}, 'attachments', {
     folder: `messages/${group.groupId}/`,
@@ -412,11 +491,18 @@ export async function sendMessage(user, groupId, body) {
   }
 
   const messageId = await withTransaction(async (client) => {
+    // Two copies of the same send arriving together: the unique index lets one in, the other gets nothing back.
     const { rows } = await client.query(
-      `INSERT INTO messages (group_id, sender_id, content, reply_to_message_id) VALUES ($1, $2, $3, $4)
-       RETURNING message_id`,
-      [group.groupId, user.userId, content, replyTo],
+      clientId
+        ? `INSERT INTO messages (group_id, sender_id, content, reply_to_message_id, client_message_id)
+           VALUES ($1, $2, $3, $4, $5)
+           ON CONFLICT (group_id, sender_id, client_message_id) WHERE client_message_id IS NOT NULL DO NOTHING
+           RETURNING message_id`
+        : `INSERT INTO messages (group_id, sender_id, content, reply_to_message_id) VALUES ($1, $2, $3, $4)
+           RETURNING message_id`,
+      clientId ? [group.groupId, user.userId, content, replyTo, clientId] : [group.groupId, user.userId, content, replyTo],
     );
+    if (!rows.length) return null;
     await files.insertAttachments(
       { column: FILES, id: rows[0].message_id },
       fileRows.map((r) => ({ ...r, uploadedBy: user.userId })),
@@ -428,6 +514,7 @@ export async function sendMessage(user, groupId, body) {
     );
     return rows[0].message_id;
   });
+  if (messageId === null) return savedByClientId(group.groupId, user.userId, clientId);
 
   // One payload per member: a quote may be hidden from someone who joined after the original (replyToSql).
   const memberIds = await activeMemberIds(pool, group.groupId);
