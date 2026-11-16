@@ -871,10 +871,26 @@ a.link-row .icon:last-child { color: var(--graphite-400); }
   .group-tabs { overflow-x: auto; }
 }
 .group-pick-head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px; }
-.group-row-actions { display: inline-flex; gap: 2px; }
-.group-row-actions .btn { height: 32px; padding: 0 6px; }
-.group-row-actions .group-message { gap: 4px; padding: 0 8px; }
-@media (max-width: 640px) { .group-row-actions .group-message span { display: none; } }
+/* SCR-22 row actions (17/11/2026): one look for every button – 32px tall, light border – and a fixed place per kind
+   (message, nickname, remove) so they line up from row to row; a row without one keeps an empty place. */
+.group-row-actions { display: inline-flex; align-items: center; justify-content: flex-end; gap: 6px; vertical-align: middle; }
+.gm-action {
+  display: inline-flex; align-items: center; justify-content: center; gap: 6px; width: 32px; height: 32px; padding: 0;
+  border: 1px solid var(--graphite-200); border-radius: 8px; background: var(--white); color: var(--graphite-600);
+  font: inherit; font-size: 13px; font-weight: 600; cursor: pointer; transition: background 0.15s, color 0.15s, border-color 0.15s;
+}
+.gm-action:hover:not(:disabled) { border-color: var(--ink-100); background: var(--ink-50); color: var(--ink-600); }
+.gm-action:focus-visible { outline: 2px solid var(--ink-600); outline-offset: 1px; }
+.gm-action:disabled { opacity: 0.55; cursor: default; }
+.gm-action.is-danger:hover:not(:disabled) { border-color: var(--red-bg); background: var(--red-bg); color: var(--red-pen); }
+.gm-action-message { width: 104px; color: var(--ink-600); }
+.gm-action-gap { display: inline-block; width: 32px; height: 32px; }
+.gm-action-gap.is-message { width: 104px; }
+@media (max-width: 640px) {
+  .gm-action-message { width: 32px; }
+  .gm-action-message span { display: none; }
+  .gm-action-gap.is-message { width: 32px; }
+}
 .group-nickname { display: grid; gap: 2px; }
 .group-nickname-row { display: flex; align-items: center; gap: 2px; }
 .group-nickname .input { width: 160px; height: 32px; }
@@ -911,15 +927,17 @@ a.link-row .icon:last-child { color: var(--graphite-400); }
   .group-members .group-members-table td.gm-actions { grid-area: actions; padding-left: 36px; }
   .group-members .group-members-table td.gm-nick:not(:has(form))::before { content: attr(data-label) ': '; color: var(--graphite-500); }
   .group-members .group-members-table .group-member-contact { display: flex; flex-wrap: wrap; gap: 2px 12px; }
-  .group-members .group-members-table .group-row-actions { display: flex; flex-wrap: wrap; }
-  .group-members .group-members-table .group-row-actions .group-message span { display: inline; }
+  .group-members .group-members-table .group-row-actions { display: flex; flex-wrap: wrap; justify-content: flex-start; }
+  .group-members .group-members-table .gm-action-gap { display: none; } /* a card has no columns to line up */
+  .group-members .group-members-table .gm-action-message { width: auto; padding: 0 12px; }
+  .group-members .group-members-table .gm-action-message span { display: inline; }
   .group-members .group-members-table .group-nickname .input { width: min(220px, 100%); }
 }
 @media (max-width: 640px) {
   .group-members .group-members-table tr { padding: 12px; }
   .group-members .group-members-table td.gm-role, .group-members .group-members-table td.gm-nick,
   .group-members .group-members-table td.gm-contact { padding-left: 0; }
-  .group-members .group-members-table td.gm-actions { padding-left: 0; margin-left: -6px; }
+  .group-members .group-members-table td.gm-actions { padding-left: 0; }
 }
 .group-dialog { width: min(440px, calc(100vw - 32px)); padding: 24px; border: 0; border-radius: var(--radius-dialog); box-shadow: var(--shadow-dialog); display: grid; gap: 12px; }
 .group-dialog:not([open]) { display: none; }
