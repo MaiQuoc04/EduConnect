@@ -50,7 +50,9 @@ export function groupScopeSql(user, role) {
 // The group if the user may see it, with what they may do; otherwise 404 (the group's existence is not revealed).
 //   readOnly         – the class belongs to an ended school year (business-rules §4: last year's groups are read only)
 //   canSeeContent    – feed / chat; false for the School Manager in class groups (business-rules §2)
-//   canManageMembers – UC-32, UC-33: School Manager or the class's homeroom teacher, class groups of an open year only
+//   canAddMembers    – UC-32: School Manager in a class group, the leader in a team; open year only (17/11/2026)
+//   canRemoveMembers – UC-33: the leader in a team only, open year (17/11/2026: nobody in the class groups)
+//   canManageMembers – either of the two
 //   canSetNickname   – UC-34: the class's homeroom teacher only, open year
 //   canLeave         – leave a team (TEAM_CHAT) of an open year; the three class groups cannot be left
 export async function findGroupForUser(db, user, groupId) {
@@ -72,14 +74,22 @@ export async function findGroupForUser(db, user, groupId) {
   );
   if (!rows.length) throw notFound('MSG_GROUP_NOT_FOUND', 'Group not found.');
   const group = rows[0];
-  // The three class groups; teams (TEAM_CHAT) have a class too but their members are fixed at creation.
+  // The three class groups (teams, TEAM_CHAT, have a class too).
   const isClassGroup = ['GENERAL', 'STUDENT', 'PARENT'].includes(group.groupType);
   const manager = user.activeRole === 'SCHOOL_MANAGER';
+  // Members (Khanh's decision 17/11/2026, business-rules §4): nobody removes anyone from the three class groups
+  // (membership follows the class); only the School Manager adds people of the class who are missing (e.g. a student
+  // who transferred in). In a team only the leader adds people (same class, or teachers for a teacher team) and
+  // removes members.
+  const leader = group.groupType === 'TEAM_CHAT' && group.leaderId === user.userId;
+  const canAddMembers = !group.readOnly && ((isClassGroup && manager) || leader);
+  const canRemoveMembers = !group.readOnly && leader;
   return {
     ...group,
     canSeeContent: !(manager && group.classId !== null),
-    canManageMembers:
-      isClassGroup && !group.readOnly && (manager || (user.activeRole === 'TEACHER' && group.isHomeroom)),
+    canAddMembers,
+    canRemoveMembers,
+    canManageMembers: canAddMembers || canRemoveMembers,
     canSetNickname: isClassGroup && !group.readOnly && user.activeRole === 'TEACHER' && group.isHomeroom,
     canLeave: group.groupType === 'TEAM_CHAT' && !group.readOnly,
   };

@@ -233,6 +233,8 @@ export async function getGroup(user, groupId) {
     readOnly: group.readOnly,
     canSeeContent: group.canSeeContent,
     canManageMembers: group.canManageMembers,
+    canAddMembers: group.canAddMembers, // 17/11/2026: School Manager (class groups) or the team leader
+    canRemoveMembers: group.canRemoveMembers, // 17/11/2026: the team leader only
     canSetNickname: group.canSetNickname,
     canLeave: group.canLeave,
     // FE-05 approval switch (business-rules §5, 11/11/2026): the feed's moderator, open year only. Same rule as
@@ -271,6 +273,8 @@ export async function listMembers(user, groupId) {
     groupType: group.groupType,
     readOnly: group.readOnly,
     canManageMembers: group.canManageMembers,
+    canAddMembers: group.canAddMembers, // 17/11/2026: School Manager (class groups) or the team leader
+    canRemoveMembers: group.canRemoveMembers, // 17/11/2026: the team leader only
     canSetNickname: group.canSetNickname,
     showContacts: contacts,
     counts: countKinds(members),

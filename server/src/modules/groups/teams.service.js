@@ -1,5 +1,5 @@
 import { pool, withTransaction } from '../../config/db.js';
-import { AppError, badRequest, forbidden } from '../../utils/AppError.js';
+import { AppError, badRequest, forbidden, notFound } from '../../utils/AppError.js';
 import { classPeopleSql } from '../classes/classGroups.js';
 import { findGroupForUser } from './groupAccess.js';
 import { byRankThenName } from './groups.service.js';
@@ -7,7 +7,7 @@ import { EVENTS, insertSystemLine, publish } from './teamEvents.js';
 
 // FE-04 Class & Group Management – teams (owner: Khanh). UC-35 Create Team Chat: a chat-only group (TEAM_CHAT) with
 // people of one class, created by a teacher, student or parent (business-rules §4; never SM or SA). The chat itself
-// is FE-06. Members are fixed at creation (nobody adds people); a member can leave.
+// is FE-06. A member can leave; since 17/11/2026 the leader adds and removes members (business-rules §4).
 // Teacher team (lead OK 05/11/2026): no class, created by a teacher from the teachers of the teacher group.
 // Leader and system lines (lead OK 15/11/2026, business-rules §4): the creator is the team leader; the leader can hand
 // it over at any time and must hand it over before leaving while others remain; any member can rename the team. Each
@@ -341,4 +341,131 @@ export async function renameTeam(user, groupId, value) {
     });
   }
   return { groupId: result.groupId, groupName: result.groupName };
+}
+
+// ---- Members of a team (Khanh's decision 17/11/2026, business-rules §4: the leader adds and removes) ----------------
+
+// People the leader can add: a class team → the people of its class (teachers, students, parents); a teacher team →
+// the teachers of the teacher group. Not in the team now; locked accounts are listed (shown, cannot be picked).
+async function teamCandidateRows(db, user, team) {
+  let rows;
+  if (team.classId === null) {
+    ({ rows } = await db.query(
+      `SELECT DISTINCT u.user_id AS "userId", u.full_name AS "fullName", u.avatar_url AS "avatarUrl", u.status,
+              ARRAY['TEACHER']::text[] AS kinds, '[]'::json AS children, NULL::text AS "studentCode"
+       FROM groups tg
+       JOIN group_members m ON m.group_id = tg.group_id AND m.left_at IS NULL
+       JOIN teachers t ON t.user_id = m.user_id
+       JOIN users u ON u.user_id = m.user_id
+       WHERE tg.group_type = 'TEACHER_SCHOOL' AND tg.deleted_at IS NULL`,
+    ));
+  } else {
+    rows = (await classPeople(db, user, [team.classId])).map(({ classId: _classId, ...p }) => p);
+  }
+  const inTeam = new Set(team.memberIds);
+  const { rows: left } = await db.query(
+    `SELECT user_id AS "userId", MAX(left_at) AS "leftAt" FROM group_members
+     WHERE group_id = $1 AND left_at IS NOT NULL GROUP BY user_id`,
+    [team.groupId],
+  );
+  const leftAt = new Map(left.map((r) => [r.userId, r.leftAt]));
+  return rows
+    .filter((p) => !inTeam.has(p.userId))
+    .map((p) => ({ ...p, leftAt: leftAt.get(p.userId) ?? null }))
+    .sort(byRankThenName);
+}
+
+function assertLeader(team, user) {
+  if (team.leaderId !== user.userId) throw forbidden('MSG_TEAM_NOT_LEADER', 'Only the team leader can do this.');
+}
+
+/** UC-32 for a team: who the leader can add. */
+export async function listTeamCandidates(user, groupId) {
+  return withTransaction(async (client) => {
+    const team = await openTeam(client, user, groupId);
+    assertLeader(team, user);
+    return {
+      groupId: team.groupId,
+      maxMembers: MAX_MEMBERS,
+      memberCount: team.memberIds.length,
+      candidates: await teamCandidateRows(client, user, team),
+    };
+  });
+}
+
+/**
+ * UC-32 for a team: the leader adds people (active accounts, same class – or teachers for a teacher team), up to
+ * MAX_MEMBERS. A new membership row each (the old one with its left_at stays); someone who was in before sees the whole
+ * chat history again (business-rules §6). One "A đã thêm B vào nhóm" line per person, written after they joined.
+ */
+export async function addTeamMembers(user, groupId, ids) {
+  const result = await withTransaction(async (client) => {
+    const team = await openTeam(client, user, groupId);
+    assertLeader(team, user);
+    const already = ids.filter((id) => team.memberIds.includes(id));
+    if (already.length) {
+      throw conflict('MSG_GROUP_MEMBER_EXISTS', 'Some people are already in the team.', { userIds: already });
+    }
+    if (team.memberIds.length + ids.length > MAX_MEMBERS) {
+      throw badRequest('MSG_TEAM_TOO_MANY', `A team has at most ${MAX_MEMBERS} members.`, { max: MAX_MEMBERS });
+    }
+    const eligible = new Set(
+      (await teamCandidateRows(client, user, team)).filter((p) => p.status === 'ACTIVE').map((p) => p.userId),
+    );
+    const wrong = ids.filter((id) => !eligible.has(id));
+    if (wrong.length) {
+      throw badRequest('MSG_TEAM_MEMBER_NOT_ELIGIBLE', 'Some people cannot join this team.', { userIds: wrong });
+    }
+    await client.query(`INSERT INTO group_members (group_id, user_id) SELECT $1, x FROM unnest($2::bigint[]) AS x`, [
+      team.groupId,
+      ids,
+    ]);
+    const messageIds = [];
+    for (const id of ids) {
+      messageIds.push(
+        await insertSystemLine(client, { groupId: team.groupId, actorId: user.userId, event: EVENTS.ADDED, targetUserId: id }),
+      );
+    }
+    return { groupId: team.groupId, added: ids.length, messageIds };
+  });
+  // group:changed reaches the new members too: the team joins their lists.
+  publish({
+    lines: [{ groupId: result.groupId, messageIds: result.messageIds }],
+    changed: [{ groupId: result.groupId, change: 'members-added' }],
+  });
+  return { groupId: result.groupId, added: result.added };
+}
+
+/**
+ * UC-33 for a team: the leader removes another member (sets left_at; the row stays for the chat history). Not oneself
+ * (leave the team instead). "A đã xoá B khỏi nhóm" for the others; B sees the team leave their lists at once.
+ */
+export async function removeTeamMember(user, groupId, targetId) {
+  const result = await withTransaction(async (client) => {
+    const team = await openTeam(client, user, groupId);
+    assertLeader(team, user);
+    if (targetId === user.userId) {
+      throw badRequest('MSG_TEAM_REMOVE_SELF', 'The leader cannot remove themselves; leave the team instead.');
+    }
+    if (!team.memberIds.includes(targetId)) {
+      throw notFound('MSG_GROUP_MEMBER_NOT_FOUND', 'This person is not in the team.');
+    }
+    await client.query('UPDATE group_members SET left_at = NOW() WHERE group_id = $1 AND user_id = $2 AND left_at IS NULL', [
+      team.groupId,
+      targetId,
+    ]);
+    const messageId = await insertSystemLine(client, {
+      groupId: team.groupId,
+      actorId: user.userId,
+      event: EVENTS.KICKED,
+      targetUserId: targetId,
+    });
+    return { groupId: team.groupId, messageIds: [messageId] };
+  });
+  publish({
+    lines: [{ groupId: result.groupId, messageIds: result.messageIds }],
+    changed: [{ groupId: result.groupId, change: 'member-removed' }],
+    removed: [{ groupId: result.groupId, userId: targetId }],
+  });
+  return { groupId: result.groupId, userId: targetId };
 }

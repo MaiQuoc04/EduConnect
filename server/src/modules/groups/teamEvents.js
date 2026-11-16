@@ -13,6 +13,8 @@ import { signalWhenSaved } from '../conversations/chatSignals.js';
 //   MEMBER_LEFT     "A đã rời nhóm"
 //   MEMBER_REMOVED  "A không còn trong nhóm"            (a class change, not their own choice)
 //   LEADER_CHANGED  "A đã chuyển quyền trưởng nhóm cho B" (target_user_id = B)
+//   MEMBER_ADDED    "A đã thêm B vào nhóm"               (17/11/2026: the leader adds B, target_user_id = B)
+//   MEMBER_KICKED   "A đã xoá B khỏi nhóm"               (17/11/2026: the leader removes B, target_user_id = B)
 
 export const EVENTS = Object.freeze({
   CREATED: 'TEAM_CREATED',
@@ -20,6 +22,8 @@ export const EVENTS = Object.freeze({
   LEFT: 'MEMBER_LEFT',
   REMOVED: 'MEMBER_REMOVED',
   LEADER: 'LEADER_CHANGED',
+  ADDED: 'MEMBER_ADDED',
+  KICKED: 'MEMBER_KICKED',
 });
 
 /** Writes one system line in the caller's transaction; returns its message id (sent later with publish()). */
