@@ -147,6 +147,16 @@ It2: Anh FE-08 + FE-14, Khanh FE-05 + FE-06).
     call added**) write "không còn trong nhóm" lines and hand the leadership over. Client: `groups/TeamActions.jsx`
     (rename, hand over, leave with the new-leader picker) on SCR-21 and in the chat header "⋮", "Trưởng nhóm" chip,
     system lines centred in the chat. Tested on the local DB (25 steps + the chat / feed suites).
+  - **17/11 (Khanh): chat sending, drafts, connection** (business-rules §6 "Sending, drafts, connection"). Server:
+    `clientMessageId` (no second copy when sent again; works without the column until the patch runs), NFC text,
+    `GET /conversations/:id/messages?after=<id>`, `conversations/chatSignals.js` (`signalWhenSaved`: group:removed /
+    group:changed / `chat:access-changed`, sent once the caller's transaction is saved) used by `syncClassTeachers`
+    (class groups) and `teamEvents.afterRemovedFromTeams` (team lines and removals now in real time, the FE-02 call
+    unchanged). Client: outbox with "Đang gửi…" / "Thử lại" / "Sửa" / "Xoá", ordered send queue, 15 s / 20 s
+    timeouts (`NETWORK_TIMEOUT`), per-chat drafts (`chat/chatDraft.js`, "Bản nháp:" in the list), connection bar and
+    catch-up on every socket `connect` (`useSocketStatus`), "↓ n tin nhắn mới", read only when the end is on screen.
+    **DB: `patch_v0.3_message_client_id.sql` waits for the lead's approval (not run on the shared DB).** Tested on the
+    local DB (17 new steps, with and without the column, + the del / act / files / team suites).
 - **Not merged yet:** none of It1. It2 branches start from `develop`. Still open in It2: FE-10 timetable (Dung).
   - FE-14 Parent Management (Anh, It2) – merged 11/11: UC-104 parent list, UC-105 parent detail with the linked
     children, UC-106 update profile (`fullName`, `occupation`, `address` only; login identifiers are not touched).

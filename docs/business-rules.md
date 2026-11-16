@@ -365,6 +365,34 @@ Boundaries that are easy to get wrong:
     off the list until a new message arrives.
   - Neither can be undone. In an ended school year or a closed 1-1 chat only delete for me is possible. Group moderators
     cannot delete other people's messages.
+- **Sending, drafts, connection** (Khanh's decisions 17/11/2026; the database part needs the lead's approval, below):
+  - **Sending:** a message shows at once, dim with "Đang gửi…", and messages are sent one after another in the order
+    they were written. The text is stored in Unicode NFC. Over 2000 characters the "Gửi" button is off (pasting more is
+    allowed, the counter turns red). A picture pasted together with text attaches the picture and keeps the text.
+  - **No answer:** sending waits 15 s, loading 20 s. A message that failed stays with its reason and "Thử lại" (when
+    sending again can help), "Sửa" (back into the box) and "Xoá" (drops only this unsent copy). With no answer at all
+    it says "Chưa rõ đã gửi được chưa": the server may have saved it.
+  - **Never twice:** each message carries a random id (`messages.client_message_id`, UUID). Sending the same id again
+    in the same chat returns the saved message instead of a copy, so "Thử lại" is always safe. Only the sender sees
+    the id. **Database: `patch_v0.3_message_client_id.sql` – NOT run on the shared database until the lead approves.**
+    Until then everything works as before, without this protection.
+  - **Drafts:** per account and chat, in the browser only (not across devices): the text, the message being answered,
+    the files already uploaded and the unsent messages. Kept 7 days. Sending clears it. The conversation list shows
+    "Bản nháp: …" for a chat that is not open and has nothing unread.
+  - **Connection:** after 3 s without the real-time connection the chat says "Mất kết nối…" and "Đã kết nối lại" when
+    it is back. Sending still works meanwhile. On every reconnection the chat reads what it missed (the messages after
+    the last one shown, plus the latest page for deletions and reactions) without losing the older messages already
+    loaded or the reading position; more than 100 missed → the latest page is shown again. A failed catch-up keeps
+    the chat as it is and tries again (up to every 30 s).
+  - **Reading:** new messages never pull a reader who is looking at older ones down; "↓ n tin nhắn mới" does. A chat
+    counts as read only when its end is on screen in a visible tab. My own messages from another tab or device do not
+    move the list either.
+  - **Losing access while the chat is open:** someone taken out of a group (teams, and – 17/11/2026 – a teacher whose
+    assignment ended: class groups) sees it leave the list and its chat close at once; the members' counts and the
+    1-1 chats of those people are read again (may they still write?). Sent only once the change is saved. A sending
+    attempt refused because the user may no longer write (read-only year, 1-1 out of reach, account locked, no longer
+    a member) closes the box with the reason. ASSUMPTION / not done (other owners' modules): real-time signals when
+    an account is locked, a school year ends or a student is transferred out of a class group.
 
 ## 7. Extracurricular activities (FE-07)
 - The homeroom teacher posts an activity in the class feed (a `posts` row + `extracurricular_events` row) with a
