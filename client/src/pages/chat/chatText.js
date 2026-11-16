@@ -1,4 +1,5 @@
 import { MEMBER_KIND_LABELS } from '../groups/groupLabels.js';
+import { RELATIONSHIP_LABELS } from '../../messages.js';
 import { memberSubline } from '../groups/memberText.js';
 
 // FE-06 display helpers. Times arrive as Vietnam-time strings ("2026-11-04 08:30:12.345+07"); they are only
@@ -83,11 +84,22 @@ export function filesText(count) {
 
 // UC-49: who someone is to me, e.g. "Giáo viên chủ nhiệm · 10A1" or "Bố của Phạm Gia Bảo · 10A1".
 const KIND_ORDER = ['HOMEROOM', 'MANAGER', 'SUBJECT_TEACHER', 'TEACHER', 'STUDENT', 'PARENT'];
+// A parent (17/11/2026): each child with their class – "Mẹ của Lê Minh Tuấn (10A1) · Mẹ của Phạm Gia Khánh (11D1)" –
+// and only the classes not already named after a child.
 export function contactLabel(person) {
   if (!person) return '';
   const kind = KIND_ORDER.find((k) => person.kinds?.includes(k));
-  const who = (kind === 'PARENT' && memberSubline(person)) || MEMBER_KIND_LABELS[kind] || '';
-  const classes = (person.classes ?? []).map((c) => c.className).join(', ');
+  const children = kind === 'PARENT' ? [...(person.children ?? [])].sort((a, b) => a.fullName.localeCompare(b.fullName, 'vi')) : [];
+  const named = new Set(children.map((c) => c.classId).filter(Boolean));
+  const who = children.length
+    ? children
+        .map((c) => `${RELATIONSHIP_LABELS[c.relationship] ?? 'Phụ huynh'} của ${c.fullName}${c.className ? ` (${c.className})` : ''}`)
+        .join(' · ')
+    : (kind === 'PARENT' && memberSubline(person)) || MEMBER_KIND_LABELS[kind] || '';
+  const classes = (person.classes ?? [])
+    .filter((c) => !named.has(c.classId))
+    .map((c) => c.className)
+    .join(', ');
   return [who, classes].filter(Boolean).join(' · ');
 }
 
