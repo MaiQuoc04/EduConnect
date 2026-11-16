@@ -1,5 +1,5 @@
--- EduConnect patch v0.3: client message id (FE-06 chat, Khanh, 17/11/2026 – NEEDS THE LEAD'S APPROVAL before it runs
--- on the shared database). business-rules §6 "Sending":
+-- EduConnect patch v0.3: client message id (FE-06 chat, Khanh; approved by the lead and run on the shared database
+-- 17/11/2026). business-rules §6 "Sending":
 --   * the chat shows a message at once (optimistic UI) and may send it again after a timeout or a lost connection;
 --   * the client gives every message a random UUID (client_message_id); the same sender sending the same UUID again in
 --     the same chat gets the message that was already saved – never a second copy.

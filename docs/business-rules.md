@@ -365,7 +365,7 @@ Boundaries that are easy to get wrong:
     off the list until a new message arrives.
   - Neither can be undone. In an ended school year or a closed 1-1 chat only delete for me is possible. Group moderators
     cannot delete other people's messages.
-- **Sending, drafts, connection** (Khanh's decisions 17/11/2026; the database part needs the lead's approval, below):
+- **Sending, drafts, connection** (Khanh's decisions 17/11/2026; the database part approved by the lead 17/11/2026):
   - **Sending:** a message shows at once, dim with "Đang gửi…", and messages are sent one after another in the order
     they were written. The text is stored in Unicode NFC. Over 2000 characters the "Gửi" button is off (pasting more is
     allowed, the counter turns red). A picture pasted together with text attaches the picture and keeps the text.
@@ -374,8 +374,8 @@ Boundaries that are easy to get wrong:
     it says "Chưa rõ đã gửi được chưa": the server may have saved it.
   - **Never twice:** each message carries a random id (`messages.client_message_id`, UUID). Sending the same id again
     in the same chat returns the saved message instead of a copy, so "Thử lại" is always safe. Only the sender sees
-    the id. **Database: `patch_v0.3_message_client_id.sql` – NOT run on the shared database until the lead approves.**
-    Until then everything works as before, without this protection.
+    the id. **Database: `patch_v0.3_message_client_id.sql` – approved by the lead and run on the shared database
+    17/11/2026.** (Without the column the server still works, only without this protection.)
   - **Drafts:** per account and chat, in the browser only (not across devices): the text, the message being answered,
     the files already uploaded and the unsent messages. Kept 7 days. Sending clears it. The conversation list shows
     "Bản nháp: …" for a chat that is not open and has nothing unread.

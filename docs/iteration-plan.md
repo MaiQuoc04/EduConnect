@@ -155,7 +155,8 @@ It2: Anh FE-08 + FE-14, Khanh FE-05 + FE-06).
     unchanged). Client: outbox with "Đang gửi…" / "Thử lại" / "Sửa" / "Xoá", ordered send queue, 15 s / 20 s
     timeouts (`NETWORK_TIMEOUT`), per-chat drafts (`chat/chatDraft.js`, "Bản nháp:" in the list), connection bar and
     catch-up on every socket `connect` (`useSocketStatus`), "↓ n tin nhắn mới", read only when the end is on screen.
-    **DB: `patch_v0.3_message_client_id.sql` waits for the lead's approval (not run on the shared DB).** Tested on the
+    **DB: `patch_v0.3_message_client_id.sql` approved by the lead and run on the shared DB 17/11 (column + unique
+    index checked; old messages keep NULL).** Tested on the
     local DB (17 new steps, with and without the column, + the del / act / files / team suites).
 - **Not merged yet:** none of It1. It2 branches start from `develop`. Still open in It2: FE-10 timetable (Dung).
   - FE-14 Parent Management (Anh, It2) – merged 11/11: UC-104 parent list, UC-105 parent detail with the linked
