@@ -19,9 +19,6 @@ router.post('/parent-links/preview', requireAuth, requireRole('SCHOOL_MANAGER'),
   ctrl.previewParentLinks); // UC-14
 router.post('/parent-links/import', requireAuth, requireRole('SCHOOL_MANAGER'), uploadSingle('file'),
   ctrl.importParentLinks); // UC-14
-// TEMPORARY read-only parent lookup by phone for SCR-13 until FE-14 has UC-104 View Parent List. Declared before
-// /:studentId so "parents" is not taken for a student id. permissions.md "Parent–student link": School Manager only.
-router.get('/parents/lookup', requireAuth, requireRole('SCHOOL_MANAGER'), ctrl.lookupParent); // UC-13
 router.get('/:studentId', requireAuth, requireRole('SCHOOL_MANAGER'), ctrl.detail); // UC-08
 router.patch('/:studentId', requireAuth, requireRole('SCHOOL_MANAGER'), ctrl.update); // UC-09
 // A business action (old enrollment TRANSFERRED + new enrollment), not a field update, so POST on a sub-resource.

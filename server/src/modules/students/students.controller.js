@@ -1,5 +1,4 @@
 import { badRequest } from '../../utils/AppError.js';
-import { normalizePhone, PHONE_RE } from '../../utils/phone.js';
 import * as parentLinkImport from './parentLinkImport.service.js';
 import * as studentsService from './students.service.js';
 
@@ -97,23 +96,6 @@ function parseParentId(value) {
     throw invalid('parentId');
   }
   return Number(value);
-}
-
-// TEMPORARY (UC-13, SCR-13): GET /students/parents/lookup?phone=. Read-only lookup of ONE existing parent account
-// by its exact phone number, so School Manager sees the parent's name before linking. It exists only because FE-14
-// (UC-104 View Parent List, owner: Khanh) is not built yet: remove it and switch SCR-13 to Khanh's endpoint then.
-// The phone is normalised as everywhere a phone is typed (business-rules §3, utils/phone.js): spaces, dots and
-// dashes removed, a leading +84 becomes 0; valid = 0 + 9 digits.
-// Not finding anyone is a normal answer (200 { found: false }), not a 404.
-export async function lookupParent(req, res) {
-  const query = req.query ?? {};
-  rejectUnknownKeys(query, ['phone']);
-  const raw = optionalString(query, 'phone');
-  if (!raw) throw invalid('phone');
-  const phone = normalizePhone(raw);
-  if (!PHONE_RE.test(phone)) throw invalid('phone');
-  const parent = await studentsService.findParentByPhone(phone);
-  res.json(parent ? { found: true, parent } : { found: false });
 }
 
 // UC-13 Link Parent–Student: { parentId, relationshipType }. Unknown keys are rejected, as in UC-09 / UC-10.
