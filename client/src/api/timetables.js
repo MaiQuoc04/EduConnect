@@ -91,3 +91,19 @@ export async function savePeriodTimes({ sessionStarts, duration, stamp }) {
   const { data } = await api.put('/timetables/period-times', { sessionStarts, duration, stamp });
   return data;
 }
+
+// Automatic scheduling (School Manager): options, a draft (nothing saved), apply the draft
+export async function getAutoOptions(schoolYearId) {
+  const { data } = await api.get('/timetables/auto/options', { params: schoolYearId ? { schoolYearId } : {} });
+  return data;
+}
+
+export async function runAutoSchedule(config) {
+  const { data } = await api.post('/timetables/auto/run', config);
+  return data;
+}
+
+export async function applyAutoSchedule({ config, stamp, draft, confirmOverwrite }) {
+  const { data } = await api.post('/timetables/auto/apply', { config, stamp, draft, confirmOverwrite });
+  return data;
+}
