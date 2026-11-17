@@ -58,10 +58,10 @@ Source: Report 3 section 4.2 (draft v1.3). Actor "User" = any signed-in account.
 | UC-29 | View Group List | Teacher, Student, Parent, School Manager | Class Groups | View the groups the user belongs to (School Manager: all class groups, without their feeds or chats). |
 | UC-30 | View Group Detail | Teacher, Student, Parent, School Manager | Class Groups | View a group's information. |
 | UC-31 | View Group Members | Teacher, Student, Parent, School Manager | Class Groups | View the members of a group. |
-| UC-32 | Add Group Member | School Manager, Homeroom Teacher | Class Groups | Add members of the same class to a group. |
-| UC-33 | Remove Group Member | School Manager, Homeroom Teacher | Class Groups | Remove a member from a group. |
+| UC-32 | Add Group Member | School Manager, Team Leader | Class Groups | Class groups: the School Manager adds people of the class who are missing (e.g. a student who transferred in). Teams: the leader adds people of the team's class (teacher team: teachers) – "A đã thêm B vào nhóm" (17/11/2026). |
+| UC-33 | Remove Group Member | Team Leader | Class Groups | Teams only: the leader removes another member – "A đã xoá B khỏi nhóm". Nobody removes anyone from the three class groups; their members follow the class (17/11/2026). |
 | UC-34 | Set Student Nickname | Homeroom Teacher | Class Groups | Set a nickname shown only inside that class. |
-| UC-35 | Create Team Chat | Teacher, Student, Parent | Teams | Create a chat-only team with members of one class; a teacher can also create a teacher team with teachers of the school (no class). Members can leave it later (the last one leaving closes it); nobody adds or removes members after creation. |
+| UC-35 | Create Team Chat | Teacher, Student, Parent | Teams | Create a chat-only team with members of one class; a teacher can also create a teacher team with teachers of the school (no class). Members can leave it later (the last one leaving closes it); nobody adds or removes members after creation. The creator is the team leader, who hands the leadership over (at any time, and before leaving while others remain); any member can rename the team; leaving, renaming and handing over show as system lines in the team chat (15/11/2026). |
 
 ## FE-05 Group Feed
 

@@ -56,6 +56,17 @@ export async function createTeam(req, res) {
   res.status(201).json(await teamService.createTeam(req.user, { source, classId, teamName, memberIds }));
 }
 
+// Leave a team; the leader leaving while others remain sends { newLeaderId } (business-rules §4, 15/11/2026).
 export async function leave(req, res) {
-  res.json(await teamService.leaveTeam(req.user, req.params.id));
+  res.json(await teamService.leaveTeam(req.user, req.params.id, { newLeaderId: req.body?.newLeaderId }));
+}
+
+// Team leader hands the leadership over: { userId }
+export async function setLeader(req, res) {
+  res.json(await teamService.transferLeader(req.user, req.params.id, req.body?.userId));
+}
+
+// Any member renames a team: { groupName }
+export async function rename(req, res) {
+  res.json(await teamService.renameTeam(req.user, req.params.id, req.body?.groupName));
 }

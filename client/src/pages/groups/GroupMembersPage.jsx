@@ -29,12 +29,13 @@ const plain = (text) =>
     .toLowerCase();
 
 // SCR-22 Group Member List – UC-31 View Group Members, with UC-32 Add Group Member, UC-33 Remove Group Member and
-// UC-34 Set Student Nickname for those allowed (the server checks again). Contacts and student codes only reach
+// UC-34 Set Student Nickname for those allowed (the server checks again). 17/11/2026 (business-rules §4): class groups –
+// nobody removes anyone, only the School Manager adds missing people of the class; teams – the leader adds and removes. Contacts and student codes only reach
 // teachers and the School Manager. FE-06 UC-49: a "Nhắn tin" button opens the 1-1 chat with members the active role
 // may write to (canMessage from the server).
 export default function GroupMembersPage() {
   const group = useOutletContext();
-  const { activeRole } = useAuth();
+  const { user } = useAuth();
   const toast = useToast();
   const [state, setState] = useState({ loading: true, data: null, error: '' });
   const [version, setVersion] = useState(0);
@@ -115,17 +116,20 @@ export default function GroupMembersPage() {
   if (state.error) return <p className="form-error">{state.error}</p>;
   if (state.loading) return <p className="loading">Đang tải thành viên…</p>;
 
-  const { counts, showContacts, canManageMembers, canSetNickname } = data;
+  const { counts, showContacts, canAddMembers, canRemoveMembers, canSetNickname } = data;
+  const canManageMembers = canAddMembers || canRemoveMembers;
   const isClass = Boolean(group.class);
-  const manager = activeRole === 'SCHOOL_MANAGER';
-  // UC-33: never the homeroom teacher; teachers only by the School Manager (the server checks the same).
-  const canRemove = (m) =>
-    canManageMembers &&
-    !m.kinds.includes('HOMEROOM') &&
-    (manager || !m.kinds.some((k) => k === 'SUBJECT_TEACHER' || k === 'TEACHER'));
+  // UC-33 (17/11/2026): the team leader removes other members; nobody in the class groups (the server checks the same).
+  const canRemove = (m) => canRemoveMembers && m.userId !== user?.id;
   const canName = (m) => canSetNickname && m.kinds.includes('STUDENT');
   // canMessage comes from the server (UC-49 reach of the active role, active accounts, never oneself).
   const showActions = canManageMembers || canSetNickname || members.some((m) => m.canMessage);
+  // Each kind of action keeps its own place on every row (an empty place when a row lacks it), so the buttons line up.
+  const slots = {
+    message: members.some((m) => m.canMessage),
+    name: canSetNickname,
+    remove: canRemoveMembers,
+  };
   // SCR-22 stat tiles: one bordered card per figure, the label coloured by role.
   const stats = isClass
     ? [
@@ -138,7 +142,7 @@ export default function GroupMembersPage() {
         ['Tổng số thành viên', counts.total, ''],
         ['Giáo viên và quản lý', counts.teachers, 'ink'],
       ];
-  const toolbarClass = `card card-outline group-toolbar${isClass ? '' : ' no-role'}${canManageMembers ? ' with-action' : ''}`;
+  const toolbarClass = `card card-outline group-toolbar${isClass ? '' : ' no-role'}${canAddMembers ? ' with-action' : ''}`;
 
   return (
     <div className="group-members">
@@ -185,7 +189,7 @@ export default function GroupMembersPage() {
           <option value="ACTIVE">Đang hoạt động</option>
           <option value="LOCKED">Đã khoá</option>
         </select>
-        {canManageMembers && (
+        {canAddMembers && (
           <button type="button" className="btn btn-primary" onClick={() => setAdding(true)} disabled={adding}>
             <Icon name="person_add" size="sm" />
             Thêm thành viên
@@ -261,6 +265,13 @@ export default function GroupMembersPage() {
                   )}
                   <td className="gm-role">
                     <span className="chips">
+                      {/* Team leader (15/11/2026, business-rules §4) */}
+                      {group.leaderId === m.userId && (
+                        <span className="chip ink">
+                          <Icon name="star" size="sm" />
+                          Trưởng nhóm
+                        </span>
+                      )}
                       {m.kinds.map((k) => (
                         <span key={k} className={`chip${k === 'HOMEROOM' || k === 'MANAGER' ? ' ink' : ''}`}>
                           {MEMBER_KIND_LABELS[k]}
@@ -286,41 +297,50 @@ export default function GroupMembersPage() {
                   {showActions && (
                     <td className="num gm-actions">
                       <span className="group-row-actions">
-                        {m.canMessage && (
-                          <button
-                            type="button"
-                            className="btn btn-tertiary group-message"
-                            onClick={() => messageTo(m)}
-                            disabled={opening !== null}
-                            title={`Nhắn tin riêng với ${m.fullName}`}
-                            aria-label={`Nhắn tin riêng với ${m.fullName}`}
-                          >
-                            <Icon name="chat" size="sm" />
-                            <span>{opening === m.userId ? 'Đang mở…' : 'Nhắn tin'}</span>
-                          </button>
-                        )}
-                        {canName(m) && editing?.userId !== m.userId && (
-                          <button
-                            type="button"
-                            className="btn btn-tertiary"
-                            onClick={() => setEditing({ userId: m.userId, value: m.nickname ?? '', saving: false, error: '' })}
-                            title="Đặt biệt danh"
-                            aria-label={`Đặt biệt danh cho ${m.fullName}`}
-                          >
-                            <Icon name="badge" size="sm" />
-                          </button>
-                        )}
-                        {canRemove(m) && (
-                          <button
-                            type="button"
-                            className="btn btn-danger"
-                            onClick={() => setRemoving(m)}
-                            title="Xoá khỏi nhóm"
-                            aria-label={`Xoá ${m.fullName} khỏi nhóm`}
-                          >
-                            <Icon name="person_remove" size="sm" />
-                          </button>
-                        )}
+                        {slots.message &&
+                          (m.canMessage ? (
+                            <button
+                              type="button"
+                              className="gm-action gm-action-message"
+                              onClick={() => messageTo(m)}
+                              disabled={opening !== null}
+                              title={`Nhắn tin riêng với ${m.fullName}`}
+                              aria-label={`Nhắn tin riêng với ${m.fullName}`}
+                            >
+                              <Icon name="chat" size="sm" />
+                              <span>{opening === m.userId ? 'Đang mở…' : 'Nhắn tin'}</span>
+                            </button>
+                          ) : (
+                            <span className="gm-action-gap is-message" aria-hidden="true" />
+                          ))}
+                        {slots.name &&
+                          (canName(m) && editing?.userId !== m.userId ? (
+                            <button
+                              type="button"
+                              className="gm-action"
+                              onClick={() => setEditing({ userId: m.userId, value: m.nickname ?? '', saving: false, error: '' })}
+                              title="Đặt biệt danh"
+                              aria-label={`Đặt biệt danh cho ${m.fullName}`}
+                            >
+                              <Icon name="badge" size="sm" />
+                            </button>
+                          ) : (
+                            <span className="gm-action-gap" aria-hidden="true" />
+                          ))}
+                        {slots.remove &&
+                          (canRemove(m) ? (
+                            <button
+                              type="button"
+                              className="gm-action is-danger"
+                              onClick={() => setRemoving(m)}
+                              title="Xoá khỏi nhóm"
+                              aria-label={`Xoá ${m.fullName} khỏi nhóm`}
+                            >
+                              <Icon name="person_remove" size="sm" />
+                            </button>
+                          ) : (
+                            <span className="gm-action-gap" aria-hidden="true" />
+                          ))}
                       </span>
                     </td>
                   )}

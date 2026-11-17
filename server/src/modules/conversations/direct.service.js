@@ -82,12 +82,17 @@ async function findContacts(db, user, { search = null, classId = null, userIds =
             COALESCE((SELECT json_agg(json_build_object('classId', mc.class_id, 'className', mc.class_name)
                                       ORDER BY mc.class_name)
                       FROM my_classes mc WHERE mc.class_id = ANY(p.class_ids)), '[]'::json) AS classes,
+            -- 17/11/2026: each child with the class they study in, so a parent of children in several classes reads
+            -- "Mẹ của A (10A1) · Mẹ của B (11D1)".
             COALESCE((SELECT json_agg(DISTINCT jsonb_build_object('fullName', cu.full_name,
-                                                                  'relationship', sp.relationship_type))
+                                                                  'relationship', sp.relationship_type,
+                                                                  'classId', ce.class_id,
+                                                                  'className', ccl.class_name))
                       FROM parents pa
                       JOIN student_parents sp ON sp.parent_id = pa.parent_id
                       JOIN class_enrollments ce ON ce.student_id = sp.student_id AND ce.status = 'STUDYING'
                                                AND ce.class_id = ANY(p.class_ids)
+                      JOIN classes ccl ON ccl.class_id = ce.class_id
                       JOIN students cs ON cs.student_id = sp.student_id
                       JOIN users cu ON cu.user_id = cs.user_id
                       WHERE pa.user_id = u.user_id AND 'PARENT' = ANY(p.kinds)), '[]'::json) AS children,

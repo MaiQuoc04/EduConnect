@@ -24,6 +24,8 @@
 --   database: run patch_v0.3_school_post_roles.sql.
 -- 10/11/2026: + attachments.storage_key and attachments.bucket (files in Supabase Storage; private files are signed
 --   from the key when read). Existing database: run patch_v0.3_attachment_storage.sql.
+-- 15/11/2026: + groups.leader_id (team leader), + messages.message_type / system_event / target_user_id (system lines
+--   in team chats). Approved by the lead. Existing database: run patch_v0.3_team_leader_system_messages.sql.
 -- How to run: Supabase > SQL Editor > paste the whole file > Run (on an empty database).
 -- Conventions:
 --   * Soft delete everywhere (deleted_at / deleted_by). Hard delete only for: post_likes (unlike),
@@ -372,8 +374,10 @@ CREATE TABLE groups (
   created_by       BIGINT NULL,
   created_at       TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
   deleted_at       TIMESTAMPTZ NULL,
+  leader_id        BIGINT NULL,                   -- TEAM_CHAT only: the team leader (15/11/2026)
   FOREIGN KEY (class_id)   REFERENCES classes(class_id),
   FOREIGN KEY (created_by) REFERENCES users(user_id),
+  FOREIGN KEY (leader_id)  REFERENCES users(user_id),
   CHECK (group_type IN ('GENERAL','STUDENT','PARENT','TEAM_CHAT','TEACHER_SCHOOL','DIRECT'))
 );
 
@@ -399,8 +403,18 @@ CREATE TABLE messages (
   reply_to_message_id     BIGINT NULL,            -- reply, one level
   deleted_for_everyone_at TIMESTAMPTZ NULL,       -- stays as a placeholder; the API never returns its content
   deleted_for_everyone_by BIGINT NULL,
+  -- 15/11/2026: a SYSTEM line of a team chat (sender_id = the member it is about): TEAM_CREATED, TEAM_RENAMED
+  -- (content = the new name), MEMBER_LEFT, MEMBER_REMOVED (class change), LEADER_CHANGED (target_user_id = new leader)
+  message_type   VARCHAR(10) NOT NULL DEFAULT 'TEXT',
+  system_event   VARCHAR(30) NULL,
+  target_user_id BIGINT NULL,
+  -- 17/11/2026: the sender's random id for the message (FE-06): sending it again returns the saved message, no copy
+  client_message_id UUID NULL,
   FOREIGN KEY (group_id)  REFERENCES groups(group_id),
   FOREIGN KEY (sender_id) REFERENCES users(user_id),
+  FOREIGN KEY (target_user_id) REFERENCES users(user_id),
+  CONSTRAINT messages_type_check CHECK (message_type IN ('TEXT', 'SYSTEM')),
+  CONSTRAINT messages_system_check CHECK ((message_type = 'SYSTEM') = (system_event IS NOT NULL)),
   FOREIGN KEY (reply_to_message_id)     REFERENCES messages(message_id),
   FOREIGN KEY (deleted_for_everyone_by) REFERENCES users(user_id)
 );
@@ -766,6 +780,8 @@ CREATE TABLE password_reset_requests (
 
 CREATE INDEX idx_group_members_group_id_user_id ON group_members (group_id, user_id);
 CREATE INDEX idx_messages_group_id_sent_at ON messages (group_id, sent_at);
+CREATE UNIQUE INDEX uq_messages_client_message_id
+  ON messages (group_id, sender_id, client_message_id) WHERE client_message_id IS NOT NULL;
 CREATE INDEX idx_notification_recipients_user_id_read_at ON notification_recipients (user_id, read_at);
 CREATE INDEX idx_activity_logs_created_at ON activity_logs (created_at);
 CREATE INDEX idx_password_reset_otps_user_id_expires_at ON password_reset_otps (user_id, expires_at);

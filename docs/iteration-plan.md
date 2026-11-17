@@ -66,6 +66,10 @@ It2: Anh FE-08 + FE-14, Khanh FE-05 + FE-06).
   `patch_v0.3_school_post_roles.sql` (FE-08, Anh: column `school_posts.target_roles`) +
   `patch_v0.3_attachment_storage.sql` (storage, Anh: `attachments.storage_key` / `bucket` + check). Both checked on the
   shared DB by the lead 11/11. 51 tables in `develop`.
+  **+ `patch_v0.3_team_leader_system_messages.sql` (FE-04 / FE-06, run by Khanh 15/11 after the lead's OK):**
+  `groups.leader_id` (the 5 active teams got their leader) and `messages.message_type` / `system_event` /
+  `target_user_id` with two checks. **Code on `feature/fe-05-group-feed` needs it; branches without that code are
+  not affected** (new columns only, with defaults). Still 51 tables.
   The shared DB also has `timetables` and `timetable_entries` from FE-10's `patch_v0.3_timetables.sql` (Dung, run
   11/11, lead OK), so `npm run db:check` shows **53 tables** until FE-10 is merged.
 - **Sample data added to the shared DB (03/11, Anh, accepted by the lead 03/11), through the app API (UC-96, UC-14, UC-28),
@@ -110,6 +114,69 @@ It2: Anh FE-08 + FE-14, Khanh FE-05 + FE-06).
     the settings screen; account import / export use the shared `utils/excel.js` (`loadTemplateSheet`,
     `templateHeaderKey`, `workbookBuffer`); new Teacher / School Manager accounts join the TEACHER_SCHOOL group
     (`server/src/modules/admin/schoolGroup.js`, also used by UC-116).
+  - **On `feature/fe-05-group-feed`, not merged yet (12/11, Khanh): FE-05 attachments.** Group posts take files like
+    school posts: upload target `post` (folder `posts/`), `POST /groups/:groupId/posts` and `PATCH /posts/:postId`
+    accept `attachments` (and `removeAttachmentIds` on edit), `GET /posts/attachment-limits`, posts carry
+    `attachmentCount` / `firstImageUrl` in lists and `attachments` in the detail; deleting a post soft deletes its
+    files; a change of files is an edit (§5: may go back to PENDING). ASSUMPTION: at most 10 files per post, as FE-08.
+    New shared helpers in `utils/attachments.js` (`summarizeAttachments`, `readUploadedFiles`, `changeAttachments`:
+    the FE-08 logic its comment proposed to share; FE-08 code untouched, Anh may switch to them) and
+    `utils/requestParsers.js` (`uploadedFiles`, `idList`). Client: FE-08 `AttachmentPicker` / `AttachmentList` on
+    SCR-36/38 and SCR-37, first picture + file count on SCR-35. Tested on the local DB with local storage (24 steps +
+    the FE-05 suite); the browser → Supabase upload itself was not run (shared bucket).
+    Also: **draft of a new group post** (client only, `pages/groupfeed/postDraft.js`): text + uploaded files saved in
+    the browser's localStorage per account and group while typing, restored when the form opens again, removed when
+    the post is sent or "Huỷ" → "Bỏ bản nháp"; the feed's composer says "Tiếp tục bản nháp". ASSUMPTION: kept 30 days.
+    No schema change; a draft does not follow the user to another device.
+  - **On `feature/fe-05-group-feed`, not merged yet (12/11, Khanh): FE-06 chat attachments.** Upload target `message`
+    (folder `messages/<groupId>/`, only that chat's files accepted); `POST /conversations/:groupId/messages` takes
+    `attachments`; a message may be files only (`messages.content` NULL, as the schema says); every message carries
+    `attachments` (one query per page, links signed for one hour), quotes and the conversation list carry
+    `attachmentCount`; a message deleted for everyone hides its files (§6). `GET /conversations/attachment-limits`.
+    ASSUMPTION: at most 10 files per message. New shared helper `listAttachmentsOf` in `utils/attachments.js`. Client:
+    📎 button and picture paste in the composer (FE-08 upload queue), files in the bubble (`pages/chat/MessageFiles.jsx`),
+    expired links re-read per message; `ChatThread` is now keyed by group (a new chat starts with an empty composer).
+    Tested on the local DB with local storage (17 steps + the FE-05 suites).
+  - **14/11 (Khanh, not committed yet): one look for both feeds.** New shared `client/src/components/feed/`
+    (`Feed.jsx`: FeedTabs, FeedSkeleton, FeedEmpty, FeedError, FeedPager, FeedCardImage, FeedPanel, NewContentPill,
+    useNewContent, openOnClick; `feed.css`: `.feed-*` cards, tabs, side panels, states, pager, reading canvas
+    `.feed-article*`), values taken from the FE-08 screens. FE-08 `SchoolFeedPage` / `SchoolPostDetailPage` now use it
+    (same look; their CSS keeps only search, pin colour, news padding and the audience line) – **Anh to check**.
+    FE-05 rebuilt on it: cards with a kind line (Bài viết / Đã ghim / Chờ duyệt / Đã bị từ chối / Đã ẩn + left bar),
+    pager (10 per page), "Có nội dung mới — Tải lại" pill, right column "Bài đã ghim" + "Duyệt bài"; SCR-37 as the
+    school reading canvas with the actions at the top; SCR-36/38 in the school form shell (`SchoolPostForm.css`
+    `.spf-*`) with a live preview; confirm dialogs in the `.sf-dialog` style.
+  - **14/11 (Khanh, not committed yet): FE-05 pop-up and long posts.** A click on a card opens the post in a pop-up
+    over the feed (`PostDialog.jsx`, address `?post=<id>`: Back closes it, a copied link opens it); the SCR-37 page
+    stays for old links (both show `PostDetail.jsx`). Editing from the pop-up comes back to it. Cards cut posts after
+    about 280 characters or 6 lines with "Hiển thị thêm" / "Ẩn bớt".
+  - **15/11 (Khanh): team leader and system lines** (lead OK; business-rules §4 / §6, UC-35, permissions). Server:
+    `groups/teamEvents.js` (system lines, leader hand-over when the system takes the leader out, real-time
+    `message:new` / `group:changed` / `group:removed`), `teams.service.js` (leader on create, "đã tạo nhóm" line,
+    `POST /groups/:id/leave { newLeaderId }` with 409 `MSG_TEAM_LEADER_MUST_TRANSFER`, `PUT /groups/:id/leader`,
+    `PATCH /groups/:id` rename), chat API returns `type` / `event` / `targetName`, system lines cannot be answered /
+    reacted to / deleted. `syncClassTeachers` (FE-04) and the transfer in `students.service.js` (**FE-02, Anh: one
+    call added**) write "không còn trong nhóm" lines and hand the leadership over. Client: `groups/TeamActions.jsx`
+    (rename, hand over, leave with the new-leader picker) on SCR-21 and in the chat header "⋮", "Trưởng nhóm" chip,
+    system lines centred in the chat. Tested on the local DB (25 steps + the chat / feed suites).
+  - **17/11 (Khanh): chat sending, drafts, connection** (business-rules §6 "Sending, drafts, connection"). Server:
+    `clientMessageId` (no second copy when sent again; works without the column until the patch runs), NFC text,
+    `GET /conversations/:id/messages?after=<id>`, `conversations/chatSignals.js` (`signalWhenSaved`: group:removed /
+    group:changed / `chat:access-changed`, sent once the caller's transaction is saved) used by `syncClassTeachers`
+    (class groups) and `teamEvents.afterRemovedFromTeams` (team lines and removals now in real time, the FE-02 call
+    unchanged). Client: outbox with "Đang gửi…" / "Thử lại" / "Sửa" / "Xoá", ordered send queue, 15 s / 20 s
+    timeouts (`NETWORK_TIMEOUT`), per-chat drafts (`chat/chatDraft.js`, "Bản nháp:" in the list), connection bar and
+    catch-up on every socket `connect` (`useSocketStatus`), "↓ n tin nhắn mới", read only when the end is on screen.
+    **DB: `patch_v0.3_message_client_id.sql` approved by the lead and run on the shared DB 17/11 (column + unique
+    index checked; old messages keep NULL).** Tested on the
+    local DB (17 new steps, with and without the column, + the del / act / files / team suites).
+  - **17/11 (Khanh): group members** (business-rules §4, permissions, UC-32 / UC-33; Khanh's decision). Class groups:
+    nobody removes anyone (403 `MSG_GROUP_MEMBER_CLASS_FIXED`), only the School Manager adds missing people of the
+    class (the homeroom teacher no longer adds or removes). Teams: the leader adds (same class / teachers, active, up to
+    50) and removes members through the same routes (`/groups/:id/candidates`, `POST|DELETE /groups/:id/members`),
+    system lines `MEMBER_ADDED` / `MEMBER_KICKED`, real time (group:changed / group:removed). New flags
+    `canAddMembers` / `canRemoveMembers`; adding and removing on the Members tab (SCR-22). No schema change. Tested on the
+    local DB (28 steps + the team / chat suites).
 - **Not merged yet:** none of It1. It2 branches start from `develop`. Still open in It2: FE-10 timetable (Dung).
   - FE-14 Parent Management (Anh, It2) – merged 11/11: UC-104 parent list, UC-105 parent detail with the linked
     children, UC-106 update profile (`fullName`, `occupation`, `address` only; login identifiers are not touched).

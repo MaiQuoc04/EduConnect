@@ -4,6 +4,7 @@ import { vietnameseNameOrder } from '../../utils/nameSort.js';
 import { containsPattern, VI_TRANSLATE } from '../../utils/search.js';
 // FE-04 (merged): one place for the class-size limit, the ended-year check and "the school year just before".
 import { conflict, lockOpenYear, MAX_CLASS_SIZE, previousYearSql } from '../classes/classes.service.js';
+import { afterRemovedFromTeams } from '../groups/teamEvents.js';
 
 // FE-02 Student Management (owner: Anh). SQL lives here; the controller validates the query first.
 // resolveSchoolYearId, enrollmentsOfYear and buildStudentFilter are shared by UC-07..UC-14.
@@ -721,6 +722,10 @@ async function moveClassGroups(client, { studentId, studentUserId, fromClassId, 
      RETURNING ${GROUP_MEMBER_COLUMNS}`,
     [fromClassId, studentUserId],
   );
+  // FE-04 (15/11/2026): in the old class's teams, a "… không còn trong nhóm" line, the leadership handed over when the
+  // student led the team, and a team left empty is closed (business-rules §4). Shown at the next read.
+  await afterRemovedFromTeams(client, studentLeft.filter((row) => row.groupType === 'TEAM_CHAT'));
+
   // Old class, parents: leave GENERAL and PARENT, unless another of their children still studies in that class.
   const parentsLeft = await leaveParentClassGroups(client, {
     classId: fromClassId, parentUserIds, exceptStudentId: studentId,

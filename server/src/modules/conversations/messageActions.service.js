@@ -38,6 +38,7 @@ async function openForChange(user, groupId, messageId) {
   const group = await openChat(pool, user, groupId);
   assertCanSend(group);
   const message = await findVisibleMessage(pool, user, group.groupId, messageId);
+  if (message.isSystem) throw badRequest('MSG_SYSTEM_MESSAGE', 'A system line cannot be changed.');
   if (message.isDeleted) throw conflict('MSG_MESSAGE_DELETED', 'This message has been deleted.');
   return { group, message };
 }
@@ -85,6 +86,9 @@ async function deleteForEveryone(user, group, message) {
 }
 
 async function deleteForMe(user, group, message) {
+  // A message deleted for everyone is already gone for everybody (only its placeholder stays): nothing left to delete
+  // for oneself (Khanh's decision 15/11/2026, business-rules §6).
+  if (message.isDeleted) throw conflict('MSG_MESSAGE_DELETED', 'This message has been deleted.');
   await pool.query(
     `INSERT INTO message_user_deletions (message_id, user_id) VALUES ($1, $2)
      ON CONFLICT (message_id, user_id) DO NOTHING`,
@@ -101,6 +105,7 @@ export async function deleteMessage(user, groupId, messageId, scope) {
   const group = await openChat(pool, user, groupId);
   if (scope === 'everyone') assertCanSend(group);
   const message = await findVisibleMessage(pool, user, group.groupId, messageId);
+  if (message.isSystem) throw badRequest('MSG_SYSTEM_MESSAGE', 'A system line cannot be deleted.');
   if (scope === 'everyone') await deleteForEveryone(user, group, message);
   else await deleteForMe(user, group, message);
   return { groupId: group.groupId, messageId: message.messageId, scope };

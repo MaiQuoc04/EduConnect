@@ -4,6 +4,7 @@ import { DEPARTMENT_REASON_TEXT, NAME_REASON_TEXT } from './utils/teacherValidat
 // Add a line here whenever a module introduces a new error code.
 const ERROR_MESSAGES = {
   NETWORK_ERROR: 'Không kết nối được máy chủ. Vui lòng thử lại.',
+  NETWORK_TIMEOUT: 'Máy chủ không phản hồi. Vui lòng thử lại.',
   SERVER_ERROR: 'Đã có lỗi xảy ra. Vui lòng thử lại.',
   NOT_FOUND: 'Không tìm thấy dữ liệu.',
   FORBIDDEN: 'Bạn không có quyền thực hiện thao tác này.',
@@ -86,10 +87,16 @@ const ERROR_MESSAGES = {
   MSG_GROUP_MEMBER_NOT_FOUND: 'Người này không còn trong nhóm.',
   MSG_GROUP_MEMBER_HOMEROOM: 'Không thể xoá giáo viên chủ nhiệm khỏi nhóm của lớp.',
   MSG_GROUP_MEMBER_TEACHER: 'Chỉ quản lý trường mới xoá được giáo viên khỏi nhóm.',
+  MSG_GROUP_MEMBER_CLASS_FIXED: 'Thành viên của nhóm lớp đi theo lớp nên không xoá được.',
+  MSG_TEAM_REMOVE_SELF: 'Trưởng nhóm không tự xoá mình được. Hãy dùng Rời nhóm.',
   MSG_NICKNAME_TOO_LONG: ({ max } = {}) => `Biệt danh tối đa ${max ?? 50} ký tự.`,
   MSG_NICKNAME_INVALID: 'Biệt danh chỉ gồm chữ trên một dòng.',
   MSG_NICKNAME_NOT_STUDENT: 'Chỉ đặt biệt danh cho học sinh đang học trong lớp.',
   MSG_GROUP_CANNOT_LEAVE: 'Không thể rời nhóm chung, nhóm học sinh hay nhóm phụ huynh của lớp. Chỉ có thể rời team.',
+  MSG_TEAM_LEADER_MUST_TRANSFER: 'Bạn là trưởng nhóm. Vui lòng chọn trưởng nhóm mới trước khi rời nhóm.',
+  MSG_TEAM_LEADER_INVALID: 'Người được chọn không còn trong nhóm. Vui lòng chọn người khác.',
+  MSG_TEAM_NOT_LEADER: 'Chỉ trưởng nhóm mới làm được việc này.',
+  MSG_SYSTEM_MESSAGE: 'Không thể thao tác với dòng thông báo của nhóm.',
   MSG_TEAM_NAME_REQUIRED: 'Vui lòng nhập tên team.',
   MSG_TEAM_NAME_LENGTH: ({ min, max } = {}) => `Tên team gồm ${min ?? 2}–${max ?? 100} ký tự, trên một dòng.`,
   MSG_TEAM_TOO_FEW: ({ min } = {}) => `Vui lòng chọn ít nhất ${min ?? 2} người khác cho team.`,
@@ -100,7 +107,6 @@ const ERROR_MESSAGES = {
   // FE-05 Group Feed
   MSG_FEED_NOT_FOUND: 'Nhóm này không có bảng tin hoặc bạn không xem được bảng tin của nhóm.',
   MSG_POST_NOT_FOUND: 'Không tìm thấy bài viết. Bài có thể đã bị xoá hoặc không còn hiển thị với bạn.',
-  MSG_POST_HIDDEN: 'Bài viết đã bị ẩn nên không thể sửa. Bạn vẫn có thể xoá bài.',
   MSG_POST_NOT_INTERACTIVE: 'Chỉ thích và bình luận được bài đã duyệt và đang hiển thị.',
   MSG_POST_NOT_PENDING: 'Bài viết không còn chờ duyệt. Vui lòng tải lại.',
   MSG_POST_NOT_APPROVED: 'Chỉ ẩn được bài đã duyệt.',
@@ -108,6 +114,7 @@ const ERROR_MESSAGES = {
     `Đã đạt giới hạn ${max ?? 5} bài ghim. Vui lòng bỏ ghim bài cũ trước khi ghim bài mới.`,
   MSG_TEXT_TOO_LONG: ({ max } = {}) => `Nội dung tối đa ${(max ?? 5000).toLocaleString('vi-VN')} ký tự.`,
   MSG_COMMENT_NOT_FOUND: 'Không tìm thấy bình luận.',
+  MSG_TOO_MANY_ATTACHMENTS: ({ max } = {}) => `Mỗi bài viết có tối đa ${max ?? 10} tệp đính kèm.`,
   // FE-06 Messaging
   MSG_CHAT_NO_ACCESS: 'Quản lý trường không xem tin nhắn của nhóm lớp.',
   MSG_CHAT_NOT_MEMBER: 'Bạn không còn là thành viên của cuộc trò chuyện này.',

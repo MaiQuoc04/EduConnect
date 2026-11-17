@@ -243,19 +243,31 @@ Boundaries that are easy to get wrong:
   to the members of the class's groups and to the School Manager (never in the teacher group or outside the class).
 - **Teams in detail** (agreed 03/11/2026): the creator picks the members when creating it – the creator plus 2–49
   others from the same class (3–50 people), no locked accounts; name 2–100 characters, not unique. After that
-  **nobody adds or removes members** and a team has **no admin**. **Anyone can leave a team**, the creator too;
-  when the last member leaves, the team is closed (soft-deleted). The three class groups cannot be left (membership
+  **only the leader adds and removes members** (Khanh's decision 17/11/2026, replaces "nobody adds or removes
+  members"): people of the team's class (a teacher team: teachers of the teacher group), active accounts, up to 50; a
+  removed member loses the team at once and can be added again (then sees the whole history, §6); the leader cannot
+  remove themselves (they leave). Lines "A đã thêm B vào nhóm" / "A đã xoá B khỏi nhóm". **Team leader** (agreed by the lead 15/11/2026, replaces "a team has no admin"):
+  the creator is the leader (`groups.leader_id`); the leader's only rights are to **hand the leadership over** to
+  another member (any time) and the duty to do so **before leaving while others remain** (a locked member may be
+  chosen, with a warning). When the system takes the leader out (transfer, promotion, assignment change), the member
+  who joined first and is still in becomes leader. **Any member can rename the team** (same name rules).
+  **Anyone can leave a team**; when the last member leaves, the team is closed (soft-deleted) and leaves every list.
+  **System lines** in the team chat (`messages.message_type = 'SYSTEM'`): "A đã tạo nhóm", "A đã đổi tên nhóm thành …",
+  "A đã rời nhóm", "A không còn trong nhóm" (taken out by a class change), "A đã chuyển quyền trưởng nhóm cho B". They
+  count as unread and move the chat up like a message, but cannot be answered, reacted to or deleted. The three class groups cannot be left (membership
   follows the class). Not possible once the school year has ended.
 - **Teacher teams** (agreed by the lead 05/11/2026, e.g. a head of department with the department's teachers): a team
   with no class (`class_id` NULL), created by a teacher (active role) who is in the teacher group. Members are
   picked from the teachers of the teacher group, whatever their class; School Managers cannot be picked, cannot create
-  one and do not see it. Same size, name, leave and no-admin rules as above. It has no school year, so it never
+  one and do not see it. Same size, name, leave and leader rules as above (the leader adds teachers of the teacher group). It has no school year, so it never
   becomes read only. A teacher whose account is locked later stays in it with the "Locked" label.
 - **Group moderator = the current homeroom teacher**, read from `classes.homeroom_teacher_id` (nothing stored per
   group), so the rights move at once when the homeroom teacher changes, posts waiting for approval included.
-- **Removing members** (UC-33): the homeroom teacher removes students and parents only; teachers are removed by the
-  School Manager (who also makes the teaching assignments). A teacher removed while still assigned to the class
-  comes back at the next membership sync (membership follows the class); to take a teacher out, end the assignment.
+- **Class group members** (UC-32 / UC-33, Khanh's decision 17/11/2026, replaces "the homeroom teacher removes students
+  and parents, the School Manager removes teachers"): **nobody removes anyone** from the three class groups – their
+  members follow the class (transfer, promotion, teaching and homeroom assignments, below). Only the **School
+  Manager adds** people of the class who are missing (e.g. a student who transferred in before the sync); the
+  homeroom teacher can no longer add or remove. To take a teacher out, end the assignment.
 - **Class group membership follows the class** (agreed 03/11/2026), in the same transaction as the change that
   causes it:
   - Transfer (UC-10) / promotion (UC-11): the student leaves every group and team of the old class and joins GENERAL
@@ -293,6 +305,15 @@ Boundaries that are easy to get wrong:
   - **Hidden** (`is_hidden`): the author still sees it, labelled "Bài viết đã bị ẩn bởi người kiểm duyệt"; other
     members do not. The moderator sees the list of hidden posts and can **unhide** one (it comes back as a normal
     post). Only posts are hidden; comments are still only deleted.
+    The author may **edit a hidden post** (agreed by the lead 12/11/2026): saving unhides it and sends it to `PENDING`
+    **even when the group has approval off**, so it comes back to the feed only when the moderator approves it (a
+    moderator editing their own hidden post: approved at once). Saving without any change keeps it hidden.
+  - **Feed order** (Khanh, 12/11/2026): pinned posts first, then newest first by posting time. A post **edited and
+    sent again** (hidden, rejected, or approved then edited while approval is on) that the moderator approves again
+    **counts as a new post**: its posting time becomes the time of that approval (top of the feed, today's time) and
+    it no longer shows "Đã chỉnh sửa"; its likes and comments stay. A first approval, unhiding without an edit and an
+    edit with approval off keep the post's time and place. The pending queue is first sent, first shown (an edited
+    post counts from when it was sent again).
   - **Pin:** at most **5 pinned posts per group**; pinning a 6th is refused ("Đã đạt giới hạn 5 bài ghim. Vui lòng
     bỏ ghim bài cũ trước khi ghim bài mới."). Hiding a post unpins it; unhiding does not pin it again.
   - **Turning approval on / off** (`groups.require_approval`): the homeroom teacher for the class general group, the
@@ -338,13 +359,48 @@ Boundaries that are easy to get wrong:
     per message, another one replaces it, the same one removes it. They do not count as unread or move the chat up.
   - **Emoji:** the system's own emoji in the text; no stickers.
   - **Delete for everyone:** own message only, within `chat.delete_for_everyone_minutes` (default 15, from sending).
-    It stays as "Tin nhắn đã được xoá" with its reactions and attachments hidden, no longer counts as unread, and cannot
-    be answered or reacted to. The database keeps the content; the API never returns it and no screen shows it.
-  - **Delete for me:** any message one can see, no time limit; others see no change. It stays hidden after leaving a
-    group and coming back. The preview falls back to the last message still visible; a 1-1 chat with none left drops
+    It stays as "Tin nhắn đã được xoá" ("Bạn đã xoá một tin nhắn" for the sender) with its reactions and attachments
+    hidden, and cannot be answered, reacted to **or deleted again** – not even "for me"
+    (Khanh's decision 15/11/2026: it is already gone for everybody). The database keeps the content; the API never
+    returns it and no screen shows it.
+    **The deletion is shown like a new message** (Khanh's decision 15/11/2026): the other members' conversation list
+    shows "<name> đã xoá một tin nhắn" as the preview (bold), counts it as one unread (the message itself is not
+    counted again), uses the deletion time, and a 1-1 chat moves to the top. Seeing the open chat clears it.
+  - **Delete for me:** any message one can see that is not deleted for everyone, no time limit; others see no change. It stays hidden after leaving a
+    group and coming back. It leaves nothing behind – no "Bạn đã xoá một tin nhắn" line, not in the chat and not in the
+    list (15/11/2026): the preview falls back to the last ordinary message still visible (a deleted-for-everyone line
+    older than one's latest delete-for-me is skipped); a 1-1 chat with none left drops
     off the list until a new message arrives.
   - Neither can be undone. In an ended school year or a closed 1-1 chat only delete for me is possible. Group moderators
     cannot delete other people's messages.
+- **Sending, drafts, connection** (Khanh's decisions 17/11/2026; the database part approved by the lead 17/11/2026):
+  - **Sending:** a message shows at once, dim with "Đang gửi…", and messages are sent one after another in the order
+    they were written. The text is stored in Unicode NFC. Over 2000 characters the "Gửi" button is off (pasting more is
+    allowed, the counter turns red). A picture pasted together with text attaches the picture and keeps the text.
+  - **No answer:** sending waits 15 s, loading 20 s. A message that failed stays with its reason and "Thử lại" (when
+    sending again can help), "Sửa" (back into the box) and "Xoá" (drops only this unsent copy). With no answer at all
+    it says "Chưa rõ đã gửi được chưa": the server may have saved it.
+  - **Never twice:** each message carries a random id (`messages.client_message_id`, UUID). Sending the same id again
+    in the same chat returns the saved message instead of a copy, so "Thử lại" is always safe. Only the sender sees
+    the id. **Database: `patch_v0.3_message_client_id.sql` – approved by the lead and run on the shared database
+    17/11/2026.** (Without the column the server still works, only without this protection.)
+  - **Drafts:** per account and chat, in the browser only (not across devices): the text, the message being answered,
+    the files already uploaded and the unsent messages. Kept 7 days. Sending clears it. The conversation list shows
+    "Bản nháp: …" for a chat that is not open and has nothing unread.
+  - **Connection:** after 3 s without the real-time connection the chat says "Mất kết nối…" and "Đã kết nối lại" when
+    it is back. Sending still works meanwhile. On every reconnection the chat reads what it missed (the messages after
+    the last one shown, plus the latest page for deletions and reactions) without losing the older messages already
+    loaded or the reading position; more than 100 missed → the latest page is shown again. A failed catch-up keeps
+    the chat as it is and tries again (up to every 30 s).
+  - **Reading:** new messages never pull a reader who is looking at older ones down; "↓ n tin nhắn mới" does. A chat
+    counts as read only when its end is on screen in a visible tab. My own messages from another tab or device do not
+    move the list either.
+  - **Losing access while the chat is open:** someone taken out of a group (teams, and – 17/11/2026 – a teacher whose
+    assignment ended: class groups) sees it leave the list and its chat close at once; the members' counts and the
+    1-1 chats of those people are read again (may they still write?). Sent only once the change is saved. A sending
+    attempt refused because the user may no longer write (read-only year, 1-1 out of reach, account locked, no longer
+    a member) closes the box with the reason. ASSUMPTION / not done (other owners' modules): real-time signals when
+    an account is locked, a school year ends or a student is transferred out of a class group.
 
 ## 7. Extracurricular activities (FE-07)
 - The homeroom teacher posts an activity in the class feed (a `posts` row + `extracurricular_events` row) with a

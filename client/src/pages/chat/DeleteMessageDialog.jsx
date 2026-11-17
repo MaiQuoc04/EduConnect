@@ -24,11 +24,20 @@ export default function DeleteMessageDialog({ forEveryone, expired, onDelete, on
   }
 
   return (
-    <dialog ref={ref} className="group-dialog" onCancel={onCancel} aria-labelledby="delete-message-title">
+    <dialog ref={ref} className="group-dialog" onCancel={(e) => {
+        e.preventDefault(); // Esc: closes through onCancel, and never while deleting
+        if (!saving) onCancel();
+      }}
+      aria-labelledby="delete-message-title">
       <h2 id="delete-message-title" className="title-md">
         Xoá tin nhắn
       </h2>
-      {forEveryone && <p>Xoá ở phía mọi người: tin nhắn được thay bằng dòng “Tin nhắn đã được xoá”.</p>}
+      {forEveryone && (
+        <p>
+          Xoá ở phía mọi người: không ai còn thấy tin nhắn, kể cả bạn. Chỉ còn dòng “Bạn đã xoá một tin nhắn” (người khác
+          thấy “Tin nhắn đã được xoá”) và dòng này không xoá được nữa.
+        </p>
+      )}
       <p>Xoá ở phía tôi: tin nhắn chỉ biến mất ở phía bạn. Những người khác vẫn thấy.</p>
       {expired && <p className="caption muted">Tin nhắn đã quá thời hạn nên chỉ xoá được ở phía bạn.</p>}
       {error && (

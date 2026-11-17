@@ -2,11 +2,15 @@ import { pool, withTransaction } from '../../config/db.js';
 import { AppError, badRequest, forbidden, notFound } from '../../utils/AppError.js';
 import { classPeopleSql, GROUP_RULE_SQL } from '../classes/classGroups.js';
 import { findGroupForUser } from './groupAccess.js';
-import { byRankThenName, memberRows } from './groups.service.js';
+import { byRankThenName } from './groups.service.js';
+import { addTeamMembers, listTeamCandidates, removeTeamMember } from './teams.service.js';
 
 // FE-04 Class & Group Management – managing class group members (owner: Khanh). Screen SCR-22 Group Member List.
-// UC-32 Add Group Member, UC-33 Remove Group Member (School Manager or the class's homeroom teacher, permissions
-// note 5) and UC-34 Set Student Nickname (homeroom teacher only). Class groups of an open school year only.
+// UC-32 Add Group Member, UC-33 Remove Group Member and UC-34 Set Student Nickname (homeroom teacher only).
+// Khanh's decision 17/11/2026 (business-rules §4, replaces "the homeroom teacher removes students and parents, the School
+// Manager removes teachers"): nobody removes anyone from the three class groups – membership follows the class; only
+// the School Manager adds people of the class who are missing. In a team the leader adds and removes (teams.service.js).
+// Open school year only.
 
 const conflict = (code, message, details) => new AppError(409, code, message, details);
 const CLASS_GROUP_TYPES = ['GENERAL', 'STUDENT', 'PARENT'];
@@ -18,7 +22,7 @@ async function manageableGroup(db, user, groupId, { lock = false } = {}) {
   const group = await findGroupForUser(db, user, groupId);
   if (!CLASS_GROUP_TYPES.includes(group.groupType)) throw forbidden(); // not the teacher group or a team
   if (group.readOnly) throw conflict('MSG_GROUP_READ_ONLY', 'The school year has ended; the group is read only.');
-  if (!group.canManageMembers) throw forbidden();
+  if (!group.canAddMembers) throw forbidden();
   if (lock) await db.query('SELECT 1 FROM groups WHERE group_id = $1 FOR UPDATE', [group.groupId]);
   return group;
 }
@@ -60,6 +64,7 @@ async function candidateRows(db, group) {
 
 // UC-32: who can be added to the group.
 export async function listCandidates(user, groupId) {
+  if ((await findGroupForUser(pool, user, groupId)).groupType === 'TEAM_CHAT') return listTeamCandidates(user, groupId);
   const group = await manageableGroup(pool, user, groupId);
   const candidates = await candidateRows(pool, group);
   return { groupId: group.groupId, candidates: candidates.sort(byRankThenName) };
@@ -80,6 +85,7 @@ function parseUserIds(value) {
 // row (schema); the old row with its left_at stays.
 export async function addMembers(user, groupId, userIds) {
   const ids = parseUserIds(userIds);
+  if ((await findGroupForUser(pool, user, groupId)).groupType === 'TEAM_CHAT') return addTeamMembers(user, groupId, ids);
   return withTransaction(async (client) => {
     const group = await manageableGroup(client, user, groupId, { lock: true });
     const { rows: active } = await client.query(
@@ -105,33 +111,16 @@ export async function addMembers(user, groupId, userIds) {
   });
 }
 
-// UC-33 Remove Group Member: sets left_at (business-rules §6, the row is kept for chat history and read receipts).
-// The homeroom teacher cannot be removed: they moderate the class groups (business-rules §5).
-// ASSUMPTION (agreed 27/10): the homeroom teacher removes students and parents only; teachers are removed by the
-// School Manager, who also makes the teaching assignments.
+// UC-33 Remove Group Member (17/11/2026): only from a team, by its leader (teams.removeTeamMember). The three class
+// groups follow the class (transfer, promotion, assignments): 403 MSG_GROUP_MEMBER_CLASS_FIXED for everyone.
 export async function removeMember(user, groupId, memberUserId) {
   const targetId = Number(memberUserId);
   if (!Number.isSafeInteger(targetId) || targetId <= 0) {
     throw notFound('MSG_GROUP_MEMBER_NOT_FOUND', 'This person is not in the group.');
   }
-  return withTransaction(async (client) => {
-    const group = await manageableGroup(client, user, groupId, { lock: true });
-    const target = (await memberRows(client, group.groupId)).find((m) => m.userId === targetId);
-    if (!target) throw notFound('MSG_GROUP_MEMBER_NOT_FOUND', 'This person is not in the group.');
-    if (target.kinds.includes('HOMEROOM')) {
-      throw conflict('MSG_GROUP_MEMBER_HOMEROOM', 'The homeroom teacher cannot be removed from the class groups.');
-    }
-    const teacher = target.kinds.some((k) => ['SUBJECT_TEACHER', 'TEACHER'].includes(k));
-    if (teacher && user.activeRole !== 'SCHOOL_MANAGER') {
-      throw forbidden('MSG_GROUP_MEMBER_TEACHER', 'Only the School Manager can remove a teacher from the group.');
-    }
-    await client.query(
-      'UPDATE group_members SET left_at = NOW() WHERE group_id = $1 AND user_id = $2 AND left_at IS NULL',
-      [group.groupId, targetId],
-    );
-    // FE-06 (Messaging) should drop the user's socket from room `group:<id>` once it keeps group rooms.
-    return { groupId: group.groupId, userId: targetId };
-  });
+  const group = await findGroupForUser(pool, user, groupId);
+  if (group.groupType === 'TEAM_CHAT') return removeTeamMember(user, groupId, targetId);
+  throw forbidden('MSG_GROUP_MEMBER_CLASS_FIXED', 'Members of a class group follow the class and cannot be removed.');
 }
 
 // UC-34 Set Student Nickname: the homeroom teacher names a studying student of their class; the nickname is stored
