@@ -19,7 +19,7 @@
 
 /* ---------- card details of this feed ---------- */
 .school-feed .school-feed-pin.is-on { color: var(--ink-600); }
-.school-feed .school-feed-pin.is-limit { opacity: 0.45; cursor: not-allowed; } /* 5 pinned already (UC-63 limit) */
+.school-feed .school-feed-pin.is-limit { opacity: 0.45; cursor: not-allowed; } /* the pin limit is reached (UC-63, maxPinned from UC-58) */
 /* News has no like / comment foot: the same space below as above. */
 .school-feed .feed-card.is-news { padding-bottom: 16px; }
 .school-feed .feed-card.is-news .feed-card-foot { padding-top: 8px; }

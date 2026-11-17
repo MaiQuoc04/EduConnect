@@ -655,7 +655,9 @@ export function PostPreview({ postType, title, content, labels, roles, authorNam
   const announcement = postType === 'ANNOUNCEMENT';
   const cleanTitle = normalizeTitle(title);
   const text = normalizeContent(content);
-  const picture = files.find((f) => f.mimeType?.startsWith('image/') && f.previewUrl)?.previewUrl;
+  // The first image of the list is the picture of the card (17/11/2026: the author orders the files); without a
+  // preview of its own (a file kept by the draft) the card shows no picture rather than another image.
+  const picture = files.find((f) => f.mimeType?.startsWith('image/'))?.previewUrl;
   return (
     <aside className="spf-preview" aria-label="Xem trước trên bảng tin">
       <div className="spf-preview-head">

@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { createSchoolPost } from '../../api/schoolPosts.js';
-import AttachmentPicker, { useAttachmentUploads } from '../../components/AttachmentPicker.jsx';
+import AttachmentPicker, { arrangeAttachments, useAttachmentUploads } from '../../components/AttachmentPicker.jsx';
 import Icon from '../../components/Icon.jsx';
 import { UPLOAD_TARGETS } from '../../api/uploads.js';
 import { useAuth } from '../../context/AuthContext.jsx';
@@ -96,6 +96,14 @@ export default function CreateSchoolPostPage() {
     limits: fileLimits.limits,
     existingCount: draftFiles.length,
   });
+  // Order of the files chosen in the picker (keys of arrangeAttachments); the first image is the picture of the card.
+  const [fileOrder, setFileOrder] = useState([]);
+  const draftExisting = draftFiles.map((f) => ({ ...f, attachmentId: draftFileId(f) }));
+  const arranged = arrangeAttachments({ order: fileOrder, existing: draftExisting, items: uploads.items });
+  // What the post will have, in the order of the list: files of the draft and new uploads that are done.
+  const orderedFiles = arranged.live
+    .filter((e) => e.kind === 'existing' || e.item.status === 'done')
+    .map((e) => (e.kind === 'existing' ? draftFiles.find((f) => draftFileId(f) === e.file.attachmentId) : e.item.result));
   const [form, setForm] = useState(() => formOf(restored));
   const [touched, setTouched] = useState({});
   const [submitted, setSubmitted] = useState(false);
@@ -122,7 +130,7 @@ export default function CreateSchoolPostPage() {
   }, [options.loading, options.error, options.grades, options.classes]);
 
   // Draft autosave: a short delay after each change, and at once when the page is left or hidden.
-  const draftJson = JSON.stringify({ ...form, files: [...draftFiles, ...uploads.uploaded] });
+  const draftJson = JSON.stringify({ ...form, files: orderedFiles });
   const pendingDraft = useRef(null);
   const saveDraft = useCallback(() => {
     if (finished.current || pendingDraft.current === null) return;
@@ -195,9 +203,9 @@ export default function CreateSchoolPostPage() {
         gradeLevelIds: form.audience.gradeLevelIds,
         classIds: form.audience.classIds,
         targetRoles: rolesToSend(form.targetRoles),
-        // Files of the draft first, then the new ones in the order of the list; files that failed are left out
-        // (told on screen).
-        attachments: [...draftFiles, ...uploads.uploaded],
+        // In the order of the list (17/11/2026: the author can reorder it; the first image is the picture of the card);
+        // files that failed are left out (told on screen).
+        attachments: orderedFiles,
       });
       finished.current = true;
       clearSchoolDraft(user?.id);
@@ -248,6 +256,7 @@ export default function CreateSchoolPostPage() {
     setSubmitted(false);
     setServerError(null);
     setDraftFiles([]);
+    setFileOrder([]);
     uploads.items.forEach((item) => uploads.remove(item.id));
   }
 
@@ -369,9 +378,12 @@ export default function CreateSchoolPostPage() {
               limits={fileLimits.limits}
               limitsError={fileLimits.error}
               onReloadLimits={fileLimits.reload}
-              existing={draftFiles.map((f) => ({ ...f, attachmentId: draftFileId(f) }))}
+              existing={draftExisting}
               onToggleExisting={removeDraftFile}
               disabled={saving}
+              sortable
+              order={fileOrder}
+              onOrderChange={setFileOrder}
             />
           </section>
 
@@ -459,7 +471,7 @@ export default function CreateSchoolPostPage() {
           labels={labels}
           roles={form.targetRoles}
           authorName={user?.fullName}
-          files={[...draftFiles, ...uploads.items.filter((item) => item.status !== 'error')]}
+          files={arranged.live.map((e) => (e.kind === 'existing' ? e.file : e.item))}
         />
       </div>
 

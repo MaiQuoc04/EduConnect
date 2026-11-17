@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { Link, useLocation, useNavigate, useParams } from 'react-router-dom';
 import { getSchoolPost, updateSchoolPost } from '../../api/schoolPosts.js';
 import { UPLOAD_TARGETS } from '../../api/uploads.js';
-import AttachmentPicker, { useAttachmentUploads } from '../../components/AttachmentPicker.jsx';
+import AttachmentPicker, { arrangeAttachments, useAttachmentUploads } from '../../components/AttachmentPicker.jsx';
 import Icon from '../../components/Icon.jsx';
 import { useAuth } from '../../context/AuthContext.jsx';
 import { useToast } from '../../context/ToastContext.jsx';
@@ -58,11 +58,27 @@ const formOf = (post) => ({
 });
 
 // The whitelist of UC-61: title, content, gradeLevelIds + classIds (one audience, sent together), targetRoles (the
-// other dimension of the audience, sent on its own), attachments (new files) and removeAttachmentIds – only when changed.
+// other dimension of the audience, sent on its own), attachments (new files), removeAttachmentIds and attachmentOrder
+// (17/11/2026: every file after the change, in the order of the list) – only when changed.
+// The files the post will have, in the order of the list: existing ones kept and new uploads that are done. Sent
+// only when it is not the order the server keeps anyway (files of the post as they are, then new ones last).
+function attachmentOrderOf({ arranged, existing, items }) {
+  const sendable = arranged.live.filter((e) => e.kind === 'existing' || e.item.status === 'done');
+  const rank = new Map([
+    ...existing.map((f, i) => [`e${f.attachmentId}`, i]),
+    ...items.map((item, i) => [`n${item.id}`, existing.length + i]),
+  ]);
+  const natural = [...sendable].sort((x, y) => rank.get(x.key) - rank.get(y.key));
+  if (sendable.every((e, i) => e === natural[i])) return null;
+  return sendable.map((e) => (e.kind === 'existing' ? { attachmentId: e.file.attachmentId } : { storageKey: e.item.result.storageKey }));
+}
+
 function changedFields(form, post, files) {
   const changes = {};
   if (files.uploaded.length) changes.attachments = files.uploaded;
   if (files.removedIds.size) changes.removeAttachmentIds = [...files.removedIds];
+  const order = attachmentOrderOf(files);
+  if (order) changes.attachmentOrder = order;
   const title = normalizeTitle(form.title);
   if (title !== post.title) changes.title = title;
   const content = normalizeContent(form.content);
@@ -119,6 +135,7 @@ export default function UpdateSchoolPostPage() {
   const [post, setPost] = useState(null);
   const [existingFiles, setExistingFiles] = useState([]); // UC-59 attachments of the post
   const [removedIds, setRemovedIds] = useState(() => new Set());
+  const [fileOrder, setFileOrder] = useState([]); // keys of arrangeAttachments (the picker's order)
   const [form, setForm] = useState(null);
   const [loading, setLoading] = useState(validId);
   const [loadError, setLoadError] = useState('');
@@ -140,6 +157,7 @@ export default function UpdateSchoolPostPage() {
         setForm(formOf(data.post));
         setExistingFiles(data.attachments ?? []);
         setRemovedIds(new Set());
+        setFileOrder([]);
       })
       .catch((err) => {
         if (controller.signal.aborted) return;
@@ -154,7 +172,8 @@ export default function UpdateSchoolPostPage() {
 
   const keptFiles = existingFiles.length - removedIds.size;
   const uploads = useAttachmentUploads({ target: UPLOAD_TARGETS.SCHOOL_POST, limits: fileLimits.limits, existingCount: keptFiles });
-  const changes = post && form ? changedFields(form, post, { uploaded: uploads.uploaded, removedIds }) : {};
+  const arranged = arrangeAttachments({ order: fileOrder, existing: existingFiles, removedIds, items: uploads.items });
+  const changes = post && form ? changedFields(form, post, { uploaded: uploads.uploaded, removedIds, arranged, existing: existingFiles, items: uploads.items }) : {};
   const changedKeys = Object.keys(changes).filter((k) => k !== 'classIds');
   // A file being uploaded is a change too (leaving would lose it), even before it is ready to send.
   const dirty = changedKeys.length > 0 || uploads.items.length > 0;
@@ -381,6 +400,9 @@ export default function UpdateSchoolPostPage() {
               removedIds={removedIds}
               onToggleExisting={toggleExisting}
               disabled={saving}
+              sortable
+              order={fileOrder}
+              onOrderChange={setFileOrder}
             />
           </section>
 
@@ -471,10 +493,7 @@ export default function UpdateSchoolPostPage() {
           labels={labels}
           roles={form.targetRoles}
           authorName={post.authorName ?? user?.fullName}
-          files={[
-            ...existingFiles.filter((f) => !removedIds.has(f.attachmentId)).map((f) => ({ mimeType: f.mimeType, previewUrl: f.url })),
-            ...uploads.items.filter((item) => item.status !== 'error'),
-          ]}
+          files={arranged.live.map((e) => (e.kind === 'existing' ? { mimeType: e.file.mimeType, previewUrl: e.file.url } : e.item))}
         />
       </div>
 
