@@ -29,6 +29,8 @@
 -- 17/11/2026: + post_likes.comment_id (FE-08: a comment can be liked); the CHECK becomes "exactly one of post_id /
 --   school_post_id / comment_id" (post_likes_target_check), + UNIQUE (user_id, comment_id). Existing database: run
 --   patch_v0.3_comment_likes.sql.
+-- 17/11/2026: + attachments.sort_order (FE-08: the author orders the files of a post; the first image is the picture of
+--   the card). NULL = upload order, as before. Existing database: run patch_v0.3_attachment_order.sql.
 -- How to run: Supabase > SQL Editor > paste the whole file > Run (on an empty database).
 -- Conventions:
 --   * Soft delete everywhere (deleted_at / deleted_by). Hard delete only for: post_likes (unlike),
@@ -570,6 +572,7 @@ CREATE TABLE attachments (
   deleted_at     TIMESTAMPTZ NULL,
   storage_key    VARCHAR(500) NULL,               -- added 10/11/2026 (patch_v0.3_attachment_storage.sql)
   bucket         VARCHAR(50)  NULL,
+  sort_order     SMALLINT     NULL,               -- added 17/11/2026 (patch_v0.3_attachment_order.sql): 0 = first; NULL = upload order (sorted NULLS LAST, then created_at)
   FOREIGN KEY (post_id)        REFERENCES posts(post_id),
   FOREIGN KEY (school_post_id) REFERENCES school_posts(school_post_id),
   FOREIGN KEY (message_id)     REFERENCES messages(message_id),
