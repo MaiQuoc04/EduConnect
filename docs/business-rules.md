@@ -454,6 +454,10 @@ Boundaries that are easy to get wrong:
     (School Manager): every save with who / when, dates still in force, what replaced which dates, periods held and
     with attendance, the weekly pattern (cells changed from the replaced timetable highlighted) and a CSV export.
     Versions trimmed before 17/11/2026 only show the part left.
+  - Saving the same pattern for exactly the same dates as the version in force changes nothing (`unchanged: true`,
+    no new history entry); the editor keeps "Lưu" disabled until something changes. Automatic scheduling and import
+    always save (they also regenerate the periods). The apply dialog of automatic scheduling says that days before
+    its start date (also the past days of the current week) keep the old timetable.
   - Saving is refused (nothing changes) when a subject has **no assigned teacher** on some dates of the range, or a
     teacher would teach **two classes in the same period**; the answer lists the dates / periods.
   - Two School Managers on the same class: a save made from an editor opened before someone else's save is refused
