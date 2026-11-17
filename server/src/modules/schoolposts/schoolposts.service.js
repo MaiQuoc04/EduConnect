@@ -3,7 +3,7 @@ import { emitToSchoolPost, emitToUsers } from '../../sockets/index.js';
 import { AppError, badRequest, forbidden, notFound } from '../../utils/AppError.js';
 // Attachment rows shared with FE-05 / FE-06 (data only, no permission check) and the storage they point to.
 import * as files from '../../utils/attachments.js';
-import { objectInfo, signedUrl } from '../../utils/storage.js';
+import { objectInfo } from '../../utils/storage.js';
 import { getNumberSetting } from '../../utils/settings.js';
 // The 15 types of the attachments bucket (read only; the shared upload module owns the list).
 import { ATTACHMENT_TYPES } from '../uploads/uploads.service.js';
@@ -269,39 +269,14 @@ async function mapLimit(items, limit, fn) {
 }
 
 /**
- * Attachments per school post for the UC-58 cards: Map id → { attachmentCount, firstImageUrl }.
- * TWO queries for the whole page, whatever its size (DB_POOL_MAX=3): the counts (shared countAttachments) and the
- * first image of each post (DISTINCT ON). Only that first image is signed – one link per card, never every file – and
- * the signing is an HTTP call to Supabase Storage, not a DB query (at most 6 at a time). A link that cannot be signed
- * (object missing, Storage down) gives null: the card simply shows no picture. A row kept on local disk (no
- * storage_key) gives its file_url as before.
+ * Attachments per school post for the UC-58 cards: Map id → { attachmentCount, firstImageUrl }. The shared
+ * summarizeAttachments (17/11/2026; it was a copy here): TWO queries for the whole page whatever its size
+ * (DB_POOL_MAX=3), only the first image of each post signed (HTTP, at most 6 at a time), null when it cannot be signed.
+ * The first image follows the order chosen by the author (attachments.sort_order), so it is the "ảnh tiêu đề".
  */
-async function summarizeAttachments(schoolPostIds, db = pool) {
-  if (!schoolPostIds.length) return new Map();
-  const counts = await files.countAttachments(ATTACHMENT_COLUMN, schoolPostIds, db);
-  if (!counts.size) return new Map();
-  const { rows } = await db.query(
-    `SELECT DISTINCT ON (school_post_id) school_post_id AS "schoolPostId", file_url AS "fileUrl",
-            storage_key AS "storageKey", bucket
-     FROM attachments
-     WHERE school_post_id = ANY($1::bigint[]) AND deleted_at IS NULL AND mime_type LIKE 'image/%'
-     ORDER BY school_post_id, attachment_id`,
-    [[...counts.keys()]],
-  );
-  const firstImages = new Map(
-    await mapLimit(rows, 6, async ({ schoolPostId, fileUrl, storageKey, bucket }) => {
-      if (!storageKey) return [schoolPostId, fileUrl];
-      try {
-        return [schoolPostId, await signedUrl(bucket, storageKey)];
-      } catch (err) {
-        console.error(`[schoolposts] first image of post ${schoolPostId} not signed: ${err.message}`);
-        return [schoolPostId, null];
-      }
-    }),
-  );
-  return new Map(
-    [...counts].map(([id, attachmentCount]) => [id, { attachmentCount, firstImageUrl: firstImages.get(id) ?? null }]),
-  );
+function summarizeAttachments(schoolPostIds, db = pool) {
+  if (!schoolPostIds.length) return Promise.resolve(new Map());
+  return files.summarizeAttachments(ATTACHMENT_COLUMN, schoolPostIds, db);
 }
 
 // --- Attachments of UC-60 / UC-61 ----------------------------------------------------------------------------------
@@ -635,6 +610,8 @@ async function notifySchoolPost(client, { schoolPostId, title, createdBy }) {
  * - attachments: what /uploads/confirm returned (controller: at most MAX_ATTACHMENTS, keys in school-posts/). Their
  *   objects are checked before the transaction (readAttachments); the rows are inserted in it, in the order sent, by
  *   the shared insertAttachments. NEWS and ANNOUNCEMENT alike (§5 / §8 do not tell them apart here).
+ *   The order of the list is the order of the post (sort_order 0..n-1, 17/11/2026): its first image is the picture of
+ *   the card.
  */
 export async function createSchoolPost(user, input) {
   const { title, content, postType, gradeLevelIds, classIds, targetRoles = [], attachments = [] } = input;
@@ -659,7 +636,7 @@ export async function createSchoolPost(user, input) {
     if (fileRows.length) {
       await files.insertAttachments(
         attachmentTarget(schoolPostId),
-        fileRows.map((row) => ({ ...row, uploadedBy: user.userId })),
+        fileRows.map((row, index) => ({ ...row, uploadedBy: user.userId, sortOrder: index })),
         client,
       );
     }
@@ -717,7 +694,12 @@ const sameIds = (a, b) => {
  *   student_parents; the proposal to add them to business-rules §14 is with the lead). Same set as now → no write.
  *   ANNOUNCEMENT must keep at least one target (§8) → 400 MSG_AUDIENCE_REQUIRED; NEWS with none = whole school.
  * - attachments (new files, as in UC-60) / removeAttachmentIds (files of this post to take off): changeAttachments.
- *   Taking a file off soft deletes its row; the object stays in the bucket.
+ *   Taking a file off soft deletes its row; the object stays in the bucket. New files without attachmentOrder go after
+ *   the files the post has (their sort_order is NULL, sorted last).
+ * - attachmentOrder (17/11/2026): the whole list of files AFTER the change, in the new order; each item is
+ *   { attachmentId } (a file the post keeps) or { storageKey } (one of the new files of this request). Every file of
+ *   the post must be in it once (otherwise 400 MSG_INVALID_PARAM { field: 'attachmentOrder' }); sort_order becomes
+ *   0..n-1. Same order as now → no write. A new order alone is a change (updated_at moves, "updated" signal).
  * Something really changed → updated_at = NOW() (no trigger on school_posts). Nothing changed → still 200.
  * ASSUMPTION: an update sends no new notification (§8 does not say so; one per typo fix would be noise).
  * ASSUMPTION: also when the audience changes, people who are new in it get NO notification: the post's notification
@@ -734,10 +716,22 @@ export async function updateSchoolPost(user, schoolPostId, changes) {
   const addRows = await readAttachments(changes.attachments ?? []);
   const result = await withTransaction(async (client) => {
     const post = await lockSchoolPost(client, schoolPostId);
-    let changed = await changeAttachments(client, user, schoolPostId, {
+    const fileChange = await changeAttachments(client, user, schoolPostId, {
       add: addRows,
       removeIds: changes.removeAttachmentIds ?? [],
     });
+    let changed = fileChange.changed;
+    if (changes.attachmentOrder) {
+      const orderedIds = changes.attachmentOrder.map((item) => {
+        const attachmentId = item.storageKey ? fileChange.added.get(item.storageKey) : item.attachmentId;
+        if (!attachmentId) {
+          throw badRequest('MSG_INVALID_PARAM', 'attachmentOrder names a file that is not sent with this request.',
+            { field: 'attachmentOrder' });
+        }
+        return attachmentId;
+      });
+      if (await files.setAttachmentOrder(attachmentTarget(schoolPostId), orderedIds, client)) changed = true;
+    }
 
     const { audience, targetRoles } = changes;
     let targetsChanged = false;
@@ -803,10 +797,11 @@ export async function updateSchoolPost(user, schoolPostId, changes) {
  * - The post may not end with more than MAX_ATTACHMENTS files → 400 MSG_TOO_MANY_ATTACHMENTS { max }.
  * ASSUMPTION: rows are soft deleted one by one here because the shared softDeleteAttachments removes ALL the files of
  * a post (UC-62). Proposed to move into utils/attachments.js as a shared function (FE-05 needs the same for edits).
- * @returns {Promise<boolean>} true when a row was added or removed
+ * @returns {Promise<{ changed: boolean, added: Map<string, number> }>} changed = a row was added or removed; added =
+ *   storageKey → new attachment id (for UC-61 attachmentOrder)
  */
 async function changeAttachments(client, user, schoolPostId, { add, removeIds }) {
-  if (!add.length && !removeIds.length) return false;
+  if (!add.length && !removeIds.length) return { changed: false, added: new Map() };
   const { rows } = await client.query(
     `SELECT attachment_id AS id, deleted_at IS NOT NULL AS "isDeleted"
      FROM attachments WHERE school_post_id = $1
@@ -832,10 +827,12 @@ async function changeAttachments(client, user, schoolPostId, { add, removeIds })
       [schoolPostId, removing],
     );
   }
+  const added = new Map();
   if (add.length) {
-    await files.insertAttachments(attachmentTarget(schoolPostId), add.map((r) => ({ ...r, uploadedBy: user.userId })), client);
+    const ids = await files.insertAttachments(attachmentTarget(schoolPostId), add.map((r) => ({ ...r, uploadedBy: user.userId })), client);
+    add.forEach((r, i) => added.set(r.storageKey, ids[i]));
   }
-  return removing.length > 0 || add.length > 0;
+  return { changed: removing.length > 0 || add.length > 0, added };
 }
 
 /**
@@ -863,9 +860,9 @@ export async function deleteSchoolPost(user, schoolPostId) {
   return result;
 }
 
-// At most 5 pinned school posts at once (17/11/2026): the number and the error code of the FE-05 group feed
+// At most 3 pinned school posts at once (17/11/2026; first 5, lowered to 3 the same day for both feeds): the number and the error code of the FE-05 group feed
 // (business-rules §5, posts.service.js MAX_PINNED), so both feeds behave the same. Proposed for §8 in the FE-08 summary.
-export const MAX_PINNED_SCHOOL_POSTS = 5;
+export const MAX_PINNED_SCHOOL_POSTS = 3;
 // Transaction-level advisory lock taken while counting: the school feed has no parent row to lock (FE-05 locks the
 // group row), so two managers pinning two different posts at the same moment cannot both pass the limit.
 const PIN_LOCK_KEY = 580063; // "FE-08 UC-63"; any constant not used by another advisory lock in this app
@@ -880,6 +877,8 @@ async function countPinned(db = pool) {
  * UC-63 Pin / Unpin School Post. Only announcements can be pinned (§8): pinning NEWS → 400 MSG_CANNOT_PIN_NEWS.
  * At most MAX_PINNED_SCHOOL_POSTS pinned at once → 409 MSG_PIN_LIMIT { max } (same code and number as FE-05 §5).
  * Same value as now → no write, still 200: pinning a pinned post is not counted again. Unpinning is never limited.
+ * ASSUMPTION: posts pinned before the limit went from 5 to 3 stay pinned (nobody's pin is removed by the server); while
+ * 3 or more are pinned, no other post can be pinned until enough are unpinned.
  * ASSUMPTION: unpinning NEWS (isPinned false) is accepted as a no-op, since NEWS is never pinned.
  * ASSUMPTION: pinning is not an edit of the post, so updated_at is not touched.
  */
