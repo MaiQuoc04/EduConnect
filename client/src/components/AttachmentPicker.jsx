@@ -13,6 +13,16 @@ import './AttachmentPicker.css';
 // `limits` = { maxFiles, maxFileMb, maxVideoMb, types: [{ mimeType, kind: 'image' | 'video' | 'document',
 // extensions }] }, read from the server (FE-08: GET /school-posts/attachment-limits), never hard-coded.
 // What to send with the post: uploads.uploaded (the /uploads/confirm answers, in the order of the list).
+//
+// Ordering (17/11/2026, FE-08 "ảnh tiêu đề"): OFF unless the form passes sortable (FE-05 / FE-06 pass nothing and
+// see no change). With sortable, order (keys, see arrangeAttachments) and onOrderChange(keys):
+//   - the first IMAGE of the list is labelled "Ảnh tiêu đề" (the picture of the card in the feed);
+//   - every other image has "Đặt làm ảnh tiêu đề" (moves it to the top), every file has up / down buttons: works on
+//     every device and with the keyboard (buttons of at least 44px on touch screens);
+//   - on a mouse / trackpad (pointer: fine) a file can also be dragged (HTML5 drag-and-drop, no library), with the
+//     dragged row faded and a line where it will land. Touch screens get no draggable rows, so scrolling is untouched;
+//   - controls only when at least 2 files are in the list. The form sends the files in arrangeAttachments(...).live
+//     order.
 
 const MB = 1024 * 1024;
 // Images the browser can shrink (imageCompress). GIF is sent as it is: redrawing it would lose the animation.
@@ -185,6 +195,31 @@ export function useAttachmentUploads({ target, groupId, limits, existingCount = 
   };
 }
 
+/**
+ * The files of the list in the order chosen (sortable picker). Keys: 'e<attachmentId>' for an existing file,
+ * 'n<id>' for an item of useAttachmentUploads. Keys missing from order (new files) go last, in the order they came.
+ * live = what will be on the post (existing not removed, uploads not failed), in order; out = removed / failed (shown
+ * after, not sortable). Each entry: { key, kind: 'existing' | 'new', file | item, name, mimeType }.
+ */
+export function arrangeAttachments({ order = [], existing = [], removedIds = new Set(), items = [] }) {
+  const entries = new Map();
+  for (const f of existing) {
+    const key = `e${f.attachmentId}`;
+    entries.set(key, { key, kind: 'existing', file: f, name: f.fileName, mimeType: f.mimeType, out: removedIds.has(f.attachmentId) });
+  }
+  for (const item of items) {
+    const key = `n${item.id}`;
+    entries.set(key, { key, kind: 'new', item, name: item.name, mimeType: item.mimeType, out: item.status === 'error' });
+  }
+  const known = (order ?? []).filter((key) => entries.has(key));
+  const seen = new Set(known);
+  const keys = [...known, ...[...entries.keys()].filter((key) => !seen.has(key))];
+  const all = keys.map((key) => entries.get(key));
+  return { live: all.filter((e) => !e.out), out: all.filter((e) => e.out) };
+}
+
+const isImage = (entry) => (entry.mimeType ?? '').startsWith('image/');
+
 function statusText(item) {
   switch (item.status) {
     case 'waiting':
@@ -224,8 +259,12 @@ export default function AttachmentPicker({
   onToggleExisting,
   disabled,
   label = 'Tệp đính kèm',
+  sortable = false,
+  order,
+  onOrderChange,
 }) {
   const id = useId();
+  const [sorting, setSorting] = useState(null); // key of the row being dragged (sortable only)
   const inputRef = useRef(null);
   const [dragging, setDragging] = useState(false);
   const [notice, setNotice] = useState('');
@@ -249,7 +288,7 @@ export default function AttachmentPicker({
       <div
         className={`ap-drop${dragging ? ' is-dragging' : ''}${locked ? ' is-locked' : ''}`}
         onDragOver={(e) => {
-          if (locked) return;
+          if (locked || sorting) return; // a row being reordered is not a file to add
           e.preventDefault();
           setDragging(true);
         }}
@@ -304,71 +343,37 @@ export default function AttachmentPicker({
         </p>
       )}
 
-      {(existing.length > 0 || uploads.items.length > 0) && (
-        <ul className="ap-list" aria-label="Danh sách tệp đính kèm">
-          {existing.map((f) => {
-            const removed = removedIds.has(f.attachmentId);
-            return (
-              <li key={`e${f.attachmentId}`} className={`ap-item${removed ? ' is-removed' : ''}`}>
-                <span className="ap-thumb">
-                  <Icon name={fileIcon(f.mimeType)} />
-                </span>
-                <span className="ap-text">
-                  <span className="ap-name">{f.fileName}</span>
-                  <span className="caption muted">
-                    {formatFileSize(f.sizeBytes)} · {removed ? 'Sẽ gỡ khi lưu' : 'Đã đính kèm'}
-                  </span>
-                </span>
-                <button
-                  type="button"
-                  className="btn btn-tertiary ap-action"
-                  onClick={() => onToggleExisting?.(f.attachmentId)}
-                  disabled={disabled || (removed && full)}
-                  aria-label={removed ? `Giữ lại ${f.fileName}` : `Gỡ ${f.fileName}`}
-                >
-                  <Icon name={removed ? 'undo' : 'close'} size="sm" />
-                  {removed ? 'Giữ lại' : 'Gỡ'}
-                </button>
+      {sortable ? (
+        <SortableList
+          uploads={uploads}
+          existing={existing}
+          removedIds={removedIds}
+          onToggleExisting={onToggleExisting}
+          disabled={disabled}
+          full={full}
+          order={order}
+          onOrderChange={onOrderChange}
+          sorting={sorting}
+          setSorting={setSorting}
+        />
+      ) : (
+        (existing.length > 0 || uploads.items.length > 0) && (
+          <ul className="ap-list" aria-label="Danh sách tệp đính kèm">
+            {existing.map((f) => {
+              const removed = removedIds.has(f.attachmentId);
+              return (
+                <li key={`e${f.attachmentId}`} className={`ap-item${removed ? ' is-removed' : ''}`}>
+                  <ExistingRow f={f} removed={removed} full={full} disabled={disabled} onToggleExisting={onToggleExisting} />
+                </li>
+              );
+            })}
+            {uploads.items.map((item) => (
+              <li key={item.id} className={`ap-item is-${item.status}`}>
+                <NewRow item={item} uploads={uploads} disabled={disabled} />
               </li>
-            );
-          })}
-          {uploads.items.map((item) => (
-            <li key={item.id} className={`ap-item is-${item.status}`}>
-              <span className="ap-thumb">
-                {item.previewUrl ? <img src={item.previewUrl} alt="" /> : <Icon name={fileIcon(item.mimeType)} />}
-              </span>
-              <span className="ap-text">
-                <span className="ap-name">{item.name}</span>
-                <span className="caption ap-status" aria-live="polite">
-                  <span className="mono">{sizeText(item)}</span>
-                  <span aria-hidden="true"> · </span>
-                  <span className={item.status === 'error' ? 'ap-error' : 'muted'}>{statusText(item)}</span>
-                </span>
-                {item.status === 'uploading' && (
-                  <span className="ap-bar" aria-hidden="true">
-                    <span style={{ width: `${Math.round((item.progress ?? 0) * 100)}%` }} />
-                  </span>
-                )}
-              </span>
-              {item.status === 'error' && item.retryable && (
-                <button type="button" className="btn btn-tertiary ap-action" onClick={() => uploads.retry(item.id)} disabled={disabled}>
-                  <Icon name="refresh" size="sm" />
-                  Thử lại
-                </button>
-              )}
-              <button
-                type="button"
-                className="btn btn-tertiary ap-action ap-remove"
-                onClick={() => uploads.remove(item.id)}
-                disabled={disabled}
-                aria-label={`Gỡ ${item.name}`}
-                title="Gỡ tệp"
-              >
-                <Icon name="close" size="sm" />
-              </button>
-            </li>
-          ))}
-        </ul>
+            ))}
+          </ul>
+        )
       )}
       {uploads.failedCount > 0 && (
         <p className="caption ap-error" role="status">
@@ -376,5 +381,289 @@ export default function AttachmentPicker({
         </p>
       )}
     </div>
+  );
+}
+
+// One existing file of the post (body + "Gỡ" / "Giữ lại"). slots = [before the thumb, under the name, before the
+// button] (sortable list only); thumb = its picture (sortable list only; the plain list keeps the icon it always had).
+function ExistingRow({ f, removed, full, disabled, onToggleExisting, thumb, slots = [] }) {
+  return (
+    <>
+      {slots[0]}
+      <span className="ap-thumb">{thumb ? <img src={thumb} alt="" /> : <Icon name={fileIcon(f.mimeType)} />}</span>
+      <span className="ap-text">
+        <span className="ap-name">{f.fileName}</span>
+        <span className="caption muted">
+          {formatFileSize(f.sizeBytes)} · {removed ? 'Sẽ gỡ khi lưu' : 'Đã đính kèm'}
+        </span>
+        {slots[1]}
+      </span>
+      {slots[2]}
+      <button
+        type="button"
+        className="btn btn-tertiary ap-action"
+        onClick={() => onToggleExisting?.(f.attachmentId)}
+        disabled={disabled || (removed && full)}
+        aria-label={removed ? `Giữ lại ${f.fileName}` : `Gỡ ${f.fileName}`}
+      >
+        <Icon name={removed ? 'undo' : 'close'} size="sm" />
+        {removed ? 'Giữ lại' : 'Gỡ'}
+      </button>
+    </>
+  );
+}
+
+// One new file of the queue (body with its state + "Thử lại" / remove). slots as ExistingRow.
+function NewRow({ item, uploads, disabled, slots = [] }) {
+  return (
+    <>
+      {slots[0]}
+      <span className="ap-thumb">
+        {item.previewUrl ? <img src={item.previewUrl} alt="" /> : <Icon name={fileIcon(item.mimeType)} />}
+      </span>
+      <span className="ap-text">
+        <span className="ap-name">{item.name}</span>
+        <span className="caption ap-status" aria-live="polite">
+          <span className="mono">{sizeText(item)}</span>
+          <span aria-hidden="true"> · </span>
+          <span className={item.status === 'error' ? 'ap-error' : 'muted'}>{statusText(item)}</span>
+        </span>
+        {item.status === 'uploading' && (
+          <span className="ap-bar" aria-hidden="true">
+            <span style={{ width: `${Math.round((item.progress ?? 0) * 100)}%` }} />
+          </span>
+        )}
+        {slots[1]}
+      </span>
+      {slots[2]}
+      {item.status === 'error' && item.retryable && (
+        <button type="button" className="btn btn-tertiary ap-action" onClick={() => uploads.retry(item.id)} disabled={disabled}>
+          <Icon name="refresh" size="sm" />
+          Thử lại
+        </button>
+      )}
+      <button
+        type="button"
+        className="btn btn-tertiary ap-action ap-remove"
+        onClick={() => uploads.remove(item.id)}
+        disabled={disabled}
+        aria-label={`Gỡ ${item.name}`}
+        title="Gỡ tệp"
+      >
+        <Icon name="close" size="sm" />
+      </button>
+    </>
+  );
+}
+
+// Rows can be dragged only with a fine pointer (mouse, trackpad): on a touch screen a draggable row would fight with
+// scrolling, and the buttons do the same job there.
+function useFinePointer() {
+  const [fine, setFine] = useState(
+    () => typeof window !== 'undefined' && Boolean(window.matchMedia?.('(pointer: fine)').matches),
+  );
+  useEffect(() => {
+    const query = window.matchMedia?.('(pointer: fine)');
+    if (!query) return undefined;
+    const onChange = () => setFine(query.matches);
+    query.addEventListener?.('change', onChange);
+    return () => query.removeEventListener?.('change', onChange);
+  }, []);
+  return fine;
+}
+
+// The sortable list (prop sortable): live files in the chosen order, then the removed / failed ones (not sortable).
+function SortableList({
+  uploads,
+  existing,
+  removedIds,
+  onToggleExisting,
+  disabled,
+  full,
+  order,
+  onOrderChange,
+  sorting,
+  setSorting,
+}) {
+  const { live, out } = arrangeAttachments({ order, existing, removedIds, items: uploads.items });
+  const finePointer = useFinePointer();
+  const [drop, setDrop] = useState(null); // { key, after }: where the dragged row will land
+  const [said, setSaid] = useState(''); // what the last move did, for screen readers
+  const refocus = useRef(null); // { key, action }: the button to focus again after a move (its row moved in the DOM)
+  const listRef = useRef(null);
+  const canSort = live.length >= 2 && !disabled;
+  const canDrag = canSort && finePointer;
+  const cover = live.find(isImage);
+
+  useEffect(() => {
+    const want = refocus.current;
+    if (!want || !listRef.current) return;
+    refocus.current = null;
+    const row = listRef.current.querySelector(`[data-key="${want.key}"]`);
+    const target =
+      row?.querySelector(`[data-act="${want.action}"]:not(:disabled)`) ?? row?.querySelector('.ap-sort button:not(:disabled)');
+    target?.focus();
+  });
+
+  if (!live.length && !out.length) return null;
+
+  function moveTo(key, index, action) {
+    const keys = live.map((e) => e.key).filter((k) => k !== key);
+    const at = Math.max(0, Math.min(index, keys.length));
+    keys.splice(at, 0, key);
+    onOrderChange?.([...keys, ...out.map((e) => e.key)]);
+    const byKey = new Map(live.map((e) => [e.key, e]));
+    const nextCover = keys.map((k) => byKey.get(k)).find(isImage);
+    setSaid(
+      `Đã chuyển “${byKey.get(key).name}” tới vị trí ${at + 1}/${keys.length}.` +
+        (nextCover && nextCover.key !== cover?.key ? ` Ảnh tiêu đề: “${nextCover.name}”.` : ''),
+    );
+    if (action) refocus.current = { key, action };
+  }
+
+  function endDrag() {
+    setSorting(null);
+    setDrop(null);
+  }
+
+  function dropHere(e) {
+    if (!sorting) return;
+    e.preventDefault();
+    if (drop && drop.key !== sorting) {
+      const keys = live.map((x) => x.key).filter((k) => k !== sorting);
+      const index = keys.indexOf(drop.key) + (drop.after ? 1 : 0);
+      moveTo(sorting, index);
+    }
+    endDrag();
+  }
+
+  return (
+    <>
+      {live.length >= 2 && (
+        <p className="caption muted ap-sort-help">
+          {live.some(isImage) ? 'Ảnh đầu tiên trong danh sách là ảnh tiêu đề, hiện trên thẻ bài ngoài bảng tin. ' : ''}
+          {finePointer ? 'Kéo thả hoặc dùng các nút mũi tên để đổi thứ tự.' : 'Dùng các nút mũi tên để đổi thứ tự.'}
+        </p>
+      )}
+      <ul
+        ref={listRef}
+        className={`ap-list${sorting ? ' is-sorting' : ''}`}
+        aria-label="Danh sách tệp đính kèm"
+        onDragOver={(e) => {
+          if (sorting) e.preventDefault();
+        }}
+        onDrop={dropHere}
+      >
+        {live.map((entry, index) => {
+          const isCover = entry === cover;
+          const landing = drop && drop.key === entry.key && drop.key !== sorting;
+          const handle = canDrag ? (
+            <span className="ap-handle" aria-hidden="true" title="Kéo để đổi thứ tự">
+              <Icon name="drag_indicator" size="sm" />
+            </span>
+          ) : null;
+          const label = isCover ? (
+            <span className="ap-cover">
+              <Icon name="image" size="sm" />
+              Ảnh tiêu đề
+            </span>
+          ) : null;
+          const controls = canSort ? (
+            <span className="ap-sort">
+              {isImage(entry) && !isCover && (
+                <button
+                  type="button"
+                  className="btn btn-tertiary ap-sort-cover"
+                  data-act="cover"
+                  onClick={() => moveTo(entry.key, 0, 'down')}
+                  aria-label={`Đặt “${entry.name}” làm ảnh tiêu đề`}
+                >
+                  <Icon name="star" size="sm" />
+                  <span>Đặt làm ảnh tiêu đề</span>
+                </button>
+              )}
+              <button
+                type="button"
+                className="btn btn-tertiary ap-sort-step"
+                data-act="up"
+                onClick={() => moveTo(entry.key, index - 1, 'up')}
+                disabled={index === 0}
+                aria-label={`Đưa “${entry.name}” lên`}
+                title="Đưa lên"
+              >
+                <Icon name="arrow_upward" size="sm" />
+              </button>
+              <button
+                type="button"
+                className="btn btn-tertiary ap-sort-step"
+                data-act="down"
+                onClick={() => moveTo(entry.key, index + 1, 'down')}
+                disabled={index === live.length - 1}
+                aria-label={`Đưa “${entry.name}” xuống`}
+                title="Đưa xuống"
+              >
+                <Icon name="arrow_downward" size="sm" />
+              </button>
+            </span>
+          ) : null;
+          const className =
+            `ap-item ap-sortable${entry.kind === 'new' ? ` is-${entry.item.status}` : ''}${isCover ? ' is-cover' : ''}` +
+            `${sorting === entry.key ? ' is-dragged' : ''}${landing ? (drop.after ? ' is-drop-after' : ' is-drop-before') : ''}`;
+          const dragProps = canDrag
+            ? {
+                draggable: true,
+                onDragStart: (e) => {
+                  e.dataTransfer.effectAllowed = 'move';
+                  e.dataTransfer.setData('text/plain', entry.name); // Firefox starts a drag only with some data
+                  setSorting(entry.key);
+                },
+                onDragOver: (e) => {
+                  if (!sorting) return;
+                  e.preventDefault();
+                  e.dataTransfer.dropEffect = 'move';
+                  const box = e.currentTarget.getBoundingClientRect();
+                  const after = e.clientY > box.top + box.height / 2;
+                  if (drop?.key !== entry.key || drop.after !== after) setDrop({ key: entry.key, after });
+                },
+                onDragEnd: endDrag,
+              }
+            : {};
+          const slots = [handle, label, controls];
+          return (
+            <li key={entry.key} data-key={entry.key} className={className} {...dragProps}>
+              {entry.kind === 'existing' ? (
+                <ExistingRow
+                  f={entry.file}
+                  removed={false}
+                  full={full}
+                  disabled={disabled}
+                  onToggleExisting={onToggleExisting}
+                  thumb={isImage(entry) ? entry.file.url : null}
+                  slots={slots}
+                />
+              ) : (
+                <NewRow item={entry.item} uploads={uploads} disabled={disabled} slots={slots} />
+              )}
+            </li>
+          );
+        })}
+        {out.map((entry) => (
+          <li
+            key={entry.key}
+            data-key={entry.key}
+            className={entry.kind === 'existing' ? 'ap-item is-removed' : `ap-item is-${entry.item.status}`}
+          >
+            {entry.kind === 'existing' ? (
+              <ExistingRow f={entry.file} removed full={full} disabled={disabled} onToggleExisting={onToggleExisting} />
+            ) : (
+              <NewRow item={entry.item} uploads={uploads} disabled={disabled} />
+            )}
+          </li>
+        ))}
+      </ul>
+      <span className="ap-said" role="status" aria-live="polite">
+        {said}
+      </span>
+    </>
   );
 }
