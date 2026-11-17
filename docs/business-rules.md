@@ -544,7 +544,9 @@ Boundaries that are easy to get wrong:
   - Algorithm (Node, no external service): step A greedy with balancing + pairwise improvement; step B constraint
     satisfaction – hardest lessons first, least-penalty cell, one-step repair, then local search (swaps) until the
     time limit (default 5 s). Same data + seed = same draft; "Xếp lại" changes the seed.
-  - Sample data: `database/sample_auto_schedule.sql` (grade 10: 6 classes, 12 more teachers).
+  - Sample data: `database/sample_auto_schedule.sql` (grade 10: 6 classes, 12 more teachers) and
+    `database/sample_grade_11_12.sql` (grades 11 and 12: 9 more classes, 20 more teachers; grade 11 already assigned
+    for "Chỉ xếp tiết", grade 12 not assigned for "Phân công + xếp tiết"). Both only add rows.
 
 ## 11. Grades (FE-11)
 - SM configures the grade structure per **subject × grade level × semester**: components with a weight and a number
