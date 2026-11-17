@@ -578,6 +578,7 @@ export default function TimetableAutoPage() {
               <ul className="ta-list">
                 {form.mode !== 'TIMETABLE' && <li>{changed} phân công thay đổi, áp dụng từ {dmy(result.range.start)} đến {dmy(result.range.assignEnd)} (hết năm học).</li>}
                 {form.mode !== 'ASSIGN' && <li>Thời khoá biểu {Object.keys(result.timetables ?? {}).length} lớp từ {dmy(result.range.start)} đến {dmy(result.range.end)}; tiết đã điểm danh được giữ.</li>}
+                {form.mode !== 'ASSIGN' && <li>Các ngày trước {dmy(result.range.start)} (kể cả các ngày đã qua của tuần này) giữ nguyên thời khoá biểu cũ; thời khoá biểu cũ vẫn xem lại được ở "Lịch sử" của từng lớp.</li>}
               </ul>
               {overwrite.length > 0 && (
                 <label className="ta-check ta-overwrite">

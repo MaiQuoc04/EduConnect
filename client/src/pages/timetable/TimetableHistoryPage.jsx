@@ -24,7 +24,8 @@ const range = (r) => (r.startDate === r.endDate ? dmy(r.startDate) : `${dmy(r.st
 const ranges = (list) => list.map(range).join('; ');
 
 function csvCell(v) {
-  const s = String(v ?? '');
+  let s = String(v ?? '');
+  if (/^[=+\-@\t\r]/.test(s)) s = `'${s}`; // a name like "=..." must not run as a formula in Excel
   return /[",\n;]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
 }
 
