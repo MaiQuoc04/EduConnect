@@ -25,7 +25,7 @@ import { ATTACHMENT_TYPES } from '../uploads/uploads.service.js'; // the 15 type
 
 const POST = feed.FEED_COLUMNS.GROUP_POST;
 const FEED_GROUP_TYPES = ['GENERAL', 'TEACHER_SCHOOL']; // business-rules §4: the other groups are chat only
-export const MAX_PINNED = 5; // business-rules §5 (11/11/2026)
+export const MAX_PINNED = 3; // business-rules §5 (11/11/2026; 5 → 3 on 17/11/2026, agreed by Khanh and Anh for both feeds)
 // ASSUMPTION: at most 10 files per post, as FE-08 school posts (§5 sets sizes, not a number).
 export const MAX_ATTACHMENTS = 10;
 const FILES = files.ATTACHMENT_COLUMNS.GROUP_POST;
