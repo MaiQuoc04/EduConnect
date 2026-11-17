@@ -1,4 +1,4 @@
-import { Navigate, Route, Routes } from 'react-router-dom';
+import { Navigate, Route, Routes, useParams } from 'react-router-dom';
 import AppLayout from './components/AppLayout.jsx';
 import { useAuth } from './context/AuthContext.jsx';
 import { HOME_BY_ROLE } from './navigation.js';
@@ -36,7 +36,6 @@ import TransferStudentPage from './pages/students/TransferStudentPage.jsx';
 import UpdateStudentPage from './pages/students/UpdateStudentPage.jsx';
 import UpdateStudentRelationshipPage from './pages/students/UpdateStudentRelationshipPage.jsx';
 import SubjectDetailPage from './pages/subjects/SubjectDetailPage.jsx';
-import SubjectFormPage from './pages/subjects/SubjectFormPage.jsx';
 import SubjectListPage from './pages/subjects/SubjectListPage.jsx';
 import HomeroomAssignmentPage from './pages/teachers/HomeroomAssignmentPage.jsx';
 import DepartmentsPage from './pages/teachers/DepartmentsPage.jsx';
@@ -59,6 +58,12 @@ import GradeHistoryPage from './pages/grades/GradeHistoryPage.jsx';
 import GradeResultsPage, { StudentResultsPage } from './pages/grades/GradeResultsPage.jsx';
 import GradeStructurePage from './pages/grades/GradeStructurePage.jsx';
 import ProtectedRoute from './routes/ProtectedRoute.jsx';
+
+// SCR-26 is a pop-up since 17/11/2026: the old edit link opens it on the subject detail.
+function SubjectEditRedirect() {
+  const { id } = useParams();
+  return <Navigate to={`/subjects/${id}?edit`} replace />;
+}
 
 function RoleHome() {
   const { activeRole } = useAuth();
@@ -249,7 +254,7 @@ export default function App() {
           path="subjects/new"
           element={
             <ProtectedRoute roles={['SCHOOL_MANAGER']}>
-              <SubjectFormPage />
+              <Navigate to="/subjects?new" replace />
             </ProtectedRoute>
           }
         />
@@ -265,7 +270,7 @@ export default function App() {
           path="subjects/:id/edit"
           element={
             <ProtectedRoute roles={['SCHOOL_MANAGER']}>
-              <SubjectFormPage key="edit" />
+              <SubjectEditRedirect />
             </ProtectedRoute>
           }
         />

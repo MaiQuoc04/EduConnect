@@ -6,18 +6,21 @@ import { errorText } from '../../messages.js';
 import { yearLabel } from '../school-years/schoolYearLabels.js';
 import { fold, periodsText } from './subjectText.js';
 import { trackLabel } from '../class-tracks/trackLabel.js';
+import SubjectFormDialog from './SubjectFormDialog.jsx';
 
 // SCR-23 Subject List – UC-22 View Subject List (School Manager). Figures (class types, periods, classes) are for
 // the chosen school year; search and filters run here because a school has only ~15 subjects, so no paging.
 export default function SubjectListPage() {
   const navigate = useNavigate();
   const [years, setYears] = useState([]);
-  const [params] = useSearchParams();
+  const [params, setParams] = useSearchParams();
   const [yearId, setYearId] = useState(() => params.get('schoolYearId') ?? ''); // back from the detail page
   const [state, setState] = useState({ loading: true, data: null, error: '' });
   const [query, setQuery] = useState('');
   const [trackId, setTrackId] = useState('');
   const [onlyUnset, setOnlyUnset] = useState(false); // subjects with no class type in the chosen year
+  const [adding, setAdding] = useState(() => params.has('new')); // UC-24 pop-up (?new: the old /subjects/new link)
+  const [reloadKey, setReloadKey] = useState(0);
 
   useEffect(() => {
     api
@@ -36,7 +39,16 @@ export default function SubjectListPage() {
     return () => {
       alive = false;
     };
-  }, [yearId]);
+  }, [yearId, reloadKey]);
+
+  function closeAdd() {
+    setAdding(false);
+    if (params.has('new')) {
+      const next = new URLSearchParams(params);
+      next.delete('new');
+      setParams(next, { replace: true });
+    }
+  }
 
   const subjects = useMemo(() => state.data?.subjects ?? [], [state.data]);
   const tracks = useMemo(() => {
@@ -81,10 +93,10 @@ export default function SubjectListPage() {
             tính theo năm học đang chọn.
           </p>
         </div>
-        <Link to="/subjects/new" className="btn btn-primary">
+        <button type="button" className="btn btn-primary" onClick={() => setAdding(true)}>
           <Icon name="add" size="sm" />
           Thêm môn học
-        </Link>
+        </button>
       </div>
 
       <div className="card card-outline subject-toolbar">
@@ -221,6 +233,16 @@ export default function SubjectListPage() {
             )}
           </p>
         </div>
+      )}
+
+      {adding && (
+        <SubjectFormDialog
+          onClose={closeAdd}
+          onSaved={() => {
+            closeAdd();
+            setReloadKey((k) => k + 1); // the new subject shows in the list
+          }}
+        />
       )}
 
       <div className="notice subject-note">
