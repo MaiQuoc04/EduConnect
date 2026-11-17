@@ -417,7 +417,7 @@ export default function TimetableEditorPage() {
             <div className="card tt-versions">
               <div className="tt-quota-head">
                 <span className="label-upper">Nhật ký phiên bản</span>
-                <span className="caption tt-muted">Lớp {cls.className}</span>
+                <Link to={`/timetables/classes/${cls.classId}/history`} className="tt-link caption">Xem toàn bộ lịch sử</Link>
               </div>
               <ol>
                 {[...data.versions].reverse().map((v) => {

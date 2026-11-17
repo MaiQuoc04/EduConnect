@@ -215,6 +215,7 @@ export default function TimetableManagementPage() {
                     <span className="tt-ledger-actions">
                       {t && <><Link className="tt-act" to={`/timetable?classId=${c.classId}${t.running ? '' : `&date=${t.startDate}`}`}>Xem</Link>{!yearEnded && <span className="tt-muted">|</span>}</>}
                       {!yearEnded && <Link className={`tt-act${t ? ' is-quiet' : ''}`} to={`/timetables/classes/${c.classId}/edit`}>{t ? 'Sửa' : 'Tạo'}</Link>}
+                      {t && <><span className="tt-muted">|</span><Link className="tt-act is-quiet" to={`/timetables/classes/${c.classId}/history`}>Lịch sử</Link></>}
                       {yearEnded && !t && <span className="tt-muted caption">—</span>}
                     </span>
                   </td>
