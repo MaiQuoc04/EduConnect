@@ -461,6 +461,9 @@ Boundaries that are easy to get wrong:
   - Signed in as a teacher (18/11/2026): in a class timetable the teacher's own lessons are coloured green with
     "Bạn dạy" and the legend counts them for the week (`mine` / `myLessons` of the week API, worked out on the
     server from the signed-in account). In the teaching schedule every lesson is theirs, so all are coloured.
+  - **Teacher schedule lookup (18/11/2026):** on the teaching assignment screen (SCR-19) the School Manager opens "Tra
+    lịch dạy giáo viên", types a name, teacher code, department or subject and sees that teacher's teaching schedule
+    week by week (same lessons as SCR-57; `GET /timetables/teachers/:teacherId/week`, School Manager only).
   - Saving is refused (nothing changes) when a subject has **no assigned teacher** on some dates of the range, or a
     teacher would teach **two classes in the same period**; the answer lists the dates / periods.
   - Two School Managers on the same class: a save made from an editor opened before someone else's save is refused
