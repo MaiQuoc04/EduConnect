@@ -98,6 +98,55 @@ export function useLeaveGuard(dirty) {
   return { asking, setAsking, stay, leave };
 }
 
+/**
+ * SCR-31 "Huỷ" while a draft exists (schoolPostDraft.js): keep the draft and leave, or throw it away and leave.
+ * Esc / "Tiếp tục soạn" stays on the form. The safe button gets the focus; "Bỏ bản nháp" is the red one.
+ * `uploading`: a file is still being sent – it cannot be kept by the draft, so the dialog says so.
+ */
+export function DraftCancelDialog({ open, uploading, onStay, onKeep, onDiscard }) {
+  const ref = useRef(null);
+  useEffect(() => {
+    const dialog = ref.current;
+    if (open && !dialog.open) dialog.showModal();
+    if (!open && dialog.open) dialog.close();
+  }, [open]);
+  return (
+    <dialog
+      ref={ref}
+      className="sf-dialog"
+      aria-labelledby="sf-draft-cancel-title"
+      aria-describedby="sf-draft-cancel-desc"
+      onCancel={(e) => {
+        e.preventDefault();
+        onStay();
+      }}
+    >
+      <div className="sf-dialog-head">
+        <Icon name="draft" />
+        <h2 id="sf-draft-cancel-title" className="title-sm">
+          Giữ lại bản nháp?
+        </h2>
+      </div>
+      <p id="sf-draft-cancel-desc" className="muted">
+        Bản nháp được lưu trên trình duyệt này, lần sau mở “Soạn bài” bạn sẽ soạn tiếp từ chỗ đang dừng. Chọn “Bỏ bản
+        nháp” nếu không cần nữa: nội dung và các tệp đã chọn sẽ bị xoá.
+        {uploading && ' Tệp đang tải lên dở sẽ không được giữ.'}
+      </p>
+      <div className="sf-dialog-actions">
+        <button type="button" className="btn btn-tertiary" onClick={onStay}>
+          Tiếp tục soạn
+        </button>
+        <button type="button" className="btn btn-secondary" onClick={onKeep} autoFocus>
+          Giữ bản nháp
+        </button>
+        <button type="button" className="btn btn-primary sf-btn-danger" onClick={onDiscard}>
+          Bỏ bản nháp
+        </button>
+      </div>
+    </dialog>
+  );
+}
+
 // Native <dialog> as the FE-02 confirmations. The safe button ("Tiếp tục soạn") gets the focus.
 export function LeaveDialog({ open, onStay, onLeave }) {
   const ref = useRef(null);
