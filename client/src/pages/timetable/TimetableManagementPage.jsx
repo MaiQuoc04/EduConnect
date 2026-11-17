@@ -123,6 +123,7 @@ export default function TimetableManagementPage() {
         </div>
         <div className="tt-head-actions">
           <Link to="/timetables/period-times" className="btn btn-secondary"><Icon name="schedule" size="sm" /> Giờ học</Link>
+          <Link to="/timetables/auto" className="btn btn-secondary"><Icon name="auto_awesome" size="sm" /> Xếp tự động</Link>
           <button type="button" className="btn btn-secondary" onClick={() => setImport(true)} disabled={!openYears.length}>
             <Icon name="upload_file" size="sm" /> Nhập TKB từ file
           </button>
