@@ -505,7 +505,8 @@
 .ta-row { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
 .ta-row-4 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 .ta-fieldset { border: 0; margin: 0; padding: 0; display: grid; gap: 6px; min-width: 0; }
-.ta-radio, .ta-check { display: flex; gap: 8px; align-items: flex-start; font-size: 14px; }
+/* Scoped: .ta-check is also a class of the teaching assignment screen (FE-03). */
+.tt-page .ta-radio, .tt-page .ta-check { display: flex; gap: 8px; align-items: flex-start; font-size: 14px; }
 .ta-grade { display: grid; gap: 4px; }
 .ta-grade .tt-link { justify-self: start; font-size: 13px; }
 .ta-chips { display: flex; flex-wrap: wrap; gap: 6px; }
@@ -599,3 +600,21 @@
 .tt-tl-item.is-mine::after { content: ''; position: absolute; right: 0; top: 0; bottom: 0; width: 4px; background: var(--green); }
 .tt-mine-tag { margin-left: 8px; font-style: normal; font-size: 11px; font-weight: 600; color: var(--green); }
 .tt-matrix-cell.is-mine { background: var(--green-bg); color: var(--green); font-weight: 600; }
+
+/* Teacher schedule lookup on the teaching assignment screen (Dung, 18/11/2026) */
+.tsl { display: grid; gap: 14px; padding: 18px; margin-bottom: 16px; }
+.tsl-head { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+.tsl-head h2 { display: flex; align-items: center; gap: 8px; margin: 0; }
+.tsl-search { position: relative; display: flex; align-items: center; gap: 8px; max-width: 560px; padding: 0 12px; border-radius: 8px; background: var(--white); outline: 1px solid var(--graphite-200); }
+.tsl-search:focus-within { outline: 2px solid var(--ink-600); }
+.tsl-input { flex: 1; min-width: 0; border: 0; outline: 0; background: transparent; font: inherit; font-size: 14px; padding: 10px 0; }
+.tsl-clear { border: 0; background: none; cursor: pointer; color: var(--graphite-500); display: inline-flex; }
+.tsl-list { position: absolute; z-index: 30; top: calc(100% + 4px); left: 0; right: 0; margin: 0; padding: 4px; list-style: none; background: var(--white); border-radius: 8px; box-shadow: var(--shadow-dialog); outline: 1px solid var(--graphite-200); max-height: 360px; overflow-y: auto; }
+.tsl-hit { display: grid; gap: 2px; width: 100%; padding: 8px 10px; border: 0; border-radius: 6px; background: none; text-align: left; font: inherit; cursor: pointer; }
+.tsl-hit:hover, .tsl-hit.is-active { background: var(--ink-50); }
+.tsl-hit span { font-size: 12px; color: var(--graphite-600); }
+.tsl-hit em { font-style: normal; font-size: 12px; color: var(--graphite-500); }
+.tsl-none { padding: 10px; font-size: 13px; color: var(--graphite-500); }
+.tsl-who { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: flex-start; gap: 12px; padding: 12px 14px; border-radius: 8px; background: var(--graphite-50); }
+.tsl-who p { margin: 4px 0 0; }
+.tsl-tools { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }

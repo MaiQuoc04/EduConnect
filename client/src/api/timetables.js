@@ -26,6 +26,12 @@ export async function saveClassTimetable(classId, { startDate, endDate, entries,
   return data;
 }
 
+// School Manager – the teaching schedule of any teacher for the week of `date` (Dung, 18/11/2026)
+export async function getTeacherWeek(teacherId, date) {
+  const { data } = await api.get(`/timetables/teachers/${teacherId}/week`, { params: date ? { date } : {} });
+  return data;
+}
+
 // UC-74 – classes this user may view (own class, children's classes, taught classes)
 export async function getViewableClasses() {
   const { data } = await api.get('/timetables/viewable-classes');
