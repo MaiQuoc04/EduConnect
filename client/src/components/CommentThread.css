@@ -156,3 +156,8 @@
 }
 .ct-new-pill:hover { background: var(--ink-800); }
 .ct-new-pill:focus-visible { outline: 2px solid var(--ink-400); outline-offset: 2px; }
+
+/* Like of a comment (17/11/2026, only when the page gives api.like): same look as the other actions, ink when liked. */
+.ct-like.is-liked { color: var(--ink-700); }
+.ct-like.is-liked .icon { color: var(--ink-600); }
+.ct-like .mono { font-size: 12px; }

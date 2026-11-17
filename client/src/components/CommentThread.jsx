@@ -243,7 +243,68 @@ function Composer({ text, setText, onSubmit, placeholder, replyingTo, onCancel, 
   );
 }
 
-function CommentNode({ node, depth, parentName, reply, onDelete }) {
+/**
+ * Like of one comment (17/11/2026), shown only when the page gives api.like (FE-08 does; FE-05 does not yet, so its
+ * threads look as before). Optimistic like the post Like button (schoolFeedShared useLike): the click shows at once;
+ * clicks made while a request is on its way only change what is wanted, and requests follow until the server agrees;
+ * an error puts back the last numbers the server confirmed. Fresh numbers from a reload / sync are taken unless a
+ * request is on its way.
+ */
+function CommentLike({ node, like }) {
+  const likedByMe = node.likedByMe ?? false;
+  const likeCount = node.likeCount ?? 0;
+  const confirmed = useRef({ likedByMe, likeCount });
+  const wanted = useRef(likedByMe);
+  const busy = useRef(false);
+  const [view, setView] = useState({ likedByMe, likeCount });
+
+  useEffect(() => {
+    if (busy.current) return;
+    confirmed.current = { likedByMe, likeCount };
+    wanted.current = likedByMe;
+    setView({ likedByMe, likeCount });
+  }, [node.commentId, likedByMe, likeCount]);
+
+  async function send() {
+    busy.current = true;
+    try {
+      while (wanted.current !== confirmed.current.likedByMe) {
+        const answer = await like.send(node.commentId, wanted.current);
+        confirmed.current = { likedByMe: answer.likedByMe, likeCount: answer.likeCount };
+      }
+      setView({ ...confirmed.current });
+    } catch (err) {
+      wanted.current = confirmed.current.likedByMe;
+      setView({ ...confirmed.current });
+      like.onError(err);
+    } finally {
+      busy.current = false;
+    }
+  }
+
+  function toggle() {
+    wanted.current = !wanted.current;
+    const { likedByMe: was, likeCount: count } = confirmed.current;
+    setView({ likedByMe: wanted.current, likeCount: count + (wanted.current ? 1 : 0) - (was ? 1 : 0) });
+    if (!busy.current) send();
+  }
+
+  return (
+    <button
+      type="button"
+      className={`ct-action ct-like${view.likedByMe ? ' is-liked' : ''}`}
+      onClick={toggle}
+      aria-pressed={view.likedByMe}
+      aria-label={`${view.likedByMe ? 'Bỏ thích' : 'Thích'} bình luận của ${node.authorName}, ${view.likeCount} lượt thích`}
+    >
+      <Icon name="favorite" size="sm" filled={view.likedByMe} />
+      Thích
+      {view.likeCount > 0 && <span className="mono">{view.likeCount.toLocaleString('vi-VN')}</span>}
+    </button>
+  );
+}
+
+function CommentNode({ node, depth, parentName, reply, like, onDelete }) {
   const deleted = node.isDeleted;
   const edited = Boolean(node.updatedAt) && node.updatedAt !== node.createdAt;
   const flat = depth >= MAX_INDENT_DEPTH; // the replies of this node are not indented any further
@@ -282,6 +343,7 @@ function CommentNode({ node, depth, parentName, reply, onDelete }) {
             </div>
             <p className="ct-content">{node.content}</p>
             <div className="ct-actions">
+              {like && <CommentLike node={node} like={like} />}
               {reply.enabled && (
                 <button type="button" className="ct-action" onClick={() => reply.toggle(node.commentId)} aria-expanded={replying}>
                   <Icon name="reply" size="sm" />
@@ -323,6 +385,7 @@ function CommentNode({ node, depth, parentName, reply, onDelete }) {
               depth={depth + 1}
               parentName={deleted ? null : node.authorName}
               reply={reply}
+              like={like}
               onDelete={onDelete}
             />
           ))}
@@ -391,6 +454,9 @@ function DeleteDialog({ comment, busy, onCancel, onConfirm }) {
  *   - list({ page, pageSize }, { signal }) → Promise<{ items, total, commentCount }>
  *   - create({ content, parentCommentId? }) → Promise<node>   (parentCommentId only for a reply)
  *   - remove(commentId) → Promise<{ commentCount }>
+ *   - like(commentId, liked) → Promise<{ likeCount, likedByMe }>   OPTIONAL (17/11/2026). Given: every comment that is
+ *     not deleted shows a "Thích" button with its count (nodes carry likeCount / likedByMe from the list). Not given
+ *     (FE-05 today): no button, nothing else changes. liked true = like (PUT), false = unlike (DELETE).
  * @param {number} [props.initialCount] the post's commentCount already known (shown until the first page arrives)
  * @param {(count: number) => void} [props.onCountChange] called when the count changes (to refresh a counter elsewhere)
  * @param {Record<string, string>} [props.messages] extra Vietnamese texts by error code for feature-specific codes
@@ -762,6 +828,19 @@ export default function CommentThread({
     }
   }
 
+  // Comment likes: only when the page gives api.like (FE-08) and the thread can be written to (canWrite false = read
+  // only, FE-05); otherwise null and no button anywhere.
+  const like = api.like && canWrite
+    ? {
+        send: (commentId, liked) => apiRef.current.like(commentId, liked),
+        onError: (err) => {
+          if (!mounted.current) return;
+          if (err?.code === 'MSG_COMMENT_NOT_FOUND') scheduleSync(); // deleted meanwhile: show the tree as it is now
+          toast(textOf(err, 'Không cập nhật được lượt thích. Vui lòng thử lại.', 'like'), { type: 'error' });
+        },
+      }
+    : null;
+
   const reply = {
     enabled: canWrite,
     enterToSend,
@@ -829,7 +908,7 @@ export default function CommentThread({
       {status === 'ready' && roots.length > 0 && (
         <ul className="ct-list" ref={listRef}>
           {roots.map((node) => (
-            <CommentNode key={node.commentId} node={node} depth={0} parentName={null} reply={reply} onDelete={(c) => setDeleting({ comment: c, busy: false })} />
+            <CommentNode key={node.commentId} node={node} depth={0} parentName={null} reply={reply} like={like} onDelete={(c) => setDeleting({ comment: c, busy: false })} />
           ))}
         </ul>
       )}
