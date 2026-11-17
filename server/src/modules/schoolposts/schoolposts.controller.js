@@ -267,3 +267,14 @@ export async function removeComment(req, res) {
   const commentId = parseId(req.params.commentId, 'commentId');
   res.json(await service.deleteSchoolPostComment(req.user, schoolPostId, commentId));
 }
+
+// Like / unlike a comment of a school post (17/11/2026, post_likes.comment_id): PUT likes, DELETE unlikes, both
+// idempotent like UC-64. Who may: the same people as UC-65 (checked in the service).
+async function setCommentLike(req, res, liked) {
+  const schoolPostId = parseId(req.params.schoolPostId, 'schoolPostId');
+  const commentId = parseId(req.params.commentId, 'commentId');
+  res.json(await service.setSchoolPostCommentLike(req.user, schoolPostId, commentId, liked));
+}
+
+export const likeComment = (req, res) => setCommentLike(req, res, true);
+export const unlikeComment = (req, res) => setCommentLike(req, res, false);

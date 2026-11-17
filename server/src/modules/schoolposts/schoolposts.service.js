@@ -1,6 +1,6 @@
 import { pool, withTransaction } from '../../config/db.js';
 import { emitToSchoolPost, emitToUsers } from '../../sockets/index.js';
-import { badRequest, forbidden, notFound } from '../../utils/AppError.js';
+import { AppError, badRequest, forbidden, notFound } from '../../utils/AppError.js';
 // Attachment rows shared with FE-05 / FE-06 (data only, no permission check) and the storage they point to.
 import * as files from '../../utils/attachments.js';
 import { objectInfo, signedUrl } from '../../utils/storage.js';
@@ -479,7 +479,11 @@ export async function listSchoolPosts(user, { postType, q, page, pageSize }) {
       firstImageUrl: attachments.get(post.schoolPostId)?.firstImageUrl ?? null,
     };
   });
-  return { items, page, pageSize, total: countRows[0].total };
+  // UC-63 limit (17/11/2026), for the School Manager's pin buttons only (they are the only ones who pin): the client
+  // greys the pin button when the limit is reached; the server still decides (pinSchoolPost).
+  const pinning =
+    user.activeRole === 'SCHOOL_MANAGER' ? { pinnedCount: await countPinned(), maxPinned: MAX_PINNED_SCHOOL_POSTS } : {};
+  return { items, page, pageSize, total: countRows[0].total, ...pinning };
 }
 
 // --- UC-59 View School Post Detail (SCR-05) ----------------------------------------------------------------------
@@ -669,7 +673,8 @@ export async function createSchoolPost(user, input) {
 // Locks a post that is not deleted (two School Managers saving at once are applied one after the other), or 404.
 async function lockSchoolPost(client, schoolPostId) {
   const { rows } = await client.query(
-    `SELECT school_post_id AS "schoolPostId", post_type AS "postType", ${TARGET_ROLES('school_posts')} AS "targetRoles"
+    `SELECT school_post_id AS "schoolPostId", post_type AS "postType", is_pinned AS "isPinned",
+            ${TARGET_ROLES('school_posts')} AS "targetRoles"
      FROM school_posts WHERE school_post_id = $1 AND deleted_at IS NULL
      FOR UPDATE`,
     [schoolPostId],
@@ -858,9 +863,23 @@ export async function deleteSchoolPost(user, schoolPostId) {
   return result;
 }
 
+// At most 5 pinned school posts at once (17/11/2026): the number and the error code of the FE-05 group feed
+// (business-rules §5, posts.service.js MAX_PINNED), so both feeds behave the same. Proposed for §8 in the FE-08 summary.
+export const MAX_PINNED_SCHOOL_POSTS = 5;
+// Transaction-level advisory lock taken while counting: the school feed has no parent row to lock (FE-05 locks the
+// group row), so two managers pinning two different posts at the same moment cannot both pass the limit.
+const PIN_LOCK_KEY = 580063; // "FE-08 UC-63"; any constant not used by another advisory lock in this app
+
+/** Pinned school posts now (not deleted; only announcements are ever pinned). Also UC-58's pinnedCount. */
+async function countPinned(db = pool) {
+  const { rows } = await db.query('SELECT COUNT(*) AS n FROM school_posts WHERE is_pinned AND deleted_at IS NULL');
+  return rows[0].n;
+}
+
 /**
  * UC-63 Pin / Unpin School Post. Only announcements can be pinned (§8): pinning NEWS → 400 MSG_CANNOT_PIN_NEWS.
- * No limit on how many posts are pinned at once (§8 sets none). Same value as now → no write, still 200.
+ * At most MAX_PINNED_SCHOOL_POSTS pinned at once → 409 MSG_PIN_LIMIT { max } (same code and number as FE-05 §5).
+ * Same value as now → no write, still 200: pinning a pinned post is not counted again. Unpinning is never limited.
  * ASSUMPTION: unpinning NEWS (isPinned false) is accepted as a no-op, since NEWS is never pinned.
  * ASSUMPTION: pinning is not an edit of the post, so updated_at is not touched.
  */
@@ -870,6 +889,14 @@ export async function pinSchoolPost(user, schoolPostId, isPinned) {
     const post = await lockSchoolPost(client, schoolPostId);
     if (isPinned && post.postType !== 'ANNOUNCEMENT') {
       throw badRequest('MSG_CANNOT_PIN_NEWS', 'Only announcements can be pinned.', { field: 'isPinned' });
+    }
+    if (isPinned && !post.isPinned) {
+      await client.query('SELECT pg_advisory_xact_lock($1)', [PIN_LOCK_KEY]);
+      if ((await countPinned(client)) >= MAX_PINNED_SCHOOL_POSTS) {
+        throw new AppError(409, 'MSG_PIN_LIMIT', `At most ${MAX_PINNED_SCHOOL_POSTS} pinned school posts.`, {
+          max: MAX_PINNED_SCHOOL_POSTS,
+        });
+      }
     }
     const { rowCount } = await client.query(
       'UPDATE school_posts SET is_pinned = $2 WHERE school_post_id = $1 AND is_pinned IS DISTINCT FROM $2',
@@ -991,7 +1018,9 @@ export async function listSchoolPostComments(user, schoolPostId, { page, pageSiz
   const post = await openSchoolPostForInteraction(pool, user, schoolPostId);
   if (post.postType !== 'ANNOUNCEMENT') return { items: [], page, pageSize, total: 0, commentCount: 0 };
   const result = await feed.listComments(post.target, { page, pageSize, canDelete: mayDeleteComment(user) });
-  return { ...result, commentCount: await commentCountOf(post.schoolPostId) };
+  // Comment likes (17/11/2026): one more query for the whole page (feed.withCommentLikes), never one per comment.
+  const items = await feed.withCommentLikes(result.items, user.userId);
+  return { ...result, items, commentCount: await commentCountOf(post.schoolPostId) };
 }
 
 /**
@@ -1023,6 +1052,35 @@ const commentCountOf = async (schoolPostId, db = pool) =>
   (await countSchoolPostComments([schoolPostId], db)).get(schoolPostId) ?? 0;
 
 const commentNotFound = () => notFound('MSG_COMMENT_NOT_FOUND', 'The comment was not found.');
+
+/**
+ * Like (liked = true) or unlike (false) a COMMENT of a school post (17/11/2026, post_likes.comment_id). Same rules as
+ * UC-64 for a post: PUT / DELETE, both idempotent (liking twice or unliking what one did not like is 200 and changes
+ * nothing); unlike HARD deletes the row (§14).
+ * Who: exactly who may comment (UC-65) – the post must be visible to the user (openSchoolPostForInteraction: the
+ * audience, plus every School Manager); otherwise 404 MSG_SCHOOL_POST_NOT_FOUND, so nobody learns the post exists.
+ * The comment must belong to THIS post and not be deleted → else 404 MSG_COMMENT_NOT_FOUND.
+ * ASSUMPTION: a soft-deleted comment answers 404 (not 400), for like AND unlike: for the API it no longer exists, the
+ * same answer UC-66 gives when deleting it again; its placeholder shows no Like button. A like given before the
+ * comment was deleted stays in post_likes (never read while the comment is deleted).
+ * ASSUMPTION: on a NEWS post comments do not exist for the API (UC-65 shows none) → 404 MSG_COMMENT_NOT_FOUND, as in
+ * deleteSchoolPostComment.
+ * The post is read FOR SHARE and the comment FOR SHARE: neither can be deleted until the like is written. No socket
+ * event (as UC-64): the client keeps its optimistic count.
+ * @returns {Promise<{ commentId: number, likeCount: number, likedByMe: boolean }>}
+ */
+export async function setSchoolPostCommentLike(user, schoolPostId, commentId, liked) {
+  return withTransaction(async (client) => {
+    const post = await openSchoolPostForInteraction(client, user, schoolPostId, { lock: true });
+    if (post.postType !== 'ANNOUNCEMENT') throw commentNotFound();
+    const comment = await feed.findComment(post.target, commentId, { forShare: true }, client);
+    if (!comment || comment.isDeleted) throw commentNotFound();
+    const target = { column: feed.FEED_COLUMNS.COMMENT, id: comment.commentId };
+    if (liked) await feed.addLike(target, user.userId, client);
+    else await feed.removeLike(target, user.userId, client);
+    return { commentId: comment.commentId, ...(await feed.likeSummary(target, user.userId, client)) };
+  });
+}
 
 /**
  * UC-66 Delete School Post Comment: SOFT delete (deleted_at = NOW(), deleted_by = user; §5 "deleted, never hidden").

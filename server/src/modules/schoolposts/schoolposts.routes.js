@@ -32,5 +32,8 @@ router.delete('/:schoolPostId/like', ...interact, ctrl.unlike); // UC-64
 router.get('/:schoolPostId/comments', ...interact, ctrl.listComments); // UC-65
 router.post('/:schoolPostId/comments', ...interact, ctrl.createComment); // UC-65
 router.delete('/:schoolPostId/comments/:commentId', ...interact, ctrl.removeComment); // UC-66
+// Like of a comment (17/11/2026): the same people as UC-65 may like a comment (audience + School Manager).
+router.put('/:schoolPostId/comments/:commentId/like', ...interact, ctrl.likeComment);
+router.delete('/:schoolPostId/comments/:commentId/like', ...interact, ctrl.unlikeComment);
 
 export default router;
