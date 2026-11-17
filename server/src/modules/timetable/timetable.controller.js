@@ -1,6 +1,7 @@
 import * as timetableImport from './timetable.import.js';
 import * as auto from './timetable.auto.js';
 import { autoApplyRequest, autoOptionsQuery, autoRunRequest } from './timetable.auto.validation.js';
+import * as timetableHistory from './timetable.history.js';
 import * as periodTimes from './timetable.periods.js';
 import * as timetableService from './timetable.service.js';
 import { classIdParam, dateQuery, importRequest, listQuery, periodTimesRequest, saveRequest } from './timetable.validation.js';
@@ -15,6 +16,11 @@ export async function list(req, res) {
 // GET /api/v1/timetables/classes/:classId/edit?date=  (SCR-28 / SCR-30 editor data, UC-71 / UC-73)
 export async function editor(req, res) {
   res.json(await timetableService.getEditor({ classId: classIdParam(req), ...dateQuery(req) }));
+}
+
+// GET /api/v1/timetables/classes/:classId/history  (every saved timetable of the class, what replaced what)
+export async function history(req, res) {
+  res.json(await timetableHistory.classHistory({ classId: classIdParam(req) }));
 }
 
 // PUT /api/v1/timetables/classes/:classId  { startDate, endDate?, entries }  (UC-71 / UC-73)

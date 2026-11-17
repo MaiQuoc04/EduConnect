@@ -23,6 +23,7 @@ router.post('/auto/apply', ...sm, ctrl.autoApply);
 router.get('/viewable-classes', ...viewers, ctrl.viewable); // UC-74
 router.get('/teaching-schedule/week', requireAuth, requireRole(ROLES.TEACHER), ctrl.teachingWeek); // SCR-57 / UC-75
 router.get('/classes/:classId/edit', ...sm, ctrl.editor); // SCR-28 / SCR-30
+router.get('/classes/:classId/history', ...sm, ctrl.history); // saved timetables of a class (Dung, 17/11/2026)
 router.put('/classes/:classId', ...sm, ctrl.save); // UC-71 / UC-73
 router.get('/classes/:classId/week', ...viewers, ctrl.classWeek); // SCR-29 / SCR-45 / UC-74
 
