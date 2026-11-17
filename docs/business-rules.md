@@ -458,6 +458,35 @@ Boundaries that are easy to get wrong:
   - Shown on the school feed column (next 5 dates), on `/school-events` (menu "Lịch của trường": upcoming / past) and,
     read only, in the class calendar (SCR-39) of the classes of that grade. No notification yet (ASSUMPTION; FE-09).
 
+- **Automatic scheduling (17/11/2026, Dung – no UC id, spec "Đặc tả: Tự động phân công & xếp thời khoá biểu"):**
+  School Manager, button "Xếp tự động" on SCR-27 (`/timetables/auto`). Three modes: assignment + timetable, assignment
+  only, timetable only (uses the running assignments). The server makes a **draft**; nothing is saved until "Áp dụng".
+  - Range: from today (or the semester's first day) to the semester's last day. New assignments run from that day to
+    the end of the school year (one teacher per class and subject); history before it is kept (same code as SCR-19).
+  - Week grid (default 5 mornings × 5 + Tuesday and Thursday afternoons × 2 = 29 cells; morning ≤ 5, afternoon ≤ 3,
+    ≤ 6 days – Công văn 7291). Periods per week from `track_subjects`, changeable for the semester being scheduled
+    (History: 1 in semester I, 2 in semester II). Fixed cells: Chào cờ (Monday period 1) and Sinh hoạt lớp (Friday
+    period 5) taken from HĐTN, a different teacher in every class (the homeroom teacher first); they do not count
+    towards the norm.
+  - Norm 17 periods/week, homeroom teacher 13 (Thông tư 05/2025), at most 4 over (ASSUMPTION: school's choice).
+  - Hard rules (never broken, re-checked on apply): qualified teacher, one teacher per (class, subject), weekly cap,
+    no teacher / class clash (lessons of classes not in the run included), exact periods per subject, only grid cells,
+    rooms per subject (e.g. Tin học 1 room), teacher busy cells, at most 2 periods of a subject per day.
+  - Soft rules (weighted penalty, weights editable): teacher gaps, two periods of a subject not adjacent, more than 4
+    periods a day, a subject packed into one day, heavy subjects (Toán, Văn, Anh) at periods 4–5 or afternoon,
+    afternoon subjects in the morning, empty cells before a lesson (empty cells go to the end of a session),
+    overload, imbalance, homeroom teacher not teaching their class.
+  - Checked before running (blocking): grid periods missing in `time_slots`, a class needing more periods than cells,
+    not enough teachers for a subject (need vs norm + overload of the qualified teachers), not enough teachers for
+    the fixed cells, too few rooms, timetable-only mode without running assignments.
+  - Apply: refused when assignments or timetables changed since the draft (`MSG_AUTO_STALE`), when a class already has
+    a timetable / assignments and the overwrite is not confirmed (`MSG_AUTO_CONFIRM`), or when the draft breaks a hard
+    rule or misses lessons. Lessons with attendance are kept; class groups follow the new assignments (FE-04 sync).
+  - Algorithm (Node, no external service): step A greedy with balancing + pairwise improvement; step B constraint
+    satisfaction – hardest lessons first, least-penalty cell, one-step repair, then local search (swaps) until the
+    time limit (default 5 s). Same data + seed = same draft; "Xếp lại" changes the seed.
+  - Sample data: `database/sample_auto_schedule.sql` (grade 10: 6 classes, 12 more teachers).
+
 ## 11. Grades (FE-11)
 - SM configures the grade structure per **subject × grade level × semester**: components with a weight and a number
   of scores (`score_count`, e.g. regular tests = 4 scores, mid-term = 1, final = 1). Semester 2 is copied from
