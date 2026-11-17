@@ -47,7 +47,7 @@
 .ta-search { position: relative; display: flex; align-items: center; }
 .ta-search .icon { position: absolute; left: 8px; color: var(--graphite-400); font-size: 18px !important; pointer-events: none; }
 .ta-search input {
-  height: 32px; width: 200px; padding: 0 10px 0 32px; border: 1px solid var(--graphite-200); border-radius: var(--radius-control);
+  height: 32px; width: 300px; max-width: 100%; padding: 0 28px 0 32px; border: 1px solid var(--graphite-200); border-radius: var(--radius-control);
   font: 400 13px/18px var(--font-ui); background: var(--white);
 }
 .ta-search input:focus { outline: none; border-color: var(--ink-600); }
@@ -133,7 +133,7 @@ td.is-dim .ta-cell { opacity: 0.35; }
 .ta-link--red { color: var(--red-pen); margin-left: auto; }
 
 @media (max-width: 640px) {
-  .ta-search input { width: 150px; }
+  .ta-search input { width: 220px; }
   .ta-scroll { max-height: none; }
 }
 .ta-save-error { flex: 1 1 100%; align-items: center; margin: 0; }
@@ -149,3 +149,8 @@ td.is-dim .ta-cell { opacity: 0.35; }
 .ta-picker-history li { display: flex; justify-content: space-between; gap: 8px; font-size: 12px; color: var(--graphite-700); }
 .ta-picker-history li span:last-child { color: var(--graphite-500); font-variant-numeric: tabular-nums; white-space: nowrap; }
 .ta-picker-range { margin-top: 6px; font-size: 11px; color: var(--ink-700); }
+
+/* Teacher search in the matrix (Dung, 18/11/2026) */
+.ta-search-clear { position: absolute; right: 6px; border: 0; background: none; padding: 0; display: inline-flex; color: var(--graphite-500); cursor: pointer; }
+.ta-search .ta-search-clear .icon { position: static; pointer-events: auto; }
+.ta-cell.is-focus:not(.is-changed) { background: var(--ink-50); }
