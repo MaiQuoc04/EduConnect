@@ -218,6 +218,24 @@ const ERROR_MESSAGES = {
   MSG_SCHOOL_EVENT_DUPLICATE: 'Ngày này đã có sự kiện cùng tên cho cùng đối tượng. Hãy kiểm tra lại lịch.',
   MSG_SCHOOL_EVENT_CHANGED: 'Sự kiện vừa được sửa ở nơi khác sau khi bạn mở. Hãy tải lại rồi sửa tiếp.',
   MSG_SCHOOL_EVENTS_NOT_READY: 'Lịch của trường chưa sẵn sàng: cơ sở dữ liệu cần chạy patch_v0.3_school_events.sql.',
+  // FE-10 automatic scheduling
+  MSG_AUTO_INVALID: ({ field, reason, min, max } = {}) =>
+    reason === 'RANGE' ? `Giá trị “${field}” phải từ ${min} đến ${max}.`
+      : field === 'classIds' && reason === 'REQUIRED' ? 'Hãy chọn ít nhất một lớp.'
+        : field === 'classIds' ? 'Có lớp không thuộc năm học này. Vui lòng tải lại trang.'
+          : field === 'grid' && reason === 'TOO_MANY_DAYS' ? `Một tuần học tối đa ${max} ngày.`
+            : field === 'grid' && reason === 'EMPTY' ? 'Khung tuần chưa có tiết nào.'
+              : field === 'grid' && reason === 'SUNDAY' ? 'Không xếp học vào Chủ nhật.'
+                : field === 'homeroomNorm' ? 'Định mức GVCN không được lớn hơn định mức chung.'
+                  : field === 'fixed' && reason === 'DUPLICATE_SLOT' ? 'Hai ô cố định trùng nhau.'
+                    : 'Thiết lập xếp tự động không hợp lệ. Vui lòng kiểm tra lại.',
+  MSG_SEMESTER_NOT_FOUND: 'Không tìm thấy học kỳ. Vui lòng tải lại trang.',
+  MSG_SEMESTER_ENDED: 'Học kỳ này đã kết thúc, không còn gì để xếp.',
+  MSG_AUTO_STALE: 'Phân công hoặc thời khoá biểu vừa thay đổi sau khi xếp. Hãy xếp lại với dữ liệu mới.',
+  MSG_AUTO_CONFIRM: ({ classes = [] } = {}) => `Lớp ${classes.join(', ')} đã có thời khoá biểu hoặc phân công. Hãy xác nhận ghi đè.`,
+  MSG_AUTO_DRAFT_INVALID: ({ problem, teacher, className, subject } = {}) =>
+    `Bản nháp vi phạm quy tắc (${problem}${teacher ? ` – ${teacher}` : ''}${className ? ` – lớp ${className}` : ''}${subject ? ` – ${subject}` : ''}). Hãy xếp lại.`,
+  MSG_AUTO_INCOMPLETE: ({ items = [] } = {}) => `Bản nháp còn thiếu: ${items.join('; ')}.`,
   // FE-10 period times (School Manager)
   MSG_PERIOD_TIMES_INVALID: ({ field, reason, min, max, earliest, gap, end } = {}) =>
     field === 'duration' ? `Thời lượng một tiết từ ${min} đến ${max} phút.`
