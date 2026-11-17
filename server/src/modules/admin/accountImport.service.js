@@ -6,6 +6,7 @@ import { cellText, loadTemplateSheet, templateHeaderKey as headerKey, workbookBu
 import { planUsernames } from '../../utils/username.js';
 import { prepareCredentials, readAccountInput } from './accounts.service.js';
 import { applyDepartment, listDepartments } from './departments.js';
+import { joinSchoolGroup, needsSchoolGroup } from './schoolGroup.js';
 
 // UC-96 Import Accounts (FE-13, owner: Linh): System Admin uploads one .xlsx / .csv file per account type, checks a
 // preview, then creates every valid row in one transaction. The temporary passwords are returned once.
@@ -343,6 +344,8 @@ export async function importAccounts({ file, type, actorId, ip }) {
           [ids, valid.map((r) => r.input.parent.occupation)],
         );
       }
+      // Teachers and School Managers join the school's teacher group ("Giáo viên toàn trường").
+      if (needsSchoolGroup([type])) await joinSchoolGroup(client, ids);
     });
   } catch (err) {
     // Another admin used one of the usernames, emails, phones or codes after the check: nothing was saved.
