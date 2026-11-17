@@ -391,6 +391,25 @@ export function saveClassTimetable({ classId, startDate, endDate, entries, stamp
       const day = await today(db);
       const { start, end } = checkRange(cls, day, startDate, endDate);
       await checkEntries(cls, entries, db);
+      // Saving again what is already in force on exactly [start, end] changes nothing: no new history entry
+      // (double click, "Lưu" without changes). Dung, 18/11/2026.
+      const { rows: same } = await db.query(
+        `SELECT t.timetable_id AS "id",
+                (SELECT COUNT(*)::int FROM timetables o WHERE o.class_id = t.class_id AND o.deleted_at IS NULL
+                   AND o.start_date <= $3::date AND o.end_date >= $2::date) AS "overlapping",
+                COALESCE((SELECT string_agg(concat_ws('-', e.weekday, e.slot_id, e.subject_id, e.room), ',' ORDER BY e.weekday, e.slot_id)
+                          FROM timetable_entries e WHERE e.timetable_id = t.timetable_id), '') AS "pattern"
+         FROM timetables t
+         WHERE t.class_id = $1 AND t.deleted_at IS NULL AND t.start_date = $2::date AND t.end_date = $3::date`,
+        [cls.classId, start, end],
+      );
+      const wanted = [...entries]
+        .sort((a, b) => a.weekday - b.weekday || Number(a.slotId) - Number(b.slotId))
+        .map((e) => [e.weekday, e.slotId, e.subjectId, e.room || null].filter((x) => x !== null && x !== undefined).join('-'))
+        .join(',');
+      if (same.length === 1 && same[0].overlapping === 1 && same[0].pattern === wanted) {
+        return { timetableId: same[0].id, unchanged: true, generated: 0, removed: 0, kept: 0, startDate: start, endDate: end };
+      }
       const result = await saveVersion(db, { cls, start, end, entries, userId: user.userId });
       return { ...result, startDate: start, endDate: end };
     }),
