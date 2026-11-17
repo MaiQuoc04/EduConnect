@@ -467,6 +467,10 @@ Boundaries that are easy to get wrong:
   - **Teacher schedule lookup (18/11/2026):** on the teaching assignment screen (SCR-19) the School Manager opens "Tra
     lịch dạy giáo viên", types a name, teacher code, department or subject and sees that teacher's teaching schedule
     week by week (same lessons as SCR-57; `GET /timetables/teachers/:teacherId/week`, School Manager only).
+  - **Finding the lessons (18/11/2026):** "Lịch dạy" (and the lookup above) shows "Lịch dạy sắp tới" – per class and
+    subject the lessons from today (first / last date, periods a week, how many left) and the dates of teaching
+    assignments whose class has no timetable yet (e.g. semester II). Opened on a week without lessons, it jumps once to
+    the first week with lessons (with "Về tuần này"); an empty week offers "Tuần có tiết trước / tiếp theo".
   - Saving is refused (nothing changes) when a subject has **no assigned teacher** on some dates of the range, or a
     teacher would teach **two classes in the same period**; the answer lists the dates / periods.
   - Two School Managers on the same class: a save made from an editor opened before someone else's save is refused
