@@ -4,6 +4,7 @@ import { getTeacherWeek } from '../../api/timetables.js';
 import Icon from '../../components/Icon.jsx';
 import { errorText } from '../../messages.js';
 import { foldVietnamese } from '../../utils/teacherValidation.js';
+import { EmptyWeekJump, TeachingOverview } from './TeachingOverview.jsx';
 import WeekTimetable, { ViewSwitch, WeekNav } from './WeekTimetable.jsx';
 import './timetable.css';
 
@@ -63,7 +64,18 @@ export default function TeacherScheduleLookup({ teachers = [], subjects = [], on
     return () => { alive = false; };
   }, [picked, date]);
 
+  // A teacher without lessons this week: open the first week that has one (once per pick).
+  const autoJump = useRef(null);
+  useEffect(() => {
+    if (!week || !picked || autoJump.current !== picked.teacherId) return;
+    autoJump.current = null;
+    const first = week.overview?.firstLessonDate;
+    if (!date && week.lessons.length === 0 && first) setDate(first);
+  }, [week, picked, date]);
+
   function choose(t) {
+    autoJump.current = t.teacherId;
+    setDate('');
     setPicked(t);
     setWeek(null);
     setQuery(t.fullName);
@@ -122,9 +134,11 @@ export default function TeacherScheduleLookup({ teachers = [], subjects = [], on
               <WeekNav week={week} busy={loading} onGo={setDate} />
             </div>
           </div>
+          <TeachingOverview week={week} onGo={setDate} who={t.fullName} />
+          <EmptyWeekJump week={week} onGo={setDate} who={t.fullName} />
           <div aria-busy={loading}>
             <WeekTimetable week={week} view={view} teacherView mineTag={false} secondLine={(l) => `Lớp ${l.className}`}
-              emptyText={`Tuần này ${t.fullName} không có tiết dạy nào (chưa được phân công, hoặc lớp chưa có thời khoá biểu).`}
+              emptyText={null}
               lessonActions={(l) => <Link to={`/timetable?classId=${l.classId}&date=${l.date}`} className="btn btn-secondary"><Icon name="calendar_view_week" size="sm" /> TKB lớp {l.className}</Link>} />
           </div>
         </>
