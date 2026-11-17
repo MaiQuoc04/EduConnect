@@ -35,5 +35,9 @@ router.delete('/:schoolPostId/comments/:commentId', ...interact, ctrl.removeComm
 // Like of a comment (17/11/2026): the same people as UC-65 may like a comment (audience + School Manager).
 router.put('/:schoolPostId/comments/:commentId/like', ...interact, ctrl.likeComment);
 router.delete('/:schoolPostId/comments/:commentId/like', ...interact, ctrl.unlikeComment);
+// Report a comment (17/11/2026): the audience of the post (checked in the service). Not the School Manager: they delete
+// any comment directly (UC-66) and handle the reports (/comment-reports) → 403. System Admin: No (§1) → 403.
+router.post('/:schoolPostId/comments/:commentId/report', requireAuth, requireRole('TEACHER', 'STUDENT', 'PARENT'),
+  ctrl.reportComment);
 
 export default router;

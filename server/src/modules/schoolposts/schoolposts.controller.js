@@ -1,6 +1,7 @@
 import { env } from '../../config/env.js';
 import { badRequest } from '../../utils/AppError.js';
 import * as service from './schoolposts.service.js';
+import * as reportsCore from '../../utils/commentReports.js';
 
 // FE-08 School Feed (owner: Anh). Validates the request before anything reaches the database; SQL lives in the service.
 
@@ -310,3 +311,37 @@ async function setCommentLike(req, res, liked) {
 
 export const likeComment = (req, res) => setCommentLike(req, res, true);
 export const unlikeComment = (req, res) => setCommentLike(req, res, false);
+
+// --- Comment reports (17/11/2026; rules shared with FE-05 in utils/commentReports.js) -----------------------------
+
+// POST /school-posts/:schoolPostId/comments/:commentId/report { reason, note? } → 201 (new report) or 200 (this user had
+// already reported the comment: nothing changes). Who may: checked in the service.
+export async function reportComment(req, res) {
+  const schoolPostId = parseId(req.params.schoolPostId, 'schoolPostId');
+  const commentId = parseId(req.params.commentId, 'commentId');
+  const input = reportsCore.parseReportInput(req.body ?? {});
+  const result = await service.reportSchoolPostComment(req.user, schoolPostId, commentId, input);
+  res.status(result.created ? 201 : 200).json(result);
+}
+
+// GET /comment-reports?status=PENDING|RESOLVED|DISMISSED&page=&pageSize= (School Manager). Default PENDING.
+export async function listCommentReports(req, res) {
+  const query = req.query ?? {};
+  const status = optionalString(query, 'status') || 'PENDING';
+  if (!reportsCore.REPORT_STATUSES.includes(status)) throw invalid('status');
+  res.json(
+    await service.listSchoolCommentReports(req.user, {
+      status,
+      page: optionalInt(query, 'page', { fallback: 1 }),
+      pageSize: optionalInt(query, 'pageSize', { max: MAX_PAGE_SIZE, fallback: DEFAULT_PAGE_SIZE }),
+    }),
+  );
+}
+
+// PATCH /comment-reports/:commentId { action: 'DELETE' | 'DISMISS' } (School Manager).
+export async function resolveCommentReport(req, res) {
+  const commentId = parseId(req.params.commentId, 'commentId');
+  const body = jsonBody(req, ['action']);
+  if (!reportsCore.REPORT_ACTIONS.includes(body.action)) throw invalid('action');
+  res.json(await service.resolveSchoolCommentReport(req.user, commentId, body.action));
+}

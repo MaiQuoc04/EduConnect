@@ -120,3 +120,27 @@ export async function setSchoolPostCommentLiked(schoolPostId, commentId, liked) 
   const { data } = liked ? await api.put(url) : await api.delete(url);
   return data;
 }
+
+// Report a comment (17/11/2026): POST /school-posts/:schoolPostId/comments/:commentId/report { reason, note? }
+// -> 201 (new) or 200 (already reported by this user: nothing changes) { commentId, reportedByMe: true, created }.
+// Own comment -> 400 MSG_CANNOT_REPORT_OWN_COMMENT; comment deleted / other post -> 404 MSG_COMMENT_NOT_FOUND; outside
+// the audience -> 404 MSG_SCHOOL_POST_NOT_FOUND; School Manager -> 403 (they delete directly, UC-66).
+export async function reportSchoolPostComment(schoolPostId, commentId, body) {
+  const url = `/school-posts/${encodeURIComponent(schoolPostId)}/comments/${encodeURIComponent(commentId)}/report`;
+  const { data } = await api.post(url, body);
+  return data;
+}
+
+// School Manager's queue (17/11/2026): GET /comment-reports?status=PENDING|RESOLVED|DISMISSED&page=&pageSize=
+// -> { items, page, pageSize, total, pendingCount }; one item per reported comment of a SCHOOL post.
+export async function listCommentReports(params, { signal } = {}) {
+  const { data } = await api.get('/comment-reports', { params: compact(params), signal });
+  return data;
+}
+
+// PATCH /comment-reports/:commentId { action: 'DELETE' | 'DISMISS' } -> { commentId, status, resolvedCount,
+// commentDeleted }. Already decided by another School Manager -> 409 MSG_REPORT_ALREADY_HANDLED.
+export async function resolveCommentReport(commentId, action) {
+  const { data } = await api.patch(`/comment-reports/${encodeURIComponent(commentId)}`, { action });
+  return data;
+}

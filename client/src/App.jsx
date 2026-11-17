@@ -19,6 +19,7 @@ import FeedGuard from './pages/groupfeed/FeedGuard.jsx';
 import GroupFeedPage from './pages/groupfeed/GroupFeedPage.jsx';
 import GroupPostDetailPage from './pages/groupfeed/GroupPostDetailPage.jsx';
 import GroupPostFormPage from './pages/groupfeed/GroupPostFormPage.jsx';
+import CommentReportsPage from './pages/schoolfeed/CommentReportsPage.jsx';
 import CreateSchoolPostPage from './pages/schoolfeed/CreateSchoolPostPage.jsx';
 import SchoolFeedPage from './pages/schoolfeed/SchoolFeedPage.jsx';
 import { SCHOOL_FEED_ROLES } from './pages/schoolfeed/schoolFeedShared.jsx';
@@ -111,6 +112,15 @@ export default function App() {
           element={
             <ProtectedRoute roles={['SCHOOL_MANAGER']}>
               <UpdateSchoolPostPage />
+            </ProtectedRoute>
+          }
+        />
+        {/* FE-08 reported comments of the school feed (17/11/2026): School Manager only; the server checks it too. */}
+        <Route
+          path="comment-reports"
+          element={
+            <ProtectedRoute roles={['SCHOOL_MANAGER']}>
+              <CommentReportsPage />
             </ProtectedRoute>
           }
         />

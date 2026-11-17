@@ -17,6 +17,7 @@ import homeroomRoutes from './modules/teacher/homeroom.routes.js';
 import teacherRoutes from './modules/teacher/teacher.routes.js';
 import teachingRoutes from './modules/teacher/teaching.routes.js';
 import schoolPostRoutes from './modules/schoolposts/schoolposts.routes.js';
+import commentReportRoutes from './modules/schoolposts/commentReports.routes.js';
 import uploadRoutes from './modules/uploads/uploads.routes.js';
 import parentRoutes from './modules/parents/parents.routes.js';
 
@@ -28,7 +29,7 @@ import parentRoutes from './modules/parents/parents.routes.js';
 //   FE-05 feed      -> /posts         (Khanh)
 //   FE-06 chat      -> /conversations (Khanh, + src/sockets)
 //   FE-07 events    -> /extracurricular-events (Dung)
-//   FE-08 school    -> /school-posts  (Anh)
+//   FE-08 school    -> /school-posts, /comment-reports (Anh)
 //   FE-09 notify    -> /notifications (Quoc)
 //   FE-10 schedule  -> /timetables, /class-events (Dung)
 //   FE-11 grades    -> /grades        (Linh)
@@ -54,6 +55,7 @@ router.use('/departments', departmentRoutes);
 router.use('/homeroom-assignments', homeroomRoutes);
 router.use('/teaching-assignments', teachingRoutes);
 router.use('/school-posts', schoolPostRoutes);
+router.use('/comment-reports', commentReportRoutes); // FE-08: School Manager's queue of reported school post comments
 router.use('/parents', parentRoutes);
 router.use('/admin', adminRoutes);
 router.use('/maintenance', maintenanceRoutes);

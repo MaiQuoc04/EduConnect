@@ -8,6 +8,8 @@ export const NAV_SECTIONS = [
     items: [
       // FE-08 School Feed (SCR-02, UC-58). System Admin sees no content (business-rules §1).
       { to: '/school-feed', label: 'Bảng tin trường', icon: 'campaign', roles: ['SCHOOL_MANAGER', 'TEACHER', 'STUDENT', 'PARENT'] },
+      // FE-08 reported comments of the school feed (17/11/2026). School Manager only.
+      { to: '/comment-reports', label: 'Báo cáo bình luận', icon: 'flag', roles: ['SCHOOL_MANAGER'] },
     ],
   },
   {

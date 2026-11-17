@@ -10,6 +10,8 @@ import { ATTACHMENT_TYPES } from '../uploads/uploads.service.js';
 import { containsPattern, VI_TRANSLATE } from '../../utils/search.js';
 // Likes / comments rows shared with FE-05 Group Feed: data only; who may do what in the school feed (§8) is here.
 import * as feed from '../../utils/feedInteractions.js';
+// Comment reports shared with FE-05 (17/11/2026): data only; who may report / handle in the school feed is here.
+import * as reports from '../../utils/commentReports.js';
 // FE-02 (merged): the one rule for "the current school year" and "the class a student studies in this year".
 import { enrollmentsOfYear, resolveSchoolYearId } from '../students/students.service.js';
 
@@ -1018,7 +1020,10 @@ export async function listSchoolPostComments(user, schoolPostId, { page, pageSiz
   if (post.postType !== 'ANNOUNCEMENT') return { items: [], page, pageSize, total: 0, commentCount: 0 };
   const result = await feed.listComments(post.target, { page, pageSize, canDelete: mayDeleteComment(user) });
   // Comment likes (17/11/2026): one more query for the whole page (feed.withCommentLikes), never one per comment.
-  const items = await feed.withCommentLikes(result.items, user.userId);
+  let items = await feed.withCommentLikes(result.items, user.userId);
+  // Comment reports (17/11/2026): reportedByMe on every node, one query. A School Manager does not report (they delete
+  // directly, UC-66), so the query is skipped for them.
+  if (user.activeRole !== 'SCHOOL_MANAGER') items = await reports.withReportedByMe(items, user.userId);
   return { ...result, items, commentCount: await commentCountOf(post.schoolPostId) };
 }
 
@@ -1100,6 +1105,9 @@ export async function deleteSchoolPostComment(user, schoolPostId, commentId) {
       throw forbidden('FORBIDDEN', 'You can only delete your own comments.');
     }
     await feed.softDeleteComment(post.target, commentId, user.userId, client);
+    // Comment reports (17/11/2026): a comment gone has nothing left to decide – its pending reports are closed
+    // (RESOLVED, by whoever deleted it) so the School Manager's queue never keeps them.
+    await reports.resolvePendingReports(commentId, user.userId, client);
     return { commentId, isDeleted: true, commentCount: await commentCountOf(post.schoolPostId, client) };
   });
   sendSafely(`schoolpost:comment-deleted #${schoolPostId}`, () =>
@@ -1109,4 +1117,75 @@ export async function deleteSchoolPostComment(user, schoolPostId, commentId) {
     }),
   );
   return result;
+}
+
+// --- Comment reports (17/11/2026; data layer shared with FE-05 in utils/commentReports.js) ------------------------
+// Who: reporting = the people who may comment (UC-65: the post's audience), School Manager excepted (see below);
+// handling = School Manager, comments of SCHOOL posts only – never group comments (business-rules §1: the School
+// Manager does not see class feeds). §5 stays as agreed: a comment is deleted (soft), never hidden.
+
+/**
+ * Report a comment of a school post. Body checked by the controller (reports.parseReportInput).
+ * - The post must be visible to the user (openSchoolPostForInteraction) → else 404 MSG_SCHOOL_POST_NOT_FOUND, the same
+ *   answer as for a post that does not exist (nobody outside the audience learns it exists).
+ * - The comment must belong to this post and not be deleted → else 404 MSG_COMMENT_NOT_FOUND (NEWS: comments do not
+ *   exist for the API, as for like / delete).
+ * - Not one's own comment → 400 MSG_CANNOT_REPORT_OWN_COMMENT (checked in reports.reportComment).
+ * - Reporting again → 200 { created: false }, nothing changes (reports.reportComment).
+ * School Manager: refused by the route (403 FORBIDDEN). ASSUMPTION: a School Manager deletes any comment of a school
+ * post directly (UC-66) and is the one who handles the reports, so a report from them would only land in their own
+ * queue; the client shows them no "Báo cáo" button.
+ * @returns {Promise<{ commentId: number, reportedByMe: true, created: boolean }>}
+ */
+export async function reportSchoolPostComment(user, schoolPostId, commentId, input) {
+  return withTransaction(async (client) => {
+    const post = await openSchoolPostForInteraction(client, user, schoolPostId, { lock: true });
+    if (post.postType !== 'ANNOUNCEMENT') throw commentNotFound();
+    const comment = await feed.findComment(post.target, commentId, { forShare: true }, client);
+    if (!comment || comment.isDeleted) throw commentNotFound();
+    const report = await reports.reportComment(comment.commentId, user.userId, input, client);
+    return { commentId: comment.commentId, reportedByMe: true, created: report.created };
+  });
+}
+
+// The School Manager's queue reads school post comments only (business-rules §1). Never 'ALL' / 'GROUP_POST' here.
+const SCHOOL_REPORTS = { source: reports.REPORT_SOURCES.SCHOOL_POST };
+
+/**
+ * GET /comment-reports (School Manager): one page of reported school post comments, one item per comment
+ * (reports.listReports), plus pendingCount (the badge of the "Chờ xử lý" tab).
+ */
+export async function listSchoolCommentReports(_user, { status, page, pageSize }) {
+  const result = await reports.listReports({ ...SCHOOL_REPORTS, status, page, pageSize });
+  return { ...result, pendingCount: await reports.countPendingReports(SCHOOL_REPORTS) };
+}
+
+const reportNotFound = () => notFound('MSG_REPORT_NOT_FOUND', 'No report was found for this comment.');
+
+/**
+ * PATCH /comment-reports/:commentId (School Manager): DELETE the comment (soft; every pending report → RESOLVED) or
+ * DISMISS the reports (→ DISMISSED, the comment stays). A comment of a GROUP post → 404 MSG_REPORT_NOT_FOUND, exactly as
+ * an id that does not exist (the School Manager never learns anything about class feeds, §1).
+ * After COMMIT, DELETE only (fire and forget, like the other real-time signals of this file):
+ *   - the author gets a personal notification that names nobody (reports.notifyCommentRemoved, §9);
+ *   - "schoolpost:comment-deleted" to the post's room, as UC-66, so open threads update.
+ * DISMISS sends nothing.
+ * ASSUMPTION: not written to activity_logs – business-rules §13 lists the logged actions and moderation is not one.
+ * @returns {Promise<{ commentId: number, status: 'RESOLVED' | 'DISMISSED', resolvedCount: number,
+ *   commentDeleted: boolean }>}
+ */
+export async function resolveSchoolCommentReport(user, commentId, action) {
+  const result = await withTransaction(async (client) => {
+    const comment = await reports.findReportedComment(commentId, { forUpdate: true }, client);
+    if (!comment || comment.column !== SCHOOL_POST) throw reportNotFound();
+    return reports.resolveReport(commentId, user.userId, action, client);
+  });
+  if (result.commentDeleted) {
+    sendSafely(`comment-removed notification #${commentId}`, () => reports.notifyCommentRemoved(result, user.userId));
+    sendSafely(`schoolpost:comment-deleted #${result.target.id}`, () =>
+      emitToSchoolPost(result.target.id, 'schoolpost:comment-deleted', { schoolPostId: result.target.id, commentId }),
+    );
+  }
+  const { commentDeleted, resolvedCount, status } = result;
+  return { commentId, status, resolvedCount, commentDeleted };
 }

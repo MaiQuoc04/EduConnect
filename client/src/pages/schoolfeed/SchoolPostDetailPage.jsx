@@ -6,6 +6,7 @@ import {
   deleteSchoolPostComment,
   getSchoolPost,
   listSchoolPostComments,
+  reportSchoolPostComment,
   setSchoolPostCommentLiked,
   setSchoolPostPinned,
 } from '../../api/schoolPosts.js';
@@ -219,8 +220,11 @@ export default function SchoolPostDetailPage() {
       create: (body) => createSchoolPostComment(schoolPostId, body),
       remove: (commentId) => deleteSchoolPostComment(schoolPostId, commentId),
       like: (commentId, liked) => setSchoolPostCommentLiked(schoolPostId, commentId, liked), // 17/11/2026
+      // Report (17/11/2026): Teacher / Student / Parent. Not a School Manager: they delete any comment directly (UC-66)
+      // and handle the reports on /comment-reports, so no "Báo cáo" button for them (the server answers 403 too).
+      ...(!isManager && { report: (commentId, body) => reportSchoolPostComment(schoolPostId, commentId, body) }),
     }),
-    [schoolPostId],
+    [schoolPostId, isManager],
   );
   // Keeps the count of the like bar in step with the comment heading.
   const onCommentCount = useCallback((commentCount) => {
