@@ -426,7 +426,7 @@ export default function WeekTimetable({ week, view, secondLine, emptyText, aside
 
   return (
     <>
-      {week.lessons.length === 0 && (
+      {week.lessons.length === 0 && emptyText && (
         <div className="notice tt-empty"><Icon name="event_busy" /><p>{emptyText}</p></div>
       )}
       {view === 'week' && (

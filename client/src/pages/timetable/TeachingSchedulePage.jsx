@@ -1,10 +1,11 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { getTeachingWeek } from '../../api/timetables.js';
 import Icon from '../../components/Icon.jsx';
 import { errorText } from '../../messages.js';
 import LessonCalendarLinks from '../calendar/LessonCalendarLinks.jsx';
-import WeekTimetable, { ViewSwitch, WeekNav } from './WeekTimetable.jsx';
+import { EmptyWeekJump, TeachingOverview } from './TeachingOverview.jsx';
+import WeekTimetable, { dmy, ViewSwitch, WeekNav } from './WeekTimetable.jsx';
 import './timetable.css';
 
 // SCR-57 Teaching Schedule, SCR-58 detail – UC-75 (FE-10). Built automatically: the lessons of the class timetables
@@ -30,12 +31,27 @@ export default function TeachingSchedulePage() {
   }, [date]);
   useEffect(() => { load(); }, [load]);
 
-  const setParam = (key, value) =>
+  const setParam = (key, value, replace = false) =>
     setParams((p) => {
       const n = new URLSearchParams(p);
       n.set(key, value);
       return n;
-    });
+    }, { replace });
+  const go = (d) => { setJumped(null); setParam('date', d); };
+
+  // Opening "Lịch dạy" on a week without lessons jumps once to the first week that has one (from today), so a teacher
+  // who teaches only in a few months does not have to page through empty weeks. Dung, 18/11/2026.
+  const [jumped, setJumped] = useState(null);
+  const autoDone = useRef(false);
+  useEffect(() => {
+    if (!week || autoDone.current) return;
+    autoDone.current = true;
+    const first = week.overview?.firstLessonDate;
+    if (!date && week.lessons.length === 0 && first) {
+      setJumped(week.weekStart);
+      setParam('date', first, true);
+    }
+  }, [week]); // eslint-disable-line react-hooks/exhaustive-deps
   const classes = week ? [...new Set(week.lessons.map((l) => l.className))] : [];
   const todayCount = week ? week.lessons.filter((l) => l.date === week.today).length : 0;
 
@@ -65,12 +81,23 @@ export default function TeachingSchedulePage() {
             ) : 'Đang tải…'}
           </span>
         </div>
-        {week && <WeekNav week={week} busy={loading} onGo={(d) => setParam('date', d)} />}
+        {week && <WeekNav week={week} busy={loading} onGo={go} />}
       </div>
+      {jumped && week && week.lessons.length > 0 && (
+        <div className="notice tov-jump" role="status">
+          <Icon name="fast_forward" />
+          <div>
+            <p>Tuần {dmy(jumped)} bạn không có tiết dạy nào, nên đang hiện tuần có tiết gần nhất ({dmy(week.weekStart)} – {dmy(week.days[5])}).</p>
+            <div className="tov-jump-actions"><button type="button" className="btn btn-secondary" onClick={() => go(jumped)}>Về tuần này</button></div>
+          </div>
+        </div>
+      )}
+      {week && <TeachingOverview week={week} onGo={go} />}
+      {week && <EmptyWeekJump week={week} onGo={go} />}
       {error && <div className="notice amber"><Icon name="error_outline" /><p>{error}</p></div>}
       {week && (
         <div aria-busy={loading}>
-          <WeekTimetable week={week} view={view} teacherView mineTag={false} secondLine={(l) => `Lớp ${l.className}`} emptyText="Tuần này bạn không có tiết dạy nào."
+          <WeekTimetable week={week} view={view} teacherView mineTag={false} secondLine={(l) => `Lớp ${l.className}`} emptyText={null}
             lessonActions={(l) => (
               <>
                 <LessonCalendarLinks lesson={l} canCreate />
