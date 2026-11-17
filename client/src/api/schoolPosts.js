@@ -111,3 +111,12 @@ export async function deleteSchoolPostComment(schoolPostId, commentId) {
   );
   return data;
 }
+
+// Like of a COMMENT (17/11/2026): PUT / DELETE /school-posts/:schoolPostId/comments/:commentId/like ->
+// { commentId, likeCount, likedByMe }. Both idempotent, as the post's like. Outside the audience -> 404
+// MSG_SCHOOL_POST_NOT_FOUND; comment gone (deleted, other post) -> 404 MSG_COMMENT_NOT_FOUND.
+export async function setSchoolPostCommentLiked(schoolPostId, commentId, liked) {
+  const url = `/school-posts/${encodeURIComponent(schoolPostId)}/comments/${encodeURIComponent(commentId)}/like`;
+  const { data } = liked ? await api.put(url) : await api.delete(url);
+  return data;
+}

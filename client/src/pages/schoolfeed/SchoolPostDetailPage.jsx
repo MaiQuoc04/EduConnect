@@ -6,6 +6,7 @@ import {
   deleteSchoolPostComment,
   getSchoolPost,
   listSchoolPostComments,
+  setSchoolPostCommentLiked,
   setSchoolPostPinned,
 } from '../../api/schoolPosts.js';
 import AttachmentList from '../../components/AttachmentList.jsx';
@@ -217,6 +218,7 @@ export default function SchoolPostDetailPage() {
       list: (params, options) => listSchoolPostComments(schoolPostId, params, options),
       create: (body) => createSchoolPostComment(schoolPostId, body),
       remove: (commentId) => deleteSchoolPostComment(schoolPostId, commentId),
+      like: (commentId, liked) => setSchoolPostCommentLiked(schoolPostId, commentId, liked), // 17/11/2026
     }),
     [schoolPostId],
   );

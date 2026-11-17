@@ -16,9 +16,14 @@ import {
 } from '../../components/feed/Feed.jsx';
 import Icon from '../../components/Icon.jsx';
 import { useAuth } from '../../context/AuthContext.jsx';
+import { errorText } from '../../messages.js';
 import { useSocket } from '../../context/SocketContext.jsx';
 import { useToast } from '../../context/ToastContext.jsx';
+// Long posts on a card: the FE-05 Group Feed rule (about 280 characters or 6 lines, "Hiển thị thêm" / "Ẩn bớt"),
+// imported, not copied, so both feeds cut the same way.
+import { excerptOf } from '../groupfeed/groupFeedShared.jsx';
 import { useLiveRefresh } from './useLiveRefresh.js';
+import { readSchoolDraft } from './schoolPostDraft.js';
 import {
   CommentCount,
   FeedAudience,
@@ -103,8 +108,13 @@ function AnnouncementFoot({ post, onLikeError }) {
  * (icon + "THÔNG BÁO" in ink / "TIN TỨC" in blue) and, for news, a blue bar on the left edge.
  * News is view only (business-rules §8): no Like, no counts, no pin button.
  */
-function PostCard({ post, canPin, pinBusy, onPin, listState, onLikeError }) {
+function PostCard({ post, canPin, pinFull, pinBusy, onPin, listState, onLikeError }) {
   const navigate = useNavigate();
+  const [expanded, setExpanded] = useState(false);
+  // The card text: the whole content when the API sends it, else UC-58's contentPreview (300 characters, white space
+  // collapsed, "…" when the server cut it – then "Hiển thị thêm" can only open up to that preview, see SchoolFeedPage.css).
+  const text = post.content ?? post.contentPreview ?? '';
+  const excerpt = excerptOf(text);
   const to = `/school-feed/${post.schoolPostId}`;
   const announcement = post.postType === 'ANNOUNCEMENT';
   const pinned = announcement && post.isPinned;
@@ -118,13 +128,18 @@ function PostCard({ post, canPin, pinBusy, onPin, listState, onLikeError }) {
           {pinned && ' · Đã ghim'}
         </span>
         {canPin && announcement && (
+          // UC-63 limit (17/11/2026): when pinFull (the text of MSG_PIN_LIMIT) the button is greyed and says why; it is
+          // aria-disabled, not disabled, so the tooltip still shows on hover. The server still decides.
           <button
             type="button"
-            className={`btn btn-icon feed-card-tool school-feed-pin${post.isPinned ? ' is-on' : ''}`}
+            className={`btn btn-icon feed-card-tool school-feed-pin${post.isPinned ? ' is-on' : ''}${
+              pinFull && !post.isPinned ? ' is-limit' : ''
+            }`}
             onClick={() => onPin(post)}
             disabled={pinBusy}
+            aria-disabled={pinFull && !post.isPinned ? true : undefined}
             aria-label={post.isPinned ? `Bỏ ghim “${post.title}”` : `Ghim “${post.title}”`}
-            title={post.isPinned ? 'Bỏ ghim' : 'Ghim lên đầu'}
+            title={post.isPinned ? 'Bỏ ghim' : pinFull || 'Ghim lên đầu'}
           >
             <Icon name="push_pin" filled={post.isPinned} />
           </button>
@@ -137,7 +152,14 @@ function PostCard({ post, canPin, pinBusy, onPin, listState, onLikeError }) {
               {post.title}
             </Link>
           </h3>
-          <p className="feed-preview">{post.contentPreview}</p>
+          <div className="sf-text">
+            <p className="feed-preview sf-excerpt">{excerpt && !expanded ? excerpt : text}</p>
+            {excerpt && (
+              <button type="button" className="sf-more" onClick={() => setExpanded((v) => !v)} aria-expanded={expanded}>
+                {expanded ? 'Ẩn bớt' : 'Hiển thị thêm'}
+              </button>
+            )}
+          </div>
           <p className="feed-meta caption">
             <Avatar src={post.authorAvatarUrl} name={post.authorName} size={20} />
             <span className="author">{post.authorName}</span>
@@ -186,7 +208,9 @@ function UpcomingCalendar() {
 }
 
 export default function SchoolFeedPage() {
-  const { activeRole } = useAuth();
+  const { activeRole, user } = useAuth();
+  // A draft of a new post left in this browser by this account (schoolPostDraft.js): "Soạn bài" says so.
+  const [hasDraft] = useState(() => Boolean(readSchoolDraft(user?.id)));
   const toast = useToast();
   const [searchParams, setSearchParams] = useSearchParams();
   const params = readParams(searchParams);
@@ -231,8 +255,18 @@ export default function SchoolFeedPage() {
   // UC-63: pin / unpin, then reload the list so the server's order (pinned first) is shown as it is. The other tabs
   // load again when opened, so they show the new order too.
   const [pinningId, setPinningId] = useState(null);
+  // Pin limit known from UC-58 (School Manager only): the MSG_PIN_LIMIT text when no more post can be pinned.
+  const pinFull =
+    list.result?.maxPinned && list.result.pinnedCount >= list.result.maxPinned
+      ? errorText({ code: 'MSG_PIN_LIMIT', details: { max: list.result.maxPinned } })
+      : '';
+
   async function handlePin(post) {
     if (pinningId) return;
+    if (!post.isPinned && pinFull) {
+      toast(pinFull, { type: 'error' }); // said before any request; the server refuses it anyway
+      return;
+    }
     setPinningId(post.schoolPostId);
     try {
       await setSchoolPostPinned(post.schoolPostId, !post.isPinned);
@@ -312,8 +346,8 @@ export default function SchoolFeedPage() {
           <div className="actions-row">
             {/* UC-60 Create School Post (SCR-31); comes back to this list (same search / tab / page) on cancel. */}
             <Link to="/school-feed/new" state={listState} className="btn btn-primary">
-              <Icon name="edit_square" size="sm" />
-              Soạn bài
+              <Icon name={hasDraft ? 'history_edu' : 'edit_square'} size="sm" />
+              {hasDraft ? 'Tiếp tục bản nháp' : 'Soạn bài'}
             </Link>
           </div>
         )}
@@ -356,6 +390,7 @@ export default function SchoolFeedPage() {
                   key={post.schoolPostId}
                   post={post}
                   canPin={isManager}
+                  pinFull={pinFull}
                   pinBusy={pinningId !== null}
                   onPin={handlePin}
                   listState={listState}
