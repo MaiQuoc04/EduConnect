@@ -530,7 +530,15 @@ export async function classWeek({ classId, date }, user) {
     [classId, frame.weekStart, frame.weekEnd],
   );
   const { trackId, ...publicClass } = cls;
-  return { class: { ...publicClass, homeroomTeacher: await homeroomOf(classId) }, ...frame, lessons };
+  // A teacher sees which lessons of the class are their own (highlighted on the screen). Dung, 18/11/2026.
+  const myId = user.activeRole === ROLES.TEACHER ? await teacherIdOf(user.userId) : null;
+  const marked = lessons.map((l) => ({ ...l, mine: myId !== null && String(l.teacherId) === String(myId) }));
+  return {
+    class: { ...publicClass, homeroomTeacher: await homeroomOf(classId) },
+    ...frame,
+    lessons: marked,
+    myLessons: myId === null ? null : marked.filter((l) => l.mine).length,
+  };
 }
 
 // GET /timetables/teaching-schedule/week?date= (SCR-57, detail SCR-58) – the teacher's own lessons, built from the
@@ -545,7 +553,7 @@ export async function teachingWeek({ date }, user) {
      ORDER BY ts."date", sl.period_number`,
     [teacherId, frame.weekStart, frame.weekEnd],
   );
-  return { ...frame, lessons, periodsThisWeek: lessons.length };
+  return { ...frame, lessons: lessons.map((l) => ({ ...l, mine: true })), periodsThisWeek: lessons.length };
 }
 
 // Used by the import (same transaction rules as the editor).
