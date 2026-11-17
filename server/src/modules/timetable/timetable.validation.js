@@ -27,6 +27,12 @@ export function classIdParam(req) {
   return String(id);
 }
 
+export function teacherIdParam(req) {
+  const id = req.params?.teacherId;
+  if (!isId(id)) throw notFound('TEACHER_NOT_FOUND', 'Teacher not found.');
+  return String(id);
+}
+
 // GET /timetables?schoolYearId=
 export function listQuery(req) {
   const id = req.query?.schoolYearId;

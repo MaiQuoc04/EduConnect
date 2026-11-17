@@ -4,7 +4,7 @@ import { autoApplyRequest, autoOptionsQuery, autoRunRequest } from './timetable.
 import * as timetableHistory from './timetable.history.js';
 import * as periodTimes from './timetable.periods.js';
 import * as timetableService from './timetable.service.js';
-import { classIdParam, dateQuery, importRequest, listQuery, periodTimesRequest, saveRequest } from './timetable.validation.js';
+import { classIdParam, dateQuery, teacherIdParam, importRequest, listQuery, periodTimesRequest, saveRequest } from './timetable.validation.js';
 
 // FE-10 timetable (Dung). Controllers check the request, call the service and send the result.
 
@@ -52,6 +52,11 @@ export async function viewable(req, res) {
 // GET /api/v1/timetables/classes/:classId/week?date=  (SCR-29 / SCR-45 / SCR-46, UC-74)
 export async function classWeek(req, res) {
   res.json(await timetableService.classWeek({ classId: classIdParam(req), ...dateQuery(req) }, req.user));
+}
+
+// GET /api/v1/timetables/teachers/:teacherId/week?date=  (School Manager: look up a teacher's teaching schedule)
+export async function teacherWeek(req, res) {
+  res.json(await timetableService.teacherWeek({ teacherId: teacherIdParam(req), ...dateQuery(req) }));
 }
 
 // GET /api/v1/timetables/teaching-schedule/week?date=  (SCR-57 / SCR-58, UC-75)
