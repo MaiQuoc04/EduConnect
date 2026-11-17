@@ -28,6 +28,24 @@ export const PERIOD_TIME_LIMITS = Object.freeze({
   DAY_END: '22:00',
 });
 
+// Automatic scheduling (17/11/2026, Dung – spec "Đặc tả: Tự động phân công & xếp thời khoá biểu"). Defaults follow
+// CT GDPT 2018 (Thông tư 32/2018 sửa bởi 13/2022), Công văn 7291 (sáng ≤ 5, chiều ≤ 3 tiết) and Thông tư 05/2025
+// (17 tiết/tuần, GVCN 13). The School Manager can change every value on the screen before running.
+export const AUTO_LIMITS = Object.freeze({
+  MORNING_MAX: 5, // Công văn 7291: a THPT morning has at most 5 periods
+  AFTERNOON_MAX: 3, // ... and an afternoon at most 3
+  DAYS_MAX: 6, // at most 6 school days a week (Monday .. Saturday)
+  CLASSES_MAX: 200,
+  NORM: 17, // Thông tư 05/2025: THPT teacher
+  HOMEROOM_NORM: 13, // homeroom teacher: 4 periods less
+  MAX_OVER: 4, // ASSUMPTION (school's choice, no legal hard cap): at most 4 periods over the norm
+  MAX_PER_DAY: 4, // soft: a teacher teaches at most 4 periods a day
+  MAX_PER_SUBJECT_DAY: 2, // hard: a subject at most 2 periods a day in a class
+  BUSY_MAX: 3000,
+  TIME_LIMIT_SEC: 5, // default search time; 1..30
+  TIME_LIMIT_SEC_MAX: 30,
+});
+
 export const ERROR_CODES = Object.freeze({
   INVALID_INPUT: 'MSG_INVALID_INPUT',
   INVALID_DATE: 'MSG_INVALID_DATE', // details: { field }
@@ -50,4 +68,11 @@ export const ERROR_CODES = Object.freeze({
   PERIOD_TIMES_INVALID: 'MSG_PERIOD_TIMES_INVALID', // details: { field, reason, min?, max?, session? }
   PERIOD_TIMES_CHANGED: 'MSG_PERIOD_TIMES_CHANGED', // 409 – someone else changed the period times meanwhile
   PERIOD_TIMES_EMPTY: 'MSG_PERIOD_TIMES_EMPTY', // time_slots has no rows
+  AUTO_INVALID: 'MSG_AUTO_INVALID', // details: { field, reason? } – a setting of the automatic scheduling is wrong
+  SEMESTER_NOT_FOUND: 'MSG_SEMESTER_NOT_FOUND',
+  SEMESTER_ENDED: 'MSG_SEMESTER_ENDED', // the semester is over: nothing left to schedule
+  AUTO_STALE: 'MSG_AUTO_STALE', // 409 – assignments or timetables changed after the draft was made
+  AUTO_CONFIRM: 'MSG_AUTO_CONFIRM', // 409 – details: { classes } already have a timetable / assignments: confirm overwrite
+  AUTO_DRAFT_INVALID: 'MSG_AUTO_DRAFT_INVALID', // 400 – details: { problem, ... } the draft breaks a hard rule
+  AUTO_INCOMPLETE: 'MSG_AUTO_INCOMPLETE', // 409 – the draft still has lessons or pairs without a place / teacher
 });
