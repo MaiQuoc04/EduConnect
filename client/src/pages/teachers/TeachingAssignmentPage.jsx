@@ -6,6 +6,7 @@ import { useToast } from '../../context/ToastContext.jsx';
 import { errorText } from '../../messages.js';
 import { formatDate } from '../../utils/format.js';
 import { foldVietnamese } from '../../utils/teacherValidation.js';
+import TeacherScheduleLookup from '../timetable/TeacherScheduleLookup.jsx';
 import './HomeroomAssignmentPage.css'; // shared toolbar / save bar styles (hr-*)
 import './TeachingAssignmentPage.css';
 
@@ -121,6 +122,7 @@ export default function TeachingAssignmentPage() {
   const [loadError, setLoadError] = useState(null);
   const [saveError, setSaveError] = useState(null);
   const [saving, setSaving] = useState(false);
+  const [lookup, setLookup] = useState(searchParams.get('lich') === '1'); // teacher schedule lookup panel
 
   const load = useCallback(async (params = {}) => {
     setLoading(true);
@@ -379,6 +381,10 @@ export default function TeachingAssignmentPage() {
       )}
       {board && !board.schoolYear && <div className="hr-empty-card"><Icon name="event_busy" /> Chưa có năm học nào được tạo.</div>}
 
+      {board?.schoolYear && lookup && (
+        <TeacherScheduleLookup teachers={board.teachers} subjects={board.subjects} onClose={() => setLookup(false)} />
+      )}
+
       {board?.schoolYear && (
         <>
           <div className="ta-toolbar">
@@ -396,6 +402,9 @@ export default function TeachingAssignmentPage() {
               <input type="checkbox" checked={onlyTodo} onChange={(e) => setOnlyTodo(e.target.checked)} />
               Chỉ lớp cần xử lý
             </label>
+            <button type="button" className={`btn ${lookup ? 'btn-primary' : 'btn-secondary'} ta-lookup-btn`} aria-expanded={lookup} onClick={() => setLookup((v) => !v)}>
+              <Icon name="person_search" size="sm" /> Tra lịch dạy giáo viên
+            </button>
             {focusTeacher && (
               <span className="ta-focus">
                 <Icon name="person_search" size="sm" /> Đang xem lớp của {focusName ?? 'giáo viên'}
