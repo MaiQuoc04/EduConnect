@@ -70,7 +70,7 @@ export default function TeachingSchedulePage() {
       {error && <div className="notice amber"><Icon name="error_outline" /><p>{error}</p></div>}
       {week && (
         <div aria-busy={loading}>
-          <WeekTimetable week={week} view={view} teacherView secondLine={(l) => `Lớp ${l.className}`} emptyText="Tuần này bạn không có tiết dạy nào."
+          <WeekTimetable week={week} view={view} teacherView mineTag={false} secondLine={(l) => `Lớp ${l.className}`} emptyText="Tuần này bạn không có tiết dạy nào."
             lessonActions={(l) => (
               <>
                 <LessonCalendarLinks lesson={l} canCreate />
