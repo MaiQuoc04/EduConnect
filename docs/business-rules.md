@@ -458,6 +458,9 @@ Boundaries that are easy to get wrong:
     no new history entry); the editor keeps "Lưu" disabled until something changes. Automatic scheduling and import
     always save (they also regenerate the periods). The apply dialog of automatic scheduling says that days before
     its start date (also the past days of the current week) keep the old timetable.
+  - Signed in as a teacher (18/11/2026): in a class timetable the teacher's own lessons are coloured green with
+    "Bạn dạy" and the legend counts them for the week (`mine` / `myLessons` of the week API, worked out on the
+    server from the signed-in account). In the teaching schedule every lesson is theirs, so all are coloured.
   - Saving is refused (nothing changes) when a subject has **no assigned teacher** on some dates of the range, or a
     teacher would teach **two classes in the same period**; the answer lists the dates / periods.
   - Two School Managers on the same class: a save made from an editor opened before someone else's save is refused
