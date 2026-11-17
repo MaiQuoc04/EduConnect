@@ -444,6 +444,16 @@ Boundaries that are easy to get wrong:
     end of the school year). Only the range changes: a version running before it ends the day before, one inside it
     is replaced, one running past it keeps its part after `end` (split). Periods of the range **without attendance**
     are deleted and generated again; periods with attendance stay (a new period is not placed on top of them).
+  - **History (17/11/2026, Dung):** nothing of an old timetable is lost when a new one is saved (manual save, import
+    or automatic scheduling). A version row is never edited in place: the version that overlaps the new range is
+    soft-deleted (`deleted_at` = time of the save) and the parts that stay in force are inserted again with the same
+    pattern, creator and `created_at`. So rows of a class with the same `created_at` are one saved timetable (its
+    first row keeps the range and pattern as saved), and a row deleted at time T was replaced by the save of the
+    same class created at T. No schema change. Periods already held (before the start of a save) are never touched.
+    Screen: "Lịch sử" on SCR-27 / "Xem toàn bộ lịch sử" in the editor – `/timetables/classes/:classId/history`
+    (School Manager): every save with who / when, dates still in force, what replaced which dates, periods held and
+    with attendance, the weekly pattern (cells changed from the replaced timetable highlighted) and a CSV export.
+    Versions trimmed before 17/11/2026 only show the part left.
   - Saving is refused (nothing changes) when a subject has **no assigned teacher** on some dates of the range, or a
     teacher would teach **two classes in the same period**; the answer lists the dates / periods.
   - Two School Managers on the same class: a save made from an editor opened before someone else's save is refused

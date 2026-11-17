@@ -558,6 +558,8 @@ Added 13/11/2026 at Dung's request (no UC ids yet – the lead decides; business
 - **Automatic scheduling** (17/11, School Manager): "Xếp tự động" on SCR-27 – teaching assignment + timetable of a
   semester as a draft, applied with the SCR-19 / UC-71 code (business rules §10). Sample data: sample_auto_schedule.sql (grade 10) and
   sample_grade_11_12.sql (grades 11 and 12, 17/11).
+- **Timetable history** (17/11, School Manager): "Lịch sử" per class on SCR-27 – every saved timetable kept (old ones
+  soft-deleted, never edited), what replaced what, periods held, CSV export. No schema change (business rules §10).
 - **School calendar** (School Manager manages, everyone reads): `/school-events`, the "Lịch sắp tới của trường" column
   of the school feed and the class calendar. Needs `patch_v0.3_school_events.sql` (proposed, waiting for the lead).
 
