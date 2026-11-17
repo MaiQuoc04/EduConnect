@@ -183,7 +183,7 @@ function lessonTodayHint() {
 }
 
 // Week grid: periods × Monday..Saturday (Sunday only when it has lessons), with morning / afternoon bands.
-function WeekGrid({ week, days, slots, byCell, onPick, secondLine, now }) {
+function WeekGrid({ week, days, slots, byCell, onPick, secondLine, now, mineTag }) {
   const groups = [true, false]
     .map((morning) => ({ morning, slots: slots.filter((s) => isMorning(s.period) === morning) }))
     .filter((g) => g.slots.length);
@@ -219,15 +219,16 @@ function WeekGrid({ week, days, slots, byCell, onPick, secondLine, now }) {
                   const l = byCell[`${d}|${s.slotId}`];
                   const state = l ? lessonState(l, week.today, now) : null;
                   return (
-                    <td key={d} className={`${d === week.today ? 'is-today' : ''}${state === 'live' ? ' is-live' : ''}`}>
+                    <td key={d} className={`${d === week.today ? 'is-today' : ''}${state === 'live' ? ' is-live' : ''}${l?.mine ? ' is-mine' : ''}`}>
                       {l ? (
-                        <button type="button" className="tt-cell" onClick={() => onPick(l)}
-                          aria-label={`${l.subjectName}, tiết ${l.period}, ${dmy(d)}, ${secondLine(l)}`}>
+                        <button type="button" className={`tt-cell${l.mine ? ' is-mine' : ''}`} onClick={() => onPick(l)}
+                          aria-label={`${l.subjectName}, tiết ${l.period}, ${dmy(d)}, ${secondLine(l)}${l.mine ? ', tiết bạn dạy' : ''}`}>
                           <span className="tt-cell-top">
                             <span className="tt-cell-subject">{l.subjectName}</span>
                             {l.room && <span className="tt-cell-room">{l.room}</span>}
                           </span>
                           <span className="tt-cell-sub">{secondLine(l)}</span>
+                          {l.mine && mineTag && <span className="tt-cell-flag is-mine"><Icon name="person" size="sm" />Bạn dạy</span>}
                           {state === 'live' && <span className="tt-cell-flag is-live">Đang diễn ra</span>}
                           {state !== 'live' && l.attendanceTaken && <span className="tt-cell-flag is-done">Đã điểm danh</span>}
                         </button>
@@ -247,7 +248,7 @@ function WeekGrid({ week, days, slots, byCell, onPick, secondLine, now }) {
 }
 
 // Day timeline (SCR-45 "Hôm nay"): morning / noon break / afternoon, with the now line on today.
-function DayTimeline({ week, date, lessons, slots, onPick, secondLine, now }) {
+function DayTimeline({ week, date, lessons, slots, onPick, secondLine, now, mineTag }) {
   const morning = lessons.filter((l) => isMorning(l.period));
   const afternoon = lessons.filter((l) => !isMorning(l.period));
   const isToday = date === week.today;
@@ -273,7 +274,7 @@ function DayTimeline({ week, date, lessons, slots, onPick, secondLine, now }) {
                 {started && i === firstOpen && (
                   <div className="tt-nowline" aria-label={`Bây giờ ${now}`}><i /><span>Bây giờ {now}</span></div>
                 )}
-                <button type="button" className={`tt-tl-item is-${state}`} onClick={() => onPick(l)}>
+                <button type="button" className={`tt-tl-item is-${state}${l.mine ? ' is-mine' : ''}`} onClick={() => onPick(l)}>
                   <i className="tt-tl-pin" aria-hidden="true" />
                   <span className="tt-tl-when">
                     <strong>Tiết {l.period}{state === 'live' && <i className="tt-pulse" aria-hidden="true" />}</strong>
@@ -285,7 +286,7 @@ function DayTimeline({ week, date, lessons, slots, onPick, secondLine, now }) {
                       <strong>{l.subjectName}</strong>
                       {l.room && <span className="tt-room-chip">{l.room}</span>}
                     </span>
-                    <span>{secondLine(l)}</span>
+                    <span>{secondLine(l)}{l.mine && mineTag && <em className="tt-mine-tag">Bạn dạy</em>}</span>
                   </span>
                 </button>
               </li>
@@ -360,8 +361,8 @@ function MatrixGroup({ g, days, byCell, day, onDay, week, now }) {
           const l = byCell[`${d}|${s.slotId}`];
           const live = l && lessonState(l, week.today, now) === 'live';
           return (
-            <button key={`${s.slotId}-${d}`} type="button" title={l ? `Tiết ${s.period}: ${l.subjectName}` : `Tiết ${s.period}: trống`}
-              className={`tt-matrix-cell${l ? '' : ' is-empty'}${i === day ? ' is-col' : ''}${live ? ' is-live' : ''}`} onClick={() => onDay(i)}>
+            <button key={`${s.slotId}-${d}`} type="button" title={l ? `Tiết ${s.period}: ${l.subjectName}${l.mine ? ' (bạn dạy)' : ''}` : `Tiết ${s.period}: trống`}
+              className={`tt-matrix-cell${l ? '' : ' is-empty'}${i === day ? ' is-col' : ''}${live ? ' is-live' : ''}${l?.mine ? ' is-mine' : ''}`} onClick={() => onDay(i)}>
               {l ? shortName(l.subjectName) : '--'}
             </button>
           );
@@ -387,7 +388,8 @@ function DayTabs({ week, days, day, onDay }) {
 }
 
 // week = { days, timeSlots, lessons, today, weekStart }; secondLine(lesson) = teacher (class) or class (teaching).
-export default function WeekTimetable({ week, view, secondLine, emptyText, aside, teacherView = false, lessonActions }) {
+// mineTag: write "Bạn dạy" on the signed-in teacher's lessons (off on the teaching schedule, where all lessons are theirs).
+export default function WeekTimetable({ week, view, secondLine, emptyText, aside, teacherView = false, lessonActions, mineTag = true }) {
   const now = useNow();
   const [picked, setPicked] = useState(null);
   const showSunday = week.lessons.some((l) => l.date === week.days[6]);
@@ -407,12 +409,13 @@ export default function WeekTimetable({ week, view, secondLine, emptyText, aside
   const lastPeriod = Math.max(5, ...week.lessons.map((l) => l.period));
   const slots = week.timeSlots.filter((s) => s.period <= lastPeriod);
   const dayLessons = week.lessons.filter((l) => l.date === days[day]);
+  const mineCount = week.lessons.filter((l) => l.mine).length;
 
   const dayView = (
     <div className={`tt-dayview${view === 'week' ? ' is-mobile-only' : ''}`}>
       <div className="tt-dayview-main">
         <DayTabs week={week} days={days} day={day} onDay={setDay} />
-        <DayTimeline week={week} date={days[day]} lessons={dayLessons} slots={week.timeSlots} onPick={setPicked} secondLine={secondLine} now={now} />
+        <DayTimeline week={week} date={days[day]} lessons={dayLessons} slots={week.timeSlots} onPick={setPicked} secondLine={secondLine} now={now} mineTag={mineTag} />
       </div>
       <aside className="tt-dayview-side">
         <WeekMatrix week={week} days={days} slots={slots} byCell={byCell} day={day} onDay={setDay} now={now} />
@@ -428,11 +431,12 @@ export default function WeekTimetable({ week, view, secondLine, emptyText, aside
       )}
       {view === 'week' && (
         <div className="tt-weekview">
-          <WeekGrid week={week} days={days} slots={slots} byCell={byCell} onPick={setPicked} secondLine={secondLine} now={now} />
+          <WeekGrid week={week} days={days} slots={slots} byCell={byCell} onPick={setPicked} secondLine={secondLine} now={now} mineTag={mineTag} />
           <div className="tt-legend caption">
             <span><i className="tt-key" />Tiết học</span>
             <span><i className="tt-key is-today" />Hôm nay</span>
             <span><i className="tt-key is-live" />Tiết đang diễn ra</span>
+            {mineCount > 0 && <span><i className="tt-key is-mine" />Tiết bạn dạy ({mineCount} tiết tuần này)</span>}
             <span className="tt-legend-hint">Bấm vào một tiết để xem chi tiết.</span>
           </div>
         </div>

@@ -588,3 +588,14 @@
 .th-grid td span.th-was { color: var(--graphite-500); font-style: italic; }
 .th-empty { display: flex; gap: 10px; align-items: center; padding: 16px; color: var(--graphite-600); }
 @media (max-width: 720px) { .th-facts { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+
+/* The signed-in teacher's own lessons (Dung, 18/11/2026) */
+.tt-wgrid td.is-mine { background: var(--green-bg); }
+.tt-cell.is-mine { box-shadow: inset 4px 0 0 var(--green); }
+.tt-cell.is-mine:hover { background: rgba(255, 255, 255, 0.5); }
+.tt-cell-flag.is-mine { display: inline-flex; align-items: center; gap: 2px; color: var(--green); }
+.tt-key.is-mine { background: var(--green-bg); outline-color: var(--green); }
+.tt-tl-item.is-mine { background: var(--green-bg); }
+.tt-tl-item.is-mine::after { content: ''; position: absolute; right: 0; top: 0; bottom: 0; width: 4px; background: var(--green); }
+.tt-mine-tag { margin-left: 8px; font-style: normal; font-size: 11px; font-weight: 600; color: var(--green); }
+.tt-matrix-cell.is-mine { background: var(--green-bg); color: var(--green); font-weight: 600; }
