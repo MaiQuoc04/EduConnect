@@ -1,4 +1,6 @@
 import * as timetableImport from './timetable.import.js';
+import * as auto from './timetable.auto.js';
+import { autoApplyRequest, autoOptionsQuery, autoRunRequest } from './timetable.auto.validation.js';
 import * as periodTimes from './timetable.periods.js';
 import * as timetableService from './timetable.service.js';
 import { classIdParam, dateQuery, importRequest, listQuery, periodTimesRequest, saveRequest } from './timetable.validation.js';
@@ -59,4 +61,17 @@ export async function getPeriodTimes(req, res) {
 // PUT /api/v1/timetables/period-times  { sessionStarts, duration, stamp }
 export async function updatePeriodTimes(req, res) {
   res.json(await periodTimes.updatePeriodTimes(periodTimesRequest(req), req.user, req.ip));
+}
+
+// ── Automatic scheduling (Dung, 17/11/2026): draft first, saved only on apply ──
+export async function autoOptions(req, res) {
+  res.json(await auto.autoOptions(autoOptionsQuery(req)));
+}
+
+export async function autoRun(req, res) {
+  res.json(await auto.runAuto(autoRunRequest(req)));
+}
+
+export async function autoApply(req, res) {
+  res.json(await auto.applyAuto(autoApplyRequest(req), req.user));
 }
