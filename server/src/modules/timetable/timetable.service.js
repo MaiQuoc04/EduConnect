@@ -551,14 +551,73 @@ async function lessonsOfTeacher(teacherId, frame) {
   return rows;
 }
 
+// Where a teacher's lessons are, so an empty week is not a dead end (Dung, 18/11/2026):
+//   prevLessonDate / nextLessonDate – the nearest lesson before / after the week shown;
+//   overview.firstLessonDate – the first lesson from today; overview.items – per class and subject, the lessons from
+//   today (first and last date, how many, periods a week); overview.unscheduled – dates of teaching assignments
+//   (from today) with no lesson, at least a week long (the class has no timetable for those dates yet).
+async function teacherOverview(teacherId, frame) {
+  const [{ rows: near }, { rows: items }, { rows: unscheduled }] = await Promise.all([
+    pool.query(
+      `SELECT to_char((SELECT MAX("date") FROM timetable_slots WHERE teacher_id = $1 AND "date" < $2::date), 'YYYY-MM-DD') AS "prev",
+              to_char((SELECT MIN("date") FROM timetable_slots WHERE teacher_id = $1 AND "date" > $3::date), 'YYYY-MM-DD') AS "next",
+              to_char((SELECT MIN("date") FROM timetable_slots WHERE teacher_id = $1 AND "date" >= CURRENT_DATE), 'YYYY-MM-DD') AS "first"`,
+      [teacherId, frame.weekStart, frame.weekEnd],
+    ),
+    pool.query(
+      `SELECT ts.class_id AS "classId", c.class_name AS "className", ts.subject_id AS "subjectId", s.subject_name AS "subjectName",
+              to_char(MIN(ts."date"), 'YYYY-MM-DD') AS "from", to_char(MAX(ts."date"), 'YYYY-MM-DD') AS "to",
+              COUNT(*)::int AS "lessons",
+              (SELECT x.periods_per_week FROM track_subjects x WHERE x.track_id = c.track_id AND x.school_year_id = c.school_year_id
+                 AND x.subject_id = ts.subject_id) AS "periodsPerWeek"
+       FROM timetable_slots ts
+       JOIN classes c ON c.class_id = ts.class_id
+       JOIN subjects s ON s.subject_id = ts.subject_id
+       WHERE ts.teacher_id = $1 AND ts."date" >= CURRENT_DATE
+       GROUP BY ts.class_id, c.class_name, c.track_id, c.school_year_id, ts.subject_id, s.subject_name
+       ORDER BY MIN(ts."date"), c.class_name, s.subject_name
+       LIMIT 50`,
+      [teacherId],
+    ),
+    // Dates of each assignment (from today) when the class has no timetable: before its first lesson and after its
+    // last one (e.g. the second semester before its timetable is made), or the whole range.
+    pool.query(
+      `WITH a AS (
+         SELECT a.class_id, c.class_name, s.subject_name, GREATEST(a.start_date, CURRENT_DATE) AS s, a.end_date AS e,
+                (SELECT MIN(ts."date") FROM timetable_slots ts WHERE ts.class_id = a.class_id
+                   AND ts."date" BETWEEN GREATEST(a.start_date, CURRENT_DATE) AND a.end_date) AS f,
+                (SELECT MAX(ts."date") FROM timetable_slots ts WHERE ts.class_id = a.class_id
+                   AND ts."date" BETWEEN GREATEST(a.start_date, CURRENT_DATE) AND a.end_date) AS l
+         FROM teaching_assignments a
+         JOIN classes c ON c.class_id = a.class_id AND c.deleted_at IS NULL
+         JOIN subjects s ON s.subject_id = a.subject_id
+         WHERE a.teacher_id = $1 AND a.deleted_at IS NULL AND a.end_date >= CURRENT_DATE
+       ), gaps AS (
+         SELECT class_id, class_name, subject_name, s AS gs, e AS ge FROM a WHERE f IS NULL
+         UNION ALL SELECT class_id, class_name, subject_name, s, f - 1 FROM a WHERE f IS NOT NULL AND f - s >= 7
+         UNION ALL SELECT class_id, class_name, subject_name, l + 1, e FROM a WHERE l IS NOT NULL AND e - l >= 7
+       )
+       SELECT class_id AS "classId", class_name AS "className", subject_name AS "subjectName",
+              to_char(gs, 'YYYY-MM-DD') AS "from", to_char(ge, 'YYYY-MM-DD') AS "to"
+       FROM gaps ORDER BY gs, class_name, subject_name LIMIT 50`,
+      [teacherId],
+    ),
+  ]);
+  return {
+    prevLessonDate: near[0].prev,
+    nextLessonDate: near[0].next,
+    overview: { firstLessonDate: near[0].first, items, unscheduled },
+  };
+}
+
 // GET /timetables/teaching-schedule/week?date= (SCR-57, detail SCR-58) – the teacher's own lessons, built from the
 // timetable (which follows the teaching assignments).
 export async function teachingWeek({ date }, user) {
   const teacherId = await teacherIdOf(user.userId);
   if (!teacherId) throw notFound('TEACHER_NOT_FOUND', 'Teacher not found.');
   const frame = await weekFrame(date);
-  const lessons = await lessonsOfTeacher(teacherId, frame);
-  return { ...frame, lessons: lessons.map((l) => ({ ...l, mine: true })), periodsThisWeek: lessons.length };
+  const [lessons, around] = await Promise.all([lessonsOfTeacher(teacherId, frame), teacherOverview(teacherId, frame)]);
+  return { ...frame, lessons: lessons.map((l) => ({ ...l, mine: true })), periodsThisWeek: lessons.length, ...around };
 }
 
 // GET /timetables/teachers/:teacherId/week?date= (School Manager, "Tra cứu lịch dạy" on the teaching assignment
@@ -577,8 +636,9 @@ export async function teacherWeek({ teacherId, date }) {
   );
   if (!rows.length) throw notFound('TEACHER_NOT_FOUND', 'Teacher not found.');
   const frame = await weekFrame(date);
-  const lessons = await lessonsOfTeacher(teacherId, frame);
+  const [lessons, around] = await Promise.all([lessonsOfTeacher(teacherId, frame), teacherOverview(teacherId, frame)]);
   return {
+    ...around,
     teacher: rows[0],
     ...frame,
     lessons,
