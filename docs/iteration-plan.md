@@ -170,7 +170,7 @@ It2: Anh FE-08 + FE-14, Khanh FE-05 + FE-06).
     children, UC-106 update profile (`fullName`, `occupation`, `address` only; login identifiers are not touched).
     Server `server/src/modules/parents/` (`GET /parents`, `GET /parents/:parentId`, `PATCH /parents/:parentId`,
     School Manager only). The UC-13 screen now uses `GET /parents`; the temporary `GET /students/parents/lookup`
-    (server) and `lookupParentByPhone` (`client/src/api/students.js`, no longer called) are not removed yet.
+    and `lookupParentByPhone` were removed 17/11 (closing item #3, on `feature/fe-08-school-feed`, not merged yet).
   - FE-08 School Feed (Anh, It2) – merged 11/11: UC-58..UC-66 (all 9 UC), screens SCR-02 School Feed, SCR-05
     School Post Detail, SCR-31 Create School Post, SCR-06 Update School Post. The school feed is the home screen
     (`HOME_BY_ROLE`) and the first menu item of every role except System Admin. Layout per Stitch: three tabs
@@ -237,7 +237,7 @@ It2: Anh FE-08 + FE-14, Khanh FE-05 + FE-06).
   |---|---|---|---|
   | 1 | Merge `fix/it1-follow-ups` (FE-03 group sync, FE-03 screen numbers – details below) | Quoc | 04/11 |
   | 2 | FE-13 departments: create / import pick from the `departments` list (details below) | Linh | **done**, merged 07/11 (the follow-up patch is still open) |
-  | 3 | Replace the temporary `GET /students/parents/lookup` with FE-14 UC-104 | Anh | with FE-14 (It2) |
+  | 3 | Replace the temporary `GET /students/parents/lookup` with FE-14 UC-104 | Anh | **done** 17/11 on `feature/fe-08-school-feed` (not merged yet): SCR-13 uses `GET /parents` since 11/11; route, `lookupParent`, `findParentByPhone` and the client's `lookupParentByPhone` removed, no error code left unused |
   | 4 | Shared Excel reading `utils/excel.js` for UC-96 / UC-14 / UC-27 (It2 clean-up, after the features merge) | Linh | It2 clean-up |
   | 5 | Decide: who adds a new department (SQL only today, or a screen for SM / SA) | Quoc | **decided 07/11**: School Manager, Departments screen (UC-114, FE-03, merged 11/11) |
   | 6 | Decide: the empty test school years on the shared DB (2025-2026, 2028-2029, 2030-2031; no classes; `school_years` has no `deleted_at`) – keep or remove | Quoc | 07/11 |
@@ -310,13 +310,16 @@ It2: Anh FE-08 + FE-14, Khanh FE-05 + FE-06).
         UC-10 / UC-11; UC-11 from a year that is not the one right before refused; 10 → 11 and 10 → 10 promoted,
         10 → 12 skipped; plus the API checks (401 / 403, list search, parent lookup, UC-14 template / preview,
         link path). `npm run build` passes.
-    - Left after the merge: FE-14 (Anh) replaces the temporary `GET /students/parents/lookup` with UC-104; the
-      `utils/excel.js` clean-up with FE-13 in It2.
+    - Left after the merge: FE-14 (Anh) replaces the temporary `GET /students/parents/lookup` with UC-104 (done
+      17/11, closing item #3); the `utils/excel.js` clean-up with FE-13 in It2.
   - FE-14 (Anh, It2 since 03/11): uses UC-104..UC-106; a parent's address is `users.address`, occupation stays
     `parents.occupation`.
   - FE-08 / FE-14 (Anh), owed since 09/11 (both merged 11/11):
-    - Now that FE-14 is merged: remove the temporary `GET /students/parents/lookup` (`students.routes.js`,
-      `lookupParent` in `students.controller.js`) and the client's `lookupParentByPhone` (closing item #3).
+    - Done 17/11 (closing item #3, not merged yet): the temporary `GET /students/parents/lookup` (`students.routes.js`,
+      `lookupParent` in `students.controller.js`, `findParentByPhone` in `students.service.js`) and the client's
+      `lookupParentByPhone` removed. Tested on the local DB: the old route gives 404; SCR-13 phone lookup through
+      `GET /parents` (10 digits, +84, dots) still shows the parent's name before linking; UC-12 / UC-13 / UC-14 and
+      FE-14 unchanged (regression suite 215/215); `npm run build` passes.
     - Error codes not in `client/src/messages.js` yet, waiting for the lead's OK (checked in the code 09/11; the
       pages keep their own texts meanwhile):
       - FE-08: `MSG_AUDIENCE_REQUIRED`, `MSG_CANNOT_PIN_NEWS`, `MSG_CANNOT_REACT_NEWS`, `MSG_CANNOT_COMMENT_NEWS`,
