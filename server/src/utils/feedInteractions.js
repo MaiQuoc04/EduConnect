@@ -20,12 +20,20 @@ import { AppError, badRequest } from './AppError.js';
 //   - A reply's parent must be a comment of the same post, not deleted.
 //   - A deleted comment is shown as a placeholder while it still has a reply that is not deleted (see listComments).
 
-// The only two column names that ever reach the SQL text (a column cannot be a $n placeholder).
-export const FEED_COLUMNS = Object.freeze({ GROUP_POST: 'post_id', SCHOOL_POST: 'school_post_id' });
-const ALLOWED_COLUMNS = new Set(Object.values(FEED_COLUMNS));
+// The only column names that ever reach the SQL text (a column cannot be a $n placeholder).
+// COMMENT (17/11/2026, post_likes.comment_id, patch_v0.3_comment_likes.sql): a like of a comment. It is accepted by
+// the LIKE functions only (addLike / removeLike / countLikes / likeSummary); the comment functions below still take a
+// post column only, so nothing changes for the existing callers.
+export const FEED_COLUMNS = Object.freeze({
+  GROUP_POST: 'post_id',
+  SCHOOL_POST: 'school_post_id',
+  COMMENT: 'comment_id',
+});
+const ALLOWED_COLUMNS = new Set([FEED_COLUMNS.GROUP_POST, FEED_COLUMNS.SCHOOL_POST]); // comments of a post
+const LIKE_COLUMNS = new Set(Object.values(FEED_COLUMNS)); // post_likes targets
 
-function columnOf(target) {
-  if (!target || !ALLOWED_COLUMNS.has(target.column)) {
+function columnOf(target, allowed = ALLOWED_COLUMNS) {
+  if (!target || !allowed.has(target.column)) {
     throw new Error(`feedInteractions: unknown target column ${target?.column}`); // programming error → 500
   }
   return target.column;
@@ -42,7 +50,7 @@ function columnOf(target) {
  * @returns {Promise<boolean>} true when a row was added
  */
 export async function addLike(target, userId, db = pool) {
-  const column = columnOf(target);
+  const column = columnOf(target, LIKE_COLUMNS);
   const { rowCount } = await db.query(
     `INSERT INTO post_likes (user_id, ${column}, created_at) VALUES ($1, $2, NOW())
      ON CONFLICT (user_id, ${column}) DO NOTHING`,
@@ -57,7 +65,7 @@ export async function addLike(target, userId, db = pool) {
  * @returns {Promise<boolean>} true when a row was removed
  */
 export async function removeLike(target, userId, db = pool) {
-  const column = columnOf(target);
+  const column = columnOf(target, LIKE_COLUMNS);
   const { rowCount } = await db.query(`DELETE FROM post_likes WHERE user_id = $1 AND ${column} = $2`, [
     userId,
     target.id,
@@ -73,7 +81,7 @@ export async function removeLike(target, userId, db = pool) {
  * @param {number} userId the reader (likedByMe)
  */
 export async function countLikes(column, ids, userId, db = pool) {
-  columnOf({ column });
+  columnOf({ column }, LIKE_COLUMNS);
   if (!ids.length) return new Map();
   const { rows } = await db.query(
     `SELECT ${column} AS "postId", COUNT(*) AS "likeCount", BOOL_OR(user_id = $2) AS "likedByMe"
@@ -87,8 +95,30 @@ export async function countLikes(column, ids, userId, db = pool) {
 
 /** { likeCount, likedByMe } of one post (the answer of like / unlike). FE-05 passes { column: 'post_id', id }. */
 export async function likeSummary(target, userId, db = pool) {
-  const like = (await countLikes(columnOf(target), [target.id], userId, db)).get(target.id);
+  const like = (await countLikes(columnOf(target, LIKE_COLUMNS), [target.id], userId, db)).get(target.id);
   return { likeCount: like?.likeCount ?? 0, likedByMe: like?.likedByMe ?? false };
+}
+
+/**
+ * Comment likes of a tree from listComments (17/11/2026): adds likeCount and likedByMe to EVERY node, in ONE query
+ * for the whole page whatever its size or depth (countLikes with every comment id, no query per node). A deleted
+ * comment (placeholder) gets 0 / false: its likes stay in post_likes but are never shown, and it cannot be liked.
+ * Returns a new tree; the input is not changed. Opt-in: listComments itself does not call it, so FE-05 sees no new
+ * field until it calls this too (with its own permission checks done first).
+ * @param {object[]} items the tree (nodes with commentId, isDeleted, replies)
+ * @param {number} userId the reader (likedByMe)
+ */
+export async function withCommentLikes(items, userId, db = pool) {
+  const ids = [];
+  const walk = (list) => list.forEach((n) => { if (!n.isDeleted) ids.push(n.commentId); walk(n.replies); });
+  walk(items);
+  const likes = await countLikes(FEED_COLUMNS.COMMENT, ids, userId, db);
+  const decorate = (list) =>
+    list.map((n) => {
+      const like = n.isDeleted ? null : likes.get(n.commentId);
+      return { ...n, likeCount: like?.likeCount ?? 0, likedByMe: like?.likedByMe ?? false, replies: decorate(n.replies) };
+    });
+  return decorate(items);
 }
 
 // --- Comments (soft delete) ---------------------------------------------------------------------------------------
