@@ -227,6 +227,9 @@ Boundaries that are easy to get wrong:
     teacher are joined. Timetable periods **inside the range without attendance** move to the new teacher; periods
     with attendance stay. A (class, subject) cannot be left without a teacher in a range that still has such
     periods.
+  - **Search on SCR-19 (18/11/2026):** the search box finds a class (name) or a teacher (whole name word first, else
+    the start of a name word, or part of the code; accents ignored). A teacher match shows only the classes where
+    that teacher is assigned in the range on screen, only the columns of their subjects, and highlights their cells.
   - **Viewing assignments by range (SCR-19):** SM picks "from" and "to"; each (class, subject) lists every teacher
     whose assignment overlaps the range, with its start and end dates (01/01–31/05 shows only A, 01/06–31/12 only
     B, 01/01–31/12 both). Changes are made for the range on screen and only when it starts today or later.
