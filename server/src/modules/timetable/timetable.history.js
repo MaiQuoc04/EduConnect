@@ -4,7 +4,9 @@
 //   * rows of a class with the same created_at are one saved timetable ("plan"); its first row keeps the full range
 //     and the pattern as saved (later rows are the pieces left in force after a change, same pattern);
 //   * a row soft-deleted at time T was replaced by the plan of the same class created at T (same transaction).
-// Versions changed before this rule (ranges trimmed in place) only show what is left of them.
+// Versions changed before this rule (ranges trimmed in place) only show what is left of them; the part split off
+// after a save by the old code got the time of that save, so rows are grouped by created_at AND pattern (that piece
+// then shows as its own entry instead of being mixed into the new timetable).
 import { pool } from '../../config/db.js';
 import { internals } from './timetable.service.js';
 
@@ -39,24 +41,37 @@ export function classHistory({ classId }, db = pool) {
               to_char(t.end_date, 'YYYY-MM-DD') AS "endDate",
               to_char(t.created_at, 'YYYY-MM-DD"T"HH24:MI:SS.US') AS "createdKey",
               to_char(t.deleted_at, 'YYYY-MM-DD"T"HH24:MI:SS.US') AS "deletedKey",
-              t.created_by AS "createdById", u.full_name AS "createdBy"
+              t.created_by AS "createdById", u.full_name AS "createdBy",
+              (SELECT md5(COALESCE(string_agg(concat_ws('-', e.weekday, e.slot_id, e.subject_id, e.room), ',' ORDER BY e.weekday, e.slot_id), ''))
+               FROM timetable_entries e WHERE e.timetable_id = t.timetable_id) AS "pattern"
        FROM timetables t LEFT JOIN users u ON u.user_id = t.created_by
        WHERE t.class_id = $1
        ORDER BY t.created_at DESC, t.timetable_id`,
       [classId],
     );
-    const plans = new Map(); // createdKey -> plan
+    const plans = new Map(); // createdKey|pattern -> plan
     for (const r of rows) {
-      let p = plans.get(r.createdKey);
+      const k = `${r.createdKey}|${r.pattern}`;
+      let p = plans.get(k);
       if (!p) {
         if (plans.size >= HISTORY_MAX_PLANS) continue;
-        p = { key: r.createdKey, rows: [], createdBy: r.createdBy ?? null };
-        plans.set(r.createdKey, p);
+        p = { key: k, createdKey: r.createdKey, rows: [], createdBy: r.createdBy ?? null };
+        plans.set(k, p);
       }
       p.rows.push(r);
     }
     const all = [...plans.values()];
-    for (const p of all) p.first = p.rows.reduce((a, b) => (Number(b.id) < Number(a.id) ? b : a));
+    // The row as saved: earliest start, then lowest id (pieces left in force come later).
+    for (const p of all) {
+      p.first = p.rows.reduce((a, b) => (b.startDate < a.startDate || (b.startDate === a.startDate && Number(b.id) < Number(a.id)) ? b : a));
+    }
+    const createdAt = new Map(); // createdKey -> plans saved at that time
+    for (const p of all) createdAt.set(p.createdKey, [...(createdAt.get(p.createdKey) ?? []), p]);
+    // The plan that replaced row r: saved at r's deletion time and overlapping r.
+    const replacer = (r) => {
+      const list = createdAt.get(r.deletedKey) ?? [];
+      return list.find((q) => q.first.startDate <= r.endDate && q.first.endDate >= r.startDate) ?? null;
+    };
 
     // Pattern of each plan = entries of its first row.
     const firstIds = all.map((p) => p.first.id);
@@ -99,13 +114,13 @@ export function classHistory({ classId }, db = pool) {
       for (const c of counts) held.set(c.key, { periods: c.n, withAttendance: c.checked });
     }
 
-    const label = (p) => ({ planId: String(p.first.id), createdAt: p.key.slice(0, 16).replace('T', ' '), createdBy: p.createdBy });
+    const label = (p) => ({ planId: String(p.first.id), createdAt: p.createdKey.slice(0, 16).replace('T', ' '), createdBy: p.createdBy });
     const out = all.map((p) => {
       const inForce = inForceOf(p);
       // Dates of this plan taken by later saves: deleted row ∩ range of the plan created at its deletion time.
       const replaced = [];
       for (const r of p.rows.filter((x) => x.deletedKey)) {
-        const q = plans.get(r.deletedKey);
+        const q = replacer(r);
         const s = q && q.first.startDate > r.startDate ? q.first.startDate : r.startDate;
         const e = q && q.first.endDate < r.endDate ? q.first.endDate : r.endDate;
         if (q && s > e) continue; // a piece cut away and kept elsewhere – not replaced
