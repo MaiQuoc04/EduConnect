@@ -147,13 +147,13 @@ Source: Report 3 section 4.2 (draft v1.3). Actor "User" = any signed-in account.
 | ID | Use case | Actor | Sub-feature | Description |
 |---|---|---|---|---|
 | UC-81 | Configure Grade Structure | School Manager | Grade Structure | Set weighted grade components per subject, grade level and semester, including how many scores each component has; locked once the semester has grades. |
-| UC-82 | Copy Grade Structure | School Manager | Grade Structure | Copy semester 1 to semester 2, or one subject to another, as an independent copy. |
+| UC-82 | Copy Grade Structure | School Manager | Grade Structure | Copy semester 1 to semester 2, or one subject to one or several others at once, as independent copies. |
 | UC-83 | Enter Grades | Teacher | Grade Entry | Enter grades for an assigned class and subject. |
-| UC-84 | Import Grades | Teacher | Grade Entry | Import grades from a file for an assigned class and subject. |
+| UC-84 | Import Grades | Teacher | Grade Entry | Import grades from a file for an assigned class and subject; the scores go into the grid unsaved until the teacher saves. |
 | UC-85 | Finalize Grades | Teacher | Grade Entry | Finalize the grades of a class, subject and semester, which locks them. |
 | UC-86 | Unlock Grades | School Manager | Grade Control | Unlock finalized grades of a class, subject and semester. |
 | UC-87 | View Grade Change History | School Manager | Grade Control | View who changed which grade and when. |
-| UC-88 | View Grades | Teacher, Student, Parent, School Manager | Results & Ranking | View grades and semester / year averages within the role's scope. |
+| UC-88 | View Grades | Teacher, Student, Parent, School Manager | Results & Ranking | View grades and semester / year averages within the role's scope (student / parent: finalized grade books only). |
 | UC-89 | View Class Ranking | Teacher, Student, Parent, School Manager | Results & Ranking | View the class ranking (student / parent: own rank only). |
 
 ## FE-12 Attendance Management

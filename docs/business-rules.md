@@ -233,6 +233,9 @@ Boundaries that are easy to get wrong:
 - Importing a class creates 3 groups automatically: **GENERAL** (feed + chat), **STUDENT** (chat), **PARENT** (chat).
   Groups can also be created by hand. One **TEACHER_SCHOOL** group for the whole school (feed + chat, all teachers +
   SMs, managed by SM, reused across years). After promotion, last year's groups are read only.
+  A new Teacher or School Manager account joins every active TEACHER_SCHOOL group in the same transaction, whether
+  created (UC-95), imported by SA (UC-96) or imported by SM (UC-116); if the group does not exist yet nothing is
+  added (FE-13, 17/11/2026).
 - **Teams** (`TEAM_CHAT`): chat only, members from one class, or teachers of the school ("teacher team", below);
   Teachers, Students and Parents can create them
   (`groups.created_by`); SA and SM cannot.
@@ -391,17 +394,49 @@ Boundaries that are easy to get wrong:
   of scores (`score_count`, e.g. regular tests = 4 scores, mid-term = 1, final = 1). Semester 2 is copied from
   semester 1 and edited independently; copying to another subject makes an independent copy. **The structure locks
   once the semester has grades.**
+  - Limits (FE-11, 10/11/2026): at most 10 components, 1–10 scores each, weight > 0 and ≤ 100 with at most 2
+    decimals.
+  - The lock is per **subject × grade level × semester** (any `grades` row of that structure, even a cleared score),
+    not the whole semester.
+  - Saving a structure that has no grades yet replaces its components: the old `grade_components` rows are hard
+    deleted (configuration, no `grades` row points to them, §14).
+  - UC-82 copies the shown structure to **one or several subjects** of a semester × grade level at once (at most 50),
+    each an independent copy that replaces the target's components. If any target already has grades the whole copy
+    is refused and nothing changes (14/11/2026).
 - Each individual score is its own `grades` row (`attempt_no`); averages are **not stored**, they are computed:
   subject semester average = weighted average of the scores present; subject year average = (S1 + 2 × S2) / 3;
-  student year average = average of subjects (every `track_subjects.weight` is 1, so a plain average).
-- Teachers enter / import grades only for their assigned class + subject.
+  student semester / year average = average of subjects (every `track_subjects.weight` is 1, so a plain average).
+  Subjects counted = those with a grade structure for the class's grade that year (only the class type's subjects
+  when set); a subject without a structure is not counted.
+- **Rounding (Circular 22/2021, 14/11/2026):** every average is rounded to 1 decimal, half up (7.94 → 7.9,
+  7.95 → 8.0). Each step uses the **rounded** result of the step before: subject semester average → subject year
+  average → student average. Ranking compares the rounded averages, so students with the same shown average share
+  a rank.
+- Teachers enter / import grades only for their assigned class + subject, with an assignment that is current or
+  still to come (`end_date` ≥ today); a teacher whose assignment has ended can only view. Only **studying** students
+  are edited, required for finalizing and ranked; transferred / dropped students keep their old grades, read only.
+  A student moved by UC-10 within the year keeps the scores from the other class; when both classes have the same
+  score slot, the score of the current class wins.
+- **Import (UC-84):** an empty score cell keeps the current score (clearing a score is done on the entry screen,
+  UC-83). Imported scores go into the grid **unsaved**; the teacher checks them and saves. The import dialog lists
+  only the rows with errors.
+- **Export:** a grade book (class × subject × semester) can be exported to Excel by anyone who can view it (assigned
+  teacher, teachers of the class, SM), finalized or not: each score, the semester average, the book status and a note
+  (left the class / missing scores). It is for reading and printing; scores are changed through the import template.
 - **Finalize** (UC-85) locks the grade book (class × subject × semester, `grade_locks`). It is **blocked if any
-  currently studying student is missing a score**. To change a finalized grade the teacher asks SM outside the
-  system; SM **unlocks** (UC-86); the teacher edits and finalizes again.
+  currently studying student is missing a score** = any score slot of any component is empty (e.g. 4 regular tests,
+  1 mid-term and 1 final are all needed). To change a finalized grade the teacher asks SM outside the
+  system; SM **unlocks** (UC-86, optional reason ≤ 255 characters in the log, the teacher is not notified); the
+  teacher edits and finalizes again. A grade book is OPEN (never finalized), LOCKED (finalized) or UNLOCKED (unlocked
+  by SM). SM views a book read only with tabs Học kỳ 1 / Học kỳ 2 / Cả năm.
 - Every grade entry and change is logged in `grade_histories` (first entry has `old_score` NULL). Grade rows are never
   deleted; clearing a score = `score` NULL.
 - Viewing: students / parents only their own / child's; teachers see all grades of classes they teach; SM sees the
   whole school (read only). Students / parents see only their own rank.
+- **Students and parents see only finalized grade books (14/11/2026).** A book never finalized is "not published":
+  its scores are left out of every average and rank. A book unlocked by SM for a correction keeps showing the scores
+  **as finalized** (rebuilt from `grade_histories`) until the teacher finalizes it again. For teachers and SM an
+  average or rank is provisional while a subject's book of the period is not finalized.
 
 ## 12. Attendance (FE-12)
 - Per period, 4 statuses: `PRESENT`, `LATE`, `ABSENT_EXCUSED`, `ABSENT_UNEXCUSED`. No leave-request feature.
@@ -429,7 +464,8 @@ Boundaries that are easy to get wrong:
 - Hard delete is allowed only for technical / configuration rows: `department_subjects` (07/11/2026), `post_likes` (unlike), `message_reactions`
   (reaction removed, §6), `class_event_viewers`,
   `teacher_subjects`, `user_roles`, `student_parents` (unlink), expired OTPs, `track_subjects` (a subject removed
-  from a class type while the year has no grades, §4).
+  from a class type while the year has no grades, §4), `grade_components` (replaced while the structure has no
+  grades, §11, 17/11/2026).
 - Status changes instead of deletes: accounts (`LOCKED`), enrollments (`TRANSFERRED` / `DROPPED`), group members
   (`left_at`), activity registrations (`CANCELLED`), activities (`CANCELLED`).
 

@@ -47,7 +47,7 @@ Source: Report 3 section 5.1 (draft v1.3). Screen numbers here are Report 3's; t
 | 41 | Calendar Event Detail | FE-10 | Displays detailed information about a selected calendar event. |
 | 42 | Update Calendar Event | FE-10 | Allows an authorized Teacher to update an existing calendar event. |
 | 43 | Group Chat | FE-06 | Allows members to communicate within a class group chat. |
-| 44 | Grade Entry | FE-11 | Allows Teacher to enter or update student grades. |
+| 44 | Grade Entry | FE-11 | Allows Teacher to enter or update student grades, import them from Excel, finalize the grade book and export it to Excel. |
 | 45 | Timetable View | FE-10 | Displays the class timetable or teaching schedule relevant to the User. |
 | 46 | Time Table Detail | FE-10 | Displays detailed information about a selected timetable entry. |
 | 47 | Academic Results | FE-11 | Displays academic results according to the User's permissions. |
@@ -71,7 +71,7 @@ Source: Report 3 section 5.1 (draft v1.3). Screen numbers here are Report 3's; t
 | 65 | School Year & Semester | FE-04 | Allows School Manager to create and update school years, create the two semesters of a school year, and close a semester. |
 | 66 | Create / Update Event | FE-07 | Allows Homeroom Teacher to post an extracurricular event in the class feed with a registration deadline, or to update an existing event. |
 | 67 | Registration List | FE-07 | Allows Homeroom Teacher to view the students registered for an event and to export the list to Excel. |
-| 68 | Grade Control | FE-11 | Allows School Manager to unlock finalized grades of a class, subject and semester and to view who changed which grade and when. |
+| 68 | Grade Control | FE-11 | Allows School Manager to unlock finalized grades of a class, subject and semester, view a grade book read only (tabs Học kỳ 1 / Học kỳ 2 / Cả năm), export it to Excel and view who changed which grade and when. |
 | 69 | Parent List | FE-14 | Allows School Manager to search and filter parents. |
 | 70 | Class Types & Subject Weights | FE-04 | Allows School Manager to define class types (each for one grade or every grade) and set their subjects and periods per week for a school year (shown as "Loại lớp & số tiết"; every weight is 1). |
 | 71 | Password Reset Requests | FE-13 | Lists the automatic resets from password reset requests (tab waiting for sign-in / used): "sent by email" or "to hand over" with the temporary password; System Admin sees all, School Manager student, parent and teacher accounts (added 01/11/2026). |

@@ -52,6 +52,7 @@ Source: Report 3 section 4.4 (draft v1.3). Full = all records; Restricted (n) = 
 | Grade | Enter / import / finalize | No | No | Restricted (11) | Restricted (11) | No | No |
 | Grade | Unlock, view change history | No | Full | No | No | No | No |
 | Grade, class ranking | View | No | Full (view only) | Restricted (12) | Restricted (12) | Restricted (7) | Restricted (7) |
+| Grade book | Export to Excel | No | Full | Restricted (12) | Restricted (12) | No | No |
 | Attendance | Take / edit same day | No | No | Restricted (13) | Restricted (13) | No | No |
 | Attendance | Edit after the day | No | Full | Restricted (14) | No | No | No |
 | Attendance | View | No | Full | Restricted (12) | Restricted (12) | Restricted (7) | Restricted (7) |
