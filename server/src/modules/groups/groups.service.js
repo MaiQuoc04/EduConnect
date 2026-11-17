@@ -224,10 +224,17 @@ export async function getGroup(user, groupId) {
     classGroups: row?.classGroups ?? [],
     teams: row?.teams ?? (group.classId === null ? await listTeacherTeams(user) : []),
     createdByName: group.groupType === 'TEAM_CHAT' ? group.createdByName : null,
+    // Team leader (15/11/2026, business-rules §4): leaderId, and what the viewer may do with the team.
+    leaderId: group.groupType === 'TEAM_CHAT' ? group.leaderId : null,
+    isLeader: group.groupType === 'TEAM_CHAT' && group.leaderId === user.userId,
+    canRename: group.groupType === 'TEAM_CHAT' && !group.readOnly,
+    canTransfer: group.groupType === 'TEAM_CHAT' && !group.readOnly && group.leaderId === user.userId,
     counts: countKinds(members),
     readOnly: group.readOnly,
     canSeeContent: group.canSeeContent,
     canManageMembers: group.canManageMembers,
+    canAddMembers: group.canAddMembers, // 17/11/2026: School Manager (class groups) or the team leader
+    canRemoveMembers: group.canRemoveMembers, // 17/11/2026: the team leader only
     canSetNickname: group.canSetNickname,
     canLeave: group.canLeave,
     // FE-05 approval switch (business-rules §5, 11/11/2026): the feed's moderator, open year only. Same rule as
@@ -266,6 +273,8 @@ export async function listMembers(user, groupId) {
     groupType: group.groupType,
     readOnly: group.readOnly,
     canManageMembers: group.canManageMembers,
+    canAddMembers: group.canAddMembers, // 17/11/2026: School Manager (class groups) or the team leader
+    canRemoveMembers: group.canRemoveMembers, // 17/11/2026: the team leader only
     canSetNickname: group.canSetNickname,
     showContacts: contacts,
     counts: countKinds(members),

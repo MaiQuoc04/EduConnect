@@ -151,14 +151,16 @@ export async function syncClassTeachers(client, classId) {
      RETURNING m.group_id AS "groupId", m.user_id AS "userId"`,
     [classId],
   );
-  // A team nobody is left in is closed, as when its last member leaves (business-rules §4 "Teams in detail").
-  if (leftTeams.length) {
-    await client.query(
-      `UPDATE groups SET deleted_at = NOW()
-       WHERE group_id = ANY($1::bigint[]) AND deleted_at IS NULL
-         AND NOT EXISTS (SELECT 1 FROM group_members WHERE group_id = groups.group_id AND left_at IS NULL)`,
-      [leftTeams.map((t) => t.groupId)],
-    );
-  }
+  // Teams (business-rules §4, 15/11/2026): "A không còn trong nhóm" lines, the leadership handed to the first member
+  // still in when the leader is taken out, and a team nobody is left in is closed. The lines show at the next read
+  // (this runs inside the caller's transaction, so nothing is sent in real time from here).
+  // Imported here, not at the top: teamEvents → conversations → groups would come back to this module (import cycle).
+  const { afterRemovedFromTeams } = await import('../groups/teamEvents.js');
+  await afterRemovedFromTeams(client, leftTeams);
+  // Class groups (17/11/2026, FE-06 real time): the teacher who is out sees the group leave their lists and its chat
+  // close, the one who is in sees it join; members' counts and 1-1 chats are re-read. Sent once the caller's
+  // transaction is saved (the teams above send theirs the same way).
+  const { signalWhenSaved } = await import('../conversations/chatSignals.js');
+  signalWhenSaved({ removed: leftGroups, added: [...back, ...fresh] });
   return { added: [...back, ...fresh], left: [...leftGroups, ...leftTeams] };
 }

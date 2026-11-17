@@ -52,7 +52,8 @@ server/src/
 - **Soft delete everywhere**: no `DELETE` on business tables; `UPDATE ... SET deleted_at = NOW()`; every `SELECT`
   adds `deleted_at IS NULL`. Hard delete only: `post_likes`, `message_reactions`, `class_event_viewers`, `teacher_subjects`, `department_subjects`, `user_roles`,
   `timetable_slots` without attendance when a timetable range is regenerated (FE-10),
-  `student_parents`, expired OTPs, `track_subjects` (subject removed from a class type before grades exist).
+  `student_parents`, expired OTPs, `track_subjects` (subject removed from a class type before grades exist),
+  `grade_components` (replaced while the grade structure has no grades).
 - **Permissions use the active role** (`req.user.activeRole`), plus data scope: "homeroom teacher" = the teacher in
   `classes.homeroom_teacher_id`; teachers only see classes in their `teaching_assignments`; parents only their linked
   children (`student_parents`); students only themselves. `ProtectedRoute` on the client is only for navigation.

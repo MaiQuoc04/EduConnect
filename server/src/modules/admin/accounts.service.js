@@ -6,6 +6,7 @@ import { normalizePhone, PHONE_RE } from '../../utils/phone.js';
 import { generateTemporaryPassword } from '../../utils/tempPassword.js';
 import { nextFreeUsername } from '../../utils/username.js';
 import { applyDepartment, listDepartments, needsDepartments } from './departments.js';
+import { joinSchoolGroup, needsSchoolGroup } from './schoolGroup.js';
 
 // FE-13 System Administration – accounts (owner: Linh).
 
@@ -147,6 +148,8 @@ export async function insertAccount(db, input, credentials = null) {
   if (input.parent) {
     await db.query('INSERT INTO parents (user_id, occupation) VALUES ($1, $2)', [userId, input.parent.occupation]);
   }
+  // Teachers and School Managers join the school's teacher group ("Giáo viên toàn trường").
+  if (needsSchoolGroup(input.roles)) await joinSchoolGroup(db, [userId]);
   return { id: userId, username, temporaryPassword };
 }
 

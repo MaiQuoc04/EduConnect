@@ -1,8 +1,12 @@
 import { pool, withTransaction } from '../../config/db.js';
 import { emitToUsers } from '../../sockets/index.js';
+import { env } from '../../config/env.js';
 import { AppError, badRequest, forbidden, notFound } from '../../utils/AppError.js';
+import * as files from '../../utils/attachments.js';
+import { uploadedFiles } from '../../utils/requestParsers.js';
 import { findGroupForUser, groupScopeSql } from '../groups/groupAccess.js';
 import { byRankThenName, memberRows } from '../groups/groups.service.js';
+import { getAttachmentLimits } from '../posts/posts.service.js';
 import { directPeer } from './direct.service.js';
 
 // FE-06 Messaging (owner: Khanh). UC-47 Chat in Group – SCR-43 Group Chat / SCR-50 Chat Room.
@@ -17,6 +21,18 @@ import { directPeer } from './direct.service.js';
 //     joined by then. Times are compared in SQL, so the client gets message ids instead of timestamps.
 // UC-110 reply, UC-111 reactions, UC-113 delete message (business-rules §6, agreed 07/11/2026). A message deleted for everyone stays as a placeholder without its content;
 // a message deleted for me (message_user_deletions) is left out for that person only.
+// Attachments (12/11/2026): files go up through the shared modules/uploads (target 'message' → messages/<groupId>/),
+// rows through utils/attachments.js (column message_id). A message may be files only (messages.content NULL, schema).
+// A message deleted for everyone hides its files (§6), like its text.
+// System lines (15/11/2026, team chats, business-rules §4 / §6): messages.message_type = 'SYSTEM' with system_event
+// TEAM_CREATED | TEAM_RENAMED (content = new name) | MEMBER_LEFT | MEMBER_REMOVED | LEADER_CHANGED (target = new
+// leader); sender_id = the member the line is about. They count as unread like a message, but cannot be answered,
+// reacted to or deleted. Written by modules/groups/teamEvents.js, sent with publishNewMessages().
+// Sending again (17/11/2026, business-rules §6): the client gives each message a random UUID (clientMessageId); the same
+// sender sending the same UUID in the same chat again gets the saved message back, never a second copy. Only the sender
+// sees the UUID (to match the copy shown at once with the saved one). The column comes with
+// patch_v0.3_message_client_id.sql: until it has run, messages are sent as before, without that check.
+// Catching up (17/11/2026): GET …/messages?after=<id> – the messages after the last one the client has.
 
 const conflict = (code, message, details) => new AppError(409, code, message, details);
 const PAGE_DEFAULT = 30;
@@ -24,6 +40,45 @@ const PAGE_MAX = 100;
 // ASSUMPTION: no agreed limit for one message (plan question Q5); 2000 characters until the lead decides.
 export const MESSAGE_MAX_LENGTH = 2000;
 const FROM_LIMIT = 500; // the most messages one jump to a quoted message loads
+// ASSUMPTION: at most 10 files per message, as a group post (§5 sets sizes, not a number).
+export const MAX_MESSAGE_ATTACHMENTS = 10;
+const FILES = files.ATTACHMENT_COLUMNS.MESSAGE;
+const fileCountSql = (alias) =>
+  `(SELECT COUNT(*) FROM attachments fa WHERE fa.message_id = ${alias}.message_id AND fa.deleted_at IS NULL)`;
+
+// patch_v0.3_message_client_id.sql run on this database? Asked once (true / false); null until then.
+let clientIdColumn = null;
+const UUID_TEXT = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+async function hasClientIdColumn() {
+  if (clientIdColumn === null) {
+    const { rows } = await pool.query(
+      `SELECT EXISTS (SELECT 1 FROM information_schema.columns
+                      WHERE table_schema = current_schema() AND table_name = 'messages'
+                        AND column_name = 'client_message_id') AS "has"`,
+    );
+    clientIdColumn = rows[0].has;
+  }
+  return clientIdColumn;
+}
+
+/** The optional clientMessageId of a new message: a UUID, lower case; null when not given. */
+function parseClientId(value) {
+  if (value === undefined || value === null || value === '') return null;
+  if (typeof value !== 'string' || !UUID_TEXT.test(value)) {
+    throw badRequest('MSG_INVALID_INPUT', 'clientMessageId must be a UUID.');
+  }
+  return value.toLowerCase();
+}
+
+/** Limits of the chat composer's file button (system_settings sizes, the 15 types of the bucket). */
+export const getMessageAttachmentLimits = () => getAttachmentLimits(MAX_MESSAGE_ATTACHMENTS);
+
+// The files of a page of messages (one query); none for a message deleted for everyone (§6).
+async function withFiles(messages, db = pool) {
+  const ids = messages.filter((m) => !m.isDeleted).map((m) => m.messageId);
+  const byId = await files.listAttachmentsOf(FILES, [...new Set(ids)], db);
+  return messages.map((m) => ({ ...m, attachments: m.isDeleted ? [] : (byId.get(m.messageId) ?? []) }));
+}
 
 // SQL: when the user first joined the message's group (alias m). All their membership rows count, left ones too:
 // UC-32 adds someone back with a new row, FE-02 / FE-04 reopen the old one (business-rules §6). Whether they are
@@ -50,7 +105,8 @@ const replyToSql = (viewer) => `(
            WHEN ${hiddenFor(viewer, 'rm')} THEN json_build_object('state', 'HIDDEN', 'messageId', rm.message_id)
            ELSE json_build_object('state', 'OK', 'messageId', rm.message_id, 'senderId', rm.sender_id,
                                   'senderName', ru.full_name, 'senderNickname', re.nickname,
-                                  'content', left(rm.content, 200))
+                                  'content', left(rm.content, 200), 'attachmentCount', ${fileCountSql('rm')},
+                                  'type', rm.message_type)
          END
   FROM messages rm
   JOIN users ru ON ru.user_id = rm.sender_id
@@ -77,12 +133,16 @@ const messageSelect = (viewer, viewerFrom = '', columns = '') => `
          m.sent_at AS "sentAt", u.full_name AS "senderName", u.avatar_url AS "senderAvatarUrl",
          u.status AS "senderStatus", e.nickname AS "senderNickname",
          ${replyToSql(viewer)} AS "replyTo", ${reactionsSql()} AS reactions,
-         (CASE WHEN m.sender_id = ${viewer} AND m.deleted_for_everyone_at IS NULL
+         m.message_type AS "type", m.system_event AS "event", m.target_user_id AS "targetUserId",
+         tu.full_name AS "targetName",
+         (CASE WHEN m.sender_id = ${viewer} AND m.deleted_for_everyone_at IS NULL AND m.message_type = 'TEXT'
                THEN GREATEST(0, CEIL(EXTRACT(EPOCH FROM (m.sent_at + make_interval(mins => ${DELETE_MINUTES_SQL}) - NOW()))))
-               ELSE 0 END)::int AS "deleteSecondsLeft"${columns}
+               ELSE 0 END)::int AS "deleteSecondsLeft",
+         ${clientIdColumn ? `CASE WHEN m.sender_id = ${viewer} THEN m.client_message_id::text END` : 'NULL::text'} AS "clientMessageId"${columns}
   FROM messages m ${viewerFrom}
   JOIN groups g ON g.group_id = m.group_id
   JOIN users u ON u.user_id = m.sender_id
+  LEFT JOIN users tu ON tu.user_id = m.target_user_id
   LEFT JOIN students st ON st.user_id = m.sender_id
   LEFT JOIN class_enrollments e ON e.student_id = st.student_id AND e.class_id = g.class_id`;
 
@@ -93,7 +153,7 @@ export async function findVisibleMessage(db, user, groupId, messageId) {
   if (Number.isSafeInteger(id) && id > 0) {
     const { rows } = await db.query(
       `SELECT m.message_id AS "messageId", m.sender_id AS "senderId",
-              m.deleted_for_everyone_at IS NOT NULL AS "isDeleted"
+              m.deleted_for_everyone_at IS NOT NULL AS "isDeleted", m.message_type = 'SYSTEM' AS "isSystem"
        FROM messages m
        WHERE m.message_id = $1 AND m.group_id = $2 AND m.deleted_at IS NULL
          AND m.sent_at >= ${visibleFrom('$3')} AND NOT ${hiddenFor('$3')}`,
@@ -121,6 +181,20 @@ async function messageForViewers(db, messageId, viewerIds) {
     [messageId, viewerIds],
   );
   return rows;
+}
+
+// The message this sender already saved with this clientMessageId in this chat, as they see it now; null if none.
+async function savedByClientId(groupId, senderId, clientId) {
+  const { rows } = await pool.query(
+    `SELECT message_id AS "messageId" FROM messages
+     WHERE group_id = $1 AND sender_id = $2 AND client_message_id = $3 AND deleted_at IS NULL`,
+    [groupId, senderId, clientId],
+  );
+  if (!rows.length) return null;
+  const [copy] = await withFiles(await messageForViewers(pool, rows[0].messageId, [senderId]));
+  if (!copy) return null;
+  const { viewerId: _viewerId, ...message } = copy;
+  return message;
 }
 
 // The group if the user may chat in it (else 404 / 403), plus canSend and, when sending is not possible, why:
@@ -184,10 +258,14 @@ export const activeMemberIds = async (db, groupId) =>
     ])
   ).rows.map((r) => r.userId);
 
-function parsePage({ before, limit, from }) {
+function parsePage({ before, limit, from, after }) {
   const beforeId = before === undefined || before === '' ? null : Number(before);
   if (beforeId !== null && (!Number.isSafeInteger(beforeId) || beforeId <= 0)) {
     throw badRequest('MSG_INVALID_INPUT', 'before must be a message id.');
+  }
+  const afterId = after === undefined || after === '' ? null : Number(after);
+  if (afterId !== null && (!Number.isSafeInteger(afterId) || afterId < 0 || beforeId !== null || from !== undefined)) {
+    throw badRequest('MSG_INVALID_INPUT', 'after must be a message id (0 or more), without before or from.');
   }
   const size = limit === undefined || limit === '' ? PAGE_DEFAULT : Number(limit);
   if (!Number.isSafeInteger(size) || size < 1 || size > PAGE_MAX) {
@@ -197,15 +275,38 @@ function parsePage({ before, limit, from }) {
   if (fromId !== null && (!Number.isSafeInteger(fromId) || fromId <= 0 || beforeId === null)) {
     throw badRequest('MSG_INVALID_INPUT', 'from must be a message id, together with before.');
   }
-  return { beforeId, fromId, size: fromId === null ? size : FROM_LIMIT };
+  return { beforeId, fromId, afterId, size: fromId === null ? size : FROM_LIMIT };
+}
+
+// Catching up after a lost connection (17/11/2026): the messages after `afterId`, oldest first, at most `size`
+// (hasMore: more are waiting – the client then reloads the latest page), plus whether the user may still send.
+async function messagesAfter(user, group, afterId, size) {
+  const { rows } = await pool.query(
+    `${messageSelect('$2')}
+     WHERE m.group_id = $1 AND m.deleted_at IS NULL AND m.sent_at >= ${visibleFrom('$2')} AND NOT ${hiddenFor('$2')}
+       AND m.message_id > $3
+     ORDER BY m.message_id
+     LIMIT $4`,
+    [group.groupId, user.userId, afterId, size + 1],
+  );
+  return {
+    groupId: group.groupId,
+    messages: await withFiles(rows.slice(0, size)),
+    hasMore: rows.length > size,
+    readOnly: group.readOnly,
+    canSend: group.canSend,
+    blockedReason: group.blockedReason,
+  };
 }
 
 // UC-47: one page of messages, oldest first. Without `before` (first page) the response also carries the chat's
 // header data and its active members with their read state, so the client can show labels and "seen by".
 // `from` (with `before`): everything from that message up to `before`, to jump to a quoted message that is not loaded.
 export async function listMessages(user, groupId, query) {
-  const { beforeId, fromId, size } = parsePage(query);
+  const { beforeId, fromId, afterId, size } = parsePage(query);
   const group = await openChat(pool, user, groupId);
+  await hasClientIdColumn();
+  if (afterId !== null) return messagesAfter(user, group, afterId, size);
   const visible = `m.group_id = $1 AND m.deleted_at IS NULL AND m.sent_at >= ${visibleFrom('$2')} AND NOT ${hiddenFor('$2')}`;
   const { rows } = await pool.query(
     `${messageSelect('$2')}
@@ -223,7 +324,7 @@ export async function listMessages(user, groupId, query) {
     );
     hasMore = older[0].hasMore;
   }
-  const page = { groupId: group.groupId, messages, hasMore };
+  const page = { groupId: group.groupId, messages: await withFiles(messages), hasMore };
   if (beforeId !== null) return page;
 
   const [members, reads] = await Promise.all([memberRows(pool, group.groupId), readStates(pool, group.groupId)]);
@@ -256,32 +357,49 @@ export async function listMessages(user, groupId, query) {
 // UC-49: 1-1 chats too, with the other person (`peer`). An empty 1-1 chat is returned to both its members so it can
 // be opened (lastMessage null); the client does not list it until it has a message.
 // The client lays the chats out from GET /groups and fills in these summaries by groupId.
+// Delete for everyone counts as new activity, like a new message (Khanh's decision 15/11/2026, business-rules §6): a
+// message's activity time is when it was sent, or when it was deleted for everyone. The preview is the message with the
+// latest activity ("Lan đã xoá một tin nhắn"), a deletion by someone else after one last read counts as one unread, and
+// activityKey (seconds) lets the client put the chat on top.
+// "Xoá ở phía tôi" leaves nothing behind (15/11/2026): a deleted-for-everyone placeholder older than the viewer's latest
+// delete-for-me in that chat is no longer the preview – the latest ordinary message is (a chat left with placeholders
+// only still shows one, so a 1-1 chat does not drop off the list).
 export async function listConversations(user) {
   const { rows } = await pool.query(
     `SELECT g.group_id AS "groupId", g.group_type AS "groupType",
-            lm.message_id AS "messageId", lm.is_deleted AS "isDeleted",
+            lm.message_id AS "messageId", lm.is_deleted AS "isDeleted", lm.message_type AS "type",
+            lm.system_event AS "event", lt.full_name AS "targetName",
             CASE WHEN lm.is_deleted THEN NULL ELSE lm.content END AS content,
-            lm.sent_at AS "sentAt", lm.sender_id AS "senderId",
+            lm.sent_at AS "sentAt", lm.activity_at AS "activityAt",
+            EXTRACT(EPOCH FROM lm.activity_at)::float8 AS "activityKey", lm.sender_id AS "senderId",
+            CASE WHEN lm.is_deleted THEN 0 ELSE ${fileCountSql('lm')} END AS "attachmentCount",
             u.full_name AS "senderName", e.nickname AS "senderNickname",
             peer.user_id AS "peerId", peer.full_name AS "peerName", peer.avatar_url AS "peerAvatarUrl",
             peer.status AS "peerStatus",
             (SELECT COUNT(*) FROM messages x
              WHERE x.group_id = g.group_id AND x.deleted_at IS NULL AND x.sender_id <> $1
-               AND x.deleted_for_everyone_at IS NULL AND NOT ${hiddenFor('$1', 'x')}
+               AND NOT ${hiddenFor('$1', 'x')}
                AND x.sent_at >= gm.joined_at
-               AND (gm.last_read_at IS NULL OR x.sent_at > gm.last_read_at)) AS "unreadCount"
+               AND (gm.last_read_at IS NULL
+                    OR COALESCE(x.deleted_for_everyone_at, x.sent_at) > gm.last_read_at)) AS "unreadCount"
      FROM groups g
      JOIN LATERAL (SELECT MIN(vm.joined_at) AS joined_at, MAX(vm.last_read_at) AS last_read_at
                    FROM group_members vm
                    WHERE vm.group_id = g.group_id AND vm.user_id = $1
                    HAVING bool_or(vm.left_at IS NULL)) gm ON TRUE
-     LEFT JOIN LATERAL (SELECT m.message_id, m.content, m.sent_at, m.sender_id,
-                               m.deleted_for_everyone_at IS NOT NULL AS is_deleted
+     LEFT JOIN LATERAL (SELECT m.message_id, m.content, m.sent_at, m.sender_id, m.message_type, m.system_event,
+                               m.target_user_id, m.deleted_for_everyone_at IS NOT NULL AS is_deleted,
+                               COALESCE(m.deleted_for_everyone_at, m.sent_at) AS activity_at
                         FROM messages m
                         WHERE m.group_id = g.group_id AND m.deleted_at IS NULL AND m.sent_at >= gm.joined_at
                           AND NOT ${hiddenFor('$1')}
-                        ORDER BY m.message_id DESC LIMIT 1) lm ON TRUE
+                        ORDER BY (m.deleted_for_everyone_at IS NOT NULL AND m.deleted_for_everyone_at <= COALESCE(
+                                    (SELECT MAX(d.deleted_at) FROM message_user_deletions d
+                                     JOIN messages dm ON dm.message_id = d.message_id
+                                     WHERE d.user_id = $1 AND dm.group_id = g.group_id), '-infinity')) ASC,
+                                 COALESCE(m.deleted_for_everyone_at, m.sent_at) DESC, m.message_id DESC LIMIT 1) lm ON TRUE
      LEFT JOIN users u ON u.user_id = lm.sender_id
+     LEFT JOIN users lt ON lt.user_id = lm.target_user_id
      LEFT JOIN students st ON st.user_id = lm.sender_id
      LEFT JOIN class_enrollments e ON e.student_id = st.student_id AND e.class_id = g.class_id
      LEFT JOIN LATERAL (SELECT pu.user_id, pu.full_name, pu.avatar_url, pu.status
@@ -306,8 +424,14 @@ export async function listConversations(user) {
       ? {
           messageId: r.messageId,
           isDeleted: r.isDeleted,
+          type: r.type,
+          event: r.event,
+          targetName: r.targetName,
           content: r.content,
+          attachmentCount: r.attachmentCount,
           sentAt: r.sentAt,
+          activityAt: r.activityAt,
+          activityKey: r.activityKey,
           senderId: r.senderId,
           senderName: r.senderName,
           senderNickname: r.senderNickname,
@@ -316,12 +440,17 @@ export async function listConversations(user) {
   }));
 }
 
-function cleanContent(content) {
+// The text of a message; with files it may be left empty (→ NULL, schema: a message of attachments only).
+function cleanContent(content, { hasFiles = false } = {}) {
+  if (hasFiles && (content === undefined || content === null || (typeof content === 'string' && !content.trim()))) {
+    return null;
+  }
   if (typeof content !== 'string' || !content.trim()) {
     throw badRequest('MSG_MESSAGE_EMPTY', 'The message is empty.');
   }
   // Keep the line breaks the user typed; only drop blank space around the whole message.
-  const text = content.replace(/\r\n?/g, '\n').trim();
+  // NFC (17/11/2026): Vietnamese typed as base letter + combining marks is stored as composed letters, like posts.
+  const text = content.normalize('NFC').replace(/\r\n?/g, '\n').trim();
   if (text.length > MESSAGE_MAX_LENGTH) {
     throw badRequest('MSG_MESSAGE_TOO_LONG', `A message has at most ${MESSAGE_MAX_LENGTH} characters.`, {
       max: MESSAGE_MAX_LENGTH,
@@ -330,26 +459,54 @@ function cleanContent(content) {
   return text;
 }
 
-// UC-47: send a text message. The sender's own message counts as read for them. Every active member gets it in
-// real time ("message:new", all their tabs), the sender's other tabs included.
-// Attachments (images / files ≤ 10 MB, video ≤ 50 MB) come later with the upload shared with FE-05.
+// UC-47: send a message (text, files, or both). The sender's own message counts as read for them. Every active
+// member gets it in real time ("message:new", all their tabs), the sender's other tabs included.
+// attachments: the /uploads/confirm answers of target 'message' for THIS group (messages/<groupId>/…), at most
+// MAX_MESSAGE_ATTACHMENTS; the objects are checked before the transaction, the rows written with the message.
 export async function sendMessage(user, groupId, body) {
-  const content = cleanContent(body?.content);
   const group = await openChat(pool, user, groupId);
+  const clientId = (await hasClientIdColumn()) ? parseClientId(body?.clientMessageId) : null;
+  // Sent again with the same clientMessageId (the first answer was lost): the message saved the first time, as it is
+  // now, with nothing written or sent again. Checked before canSend: the message already exists.
+  if (clientId) {
+    const saved = await savedByClientId(group.groupId, user.userId, clientId);
+    if (saved) return saved;
+  }
   assertCanSend(group);
+  const attached = uploadedFiles(body ?? {}, 'attachments', {
+    folder: `messages/${group.groupId}/`,
+    bucket: env.storage.buckets.attachments,
+    max: MAX_MESSAGE_ATTACHMENTS,
+  });
+  const content = cleanContent(body?.content, { hasFiles: attached.length > 0 });
+  const fileRows = await files.readUploadedFiles(attached);
   // Reply: one level; the original must be a message the sender can see in this chat, not deleted for everyone.
   let replyTo = null;
   if (body?.replyToMessageId !== undefined && body.replyToMessageId !== null) {
     const original = await findVisibleMessage(pool, user, group.groupId, body.replyToMessageId).catch(() => null);
-    if (!original || original.isDeleted) throw badRequest('MSG_REPLY_INVALID', 'This message can no longer be answered.');
+    if (!original || original.isDeleted || original.isSystem) {
+      throw badRequest('MSG_REPLY_INVALID', 'This message can no longer be answered.');
+    }
     replyTo = original.messageId;
   }
 
   const messageId = await withTransaction(async (client) => {
+    // Two copies of the same send arriving together: the unique index lets one in, the other gets nothing back.
     const { rows } = await client.query(
-      `INSERT INTO messages (group_id, sender_id, content, reply_to_message_id) VALUES ($1, $2, $3, $4)
-       RETURNING message_id`,
-      [group.groupId, user.userId, content, replyTo],
+      clientId
+        ? `INSERT INTO messages (group_id, sender_id, content, reply_to_message_id, client_message_id)
+           VALUES ($1, $2, $3, $4, $5)
+           ON CONFLICT (group_id, sender_id, client_message_id) WHERE client_message_id IS NOT NULL DO NOTHING
+           RETURNING message_id`
+        : `INSERT INTO messages (group_id, sender_id, content, reply_to_message_id) VALUES ($1, $2, $3, $4)
+           RETURNING message_id`,
+      clientId ? [group.groupId, user.userId, content, replyTo, clientId] : [group.groupId, user.userId, content, replyTo],
+    );
+    if (!rows.length) return null;
+    await files.insertAttachments(
+      { column: FILES, id: rows[0].message_id },
+      fileRows.map((r) => ({ ...r, uploadedBy: user.userId })),
+      client,
     );
     await client.query(
       `UPDATE group_members SET last_read_at = NOW() WHERE group_id = $1 AND user_id = $2 AND left_at IS NULL`,
@@ -357,10 +514,11 @@ export async function sendMessage(user, groupId, body) {
     );
     return rows[0].message_id;
   });
+  if (messageId === null) return savedByClientId(group.groupId, user.userId, clientId);
 
   // One payload per member: a quote may be hidden from someone who joined after the original (replyToSql).
   const memberIds = await activeMemberIds(pool, group.groupId);
-  const copies = await messageForViewers(pool, messageId, memberIds);
+  const copies = await withFiles(await messageForViewers(pool, messageId, memberIds)); // one query, signed once for every copy
   for (const { viewerId, ...message } of copies) {
     emitToUsers([viewerId], 'message:new', { groupId: group.groupId, message });
   }
@@ -371,6 +529,21 @@ export async function sendMessage(user, groupId, body) {
   });
   const { viewerId: _viewerId, ...mine } = copies.find((c) => c.viewerId === user.userId);
   return mine;
+}
+
+/**
+ * Sends messages written by someone else's action (team system lines, teamEvents.js) to every active member, after
+ * COMMIT: "message:new" with the message as each viewer sees it, as sendMessage does. Errors are only logged.
+ */
+export function publishNewMessages(groupId, messageIds) {
+  if (!messageIds?.length) return;
+  (async () => {
+    const memberIds = await activeMemberIds(pool, groupId);
+    for (const messageId of messageIds) {
+      const copies = await withFiles(await messageForViewers(pool, messageId, memberIds));
+      for (const { viewerId, ...message } of copies) emitToUsers([viewerId], 'message:new', { groupId, message });
+    }
+  })().catch((err) => console.error(`[conversations] system lines of group #${groupId} not sent:`, err?.message));
 }
 
 // UC-47: the user has read the chat up to now (opening it, or a new message arriving while it is open).

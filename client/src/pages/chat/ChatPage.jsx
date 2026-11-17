@@ -10,8 +10,10 @@ import { errorText } from '../../messages.js';
 import { fold } from '../subjects/subjectText.js';
 import { GROUP_TYPE_ICONS, GROUP_TYPE_LABELS } from '../groups/groupLabels.js';
 import TeamCreatePanel from '../groups/TeamCreatePanel.jsx';
+import { TeamMenu, useTeamActions } from '../groups/TeamActions.jsx';
+import { DRAFT_EVENT, draftPreview, readChatDraft } from './chatDraft.js';
 import ChatThread from './ChatThread.jsx';
-import { contactLabel, previewText, shortTime, unreadLabel } from './chatText.js';
+import { activityOf, contactLabel, previewText, shortTime, timeKey, unreadLabel } from './chatText.js';
 
 const NOT_FOUND_PERSON = 'Không phải thành viên trong nhóm mà bạn đã tham gia hoặc không tồn tại.';
 
@@ -28,6 +30,8 @@ const NOT_FOUND_PERSON = 'Không phải thành viên trong nhóm mà bạn đã 
 // The School Manager sees no class chat (business-rules §2): the list keeps only the school-wide teacher group.
 // Opened from a group or from "Nhóm của tôi", the router state { backTo, backLabel } (groupLabels.js) adds a
 // "Quay lại" button at the top left; it is passed on while the user switches chats so the way back stays.
+// 17/11/2026 (business-rules §6): a chat with a draft that is not open and has nothing unread shows "Bản nháp: …";
+// the list is read again on every socket (re)connection and when who may write in a chat changed (chat:access-changed).
 export default function ChatPage() {
   const { groupId } = useParams();
   const navigate = useNavigate();
@@ -51,6 +55,18 @@ export default function ChatPage() {
   const openId = groupId ? Number(groupId) : null;
   const openRef = useRef(openId);
   openRef.current = openId;
+  // Drafts are in localStorage (chatDraft.js): re-render when one changes, here or in another tab.
+  const [, setDraftVersion] = useState(0);
+  useEffect(() => {
+    const bump = () => setDraftVersion((v) => v + 1);
+    const onStorage = (e) => e.key?.startsWith('educonnect:chat-draft:') && bump();
+    window.addEventListener(DRAFT_EVENT, bump);
+    window.addEventListener('storage', onStorage);
+    return () => {
+      window.removeEventListener(DRAFT_EVENT, bump);
+      window.removeEventListener('storage', onStorage);
+    };
+  }, []);
 
   const loadGroups = useCallback(() => {
     return api
@@ -151,18 +167,38 @@ export default function ChatPage() {
     };
     socket.on('message:new', onNew);
     socket.on('message:read', onRead);
-    // A deleted message changes the preview and maybe the unread count: the server recounts.
+    // A message deleted for everyone counts as new activity (preview, one unread for the others, the chat goes up):
+    // the server recounts.
     socket.on('message:deleted', loadSummaries);
     socket.on('message:hidden', loadSummaries);
-    socket.io.on('reconnect', loadSummaries);
+    socket.on('chat:access-changed', loadSummaries);
+    socket.on('connect', loadSummaries); // first connection, every reconnection, a role switch: what was missed
+    // Teams (15/11/2026): renamed, leader handed over, someone left → lists read again. Out of a team (left, or the
+    // last one and it closed) → it leaves the lists, and its chat closes if it is open here.
+    const onGroupChanged = () => {
+      loadGroups();
+      loadSummaries();
+    };
+    const onGroupRemoved = ({ groupId: gid, closed }) => {
+      onGroupChanged();
+      if (gid === openRef.current) {
+        toast(closed ? 'Nhóm không còn thành viên nên đã đóng.' : 'Bạn không còn trong nhóm này.');
+        navigate('/chat', { replace: true, state: backState });
+      }
+    };
+    socket.on('group:changed', onGroupChanged);
+    socket.on('group:removed', onGroupRemoved);
     return () => {
+      socket.off('group:changed', onGroupChanged);
+      socket.off('group:removed', onGroupRemoved);
       socket.off('message:new', onNew);
       socket.off('message:read', onRead);
       socket.off('message:deleted', loadSummaries);
       socket.off('message:hidden', loadSummaries);
-      socket.io.off('reconnect', loadSummaries);
+      socket.off('chat:access-changed', loadSummaries);
+      socket.off('connect', loadSummaries);
     };
-  }, [socket, me, loadGroups, loadSummaries]);
+  }, [socket, me, loadGroups, loadSummaries, toast, navigate, backState]);
 
   // One section per class (its groups, then my teams), then the school-wide teacher group.
   const sections = useMemo(() => {
@@ -188,11 +224,15 @@ export default function ChatPage() {
         ),
       });
     }
-    // UC-49: 1-1 chats first, newest message first. A chat without a message is not listed: it can be open on the
+    // UC-49: 1-1 chats first, latest activity first (a new message, or one deleted for everyone). A chat without a message is not listed: it can be open on the
     // right, it appears with its first message, and nothing stays behind when the user moves on without writing.
     const direct = Object.values(summaries)
       .filter((c) => c.groupType === 'DIRECT' && c.peer && c.lastMessage && keep(c.peer.fullName))
-      .sort((a, b) => b.lastMessage.messageId - a.lastMessage.messageId)
+      .sort(
+        (a, b) =>
+          timeKey(activityOf(b.lastMessage)) - timeKey(activityOf(a.lastMessage)) ||
+          b.lastMessage.messageId - a.lastMessage.messageId,
+      )
       .map((c) => ({ groupId: c.groupId, groupType: 'DIRECT', title: c.peer.fullName, peer: c.peer }));
     if (direct.length) result.unshift({ key: 'direct', title: 'Tin nhắn riêng', items: direct });
     return result.filter((s) => s.items.length);
@@ -271,6 +311,7 @@ export default function ChatPage() {
                       const last = summary?.lastMessage ?? null;
                       const unread = summary?.unreadCount ?? 0;
                       const direct = g.groupType === 'DIRECT';
+                      const draft = g.groupId !== openId && !unread ? readChatDraft(me, g.groupId) : null;
                       return (
                         <li key={g.groupId}>
                           <NavLink
@@ -288,11 +329,17 @@ export default function ChatPage() {
                             <span className="chat-item-text">
                               <span className="chat-item-row">
                                 <span className="chat-item-name">{g.title}</span>
-                                {last && <span className="caption chat-item-time">{shortTime(last.sentAt)}</span>}
+                                {last && <span className="caption chat-item-time">{shortTime(activityOf(last))}</span>}
                               </span>
                               <span className="chat-item-row">
                                 <span className={`caption chat-item-last${unread ? ' unread' : ''}`}>
-                                  {previewText(last, me, direct)}
+                                  {draft ? (
+                                    <>
+                                      <span className="chat-item-draft">Bản nháp:</span> {draftPreview(draft)}
+                                    </>
+                                  ) : (
+                                    previewText(last, me, direct)
+                                  )}
                                 </span>
                                 {unread > 0 && (
                                   <span className="chat-badge" aria-label={`${unread} tin nhắn chưa đọc`}>
@@ -403,7 +450,7 @@ function DirectRoom({ summary, backState }) {
           <p className="caption muted">{sub || 'Tin nhắn riêng'}</p>
         </div>
       </header>
-      <ChatThread groupId={summary.groupId} onPeer={setDetail} />
+      <ChatThread key={summary.groupId} groupId={summary.groupId} onPeer={setDetail} />
     </>
   );
 }
@@ -411,13 +458,34 @@ function DirectRoom({ summary, backState }) {
 // Right pane: the chosen group's header, then the chat (FE-06).
 function ChatRoom({ groupId, backState }) {
   const [state, setState] = useState({ loading: true, group: null, error: '' });
+  const [version, setVersion] = useState(0);
+  const socket = useSocket();
+  const navigate = useNavigate();
+  const toast = useToast();
 
   useEffect(() => {
     api
       .get(`/groups/${groupId}`)
       .then(({ data }) => setState({ loading: false, group: data, error: '' }))
       .catch((err) => setState({ loading: false, group: null, error: errorText(err) }));
-  }, [groupId]);
+  }, [groupId, version]);
+
+  // Team renamed / leader handed over / someone left: the header (name, count, menu) is read again.
+  useEffect(() => {
+    if (!socket) return undefined;
+    const onChanged = ({ groupId: gid }) => gid === Number(groupId) && setVersion((v) => v + 1);
+    socket.on('group:changed', onChanged);
+    return () => socket.off('group:changed', onChanged);
+  }, [socket, groupId]);
+
+  // Team actions in the header's "⋮" menu (rename, hand over, leave – business-rules §4, 15/11/2026).
+  const teamActions = useTeamActions(state.group, {
+    onLeft: (data) => {
+      toast(data.teamClosed ? 'Bạn đã rời nhóm. Nhóm không còn thành viên nên đã đóng.' : 'Bạn đã rời nhóm.');
+      navigate('/chat', { replace: true, state: backState });
+    },
+    onChanged: () => setVersion((v) => v + 1),
+  });
 
   const g = state.group;
   if (state.loading) return <p className="loading chat-list-note">Đang tải nhóm…</p>;
@@ -447,9 +515,11 @@ function ChatRoom({ groupId, backState }) {
           <Icon name="info" size="sm" />
           Thông tin nhóm
         </Link>
+        <TeamMenu items={teamActions.items} />
       </header>
+      {teamActions.dialogs}
       {g.canSeeContent ? (
-        <ChatThread groupId={g.groupId} />
+        <ChatThread key={g.groupId} groupId={g.groupId} />
       ) : (
         <div className="chat-empty">
           <span className="gd-pending-icon" aria-hidden="true">

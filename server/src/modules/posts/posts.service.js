@@ -1,9 +1,12 @@
 import { pool, withTransaction } from '../../config/db.js';
 import { AppError, forbidden, notFound } from '../../utils/AppError.js';
+import * as files from '../../utils/attachments.js';
 import * as feed from '../../utils/feedInteractions.js';
+import { getNumberSetting } from '../../utils/settings.js';
 import { emitToUsers } from '../../sockets/index.js';
 import { activeMemberIds } from '../conversations/conversations.service.js';
 import { findGroupForUser } from '../groups/groupAccess.js';
+import { ATTACHMENT_TYPES } from '../uploads/uploads.service.js'; // the 15 types of the attachments bucket (read only)
 
 // FE-05 Group Feed (owner: Khanh), UC-36..UC-46. Rules: business-rules §5 (post states agreed by the lead 11/11/2026),
 // permissions.md "Group feed" rows (notes 4, 5, 6, 16).
@@ -16,11 +19,17 @@ import { findGroupForUser } from '../groups/groupAccess.js';
 //     hidden posts are seen only by their author and the moderator (§5);
 //   - last year's groups are read only (§4): every write → 409 MSG_GROUP_READ_ONLY.
 // Likes and comment rows go through utils/feedInteractions.js, shared with FE-08 School Feed (column post_id).
-// Attachments are not built yet (business-rules §15: storage provider not decided; same for FE-06 and FE-08).
+// Attachments (12/11/2026): files go up through the shared modules/uploads (target 'post' → folder posts/), and their
+// rows through utils/attachments.js (column post_id), as FE-08. Sizes from system_settings (§5: images / files
+// upload.max_file_mb, videos upload.max_video_mb). A file is part of the post: who sees the post sees its files.
 
 const POST = feed.FEED_COLUMNS.GROUP_POST;
 const FEED_GROUP_TYPES = ['GENERAL', 'TEACHER_SCHOOL']; // business-rules §4: the other groups are chat only
 export const MAX_PINNED = 5; // business-rules §5 (11/11/2026)
+// ASSUMPTION: at most 10 files per post, as FE-08 school posts (§5 sets sizes, not a number).
+export const MAX_ATTACHMENTS = 10;
+const FILES = files.ATTACHMENT_COLUMNS.GROUP_POST;
+const filesOf = (postId) => ({ column: FILES, id: postId });
 export const VIEWS = ['feed', 'mine', 'pending', 'hidden'];
 const MODERATOR_VIEWS = ['pending', 'hidden'];
 
@@ -52,6 +61,7 @@ function assertModerator(group) {
 
 const isLive = (post) => post.approvalStatus === 'APPROVED' && !post.isHidden;
 
+
 // A post as the API returns it (alias p = posts). The nickname (UC-34) comes from the author's enrollment in the
 // group's class, so it never shows in the teacher group (business-rules §4), as in the chat.
 const POST_FIELDS = `p.post_id AS "postId", p.group_id AS "groupId", p.content,
@@ -72,7 +82,7 @@ function permissionsOf(post, user, group) {
   const mod = group.isModerator;
   return {
     interact: open && isLive(post),
-    edit: open && own && !post.isHidden,
+    edit: open && own, // a hidden post too: saving sends it back for approval (§5, 12/11/2026)
     delete: open && own,
     pin: open && mod && isLive(post),
     hide: open && mod && post.approvalStatus === 'APPROVED',
@@ -80,18 +90,21 @@ function permissionsOf(post, user, group) {
   };
 }
 
-// Likes and comment counts of a page of posts: 2 queries for the whole page (no N+1).
+// Likes, comment counts and files (count + first image) of a page of posts: a few queries for the whole page (no N+1).
 async function decorate(posts, user, group, db = pool) {
   const ids = posts.map((p) => p.postId);
-  const [likes, comments] = await Promise.all([
+  const [likes, comments, attachments] = await Promise.all([
     feed.countLikes(POST, ids, user.userId, db),
     feed.countComments(POST, ids, db),
+    files.summarizeAttachments(FILES, ids, db),
   ]);
   return posts.map((post) => ({
     ...post,
     likeCount: likes.get(post.postId)?.likeCount ?? 0,
     likedByMe: likes.get(post.postId)?.likedByMe ?? false,
     commentCount: comments.get(post.postId) ?? 0,
+    attachmentCount: attachments.get(post.postId)?.attachmentCount ?? 0,
+    firstImageUrl: attachments.get(post.postId)?.firstImageUrl ?? null, // signed for one hour
     can: permissionsOf(post, user, group),
   }));
 }
@@ -174,7 +187,7 @@ const postChanged = (group, post, change, wasLive) =>
  * One page of the feed of a group. view:
  *   feed     live posts (APPROVED, not hidden): pinned first, then newest first – every member
  *   mine     the viewer's own posts that are not live (pending, rejected, hidden), newest first
- *   pending  posts waiting for approval, oldest first (UC-46 queue) – moderator only
+ *   pending  posts waiting for approval, first sent first (UC-46 queue; an edited post counts from when it was sent again) – moderator only
  *   hidden   hidden posts, last hidden first (unhide, §5) – moderator only
  * The group block tells the client what to show around the list: approval on, read only, moderator, the "no homeroom
  * teacher" banner (§5: a class whose homeroom teacher is missing or locked), and the counters of the tabs.
@@ -195,7 +208,12 @@ export async function listPosts(user, groupId, { view, page, pageSize }) {
       where: `p.author_id = ${$(user.userId)} AND (p.approval_status <> 'APPROVED' OR p.is_hidden)`,
       order: 'p.created_at DESC',
     }),
-    pending: () => ({ where: `p.approval_status = 'PENDING'`, order: 'p.created_at ASC' }),
+    // First sent, first shown: the time the post entered the queue – created, or edited and sent again (an approved,
+    // rejected or hidden post edited goes back to PENDING; only an author's edit sets updated_at).
+    pending: () => ({
+      where: `p.approval_status = 'PENDING'`,
+      order: 'COALESCE(p.updated_at, p.created_at) ASC, p.post_id ASC',
+    }),
     hidden: () => ({ where: `p.is_hidden`, order: 'p.hidden_at DESC' }),
   };
   const { where, order } = views[view]();
@@ -263,9 +281,13 @@ export async function listPosts(user, groupId, { view, page, pageSize }) {
 
 export async function getPost(user, postId) {
   const { post, group } = await openPost(pool, user, postId);
-  const [item] = await decorate([post], user, group);
+  const [[item], attachments] = await Promise.all([
+    decorate([post], user, group),
+    files.listAttachments(filesOf(post.postId)), // every file, links signed for one hour
+  ]);
   return {
     ...item,
+    attachments,
     group: {
       groupId: group.groupId,
       groupType: group.groupType,
@@ -276,13 +298,29 @@ export async function getPost(user, postId) {
   };
 }
 
+/**
+ * What a file picker must respect, read from system_settings at each call (never hard-coded): SCR-36 / SCR-38, and
+ * the FE-06 chat composer with its own maxFiles.
+ */
+export async function getAttachmentLimits(maxFiles = MAX_ATTACHMENTS) {
+  return {
+    maxFiles,
+    maxFileMb: await getNumberSetting('upload.max_file_mb', 10),
+    maxVideoMb: await getNumberSetting('upload.max_video_mb', 50),
+    types: Object.entries(ATTACHMENT_TYPES).map(([mimeType, rule]) => ({ mimeType, kind: rule.kind, extensions: rule.ext })),
+  };
+}
+
 // --- UC-38 Create Post ----------------------------------------------------------------------------------------------
 
 /**
  * Any member of a feed group can post (§5). Approved at once when the author is the moderator (homeroom teacher in
  * the class, School Manager in the teacher group) or the group has approval off; otherwise PENDING.
+ * attachments: /uploads/confirm answers (controller: at most MAX_ATTACHMENTS, keys in posts/). The objects are checked
+ * before the transaction; the rows are written with the post, in the order sent, or not at all.
  */
-export async function createPost(user, groupId, { content }) {
+export async function createPost(user, groupId, { content, attachments = [] }) {
+  const fileRows = await files.readUploadedFiles(attachments);
   const { group, post } = await withTransaction(async (client) => {
     const g = await openFeed(client, user, groupId);
     assertWritable(g);
@@ -292,6 +330,7 @@ export async function createPost(user, groupId, { content }) {
        VALUES ($1, $2, $3, $4, NOW()) RETURNING post_id AS "postId"`,
       [g.groupId, user.userId, content, status],
     );
+    await files.insertAttachments(filesOf(rows[0].postId), fileRows.map((r) => ({ ...r, uploadedBy: user.userId })), client);
     return { group: g, post: await readPost(client, user, g, rows[0].postId) };
   });
   postChanged(group, post, 'created', false);
@@ -301,27 +340,39 @@ export async function createPost(user, groupId, { content }) {
 // --- UC-39 Edit Own Post --------------------------------------------------------------------------------------------
 
 /**
- * The author edits the text (§5, 11/11/2026). A hidden post cannot be edited (409 MSG_POST_HIDDEN).
+ * The author edits the text (§5, 11/11/2026).
  * New state: APPROVED when the author is the moderator or approval is off, else PENDING – so an approved post edited
  * while approval is on leaves the feed until it is approved again, and a rejected post is sent for approval again.
- * Leaving the feed also unpins it. Same text as before → nothing is written.
+ * A HIDDEN post (§5, agreed by the lead 12/11/2026) can be edited too: saving unhides it and sends it to PENDING even
+ * when approval is off, so only the moderator can bring it back to the feed (the moderator's own post: APPROVED).
+ * Leaving the feed also unpins it. Same text and no file added / removed → nothing is written (a hidden post stays
+ * hidden).
+ * Files: attachments (new, as UC-38) are added, removeAttachmentIds (files of this post) are soft deleted; a change of
+ * files counts as an edit (same new state as a text change).
  */
-export async function updatePost(user, postId, { content }) {
+export async function updatePost(user, postId, { content, attachments = [], removeAttachmentIds = [] }) {
+  const addRows = await files.readUploadedFiles(attachments); // storage is read before the lock
   const result = await withTransaction(async (client) => {
     const { post, group } = await openPost(client, user, postId, { lock: 'update' });
     assertWritable(group);
     if (post.authorId !== user.userId) throw forbidden('FORBIDDEN', 'You can only edit your own posts.');
-    if (post.isHidden) throw conflict('MSG_POST_HIDDEN', 'A hidden post cannot be edited.');
-    if (post.content === content) {
+    const filesChanged = await files.changeAttachments(
+      filesOf(post.postId),
+      { add: addRows, removeIds: removeAttachmentIds, uploadedBy: user.userId, max: MAX_ATTACHMENTS },
+      client,
+    );
+    if (post.content === content && !filesChanged) {
       return { group, before: post, changed: false, post: (await decorate([post], user, group, client))[0] };
     }
-    const status = group.isModerator || !group.requireApproval ? 'APPROVED' : 'PENDING';
+    const status =
+      group.isModerator || (!group.requireApproval && !post.isHidden) ? 'APPROVED' : 'PENDING';
     await client.query(
       `UPDATE posts
        SET content = $2, updated_at = NOW(), approval_status = $3::varchar,
            reviewed_by = CASE WHEN approval_status = $3::varchar THEN reviewed_by END,
            reviewed_at = CASE WHEN approval_status = $3::varchar THEN reviewed_at END,
-           is_pinned = is_pinned AND $3::varchar = 'APPROVED'
+           is_pinned = is_pinned AND $3::varchar = 'APPROVED',
+           is_hidden = FALSE, hidden_by = NULL, hidden_at = NULL
        WHERE post_id = $1`,
       [post.postId, content, status],
     );
@@ -333,7 +384,8 @@ export async function updatePost(user, postId, { content }) {
 
 // --- UC-40 Delete Own Post ------------------------------------------------------------------------------------------
 
-// Soft delete by the author, whatever its state (§14). Its comments and likes stay in the DB, unreachable.
+// Soft delete by the author, whatever its state (§14). Its comments and likes stay in the DB, unreachable; its files
+// are soft deleted with it (the objects stay in the bucket, no link is signed for them any more).
 export async function deletePost(user, postId) {
   const { group, post } = await withTransaction(async (client) => {
     const opened = await openPost(client, user, postId, { lock: 'update' });
@@ -343,6 +395,7 @@ export async function deletePost(user, postId) {
       opened.post.postId,
       user.userId,
     ]);
+    await files.softDeleteAttachments(filesOf(opened.post.postId), client);
     return opened;
   });
   signal(
@@ -499,14 +552,24 @@ export function setHidden(user, postId, isHidden) {
   });
 }
 
-/** UC-46: approve or reject a PENDING post (else 409 MSG_POST_NOT_PENDING). No reason is stored (§5). */
+/**
+ * UC-46: approve or reject a PENDING post (else 409 MSG_POST_NOT_PENDING). No reason is stored (§5).
+ * A post that was edited and sent again (hidden, rejected, or approved then edited while approval is on; updated_at
+ * set) and is now approved counts as a NEW post (Khanh's decision 12/11/2026, business-rules §5): its posting time
+ * becomes now and the "edited" mark is cleared, so it shows at the top of the feed with today's time. Likes and
+ * comments stay. A first approval keeps the time it was written.
+ */
 export function reviewPost(user, postId, decision) {
   const status = decision === 'APPROVE' ? 'APPROVED' : 'REJECTED';
   return moderate(user, postId, decision === 'APPROVE' ? 'approved' : 'rejected', async (client, post) => {
     if (post.approvalStatus !== 'PENDING') throw conflict('MSG_POST_NOT_PENDING', 'The post is not waiting for approval.');
+    const repost = status === 'APPROVED' && post.updatedAt !== null;
     await client.query(
-      `UPDATE posts SET approval_status = $2, reviewed_by = $3, reviewed_at = NOW() WHERE post_id = $1`,
-      [post.postId, status, user.userId],
+      `UPDATE posts SET approval_status = $2, reviewed_by = $3, reviewed_at = NOW(),
+              created_at = CASE WHEN $4::boolean THEN NOW() ELSE created_at END,
+              updated_at = CASE WHEN $4::boolean THEN NULL ELSE updated_at END
+       WHERE post_id = $1`,
+      [post.postId, status, user.userId, repost],
     );
     return true;
   });

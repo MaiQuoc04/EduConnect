@@ -1,39 +1,11 @@
-/* FE-08 SCR-02 School Feed. Only this screen's styles; every rule is scoped under .school-feed.
-   Design: Stitch "SCR-34 School Feed" (team decision 08/11/2026): underline tabs Tất cả / Thông báo / Tin tức, one
-   list of cards (label-uppercase kind line, serif titles, pinned card tinted ink-50, "Gửi tới: …" meta,
-   "Thích (n) · Bình luận (n)") and a 280px "Lịch sắp tới" column on the right. Tokens come from styles.css.
-   Like / comment controls (.sf-*) are in styles.css (FE-08 block) because SCR-05 uses them too.
-   Breakpoints as the other screens: 1080px, 900px (app shell becomes a drawer; calendar column hidden), 640px. */
+/* FE-08 SCR-02 School Feed. Only this screen's own styles; every rule is scoped under .school-feed.
+   Design: Stitch "SCR-34 School Feed" (team decision 08/11/2026). Tabs, cards, side panel, pager, empty / loading
+   states and the "Có nội dung mới" pill are the shared components/feed (feed.css, 14/11/2026, shared with FE-05 Group
+   Feed). Like / comment controls (.sf-*) are in styles.css (FE-08 block). */
 
 .school-feed { min-width: 0; }
 
-/* ---------- toolbar: tabs + search ---------- */
-.school-feed-toolbar {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: flex-end;
-  justify-content: space-between;
-  gap: 12px 24px;
-  margin-bottom: 20px;
-  border-bottom: 1px solid var(--graphite-200);
-}
-.school-feed-tabs { display: flex; gap: 24px; }
-.school-feed-tabs button {
-  min-height: 44px;
-  padding: 0 2px;
-  margin-bottom: -1px;
-  border: 0;
-  border-bottom: 2px solid transparent;
-  background: transparent;
-  font: 500 15px/20px var(--font-ui);
-  color: var(--graphite-600);
-  cursor: pointer;
-  transition: color 0.15s, border-color 0.15s;
-}
-.school-feed-tabs button:hover { color: var(--graphite-900); }
-.school-feed-tabs button[aria-selected='true'] { color: var(--ink-700); border-bottom-color: var(--ink-600); }
-.school-feed-tabs button:focus-visible { outline: 2px solid var(--ink-400); outline-offset: -2px; }
-
+/* ---------- search in the toolbar ---------- */
 .school-feed-search { position: relative; flex: 0 1 320px; margin-bottom: 8px; }
 .school-feed-search .icon {
   position: absolute;
@@ -45,200 +17,16 @@
 }
 .school-feed-search .input { width: 100%; height: 40px; padding-left: 32px; }
 
-/* ---------- list + calendar column ---------- */
-.school-feed-layout {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) 280px;
-  gap: 32px;
-  align-items: start;
-}
-.school-feed-main { min-width: 0; }
-.school-feed-total { margin-bottom: 8px; }
-.school-feed-list { display: grid; gap: 12px; transition: opacity 0.15s; }
-.school-feed-list.is-refreshing { opacity: 0.55; }
-
-/* ---------- card (announcement and news) ---------- */
-.school-feed-card {
-  min-width: 0;
-  padding: 16px 20px 8px;
-  border-radius: var(--radius-card);
-  background: var(--white);
-  outline: 1px solid var(--graphite-200);
-  cursor: pointer;
-  transition: outline-color 0.15s;
-}
-.school-feed-card:hover { outline-color: var(--graphite-300); }
-.school-feed-card.is-pinned { background: var(--ink-50); outline-color: var(--ink-200); }
-.school-feed-card.is-pinned:hover { outline-color: var(--ink-400); }
-/* News sits in the same list as announcements under "Tất cả": blue kind line and a blue bar on the left edge. */
-.school-feed-card.is-news { box-shadow: inset 3px 0 0 var(--blue); padding-bottom: 16px; }
-.school-feed-card-top { display: flex; align-items: center; justify-content: space-between; gap: 8px; min-height: 28px; }
-.school-feed .school-feed-kind { display: inline-flex; align-items: center; gap: 4px; color: var(--ink-700); }
-.school-feed .is-news .school-feed-kind { color: var(--blue); }
-.school-feed-pin.btn { width: 44px; height: 44px; margin: -8px -12px -8px 0; color: var(--graphite-500); }
-.school-feed-pin.is-on { color: var(--ink-600); }
-.school-feed-pin.btn:hover { background: var(--ink-50); color: var(--ink-700); }
-.school-feed-card.is-pinned .school-feed-pin.btn:hover { background: var(--ink-100); }
-
-.school-feed-card-body { display: flex; gap: 20px; align-items: flex-start; margin-top: 4px; }
-.school-feed-card-text { flex: 1; min-width: 0; display: grid; gap: 6px; }
-.school-feed-title {
-  font-family: var(--font-serif);
-  font-size: 20px;
-  line-height: 27px;
-  font-weight: 600;
-  letter-spacing: -0.005em;
-  overflow-wrap: anywhere;
-}
-.school-feed-title a { color: var(--graphite-900); }
-.school-feed-preview {
-  color: var(--graphite-700);
-  overflow-wrap: anywhere;
-  display: -webkit-box;
-  -webkit-line-clamp: 3;
-  -webkit-box-orient: vertical;
-  overflow: hidden;
-}
-.school-feed-meta { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 6px; color: var(--graphite-600); }
-.school-feed-meta .author { color: var(--graphite-700); font-weight: 500; }
-.school-feed-image {
-  flex: 0 0 200px;
-  height: 132px;
-  margin: 0;
-  border-radius: var(--radius-control);
-  overflow: hidden;
-  background: var(--graphite-100);
-}
-.school-feed-image img { width: 100%; height: 100%; object-fit: cover; }
-.school-feed-card-foot {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 4px 16px;
-  margin-top: 8px;
-  padding-top: 4px;
-  border-top: 1px solid var(--graphite-100);
-}
-.school-feed-card.is-pinned .school-feed-card-foot { border-top-color: var(--ink-100); }
-.school-feed-card.is-news .school-feed-card-foot { padding-top: 8px; }
-
-/* ---------- "Lịch sắp tới" (frame only, FE-10) ---------- */
-.school-feed-side { min-width: 0; }
-.school-feed-calendar {
-  padding: 20px;
-  border-radius: var(--radius-card);
-  background: var(--white);
-  outline: 1px solid var(--graphite-200);
-}
-.school-feed-calendar-title {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding-bottom: 12px;
-  margin-bottom: 12px;
-  border-bottom: 1px solid var(--graphite-200);
-  font-size: 16px;
-  line-height: 22px;
-  font-weight: 600;
-  color: var(--graphite-900);
-}
-.school-feed-calendar-title .icon { color: var(--ink-700); }
-.school-feed-calendar-empty {
-  padding: 24px 12px;
-  border-radius: var(--radius-control);
-  outline: 1px dashed var(--graphite-300);
-  background: var(--graphite-50);
-  color: var(--graphite-600);
-  text-align: center;
-}
-
-/* ---------- states ---------- */
-.school-feed-empty {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 20px;
-  border-radius: var(--radius-card);
-  background: var(--graphite-50);
-  outline: 1px dashed var(--graphite-300);
-  color: var(--graphite-600);
-}
-.school-feed-empty .icon { color: var(--graphite-400); }
-.school-feed-error { display: grid; justify-items: start; gap: 8px; }
-.school-feed-skeleton {
-  display: grid;
-  gap: 10px;
-  padding: 20px;
-  border-radius: var(--radius-card);
-  background: var(--white);
-  outline: 1px solid var(--graphite-200);
-}
-.school-feed-skeleton span { height: 12px; border-radius: 4px; background: var(--graphite-100); animation: school-feed-pulse 1.2s ease-in-out infinite; }
-.school-feed-skeleton span:first-child { width: 30%; }
-.school-feed-skeleton span:nth-child(2) { width: 85%; height: 18px; }
-.school-feed-skeleton span:last-child { width: 60%; }
-@keyframes school-feed-pulse { 50% { opacity: 0.5; } }
-@media (prefers-reduced-motion: reduce) { .school-feed-skeleton span { animation: none; } }
-
-.school-feed-pager { display: flex; align-items: center; justify-content: center; gap: 12px; margin-top: 16px; }
-.school-feed-pager .btn { width: 44px; height: 44px; padding: 0; }
-
-/* ---------- responsive ---------- */
-@media (max-width: 1080px) {
-  .school-feed-layout { grid-template-columns: minmax(0, 1fr) 240px; gap: 20px; }
-  .school-feed-image { flex-basis: 150px; height: 108px; }
-}
-
-/* Narrow: the calendar column is only an empty frame until FE-10, so it is hidden rather than pushed under a long
-   list; the list takes the whole width. */
-@media (max-width: 900px) {
-  .school-feed-layout { grid-template-columns: minmax(0, 1fr); }
-  .school-feed-side { display: none; }
-}
+/* ---------- card details of this feed ---------- */
+.school-feed .school-feed-pin.is-on { color: var(--ink-600); }
+/* News has no like / comment foot: the same space below as above. */
+.school-feed .feed-card.is-news { padding-bottom: 16px; }
+.school-feed .feed-card.is-news .feed-card-foot { padding-top: 8px; }
 
 @media (max-width: 640px) {
   .school-feed .page-header { flex-wrap: wrap; }
   .school-feed .page-header .btn { min-height: 44px; }
-  .school-feed-toolbar { flex-direction: column-reverse; align-items: stretch; gap: 10px; }
   .school-feed-search { flex: none; margin-bottom: 0; }
   .school-feed-search .input { height: 44px; }
-  .school-feed-tabs { gap: 0; }
-  .school-feed-tabs button { flex: 1; }
-  /* The whole card opens the post; the title link still gets a 44px tap height without moving the layout. */
-  .school-feed-title a { display: block; padding: 10px 0; margin: -10px 0; }
-  .school-feed-card { padding: 14px 14px 6px; }
-  .school-feed-card.is-news { padding-bottom: 14px; }
-  .school-feed-card-body { flex-direction: column-reverse; gap: 12px; }
-  .school-feed-image { flex: none; width: 100%; height: auto; aspect-ratio: 16 / 9; }
-  .school-feed-title { font-size: 18px; line-height: 24px; }
+  .school-feed .feed-card.is-news { padding-bottom: 14px; }
 }
-
-/* ---------- real time (FE-08 step 3): "Có nội dung mới — Tải lại" ----------
-   Zero-height sticky wrapper, always in the DOM: the pill floats over the top of the list while the reader scrolls and
-   showing it never moves a card. */
-.school-feed-new-wrap {
-  position: sticky;
-  top: 12px;
-  z-index: 3;
-  height: 0;
-  display: flex;
-  justify-content: center;
-  overflow: visible;
-}
-.school-feed-new {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  min-height: 44px;
-  padding: 0 18px;
-  border: 0;
-  border-radius: 999px;
-  background: var(--ink-700);
-  color: #fff;
-  font: 500 14px/20px var(--font-ui);
-  box-shadow: var(--shadow-menu);
-  cursor: pointer;
-  white-space: nowrap;
-}
-.school-feed-new:hover { background: var(--ink-800); }
-.school-feed-new:focus-visible { outline: 2px solid var(--ink-400); outline-offset: 2px; }

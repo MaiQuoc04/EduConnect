@@ -13,6 +13,8 @@ router.get('/groups/:groupId/posts', ...member, ctrl.list); // UC-36 (+ UC-46 qu
 router.post('/groups/:groupId/posts', ...member, ctrl.create); // UC-38
 router.put('/groups/:groupId/post-approval', ...member, ctrl.setApproval); // §5 approval switch (moderator)
 
+// File picker limits (before '/posts/:postId', which would read the path as an id).
+router.get('/posts/attachment-limits', ...member, ctrl.attachmentLimits); // UC-38 / UC-39
 router.get('/posts/:postId', ...member, ctrl.detail); // UC-37
 router.patch('/posts/:postId', ...member, ctrl.update); // UC-39
 router.delete('/posts/:postId', ...member, ctrl.remove); // UC-40

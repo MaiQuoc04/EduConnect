@@ -1,5 +1,4 @@
-import { useEffect, useState } from 'react';
-import { Link, useNavigate, useParams } from 'react-router-dom';
+import { useEffect, useRef, useState } from 'react';
 import { api } from '../../api/client.js';
 import Icon from '../../components/Icon.jsx';
 import { useToast } from '../../context/ToastContext.jsx';
@@ -9,35 +8,24 @@ import { toSubjectCode } from './subjectText.js';
 const CODE_ERRORS = ['MSG_SUBJECT_CODE_FORMAT', 'MSG_SUBJECT_CODE_TAKEN', 'MSG_SUBJECT_CODE_LOCKED'];
 const NAME_ERRORS = ['MSG_SUBJECT_NAME_LENGTH', 'MSG_SUBJECT_NAME_TAKEN'];
 
-// SCR-26 Create / Update Subject – UC-24 Create Subject (/subjects/new) and UC-25 Update Subject
-// (/subjects/:id/edit). A subject has only a code and a name; its class types and periods are set in
-// "Loại lớp & số tiết" (UC-26). Once the subject is used, the server locks the code (codeLocked).
-export default function SubjectFormPage() {
-  const { id } = useParams();
-  const editing = Boolean(id);
-  const navigate = useNavigate();
+// SCR-26 Create / Update Subject as a pop-up (17/11/2026: was its own page) – UC-24 Create Subject from the subject
+// list, UC-25 Update Subject from the subject detail. A subject has only a code and a name; its class types and
+// periods are set in "Loại lớp & số tiết" (UC-26). Once the subject is used, the server locks the code (codeLocked).
+// subject: the subject to edit (from GET /subjects/:id), or null to create one. onSaved(subject) after saving.
+export default function SubjectFormDialog({ subject = null, onClose, onSaved }) {
+  const editing = Boolean(subject);
+  const ref = useRef(null);
   const toast = useToast();
-  const [form, setForm] = useState({ subjectCode: '', subjectName: '' });
-  const [original, setOriginal] = useState(null);
-  const [loadError, setLoadError] = useState('');
+  const [form, setForm] = useState({
+    subjectCode: subject?.subjectCode ?? '',
+    subjectName: subject?.subjectName ?? '',
+  });
   const [error, setError] = useState(null); // { field: 'code' | 'name' | null, text }
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
-    if (!editing) return undefined;
-    let alive = true;
-    api
-      .get(`/subjects/${id}`)
-      .then(({ data }) => {
-        if (!alive) return;
-        setOriginal(data.subject);
-        setForm({ subjectCode: data.subject.subjectCode, subjectName: data.subject.subjectName });
-      })
-      .catch((err) => alive && setLoadError(errorText(err)));
-    return () => {
-      alive = false;
-    };
-  }, [editing, id]);
+    ref.current?.showModal();
+  }, []);
 
   async function handleSubmit(e) {
     e.preventDefault();
@@ -48,9 +36,11 @@ export default function SubjectFormPage() {
     setSaving(true);
     setError(null);
     try {
-      const { data } = editing ? await api.put(`/subjects/${id}`, form) : await api.post('/subjects', form);
+      const { data } = editing
+        ? await api.put(`/subjects/${subject.subjectId}`, form)
+        : await api.post('/subjects', form);
       toast(editing ? 'Đã lưu thay đổi môn học.' : `Đã thêm môn học ${data.subject.subjectName}.`);
-      navigate(`/subjects/${data.subject.subjectId}`);
+      onSaved(data.subject);
     } catch (err) {
       const field = CODE_ERRORS.includes(err.code) ? 'code' : NAME_ERRORS.includes(err.code) ? 'name' : null;
       setError({ field, text: errorText(err) });
@@ -58,30 +48,34 @@ export default function SubjectFormPage() {
     }
   }
 
-  if (loadError) return <p className="form-error">{loadError}</p>;
-  if (editing && !original) return <p className="loading">Đang tải môn học…</p>;
+  function cancel(e) {
+    e?.preventDefault(); // Esc: the dialog closes only through onClose (and never while saving)
+    if (!saving) onClose();
+  }
 
-  const back = editing ? `/subjects/${id}` : '/subjects';
-  const codeLocked = Boolean(original?.codeLocked);
+  const codeLocked = Boolean(subject?.codeLocked);
 
   return (
-    <>
-      <nav className="breadcrumb" aria-label="Breadcrumb">
-        <span>EduConnect</span>/<span>Đào tạo</span>/<Link to="/subjects">Môn học</Link>/
-        <span className="current">{editing ? 'Sửa môn học' : 'Thêm môn học'}</span>
-      </nav>
-      <Link to={back} className="back-link">
-        <Icon name="arrow_back" size="sm" />
-        {editing ? original.subjectName : 'Danh mục môn học'}
-      </Link>
-      <div className="page-header">
-        <div>
-          <h1 className="headline-lg">{editing ? 'Sửa thông tin môn học' : 'Thêm môn học'}</h1>
-          <p>Mã môn và tên môn hiển thị trong toàn hệ thống và trong các tệp nhập dữ liệu.</p>
+    <dialog
+      ref={ref}
+      className="group-dialog subject-dialog"
+      onCancel={cancel}
+      onClick={(e) => e.target === e.currentTarget && cancel()} // a click on the backdrop
+      aria-labelledby="subject-dialog-title"
+    >
+      <form onSubmit={handleSubmit} noValidate className="subject-dialog-form">
+        <div className="subject-dialog-head">
+          <div>
+            <h2 id="subject-dialog-title" className="title-md">
+              {editing ? 'Sửa thông tin môn học' : 'Thêm môn học'}
+            </h2>
+            <p className="caption muted">Mã môn và tên môn hiển thị trong toàn hệ thống và trong các tệp nhập dữ liệu.</p>
+          </div>
+          <button type="button" className="btn btn-icon" onClick={cancel} aria-label="Đóng" disabled={saving}>
+            <Icon name="close" />
+          </button>
         </div>
-      </div>
 
-      <form className="card card-outline form-card" onSubmit={handleSubmit} noValidate>
         <div className={`field${error?.field === 'code' ? ' invalid' : ''}`}>
           <label className="field-label" htmlFor="subject-code">
             Mã môn học
@@ -140,14 +134,14 @@ export default function SubjectFormPage() {
         )}
 
         <div className="card-footer">
-          <Link to={back} className="btn btn-secondary">
+          <button type="button" className="btn btn-secondary" onClick={cancel} disabled={saving}>
             Huỷ
-          </Link>
+          </button>
           <button type="submit" className="btn btn-primary" disabled={saving}>
             {saving ? 'Đang lưu…' : editing ? 'Lưu thay đổi' : 'Thêm môn học'}
           </button>
         </div>
       </form>
-    </>
+    </dialog>
   );
 }

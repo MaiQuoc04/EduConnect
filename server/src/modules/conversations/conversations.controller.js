@@ -12,13 +12,18 @@ export async function openDirect(req, res) {
   res.status(result.created ? 201 : 200).json(result);
 }
 
+// Limits of the chat composer's file button (count, sizes from system_settings, the 15 types)
+export async function attachmentLimits(_req, res) {
+  res.json(await service.getMessageAttachmentLimits());
+}
+
 export async function list(req, res) {
   res.json(await service.listConversations(req.user));
 }
 
 export async function messages(req, res) {
-  const { before, limit, from } = req.query;
-  res.json(await service.listMessages(req.user, req.params.groupId, { before, limit, from }));
+  const { before, limit, from, after } = req.query;
+  res.json(await service.listMessages(req.user, req.params.groupId, { before, limit, from, after }));
 }
 
 export async function send(req, res) {
