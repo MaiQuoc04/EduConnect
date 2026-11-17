@@ -475,6 +475,8 @@ Class calendar (UC-76..80) + job: class event reminder 1 day before. Moved from 
 
 Added 13/11/2026 at Dung's request (no UC ids yet – the lead decides; business rules §10):
 - **Period times** (School Manager): start of each session + one period length, breaks unchanged – `/timetables/period-times`.
+- **Automatic scheduling** (17/11, School Manager): "Xếp tự động" on SCR-27 – teaching assignment + timetable of a
+  semester as a draft, applied with the SCR-19 / UC-71 code (business rules §10). Sample data: sample_auto_schedule.sql.
 - **School calendar** (School Manager manages, everyone reads): `/school-events`, the "Lịch sắp tới của trường" column
   of the school feed and the class calendar. Needs `patch_v0.3_school_events.sql` (proposed, waiting for the lead).
 
