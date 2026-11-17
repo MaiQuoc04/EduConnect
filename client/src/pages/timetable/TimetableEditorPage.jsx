@@ -199,7 +199,8 @@ export default function TimetableEditorPage() {
       });
     try {
       const r = await saveClassTimetable(classId, { startDate: start, endDate: end, entries, stamp: data.stamp });
-      toast(`Đã lưu thời khoá biểu lớp ${cls.className} từ ${dmy(r.startDate)} đến ${dmy(r.endDate)}: tạo ${r.generated} tiết${r.kept ? `, giữ ${r.kept} tiết đã điểm danh` : ''}.`);
+      if (r.unchanged) toast(`Thời khoá biểu lớp ${cls.className} từ ${dmy(r.startDate)} đến ${dmy(r.endDate)} không có gì thay đổi nên không lưu bản mới.`);
+      else toast(`Đã lưu thời khoá biểu lớp ${cls.className} từ ${dmy(r.startDate)} đến ${dmy(r.endDate)}: tạo ${r.generated} tiết${r.kept ? `, giữ ${r.kept} tiết đã điểm danh` : ''}.`);
       await load(r.startDate);
     } catch (err) {
       setSaveError(err);
@@ -233,7 +234,8 @@ export default function TimetableEditorPage() {
         {!data.ended && (
           <div className="tt-head-actions">
             <button type="button" className="btn btn-secondary" onClick={cancel} disabled={saving}>{dirty ? 'Huỷ thay đổi' : 'Huỷ'}</button>
-            <button type="button" className="btn btn-primary" disabled={saving || !!rangeError} onClick={save} title={rangeError || undefined}>
+            <button type="button" className="btn btn-primary" disabled={saving || !!rangeError || (!creating && !dirty)} onClick={save}
+              title={rangeError || (!creating && !dirty ? 'Chưa có thay đổi nào để lưu' : undefined)}>
               <Icon name={creating ? 'done_all' : 'check'} size="sm" /> {saving ? 'Đang lưu…' : creating ? 'Lưu TKB' : 'Lưu thay đổi'}
             </button>
           </div>
