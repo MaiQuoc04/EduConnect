@@ -14,6 +14,12 @@ export async function getTimetableEditor(classId, date) {
   return data;
 }
 
+// Every saved timetable of a class: pattern, who / when, dates still in force, what replaced what (Dung, 17/11/2026)
+export async function getTimetableHistory(classId) {
+  const { data } = await api.get(`/timetables/classes/${classId}/history`);
+  return data;
+}
+
 // UC-71 / UC-73 – save the weekly pattern for [startDate, endDate] (endDate empty = end of the school year)
 export async function saveClassTimetable(classId, { startDate, endDate, entries, stamp }) {
   const { data } = await api.put(`/timetables/classes/${classId}`, { startDate, endDate: endDate || undefined, entries, stamp });

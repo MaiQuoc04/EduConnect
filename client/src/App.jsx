@@ -41,6 +41,7 @@ import HomeroomAssignmentPage from './pages/teachers/HomeroomAssignmentPage.jsx'
 import DepartmentsPage from './pages/teachers/DepartmentsPage.jsx';
 import TeachingSchedulePage from './pages/timetable/TeachingSchedulePage.jsx';
 import TimetableEditorPage from './pages/timetable/TimetableEditorPage.jsx';
+import TimetableHistoryPage from './pages/timetable/TimetableHistoryPage.jsx';
 import TimetableImportPage from './pages/timetable/TimetableImportPage.jsx';
 import PeriodTimesPage from './pages/timetable/PeriodTimesPage.jsx';
 import TimetableAutoPage from './pages/timetable/TimetableAutoPage.jsx';
@@ -355,6 +356,7 @@ export default function App() {
         <Route path="timetables/period-times" element={<ProtectedRoute roles={['SCHOOL_MANAGER']}><PeriodTimesPage /></ProtectedRoute>} />
         <Route path="timetables/import" element={<ProtectedRoute roles={['SCHOOL_MANAGER']}><TimetableImportPage /></ProtectedRoute>} />
         <Route path="timetables/classes/:classId/edit" element={<ProtectedRoute roles={['SCHOOL_MANAGER']}><TimetableEditorPage /></ProtectedRoute>} />
+        <Route path="timetables/classes/:classId/history" element={<ProtectedRoute roles={['SCHOOL_MANAGER']}><TimetableHistoryPage /></ProtectedRoute>} />
         <Route path="timetable" element={<ProtectedRoute roles={['SCHOOL_MANAGER', 'TEACHER', 'STUDENT', 'PARENT']}><TimetableViewPage /></ProtectedRoute>} />
         <Route path="teaching-schedule" element={<ProtectedRoute roles={['TEACHER']}><TeachingSchedulePage /></ProtectedRoute>} />
         {/* FE-10 class calendar (Dung, It3): SCR-39 calendar, SCR-40 create, SCR-41 detail, SCR-42 update */}
