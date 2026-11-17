@@ -22,9 +22,11 @@ api.interceptors.response.use(
   (err) => {
     const data = err.response?.data ?? {};
     if (err.response?.status === 401 && data.code === 'AUTH_INVALID') tokenStore.clear();
+    // A request given a `timeout` (chat, FE-06) that got no answer in time: the server may still have done it.
+    const timedOut = !err.response && (err.code === 'ECONNABORTED' || err.code === 'ETIMEDOUT');
     return Promise.reject({
       status: err.response?.status ?? 0,
-      code: data.code ?? 'NETWORK_ERROR',
+      code: data.code ?? (timedOut ? 'NETWORK_TIMEOUT' : 'NETWORK_ERROR'),
       message: data.message ?? 'Cannot reach the server. Please try again.',
       details: data.details,
     });

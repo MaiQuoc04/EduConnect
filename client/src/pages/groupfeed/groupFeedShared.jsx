@@ -8,56 +8,109 @@ import {
   reviewGroupPost,
 } from '../../api/groupPosts.js';
 import Avatar from '../../components/Avatar.jsx';
+import { FeedCardImage } from '../../components/feed/Feed.jsx';
 import Icon from '../../components/Icon.jsx';
 import { useToast } from '../../context/ToastContext.jsx';
 import { errorText } from '../../messages.js';
-import ConfirmDialog from '../groups/ConfirmDialog.jsx';
 import { CommentCount, formatDateTime, isEdited, LikeButton, useLike } from '../schoolfeed/schoolFeedShared.jsx';
 import './GroupFeed.css';
 import ActivityFeedCard from '../extracurricular/ActivityFeedCard.jsx';
 
 // FE-05 Group Feed (owner: Khanh): pieces shared by SCR-35 Group Feed, SCR-37 Group Post Detail and the form
-// (SCR-36 / SCR-38). Like button, comment count, date format and the comment tree come from FE-08 (shared feed code).
+// (SCR-36 / SCR-38). Since 14/11/2026 the feed looks like the school feed: cards, tabs, pager, states and the reading
+// canvas are the shared components/feed (feed.css); like button, comment count, date format and the comment tree come
+// from FE-08. A group post has no title (business-rules §5): its text is the body of the card.
 
 export const MAX_POST_LENGTH = 5000; // business-rules §5 (11/11/2026), same as the server
 export const postLength = (text) => [...text.normalize('NFC').trim()].length;
 export const feedPath = (groupId) => `/groups/${groupId}/feed`;
 export const postPath = (groupId, postId) => `${feedPath(groupId)}/${postId}`;
+// The feed with one post open in the pop-up (GroupFeedPage reads ?post=). state.fromFeed: opened from the feed, so
+// closing goes back one step instead of adding one.
+export const postPopupPath = (groupId, postId) => `${feedPath(groupId)}?post=${postId}`;
+export const POPUP_STATE = { fromFeed: true };
+
+// Long posts on a card (14/11/2026): cut after about 280 characters (or 6 lines) at a word boundary, with "…" and a
+// "Hiển thị thêm" button; "Ẩn bớt" cuts it again.
+const EXCERPT_CHARS = 280;
+const EXCERPT_LINES = 6;
+export function excerptOf(text) {
+  const lines = text.split('\n');
+  let cut = text;
+  if (lines.length > EXCERPT_LINES) cut = lines.slice(0, EXCERPT_LINES).join('\n');
+  if (cut.length > EXCERPT_CHARS) {
+    cut = cut.slice(0, EXCERPT_CHARS);
+    const space = cut.search(/\s\S*$/); // last whitespace: do not cut a word in two
+    if (space > EXCERPT_CHARS * 0.6) cut = cut.slice(0, space);
+  }
+  return cut.length < text.length ? `${cut.trimEnd()}…` : null;
+}
 
 // Who moderates, in words, for the hints (business-rules §5).
 export const moderatorName = (groupType) =>
   groupType === 'TEACHER_SCHOOL' ? 'quản lý nhà trường' : 'giáo viên chủ nhiệm';
 
-const PREVIEW_CHARS = 600; // longer posts are cut in the feed, read in full on SCR-37
+export const authorLabel = (post) =>
+  post.authorNickname ? `${post.authorName} (${post.authorNickname})` : post.authorName;
 
-// Labels of a post that is not simply live (business-rules §5: only the author and the moderator see these posts).
-function PostStatus({ post, groupType }) {
+/**
+ * The kind line of a post, as the school feed's "THÔNG BÁO · ĐÃ GHIM": what the post is now (business-rules §5).
+ * state also names the card's left bar (feed.css .feed-card.is-pending / is-rejected / is-hidden).
+ */
+export function postKind(post) {
+  if (post.isHidden) return { state: 'hidden', icon: 'visibility_off', label: 'Đã ẩn' };
+  if (post.approvalStatus === 'REJECTED') return { state: 'rejected', icon: 'block', label: 'Đã bị từ chối' };
+  if (post.approvalStatus === 'PENDING') return { state: 'pending', icon: 'hourglass_top', label: 'Chờ duyệt' };
+  if (post.isPinned) return { state: 'pinned', icon: 'push_pin', label: 'Bài viết · Đã ghim', filled: true };
+  return { state: 'live', icon: 'article', label: 'Bài viết' };
+}
+
+export function PostKind({ post }) {
+  const kind = postKind(post);
   return (
-    <>
-      {post.isPinned && (
-        <span className="stamp gf-stamp">
-          <Icon name="push_pin" size="sm" />
-          Đã ghim
-        </span>
-      )}
-      {post.approvalStatus === 'PENDING' && <span className="pill amber">Chờ duyệt</span>}
-      {post.approvalStatus === 'REJECTED' && <span className="pill red">Đã bị từ chối</span>}
-      {post.isHidden && (
-        <span className="pill" title={`Bài viết đã bị ẩn bởi ${moderatorName(groupType)}`}>
-          Đã ẩn
-        </span>
-      )}
-    </>
+    <span className={`label-upper feed-kind is-${kind.state}`}>
+      <Icon name={kind.icon} size="sm" filled={kind.filled} />
+      {kind.label}
+    </span>
   );
 }
 
-function StatusNotice({ post, groupType }) {
+/** Author, time and "Đã chỉnh sửa" – the school feed's meta line. */
+export function PostMeta({ post, avatarSize = 20, timeTo, timeState, className = 'feed-meta caption' }) {
+  const time = formatDateTime(post.createdAt);
+  return (
+    <p className={className}>
+      <Avatar src={post.authorAvatarUrl} name={post.authorName} size={avatarSize} />
+      <span className="author">{authorLabel(post)}</span>
+      {post.authorStatus === 'LOCKED' && <span className="pill red gf-locked">Đã khoá</span>}
+      <span aria-hidden="true">·</span>
+      {timeTo ? (
+        <Link to={timeTo} state={timeState} className="gf-time">
+          <time dateTime={post.createdAt}>{time}</time>
+        </Link>
+      ) : (
+        <time dateTime={post.createdAt}>{time}</time>
+      )}
+      {isEdited(post) && (
+        <span className="chip" title={`Chỉnh sửa lúc ${formatDateTime(post.updatedAt)}`}>
+          Đã chỉnh sửa
+        </span>
+      )}
+    </p>
+  );
+}
+
+/** What the post's state means for the reader – on SCR-37 only (the card says it with its kind line and bar). */
+export function StatusNotice({ post, groupType }) {
   const who = moderatorName(groupType);
   if (post.isHidden) {
     return (
       <div className="notice gf-status-notice">
         <Icon name="visibility_off" />
-        <p>Bài viết đã bị ẩn bởi {who}. Các thành viên khác không còn thấy bài này.</p>
+        <p>
+          Bài viết đã bị ẩn bởi {who}. Các thành viên khác không còn thấy bài này.
+          {post.can?.edit && ' Bạn có thể sửa bài để gửi duyệt lại, hoặc xoá bài.'}
+        </p>
       </div>
     );
   }
@@ -80,80 +133,80 @@ function StatusNotice({ post, groupType }) {
   return null;
 }
 
-function Interactions({ post, detailLink, onLikeError }) {
+/** Like + comment count (UC-43), as the school feed. */
+export function PostInteractions({ post, onLikeError }) {
   const like = useLike(post.postId, post.likedByMe, post.likeCount, onLikeError, groupPostLike);
   return (
-    <div className="gf-interactions">
+    <>
       <LikeButton liked={like.likedByMe} count={like.likeCount} onClick={like.toggle} />
-      {detailLink ? (
-        <Link to={detailLink} className="gf-comments-link">
-          <CommentCount count={post.commentCount} />
-        </Link>
-      ) : (
-        <CommentCount count={post.commentCount} />
-      )}
-    </div>
+      <CommentCount count={post.commentCount} />
+    </>
   );
 }
 
 /**
- * One post. mode 'feed' cuts long text and links to the detail; 'detail' shows everything. onAction(kind, post) runs
- * the moderator / author actions (usePostActions). Buttons follow post.can, sent by the server.
+ * One post in the feed (SCR-35), laid out like a school feed card: kind line with the "⋮" menu, the text (long posts
+ * cut, "Hiển thị thêm" / "Ẩn bớt") with the meta line under it and the first picture on the right, then likes /
+ * comments / files and, for the moderator, "Duyệt" / "Từ chối". A click on the card opens the post in the pop-up
+ * (onOpen); links and buttons inside keep their own action. Buttons follow post.can, sent by the server.
  */
-export function PostCard({ post, groupId, groupType, mode = 'feed', onAction, editState }) {
+export function PostCard({ post, groupId, onAction, onOpen }) {
   const toast = useToast();
+  const [expanded, setExpanded] = useState(false);
   const detail = postPath(groupId, post.postId);
-  const long = mode === 'feed' && post.content.length > PREVIEW_CHARS;
-  const text = long ? `${post.content.slice(0, PREVIEW_CHARS).trimEnd()}…` : post.content;
+  const excerpt = excerptOf(post.content);
   const { can } = post;
+  const kind = postKind(post);
   const onLikeError = (err) => toast(errorText(err), { type: 'error' });
-  const name = post.authorNickname ? `${post.authorName} (${post.authorNickname})` : post.authorName;
+  const hasFoot = can.interact || can.review || post.attachmentCount > 0;
+  const classes = ['feed-card', kind.state !== 'live' && `is-${kind.state}`, !hasFoot && 'no-foot'];
 
   return (
-    <article className={`card card-outline gf-post${post.isPinned ? ' is-pinned' : ''}`} aria-label={`Bài của ${name}`}>
-      <header className="gf-post-head">
-        <Avatar src={post.authorAvatarUrl} name={post.authorName} size={40} />
-        <div className="gf-post-who">
-          <span className="gf-author">
-            {name}
-            {post.authorStatus === 'LOCKED' && <span className="pill red gf-locked">Đã khoá</span>}
-          </span>
-          <span className="caption muted">
-            {mode === 'feed' ? (
-              <Link to={detail} className="gf-time">
-                {formatDateTime(post.createdAt)}
-              </Link>
-            ) : (
-              formatDateTime(post.createdAt)
+    <article
+      className={classes.filter(Boolean).join(' ')}
+      onClick={(e) => {
+        if (e.target.closest('a, button, [role="menu"]') || window.getSelection()?.toString()) return;
+        onOpen(post);
+      }}
+      aria-label={`Bài của ${authorLabel(post)}`}
+    >
+      <div className="feed-card-top">
+        <PostKind post={post} />
+        <PostMenu post={post} editTo={`${detail}/edit`} editState={{ from: 'feed' }} onAction={onAction} />
+      </div>
+      <div className="feed-card-body">
+        <div className="feed-card-text">
+          <div className="gf-text">
+            <p className="feed-preview is-body">{excerpt && !expanded ? excerpt : post.content}</p>
+            {excerpt && (
+              <button
+                type="button"
+                className="gf-more"
+                onClick={() => setExpanded((v) => !v)}
+                aria-expanded={expanded}
+              >
+                {expanded ? 'Ẩn bớt' : 'Hiển thị thêm'}
+              </button>
             )}
-            {isEdited(post) && ' · Đã chỉnh sửa'}
-          </span>
+          </div>
+          {/* FE-07 (Dung): a post that carries an extracurricular activity shows its card (title, time, registration). */}
+          {post.activity && <ActivityFeedCard activity={post.activity} />}
+          <PostMeta post={post} timeTo={postPopupPath(groupId, post.postId)} timeState={POPUP_STATE} />
         </div>
-        <div className="gf-post-status">
-          <PostStatus post={post} groupType={groupType} />
-        </div>
-        <PostMenu post={post} editTo={`${detail}/edit`} editState={editState} onAction={onAction} />
-      </header>
-
-      <StatusNotice post={post} groupType={groupType} />
-
-      <p className="gf-content">{text}</p>
-      {long && (
-        <Link to={detail} className="gf-more">
-          Xem tiếp
-        </Link>
-      )}
-      {/* FE-07 (Dung): a post that carries an extracurricular activity shows its card (title, time, registration). */}
-      {post.activity && <ActivityFeedCard activity={post.activity} />}
-
-      {(can.interact || can.review) && (
-        <footer className="gf-post-foot">
-          {can.interact && (
-            <Interactions post={post} detailLink={mode === 'feed' ? detail : null} onLikeError={onLikeError} />
+        <FeedCardImage src={post.firstImageUrl} />
+      </div>
+      {hasFoot && (
+        <div className="feed-card-foot">
+          {can.interact && <PostInteractions post={post} onLikeError={onLikeError} />}
+          {post.attachmentCount > 0 && (
+            <span className="sf-attachments caption">
+              <Icon name="attach_file" size="sm" />
+              {post.attachmentCount} tệp đính kèm
+            </span>
           )}
           {/* UC-46 stays in sight: the moderator works through the pending queue with these two buttons. */}
           {can.review && (
-            <div className="gf-actions">
+            <div className="feed-card-actions">
               <button type="button" className="btn btn-primary btn-sm" onClick={() => onAction('approve', post)}>
                 <Icon name="check" size="sm" />
                 Duyệt
@@ -163,18 +216,36 @@ export function PostCard({ post, groupId, groupType, mode = 'feed', onAction, ed
               </button>
             </div>
           )}
-        </footer>
+        </div>
       )}
     </article>
   );
 }
 
-/**
- * The "⋮" menu at the top right of a post: pin, hide, edit, delete – only the items post.can allows; no button at all
- * when none is allowed. Closes on a click outside, Esc (focus back on the button) and after choosing.
- */
-function PostMenu({ post, editTo, editState, onAction }) {
+/** The author / moderator actions a post allows, in display order (menu on SCR-35, buttons on SCR-37). */
+export function postActions(post) {
   const { can } = post;
+  return [
+    can.review && { kind: 'approve', icon: 'check', label: 'Duyệt', primary: true },
+    can.review && { kind: 'reject', icon: 'block', label: 'Từ chối' },
+    can.pin && { kind: post.isPinned ? 'unpin' : 'pin', icon: 'push_pin', label: post.isPinned ? 'Bỏ ghim' : 'Ghim bài' },
+    can.hide && {
+      kind: post.isHidden ? 'unhide' : 'hide',
+      icon: post.isHidden ? 'visibility' : 'visibility_off',
+      label: post.isHidden ? 'Bỏ ẩn' : 'Ẩn bài',
+    },
+    can.edit && { kind: 'edit', icon: 'edit', label: 'Sửa bài' },
+    can.delete && { kind: 'delete', icon: 'delete', label: 'Xoá bài', danger: true },
+  ].filter(Boolean);
+}
+
+/**
+ * The "⋮" menu at the top right of a card (where the school feed has its pin button) and of the pop-up: pin, hide, edit,
+ * delete – only
+ * the items post.can allows (review stays as buttons in the foot); nothing when none is allowed. Closes on a click
+ * outside, Esc (focus back on the button) and after choosing.
+ */
+export function PostMenu({ post, editTo, editState, onAction, triggerClass = 'btn btn-icon feed-card-tool' }) {
   const [open, setOpen] = useState(false);
   const ref = useRef(null);
   const button = useRef(null);
@@ -197,16 +268,7 @@ function PostMenu({ post, editTo, editState, onAction }) {
     };
   }, [open]);
 
-  const items = [
-    can.pin && { kind: post.isPinned ? 'unpin' : 'pin', icon: 'push_pin', label: post.isPinned ? 'Bỏ ghim' : 'Ghim bài' },
-    can.hide && {
-      kind: post.isHidden ? 'unhide' : 'hide',
-      icon: post.isHidden ? 'visibility' : 'visibility_off',
-      label: post.isHidden ? 'Bỏ ẩn' : 'Ẩn bài',
-    },
-    can.edit && { kind: 'edit', icon: 'edit', label: 'Sửa bài' },
-    can.delete && { kind: 'delete', icon: 'delete', label: 'Xoá bài', danger: true },
-  ].filter(Boolean);
+  const items = postActions(post).filter((item) => item.kind !== 'approve' && item.kind !== 'reject');
   if (!items.length) return null;
 
   const choose = (kind) => {
@@ -219,7 +281,7 @@ function PostMenu({ post, editTo, editState, onAction }) {
       <button
         ref={button}
         type="button"
-        className="btn btn-icon gf-menu-trigger"
+        className={`${triggerClass} gf-menu-trigger`}
         aria-label="Thao tác với bài viết"
         aria-haspopup="menu"
         aria-expanded={open}
@@ -255,14 +317,16 @@ function PostMenu({ post, editTo, editState, onAction }) {
   );
 }
 
-// Actions that ask first (they take the post away from someone's view).
+// Actions that ask first (they take the post away from someone's view). Same dialog as the school feed (.sf-dialog).
 const CONFIRM = {
   delete: {
     title: 'Xoá bài viết?',
-    body: 'Bài viết và các bình luận của bài sẽ không còn hiển thị với ai.',
-    label: 'Xoá bài',
+    body: 'Sau khi xoá, bài viết và các bình luận của bài không còn hiển thị với ai trong nhóm.',
+    label: 'Xoá bài viết',
     busy: 'Đang xoá…',
     icon: 'delete',
+    keep: 'Giữ lại',
+    danger: true,
   },
   hide: {
     title: 'Ẩn bài viết?',
@@ -270,6 +334,7 @@ const CONFIRM = {
     label: 'Ẩn bài',
     busy: 'Đang ẩn…',
     icon: 'visibility_off',
+    keep: 'Quay lại',
   },
   reject: {
     title: 'Từ chối bài viết?',
@@ -277,6 +342,7 @@ const CONFIRM = {
     label: 'Từ chối',
     busy: 'Đang lưu…',
     icon: 'block',
+    keep: 'Quay lại',
   },
 };
 
@@ -300,13 +366,67 @@ const DONE = {
   delete: 'Đã xoá bài viết.',
 };
 
+const QUOTE_CHARS = 140;
+
+/**
+ * Native <dialog> in the school feed's style (.sf-dialog): icon + title, the text quoted (optional), what will happen,
+ * the safe button focused. config: { icon, title, body, label, busy, keep, danger }.
+ */
+export function FeedConfirmDialog({ config, quote, busy, onCancel, onConfirm }) {
+  const ref = useRef(null);
+  const titleId = useId();
+  useEffect(() => {
+    const dialog = ref.current;
+    if (!dialog.open) dialog.showModal();
+    return () => dialog.open && dialog.close();
+  }, []);
+  const text = quote && quote.length > QUOTE_CHARS ? `${quote.slice(0, QUOTE_CHARS).trimEnd()}…` : quote;
+  return (
+    <dialog
+      ref={ref}
+      className="sf-dialog"
+      aria-labelledby={titleId}
+      onCancel={(e) => {
+        e.preventDefault();
+        if (!busy) onCancel();
+      }}
+    >
+      <div className={`sf-dialog-head${config.danger ? ' is-danger' : ''}`}>
+        <Icon name={config.icon} />
+        <h2 id={titleId} className="title-sm">
+          {config.title}
+        </h2>
+      </div>
+      {text && <p className="sf-dialog-quote gf-dialog-quote">{text}</p>}
+      <div className={`notice${config.danger ? ' amber' : ''}`}>
+        <Icon name={config.danger ? 'warning' : 'info'} size="sm" />
+        <p>{config.body}</p>
+      </div>
+      <div className="sf-dialog-actions">
+        <button type="button" className="btn btn-secondary" onClick={onCancel} disabled={busy} autoFocus>
+          {config.keep}
+        </button>
+        <button
+          type="button"
+          className={`btn btn-primary${config.danger ? ' sf-btn-danger' : ''}`}
+          onClick={onConfirm}
+          disabled={busy}
+        >
+          <Icon name={busy ? 'progress_activity' : config.icon} size="sm" className={busy ? 'sf-spin' : undefined} />
+          {busy ? config.busy : config.label}
+        </button>
+      </div>
+    </dialog>
+  );
+}
+
 /**
  * Runs a post action and reports it. onDone(kind, result, post) gets the server's answer (the post as it is now, or
  * { isDeleted } after a delete). Returns { run, dialog }: render `dialog` once in the page.
  */
 export function usePostActions(onDone) {
   const toast = useToast();
-  const [asking, setAsking] = useState(null); // { kind, post }
+  const [asking, setAsking] = useState(null); // { kind, post, busy }
   const busy = useRef(false);
 
   async function perform(kind, post) {
@@ -317,7 +437,7 @@ export function usePostActions(onDone) {
 
   async function run(kind, post) {
     if (CONFIRM[kind]) {
-      setAsking({ kind, post });
+      setAsking({ kind, post, busy: false });
       return;
     }
     if (busy.current) return;
@@ -332,21 +452,28 @@ export function usePostActions(onDone) {
     }
   }
 
-  const c = asking && CONFIRM[asking.kind];
-  const dialog = c ? (
-    <ConfirmDialog
-      title={c.title}
-      confirmLabel={c.label}
-      busyLabel={c.busy}
-      icon={c.icon}
+  async function confirm() {
+    const { kind, post } = asking;
+    setAsking((a) => ({ ...a, busy: true }));
+    try {
+      await perform(kind, post);
+      setAsking(null);
+    } catch (err) {
+      setAsking(null);
+      toast(errorText(err), { type: 'error' });
+      if (err.status === 404 || err.status === 409) onDone('stale', null, post);
+    }
+  }
+
+  const dialog = asking ? (
+    <FeedConfirmDialog
+      key={`${asking.kind}-${asking.post.postId}`}
+      config={CONFIRM[asking.kind]}
+      quote={asking.post.content}
+      busy={asking.busy}
       onCancel={() => setAsking(null)}
-      onConfirm={async () => {
-        await perform(asking.kind, asking.post);
-        setAsking(null);
-      }}
-    >
-      {c.body}
-    </ConfirmDialog>
+      onConfirm={confirm}
+    />
   ) : null;
 
   return { run, dialog };

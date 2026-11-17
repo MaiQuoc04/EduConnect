@@ -16,6 +16,7 @@ import departmentRoutes from './modules/teacher/department.routes.js';
 import homeroomRoutes from './modules/teacher/homeroom.routes.js';
 import teacherRoutes from './modules/teacher/teacher.routes.js';
 import teachingRoutes from './modules/teacher/teaching.routes.js';
+import gradeRoutes from './modules/grades/grades.routes.js';
 import schoolPostRoutes from './modules/schoolposts/schoolposts.routes.js';
 import uploadRoutes from './modules/uploads/uploads.routes.js';
 import parentRoutes from './modules/parents/parents.routes.js';
@@ -54,6 +55,7 @@ router.use('/teachers', teacherRoutes);
 router.use('/departments', departmentRoutes);
 router.use('/homeroom-assignments', homeroomRoutes);
 router.use('/teaching-assignments', teachingRoutes);
+router.use('/grades', gradeRoutes);
 router.use('/school-posts', schoolPostRoutes);
 router.use('/parents', parentRoutes);
 router.use('/extracurricular-events', extracurricularRoutes); // FE-07 (Dung, It3)

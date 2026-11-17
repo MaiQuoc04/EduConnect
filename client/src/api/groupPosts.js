@@ -13,9 +13,17 @@ export async function listGroupPosts(groupId, params, { signal } = {}) {
   return data;
 }
 
-// UC-38 POST /groups/:groupId/posts { content } -> 201 post (PENDING or APPROVED)
-export async function createGroupPost(groupId, content) {
-  const { data } = await api.post(`/groups/${encodeURIComponent(groupId)}/posts`, { content });
+// UC-38 POST /groups/:groupId/posts { content, attachments? } -> 201 post (PENDING or APPROVED)
+// attachments: the /uploads/confirm answers (api/uploads.js uploadFile with target 'post'), in the order shown.
+export async function createGroupPost(groupId, content, attachments = []) {
+  const body = attachments.length ? { content, attachments } : { content };
+  const { data } = await api.post(`/groups/${encodeURIComponent(groupId)}/posts`, body);
+  return data;
+}
+
+// GET /posts/attachment-limits -> { maxFiles, maxFileMb, maxVideoMb, types } for the file picker (system_settings)
+export async function getPostAttachmentLimits({ signal } = {}) {
+  const { data } = await api.get('/posts/attachment-limits', { signal });
   return data;
 }
 
@@ -25,15 +33,20 @@ export async function setPostApproval(groupId, requireApproval) {
   return data;
 }
 
-// UC-37 GET /posts/:postId -> post + group { groupId, groupType, groupName, readOnly, isModerator }
+// UC-37 GET /posts/:postId -> post + attachments (links signed for one hour) + group { groupId, groupType, groupName,
+// readOnly, isModerator }. In lists each post has attachmentCount and firstImageUrl instead.
 export async function getGroupPost(postId, { signal } = {}) {
   const { data } = await api.get(postPath(postId), { signal });
   return data;
 }
 
-// UC-39 PATCH /posts/:postId { content } -> post (may go back to PENDING, business-rules §5)
-export async function updateGroupPost(postId, content) {
-  const { data } = await api.patch(postPath(postId), { content });
+// UC-39 PATCH /posts/:postId { content, attachments? (new files), removeAttachmentIds? } -> post (may go back to
+// PENDING, business-rules §5; a change of files counts as an edit)
+export async function updateGroupPost(postId, content, { attachments = [], removeAttachmentIds = [] } = {}) {
+  const body = { content };
+  if (attachments.length) body.attachments = attachments;
+  if (removeAttachmentIds.length) body.removeAttachmentIds = removeAttachmentIds;
+  const { data } = await api.patch(postPath(postId), body);
   return data;
 }
 

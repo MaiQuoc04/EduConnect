@@ -1,16 +1,18 @@
 import Avatar from '../../components/Avatar.jsx';
 import Icon from '../../components/Icon.jsx';
-import { dayLabel, dayOf, REACTIONS, REACTION_EMOJI, timeOf } from './chatText.js';
+import { dayLabel, dayOf, filesText, REACTIONS, REACTION_EMOJI, systemText, timeOf } from './chatText.js';
+import MessageFiles from './MessageFiles.jsx';
 
 // One message of a chat: a day separator when needed, the sender, the quote of the message it answers, the text, the
 // reactions and the actions (react, reply, delete). The thread (ChatThread.jsx) holds the state and calls the server.
-// A message deleted for everyone shows only a placeholder, which the user can still remove from their own view.
+// A message deleted for everyone shows only a placeholder ("Bạn đã xoá một tin nhắn" / "Tin nhắn đã được xoá") with no
+// action at all: it is already gone for everybody, so it cannot be deleted again (15/11/2026, business-rules §6).
 function replyText(reply, me) {
   if (reply.state === 'BEFORE_JOIN') return { who: '', text: 'Tin nhắn trước khi bạn vào nhóm' };
   if (reply.state === 'DELETED') return { who: '', text: 'Tin nhắn đã được xoá' };
   if (reply.state === 'HIDDEN') return { who: '', text: 'Bạn đã xoá tin nhắn này' };
   const who = reply.senderId === me ? 'Bạn' : reply.senderNickname || reply.senderName;
-  return { who, text: reply.content };
+  return { who, text: reply.content || filesText(reply.attachmentCount) };
 }
 
 // "Bạn đã trả lời Lan", "Bin đã trả lời bạn": who answered whom, above the message.
@@ -37,7 +39,26 @@ export default function MessageRow({
   onReply,
   onDelete,
   onJump,
+  onFilesExpired,
 }) {
+  // A team's system line (15/11/2026): centred, no bubble, no action.
+  if (m.type === 'SYSTEM') {
+    return (
+      <>
+        {newDay && (
+          <li className="msg-day">
+            <span className="caption">{dayLabel(dayOf(m.sentAt))}</span>
+          </li>
+        )}
+        <li id={`msg-${m.messageId}`} className="msg-system">
+          <span className="caption">
+            {systemText(m, me)}
+            <time dateTime={m.sentAt}> · {timeOf(m.sentAt)}</time>
+          </span>
+        </li>
+      </>
+    );
+  }
   const mine = m.senderId === me;
   const name = m.senderNickname ? `${m.senderNickname} (${m.senderName})` : m.senderName;
   const reply = !m.isDeleted && m.replyTo ? replyText(m.replyTo, me) : null;
@@ -50,6 +71,7 @@ export default function MessageRow({
       if (!window.getSelection()?.toString()) onJump(m.replyTo.messageId);
       return;
     }
+    if (m.isDeleted) return; // a deleted message has no actions
     toggle('tools')(e);
   };
   const myReaction = (m.reactions ?? []).find((r) => r.userIds.includes(me))?.code;
@@ -108,9 +130,12 @@ export default function MessageRow({
                   <span>{reply.text}</span>
                 </button>
               )}
-              <p className="msg-text">
-                {m.isDeleted ? (mine ? 'Bạn đã xoá một tin nhắn' : 'Tin nhắn đã được xoá') : m.content}
-              </p>
+              {!m.isDeleted && <MessageFiles files={m.attachments} onExpired={() => onFilesExpired?.(m.messageId)} />}
+              {(m.isDeleted || m.content) && (
+                <p className="msg-text">
+                  {m.isDeleted ? (mine ? 'Bạn đã xoá một tin nhắn' : 'Tin nhắn đã được xoá') : m.content}
+                </p>
+              )}
               <time className="msg-time" dateTime={m.sentAt}>
                 {timeOf(m.sentAt)}
               </time>
@@ -126,9 +151,11 @@ export default function MessageRow({
                   </button>
                 </>
               )}
-              <button type="button" className="msg-tool" onClick={() => onDelete(m)} aria-label="Xoá tin nhắn" title="Xoá tin nhắn">
-                <Icon name="delete" size="sm" />
-              </button>
+              {!m.isDeleted && (
+                <button type="button" className="msg-tool" onClick={() => onDelete(m)} aria-label="Xoá tin nhắn" title="Xoá tin nhắn">
+                  <Icon name="delete" size="sm" />
+                </button>
+              )}
               {open === 'react' && (
                 <div className="msg-react-bar" role="menu" aria-label="Chọn cảm xúc">
                   {REACTIONS.map((r) => (
@@ -172,5 +199,64 @@ export default function MessageRow({
         </div>
       </li>
     </>
+  );
+}
+
+// One of my messages not confirmed by the server yet (17/11/2026, business-rules §6 "Sending"), after the real ones:
+//   sending – dim, "Đang gửi…";
+//   failed  – the reason, then "Thử lại" (when sending again can help and I may still send), "Sửa" (back into the box)
+//             and "Xoá" (only drops this copy; a message that was maybe saved after all shows up at the next load).
+export function OutboxRow({ message: m, me, canSend, onRetry, onEdit, onDrop }) {
+  const failed = m.status === 'failed';
+  const reply = m.replyTo;
+  const replyWho = reply ? (reply.senderId === me ? 'chính bạn' : reply.senderNickname || reply.senderName) : '';
+  return (
+    <li className={`msg mine first msg-outbox${failed ? ' is-failed' : ' is-sending'}`} aria-busy={!failed}>
+      <div className="msg-body">
+        {reply && (
+          <p className="msg-reply-note caption">
+            <Icon name="reply" size="sm" />
+            Bạn đang trả lời {replyWho}
+          </p>
+        )}
+        <div className="msg-line">
+          <div className="msg-bubble">
+            {m.files.length > 0 && (
+              <p className="msg-outbox-files caption">
+                <Icon name="attach_file" size="sm" />
+                {m.files.length === 1 ? m.files[0].fileName : `${m.files.length} tệp`}
+              </p>
+            )}
+            {m.content && <p className="msg-text">{m.content}</p>}
+          </div>
+        </div>
+        <p className="msg-outbox-state caption" role={failed ? 'alert' : undefined}>
+          {failed ? (
+            <>
+              <Icon name="error" size="sm" />
+              <span>{m.unsure ? 'Chưa rõ đã gửi được chưa.' : m.error || 'Không gửi được.'}</span>
+              {m.retryable && canSend && (
+                <button type="button" className="link-button" onClick={() => onRetry(m.clientMessageId)}>
+                  Thử lại
+                </button>
+              )}
+              {canSend && (
+                <button type="button" className="link-button" onClick={() => onEdit(m.clientMessageId)}>
+                  Sửa
+                </button>
+              )}
+              <button type="button" className="link-button" onClick={() => onDrop(m.clientMessageId)}>
+                Xoá
+              </button>
+            </>
+          ) : (
+            <>
+              <Icon name="schedule" size="sm" />
+              Đang gửi…
+            </>
+          )}
+        </p>
+      </div>
+    </li>
   );
 }

@@ -233,6 +233,9 @@ Boundaries that are easy to get wrong:
 - Importing a class creates 3 groups automatically: **GENERAL** (feed + chat), **STUDENT** (chat), **PARENT** (chat).
   Groups can also be created by hand. One **TEACHER_SCHOOL** group for the whole school (feed + chat, all teachers +
   SMs, managed by SM, reused across years). After promotion, last year's groups are read only.
+  A new Teacher or School Manager account joins every active TEACHER_SCHOOL group in the same transaction, whether
+  created (UC-95), imported by SA (UC-96) or imported by SM (UC-116); if the group does not exist yet nothing is
+  added (FE-13, 17/11/2026).
 - **Teams** (`TEAM_CHAT`): chat only, members from one class, or teachers of the school ("teacher team", below);
   Teachers, Students and Parents can create them
   (`groups.created_by`); SA and SM cannot.
@@ -240,19 +243,31 @@ Boundaries that are easy to get wrong:
   to the members of the class's groups and to the School Manager (never in the teacher group or outside the class).
 - **Teams in detail** (agreed 03/11/2026): the creator picks the members when creating it – the creator plus 2–49
   others from the same class (3–50 people), no locked accounts; name 2–100 characters, not unique. After that
-  **nobody adds or removes members** and a team has **no admin**. **Anyone can leave a team**, the creator too;
-  when the last member leaves, the team is closed (soft-deleted). The three class groups cannot be left (membership
+  **only the leader adds and removes members** (Khanh's decision 17/11/2026, replaces "nobody adds or removes
+  members"): people of the team's class (a teacher team: teachers of the teacher group), active accounts, up to 50; a
+  removed member loses the team at once and can be added again (then sees the whole history, §6); the leader cannot
+  remove themselves (they leave). Lines "A đã thêm B vào nhóm" / "A đã xoá B khỏi nhóm". **Team leader** (agreed by the lead 15/11/2026, replaces "a team has no admin"):
+  the creator is the leader (`groups.leader_id`); the leader's only rights are to **hand the leadership over** to
+  another member (any time) and the duty to do so **before leaving while others remain** (a locked member may be
+  chosen, with a warning). When the system takes the leader out (transfer, promotion, assignment change), the member
+  who joined first and is still in becomes leader. **Any member can rename the team** (same name rules).
+  **Anyone can leave a team**; when the last member leaves, the team is closed (soft-deleted) and leaves every list.
+  **System lines** in the team chat (`messages.message_type = 'SYSTEM'`): "A đã tạo nhóm", "A đã đổi tên nhóm thành …",
+  "A đã rời nhóm", "A không còn trong nhóm" (taken out by a class change), "A đã chuyển quyền trưởng nhóm cho B". They
+  count as unread and move the chat up like a message, but cannot be answered, reacted to or deleted. The three class groups cannot be left (membership
   follows the class). Not possible once the school year has ended.
 - **Teacher teams** (agreed by the lead 05/11/2026, e.g. a head of department with the department's teachers): a team
   with no class (`class_id` NULL), created by a teacher (active role) who is in the teacher group. Members are
   picked from the teachers of the teacher group, whatever their class; School Managers cannot be picked, cannot create
-  one and do not see it. Same size, name, leave and no-admin rules as above. It has no school year, so it never
+  one and do not see it. Same size, name, leave and leader rules as above (the leader adds teachers of the teacher group). It has no school year, so it never
   becomes read only. A teacher whose account is locked later stays in it with the "Locked" label.
 - **Group moderator = the current homeroom teacher**, read from `classes.homeroom_teacher_id` (nothing stored per
   group), so the rights move at once when the homeroom teacher changes, posts waiting for approval included.
-- **Removing members** (UC-33): the homeroom teacher removes students and parents only; teachers are removed by the
-  School Manager (who also makes the teaching assignments). A teacher removed while still assigned to the class
-  comes back at the next membership sync (membership follows the class); to take a teacher out, end the assignment.
+- **Class group members** (UC-32 / UC-33, Khanh's decision 17/11/2026, replaces "the homeroom teacher removes students
+  and parents, the School Manager removes teachers"): **nobody removes anyone** from the three class groups – their
+  members follow the class (transfer, promotion, teaching and homeroom assignments, below). Only the **School
+  Manager adds** people of the class who are missing (e.g. a student who transferred in before the sync); the
+  homeroom teacher can no longer add or remove. To take a teacher out, end the assignment.
 - **Class group membership follows the class** (agreed 03/11/2026), in the same transaction as the change that
   causes it:
   - Transfer (UC-10) / promotion (UC-11): the student leaves every group and team of the old class and joins GENERAL
@@ -290,6 +305,15 @@ Boundaries that are easy to get wrong:
   - **Hidden** (`is_hidden`): the author still sees it, labelled "Bài viết đã bị ẩn bởi người kiểm duyệt"; other
     members do not. The moderator sees the list of hidden posts and can **unhide** one (it comes back as a normal
     post). Only posts are hidden; comments are still only deleted.
+    The author may **edit a hidden post** (agreed by the lead 12/11/2026): saving unhides it and sends it to `PENDING`
+    **even when the group has approval off**, so it comes back to the feed only when the moderator approves it (a
+    moderator editing their own hidden post: approved at once). Saving without any change keeps it hidden.
+  - **Feed order** (Khanh, 12/11/2026): pinned posts first, then newest first by posting time. A post **edited and
+    sent again** (hidden, rejected, or approved then edited while approval is on) that the moderator approves again
+    **counts as a new post**: its posting time becomes the time of that approval (top of the feed, today's time) and
+    it no longer shows "Đã chỉnh sửa"; its likes and comments stay. A first approval, unhiding without an edit and an
+    edit with approval off keep the post's time and place. The pending queue is first sent, first shown (an edited
+    post counts from when it was sent again).
   - **Pin:** at most **5 pinned posts per group**; pinning a 6th is refused ("Đã đạt giới hạn 5 bài ghim. Vui lòng
     bỏ ghim bài cũ trước khi ghim bài mới."). Hiding a post unpins it; unhiding does not pin it again.
   - **Turning approval on / off** (`groups.require_approval`): the homeroom teacher for the class general group, the
@@ -335,13 +359,48 @@ Boundaries that are easy to get wrong:
     per message, another one replaces it, the same one removes it. They do not count as unread or move the chat up.
   - **Emoji:** the system's own emoji in the text; no stickers.
   - **Delete for everyone:** own message only, within `chat.delete_for_everyone_minutes` (default 15, from sending).
-    It stays as "Tin nhắn đã được xoá" with its reactions and attachments hidden, no longer counts as unread, and cannot
-    be answered or reacted to. The database keeps the content; the API never returns it and no screen shows it.
-  - **Delete for me:** any message one can see, no time limit; others see no change. It stays hidden after leaving a
-    group and coming back. The preview falls back to the last message still visible; a 1-1 chat with none left drops
+    It stays as "Tin nhắn đã được xoá" ("Bạn đã xoá một tin nhắn" for the sender) with its reactions and attachments
+    hidden, and cannot be answered, reacted to **or deleted again** – not even "for me"
+    (Khanh's decision 15/11/2026: it is already gone for everybody). The database keeps the content; the API never
+    returns it and no screen shows it.
+    **The deletion is shown like a new message** (Khanh's decision 15/11/2026): the other members' conversation list
+    shows "<name> đã xoá một tin nhắn" as the preview (bold), counts it as one unread (the message itself is not
+    counted again), uses the deletion time, and a 1-1 chat moves to the top. Seeing the open chat clears it.
+  - **Delete for me:** any message one can see that is not deleted for everyone, no time limit; others see no change. It stays hidden after leaving a
+    group and coming back. It leaves nothing behind – no "Bạn đã xoá một tin nhắn" line, not in the chat and not in the
+    list (15/11/2026): the preview falls back to the last ordinary message still visible (a deleted-for-everyone line
+    older than one's latest delete-for-me is skipped); a 1-1 chat with none left drops
     off the list until a new message arrives.
   - Neither can be undone. In an ended school year or a closed 1-1 chat only delete for me is possible. Group moderators
     cannot delete other people's messages.
+- **Sending, drafts, connection** (Khanh's decisions 17/11/2026; the database part approved by the lead 17/11/2026):
+  - **Sending:** a message shows at once, dim with "Đang gửi…", and messages are sent one after another in the order
+    they were written. The text is stored in Unicode NFC. Over 2000 characters the "Gửi" button is off (pasting more is
+    allowed, the counter turns red). A picture pasted together with text attaches the picture and keeps the text.
+  - **No answer:** sending waits 15 s, loading 20 s. A message that failed stays with its reason and "Thử lại" (when
+    sending again can help), "Sửa" (back into the box) and "Xoá" (drops only this unsent copy). With no answer at all
+    it says "Chưa rõ đã gửi được chưa": the server may have saved it.
+  - **Never twice:** each message carries a random id (`messages.client_message_id`, UUID). Sending the same id again
+    in the same chat returns the saved message instead of a copy, so "Thử lại" is always safe. Only the sender sees
+    the id. **Database: `patch_v0.3_message_client_id.sql` – approved by the lead and run on the shared database
+    17/11/2026.** (Without the column the server still works, only without this protection.)
+  - **Drafts:** per account and chat, in the browser only (not across devices): the text, the message being answered,
+    the files already uploaded and the unsent messages. Kept 7 days. Sending clears it. The conversation list shows
+    "Bản nháp: …" for a chat that is not open and has nothing unread.
+  - **Connection:** after 3 s without the real-time connection the chat says "Mất kết nối…" and "Đã kết nối lại" when
+    it is back. Sending still works meanwhile. On every reconnection the chat reads what it missed (the messages after
+    the last one shown, plus the latest page for deletions and reactions) without losing the older messages already
+    loaded or the reading position; more than 100 missed → the latest page is shown again. A failed catch-up keeps
+    the chat as it is and tries again (up to every 30 s).
+  - **Reading:** new messages never pull a reader who is looking at older ones down; "↓ n tin nhắn mới" does. A chat
+    counts as read only when its end is on screen in a visible tab. My own messages from another tab or device do not
+    move the list either.
+  - **Losing access while the chat is open:** someone taken out of a group (teams, and – 17/11/2026 – a teacher whose
+    assignment ended: class groups) sees it leave the list and its chat close at once; the members' counts and the
+    1-1 chats of those people are read again (may they still write?). Sent only once the change is saved. A sending
+    attempt refused because the user may no longer write (read-only year, 1-1 out of reach, account locked, no longer
+    a member) closes the box with the reason. ASSUMPTION / not done (other owners' modules): real-time signals when
+    an account is locked, a school year ends or a student is transferred out of a class group.
 
 ## 7. Extracurricular activities (FE-07)
 - The homeroom teacher posts an activity in the class feed (a `posts` row + `extracurricular_events` row) with a
@@ -382,7 +441,7 @@ Boundaries that are easy to get wrong:
     `sendActivityDeadlineReminders()` in `modules/extracurricular/extracurricular.reminders.js`, to be called by
     FE-09's scheduled job (UC-69, Quoc).
   - **Links with the class feed (13/11/2026, Dung's request):** the homeroom teacher can start a new activity from the
-    class feed ("Tạo hoạt động ngoại khoá" above the posts, shown to the feed's moderator only, not in an ended year);
+    class feed (panel "Hoạt động ngoại khoá" in the right column, shown to the feed's moderator only, not in an ended year);
     the form always shows the homeroom class (a choice when the teacher has several homeroom classes in open years)
     with a link to that class feed; the "Ngoại khoá" list and the activity detail link to the class feed and to the
     activity's post.
@@ -427,17 +486,49 @@ Boundaries that are easy to get wrong:
   of scores (`score_count`, e.g. regular tests = 4 scores, mid-term = 1, final = 1). Semester 2 is copied from
   semester 1 and edited independently; copying to another subject makes an independent copy. **The structure locks
   once the semester has grades.**
+  - Limits (FE-11, 10/11/2026): at most 10 components, 1–10 scores each, weight > 0 and ≤ 100 with at most 2
+    decimals.
+  - The lock is per **subject × grade level × semester** (any `grades` row of that structure, even a cleared score),
+    not the whole semester.
+  - Saving a structure that has no grades yet replaces its components: the old `grade_components` rows are hard
+    deleted (configuration, no `grades` row points to them, §14).
+  - UC-82 copies the shown structure to **one or several subjects** of a semester × grade level at once (at most 50),
+    each an independent copy that replaces the target's components. If any target already has grades the whole copy
+    is refused and nothing changes (14/11/2026).
 - Each individual score is its own `grades` row (`attempt_no`); averages are **not stored**, they are computed:
   subject semester average = weighted average of the scores present; subject year average = (S1 + 2 × S2) / 3;
-  student year average = average of subjects (every `track_subjects.weight` is 1, so a plain average).
-- Teachers enter / import grades only for their assigned class + subject.
+  student semester / year average = average of subjects (every `track_subjects.weight` is 1, so a plain average).
+  Subjects counted = those with a grade structure for the class's grade that year (only the class type's subjects
+  when set); a subject without a structure is not counted.
+- **Rounding (Circular 22/2021, 14/11/2026):** every average is rounded to 1 decimal, half up (7.94 → 7.9,
+  7.95 → 8.0). Each step uses the **rounded** result of the step before: subject semester average → subject year
+  average → student average. Ranking compares the rounded averages, so students with the same shown average share
+  a rank.
+- Teachers enter / import grades only for their assigned class + subject, with an assignment that is current or
+  still to come (`end_date` ≥ today); a teacher whose assignment has ended can only view. Only **studying** students
+  are edited, required for finalizing and ranked; transferred / dropped students keep their old grades, read only.
+  A student moved by UC-10 within the year keeps the scores from the other class; when both classes have the same
+  score slot, the score of the current class wins.
+- **Import (UC-84):** an empty score cell keeps the current score (clearing a score is done on the entry screen,
+  UC-83). Imported scores go into the grid **unsaved**; the teacher checks them and saves. The import dialog lists
+  only the rows with errors.
+- **Export:** a grade book (class × subject × semester) can be exported to Excel by anyone who can view it (assigned
+  teacher, teachers of the class, SM), finalized or not: each score, the semester average, the book status and a note
+  (left the class / missing scores). It is for reading and printing; scores are changed through the import template.
 - **Finalize** (UC-85) locks the grade book (class × subject × semester, `grade_locks`). It is **blocked if any
-  currently studying student is missing a score**. To change a finalized grade the teacher asks SM outside the
-  system; SM **unlocks** (UC-86); the teacher edits and finalizes again.
+  currently studying student is missing a score** = any score slot of any component is empty (e.g. 4 regular tests,
+  1 mid-term and 1 final are all needed). To change a finalized grade the teacher asks SM outside the
+  system; SM **unlocks** (UC-86, optional reason ≤ 255 characters in the log, the teacher is not notified); the
+  teacher edits and finalizes again. A grade book is OPEN (never finalized), LOCKED (finalized) or UNLOCKED (unlocked
+  by SM). SM views a book read only with tabs Học kỳ 1 / Học kỳ 2 / Cả năm.
 - Every grade entry and change is logged in `grade_histories` (first entry has `old_score` NULL). Grade rows are never
   deleted; clearing a score = `score` NULL.
 - Viewing: students / parents only their own / child's; teachers see all grades of classes they teach; SM sees the
   whole school (read only). Students / parents see only their own rank.
+- **Students and parents see only finalized grade books (14/11/2026).** A book never finalized is "not published":
+  its scores are left out of every average and rank. A book unlocked by SM for a correction keeps showing the scores
+  **as finalized** (rebuilt from `grade_histories`) until the teacher finalizes it again. For teachers and SM an
+  average or rank is provisional while a subject's book of the period is not finalized.
 
 ## 12. Attendance (FE-12)
 - Per period, 4 statuses: `PRESENT`, `LATE`, `ABSENT_EXCUSED`, `ABSENT_UNEXCUSED`. No leave-request feature.
@@ -465,7 +556,8 @@ Boundaries that are easy to get wrong:
 - Hard delete is allowed only for technical / configuration rows: `department_subjects` (07/11/2026), `post_likes` (unlike), `message_reactions`
   (reaction removed, §6), `class_event_viewers`,
   `teacher_subjects`, `user_roles`, `student_parents` (unlink), expired OTPs, `track_subjects` (a subject removed
-  from a class type while the year has no grades, §4).
+  from a class type while the year has no grades, §4), `grade_components` (replaced while the structure has no
+  grades, §11, 17/11/2026).
 - Status changes instead of deletes: accounts (`LOCKED`), enrollments (`TRANSFERRED` / `DROPPED`), group members
   (`left_at`), activity registrations (`CANCELLED`), activities (`CANCELLED`).
 

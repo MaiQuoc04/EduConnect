@@ -9,6 +9,7 @@ import { normalizePhone, PHONE_RE } from '../../utils/phone.js';
 import { containsPattern, VI_TRANSLATE } from '../../utils/search.js';
 import { isValidUsername } from '../../utils/username.js';
 import { ROLE_CODES } from './accounts.service.js';
+import { workbookBuffer, XLSX_MIME } from '../../utils/excel.js';
 
 // FE-13 System Administration (owner: Linh) – account list and control:
 // UC-97 View Account List, UC-98 Export Account List, UC-99 Update Login Identifiers,
@@ -179,8 +180,8 @@ export async function exportAccounts(query) {
   const date = new Date().toLocaleDateString('sv-SE', { timeZone: 'Asia/Ho_Chi_Minh' }).replaceAll('-', '');
   return {
     fileName: `educonnect-accounts-${date}.xlsx`,
-    contentType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-    buffer: Buffer.from(await wb.xlsx.writeBuffer()),
+    contentType: XLSX_MIME,
+    buffer: await workbookBuffer(wb),
   };
 }
 

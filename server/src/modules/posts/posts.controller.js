@@ -1,4 +1,6 @@
+import { env } from '../../config/env.js';
 import {
+  idList,
   invalid,
   jsonBody,
   optionalEnum,
@@ -6,6 +8,7 @@ import {
   parseId,
   requiredBoolean,
   requiredText,
+  uploadedFiles,
 } from '../../utils/requestParsers.js';
 import * as service from './posts.service.js';
 
@@ -22,6 +25,9 @@ const paging = (query) => ({
 });
 const groupIdOf = (req) => parseId(req.params.groupId, 'groupId');
 const postIdOf = (req) => parseId(req.params.postId, 'postId');
+// Files of a post: /uploads/confirm answers of target 'post' (folder posts/), in the attachments bucket.
+const filesIn = (body) =>
+  uploadedFiles(body, 'attachments', { folder: 'posts/', bucket: env.storage.buckets.attachments, max: service.MAX_ATTACHMENTS });
 
 // UC-36 View Group Feed (view = feed | mine | pending | hidden)
 export async function list(req, res) {
@@ -29,10 +35,16 @@ export async function list(req, res) {
   res.json(await service.listPosts(req.user, groupIdOf(req), { view, ...paging(req.query) }));
 }
 
-// UC-38 Create Post
+// UC-38 Create Post { content, attachments? }
 export async function create(req, res) {
-  const content = requiredText(jsonBody(req, ['content']), 'content', MAX_POST_LENGTH);
-  res.status(201).json(await service.createPost(req.user, groupIdOf(req), { content }));
+  const body = jsonBody(req, ['content', 'attachments']);
+  const content = requiredText(body, 'content', MAX_POST_LENGTH);
+  res.status(201).json(await service.createPost(req.user, groupIdOf(req), { content, attachments: filesIn(body) }));
+}
+
+// Limits of the SCR-36 / SCR-38 file picker (count, sizes from system_settings, the 15 types)
+export async function attachmentLimits(_req, res) {
+  res.json(await service.getAttachmentLimits());
 }
 
 // Approval switch on the group detail screen (business-rules §5, 11/11/2026)
@@ -46,10 +58,17 @@ export async function detail(req, res) {
   res.json(await service.getPost(req.user, postIdOf(req)));
 }
 
-// UC-39 Edit Own Post
+// UC-39 Edit Own Post { content, attachments? (new files), removeAttachmentIds? }
 export async function update(req, res) {
-  const content = requiredText(jsonBody(req, ['content']), 'content', MAX_POST_LENGTH);
-  res.json(await service.updatePost(req.user, postIdOf(req), { content }));
+  const body = jsonBody(req, ['content', 'attachments', 'removeAttachmentIds']);
+  const content = requiredText(body, 'content', MAX_POST_LENGTH);
+  res.json(
+    await service.updatePost(req.user, postIdOf(req), {
+      content,
+      attachments: filesIn(body),
+      removeAttachmentIds: idList(body, 'removeAttachmentIds'),
+    }),
+  );
 }
 
 // UC-40 Delete Own Post

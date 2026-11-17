@@ -5,6 +5,7 @@ import Icon from '../../components/Icon.jsx';
 import { errorText } from '../../messages.js';
 import { yearLabel } from '../school-years/schoolYearLabels.js';
 import { trackLabel } from '../class-tracks/trackLabel.js';
+import SubjectFormDialog from './SubjectFormDialog.jsx';
 
 const TEACHERS_SHOWN = 5; // longer lists open with "+n giáo viên khác"
 const MISSING = 'MISSING'; // table filter: classes without an active teacher
@@ -29,6 +30,8 @@ export default function SubjectDetailPage() {
   const [state, setState] = useState({ loading: true, data: null, error: '' });
   const [grade, setGrade] = useState(''); // '' = all, a grade level, or MISSING
   const [allTeachers, setAllTeachers] = useState(false);
+  const [editing, setEditing] = useState(() => params.has('edit')); // UC-25 pop-up (?edit: the old /edit link)
+  const [reloadKey, setReloadKey] = useState(0);
 
   useEffect(() => {
     api
@@ -47,7 +50,16 @@ export default function SubjectDetailPage() {
     return () => {
       alive = false;
     };
-  }, [id, yearId]);
+  }, [id, yearId, reloadKey]);
+
+  function closeEdit() {
+    setEditing(false);
+    if (params.has('edit')) {
+      const next = new URLSearchParams(params);
+      next.delete('edit');
+      setParams(next, { replace: true });
+    }
+  }
 
   const classes = useMemo(() => state.data?.classes ?? [], [state.data]);
   const grades = useMemo(() => [...new Set(classes.map((c) => c.gradeLevel))].sort(), [classes]);
@@ -115,10 +127,10 @@ export default function SubjectDetailPage() {
               </option>
             ))}
           </select>
-          <Link to={`/subjects/${subject.subjectId}/edit`} className="btn btn-primary">
+          <button type="button" className="btn btn-primary" onClick={() => setEditing(true)}>
             <Icon name="edit" size="sm" />
             Sửa thông tin môn
-          </Link>
+          </button>
         </div>
       </div>
 
@@ -282,6 +294,17 @@ export default function SubjectDetailPage() {
           <p className="subject-empty muted">Năm học này chưa có lớp nào học môn này.</p>
         )}
       </section>
+
+      {editing && (
+        <SubjectFormDialog
+          subject={subject}
+          onClose={closeEdit}
+          onSaved={() => {
+            closeEdit();
+            setReloadKey((k) => k + 1); // the new code / name on the page
+          }}
+        />
+      )}
     </div>
   );
 }

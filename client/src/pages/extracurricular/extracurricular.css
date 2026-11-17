@@ -155,3 +155,5 @@
   background: var(--ink-50); outline: 1px solid var(--ink-100); }
 .xa-feed-actions p { margin: 0; flex: 1 1 220px; display: flex; align-items: center; gap: 6px; color: var(--ink-700); }
 @media (max-width: 560px) { .xa-feed-link { margin-right: 0; width: 100%; justify-content: center; } }
+.xa-feed-panel-text { margin: 0 0 10px; }
+.xa-feed-panel-actions { display: flex; flex-wrap: wrap; gap: 8px; }
