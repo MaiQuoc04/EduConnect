@@ -280,7 +280,7 @@ export default function TimetableAutoPage() {
   const blocking = result && (!result.ok || result.unplaced.length > 0 || result.unassigned.length > 0);
 
   return (
-    <div className="tt-page ta-page">
+    <div className="tt-page">
       <nav className="tt-crumb" aria-label="Breadcrumb">
         <span>EduConnect</span><span className="tt-crumb-sep">/</span><Link to="/timetables">Thời khoá biểu</Link><span className="tt-crumb-sep">/</span><strong className="tt-ink">Xếp tự động</strong>
       </nav>
