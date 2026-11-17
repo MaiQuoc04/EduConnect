@@ -213,35 +213,35 @@ export function getEditor({ classId, date }) {
 
 // ── UC-71 Create / UC-73 Update: save a version and generate the periods ───
 
-// Ends, trims, splits or removes other versions of the class so [start, end] is free (history before `start` kept).
+// Makes [start, end] free for a new version (history before `start` kept). A version row is never changed in place
+// (Dung, 17/11/2026 – timetable history): an overlapping version is soft-deleted (deleted_at = NOW(), the time of the
+// change) and its parts outside [start, end], which stay in force, are inserted again as pieces with the same
+// pattern, creator and created_at. So the original row keeps its full range and pattern, the rows of a class with
+// the same created_at are one saved timetable, and the version created at NOW() is the one that replaced it
+// (read back by timetable.history.js).
 async function freeRange(classId, start, end, db) {
   const { rows } = await db.query(
     `SELECT timetable_id AS "id", to_char(start_date, 'YYYY-MM-DD') AS "startDate", to_char(end_date, 'YYYY-MM-DD') AS "endDate"
      FROM timetables WHERE class_id = $1 AND deleted_at IS NULL AND start_date <= $3::date AND end_date >= $2::date`,
     [classId, start, end],
   );
+  const piece = async (fromId, startSql, endSql, params) => {
+    const { rows: made } = await db.query(
+      `INSERT INTO timetables (class_id, start_date, end_date, created_by, created_at)
+       SELECT class_id, ${startSql}, ${endSql}, created_by, created_at FROM timetables WHERE timetable_id = $1
+       RETURNING timetable_id AS "id"`,
+      [fromId, ...params],
+    );
+    await db.query(
+      `INSERT INTO timetable_entries (timetable_id, weekday, slot_id, subject_id, room)
+       SELECT $2, weekday, slot_id, subject_id, room FROM timetable_entries WHERE timetable_id = $1`,
+      [fromId, made[0].id],
+    );
+  };
   for (const v of rows) {
-    if (v.startDate < start && v.endDate > end) {
-      // Split: the part after `end` becomes a new version with the same pattern.
-      const { rows: tail } = await db.query(
-        `INSERT INTO timetables (class_id, start_date, end_date, created_by)
-         SELECT class_id, $2::date + 1, end_date, created_by FROM timetables WHERE timetable_id = $1
-         RETURNING timetable_id AS "id"`,
-        [v.id, end],
-      );
-      await db.query(
-        `INSERT INTO timetable_entries (timetable_id, weekday, slot_id, subject_id, room)
-         SELECT $2, weekday, slot_id, subject_id, room FROM timetable_entries WHERE timetable_id = $1`,
-        [v.id, tail[0].id],
-      );
-      await db.query('UPDATE timetables SET end_date = $2::date - 1 WHERE timetable_id = $1', [v.id, start]);
-    } else if (v.startDate < start) {
-      await db.query('UPDATE timetables SET end_date = $2::date - 1 WHERE timetable_id = $1', [v.id, start]);
-    } else if (v.endDate <= end) {
-      await db.query('UPDATE timetables SET deleted_at = NOW() WHERE timetable_id = $1', [v.id]);
-    } else {
-      await db.query('UPDATE timetables SET start_date = $2::date + 1 WHERE timetable_id = $1', [v.id, end]);
-    }
+    await db.query('UPDATE timetables SET deleted_at = NOW() WHERE timetable_id = $1', [v.id]);
+    if (v.startDate < start) await piece(v.id, 'start_date', '$2::date - 1', [start]); // part before stays
+    if (v.endDate > end) await piece(v.id, '$2::date + 1', 'end_date', [end]); // part after stays
   }
 }
 
