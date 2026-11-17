@@ -77,7 +77,7 @@ function changedFields(form, post, files) {
 
 function NotFound({ backTo }) {
   return (
-    <div className="school-post-form">
+    <div className="school-post-form is-school">
       <section className="card card-outline spf-missing">
         <Icon name="article" />
         <h1 className="title-md">Không tìm thấy bài viết</h1>
@@ -173,7 +173,7 @@ export default function UpdateSchoolPostPage() {
 
   if (loadError) {
     return (
-      <div className="school-post-form">
+      <div className="school-post-form is-school">
         <div className="spf-load-error">
           <p className="form-error" role="alert">
             {loadError}
@@ -194,7 +194,7 @@ export default function UpdateSchoolPostPage() {
 
   if (loading || !post || !form) {
     return (
-      <div className="school-post-form" aria-busy="true">
+      <div className="school-post-form is-school" aria-busy="true">
         <div className="page-header">
           <div>
             <h1 className="headline-xl">Sửa bài đăng</h1>
@@ -290,7 +290,7 @@ export default function UpdateSchoolPostPage() {
   const changedCount = changedKeys.length;
 
   return (
-    <div className="school-post-form">
+    <div className="school-post-form is-school">
       <nav className="breadcrumb" aria-label="Breadcrumb">
         <span>EduConnect</span>/<span>Trường</span>/<Link to={backTo}>Bảng tin trường</Link>/
         <Link to={detailPath} data-leave-guard="off" onClick={cancel}>
