@@ -7,8 +7,9 @@
 // The range: from today (or the semester's first day) to the semester's last day. Assignments made by step A run
 // from that day to the end of the school year (one teacher per class and subject for the year).
 import { createHash } from 'node:crypto';
-import { pool } from '../../config/db.js';
+import { pool, withTransaction } from '../../config/db.js';
 import { AppError, badRequest, notFound } from '../../utils/AppError.js';
+import { syncClassTeachers } from '../classes/classGroups.js';
 import * as teacherQueries from '../teacher/teacher.queries.js';
 import { assignTeachers, countedPeriods, MORNING_LAST, solveTimetable } from './timetable.auto.solver.js';
 import { AUTO_LIMITS, ERROR_CODES } from './timetable.constants.js';
@@ -402,4 +403,176 @@ export function runAuto(cfg) {
       loadsBefore: loads,
     };
   });
+}
+
+// ── apply: check the draft again, then save ────────────────────────────────
+
+function checkDraft(cfg, ctx, draft) {
+  const fail = (problem, details = {}) => badRequest(ERROR_CODES.AUTO_DRAFT_INVALID, `The draft breaks a rule: ${problem}.`, { problem, ...details });
+  const classById = new Map(ctx.classes.map((c) => [c.classId, c]));
+  const teacherById = new Map(ctx.teachers.map((t) => [t.teacherId, t]));
+  const cn = (id) => classById.get(id)?.className ?? id;
+  const sn = (id) => ctx.subjectName.get(id) ?? id;
+  const tn = (id) => teacherById.get(id)?.name ?? id;
+
+  // Assignments: the draft's (steps A) or the running ones (step B alone).
+  const assign = new Map();
+  if (cfg.mode === 'TIMETABLE') {
+    for (const [k, t] of ctx.current) assign.set(k, t);
+  } else {
+    for (const a of draft.assignments) {
+      const c = classById.get(a.classId);
+      if (!c) throw fail('CLASS_NOT_IN_RUN', { classId: a.classId });
+      if (!c.subjects.some((s) => s.subjectId === a.subjectId)) throw fail('SUBJECT_NOT_IN_CLASS', { className: cn(a.classId), subject: sn(a.subjectId) });
+      const t = teacherById.get(a.teacherId);
+      if (!t || t.status !== 'ACTIVE') throw fail('TEACHER_UNKNOWN', { className: cn(a.classId), subject: sn(a.subjectId) });
+      if (!t.subjectIds.includes(a.subjectId)) throw fail('NOT_QUALIFIED', { teacher: t.name, subject: sn(a.subjectId) });
+      if (assign.has(pairKey(a.classId, a.subjectId))) throw fail('DUPLICATE_PAIR', { className: cn(a.classId), subject: sn(a.subjectId) });
+      assign.set(pairKey(a.classId, a.subjectId), a.teacherId);
+    }
+    const missing = ctx.classes.flatMap((c) => c.subjects.filter((s) => !assign.has(pairKey(c.classId, s.subjectId))).map((s) => `${c.className} – ${sn(s.subjectId)}`));
+    if (missing.length) throw conflict(ERROR_CODES.AUTO_INCOMPLETE, 'Some subjects have no teacher.', { items: missing.slice(0, 10), count: missing.length });
+    // Weekly cap (H3) and the fixed-slot subject taught by a different teacher in every class.
+    const load = new Map(ctx.teachers.map((t) => [t.teacherId, t.baseLoad]));
+    const fixedBy = new Map();
+    for (const c of ctx.classes) {
+      for (const s of c.subjects) {
+        const t = assign.get(pairKey(c.classId, s.subjectId));
+        load.set(t, load.get(t) + countedPeriods(s.subjectId, s.periods, cfg));
+        if (cfg.fixed?.slots.length && s.subjectId === cfg.fixed.subjectId) {
+          if (fixedBy.has(t)) throw fail('FIXED_SAME_TEACHER', { teacher: tn(t), classes: [cn(fixedBy.get(t)), c.className] });
+          fixedBy.set(t, c.classId);
+        }
+      }
+    }
+    for (const [t, l] of load) {
+      const tt = teacherById.get(t);
+      if (!tt) continue;
+      const cap = (tt.homeroom ? cfg.homeroomNorm : cfg.norm) + cfg.maxOver;
+      if (l > cap && [...assign.values()].includes(t)) throw fail('OVER_CAP', { teacher: tt.name, load: l, cap });
+    }
+  }
+  if (cfg.mode === 'ASSIGN') return { assign, entries: null };
+
+  // Timetables (H4–H10).
+  const days = gridDays(cfg.grid);
+  const inGrid = new Set(days.flatMap((d) => d.periods.map((p) => `${d.weekday}-${p}`)));
+  const slotByPeriod = new Map(ctx.slots.map((s) => [s.period, s.slotId]));
+  const teacherAt = new Map();
+  const busy = new Map(ctx.teachers.map((t) => [t.teacherId, new Set(t.busy)]));
+  const roomUse = new Map();
+  const entries = {};
+  for (const c of ctx.classes) {
+    const list = draft.timetables[c.classId];
+    if (!list) throw fail('CLASS_MISSING', { className: c.className });
+    const seen = new Set();
+    const perSubject = new Map();
+    const perDay = new Map();
+    for (const e of list) {
+      const cell = `${e.weekday}-${e.period}`;
+      if (!inGrid.has(cell) || !slotByPeriod.has(e.period)) throw fail('OUTSIDE_GRID', { className: c.className, weekday: e.weekday, period: e.period });
+      if (seen.has(cell)) throw fail('CLASS_CLASH', { className: c.className, weekday: e.weekday, period: e.period });
+      seen.add(cell);
+      if (!c.subjects.some((s) => s.subjectId === e.subjectId)) throw fail('SUBJECT_NOT_IN_CLASS', { className: c.className, subject: sn(e.subjectId) });
+      perSubject.set(e.subjectId, (perSubject.get(e.subjectId) ?? 0) + 1);
+      const dk = `${e.subjectId}|${e.weekday}`;
+      perDay.set(dk, (perDay.get(dk) ?? 0) + 1);
+      if (perDay.get(dk) > cfg.maxPerSubjectDay) throw fail('SUBJECT_DAY_LIMIT', { className: c.className, subject: sn(e.subjectId), weekday: e.weekday });
+      const t = assign.get(pairKey(c.classId, e.subjectId));
+      if (!t) throw fail('NO_TEACHER', { className: c.className, subject: sn(e.subjectId) });
+      if (busy.get(t)?.has(cell)) throw fail('TEACHER_BUSY', { teacher: tn(t), weekday: e.weekday, period: e.period });
+      if (teacherAt.has(`${t}|${cell}`)) {
+        throw fail('TEACHER_CLASH', { teacher: tn(t), weekday: e.weekday, period: e.period, classes: [teacherAt.get(`${t}|${cell}`), c.className] });
+      }
+      teacherAt.set(`${t}|${cell}`, c.className);
+      if (cfg.rooms[e.subjectId] != null) {
+        const rk = `${e.subjectId}|${cell}`;
+        roomUse.set(rk, (roomUse.get(rk) ?? 0) + 1);
+        if (roomUse.get(rk) > cfg.rooms[e.subjectId]) throw fail('ROOM_FULL', { subject: sn(e.subjectId), weekday: e.weekday, period: e.period });
+      }
+    }
+    for (const s of c.subjects) {
+      if ((perSubject.get(s.subjectId) ?? 0) !== s.periods) {
+        throw conflict(ERROR_CODES.AUTO_INCOMPLETE, 'A subject does not have its periods.', {
+          items: [`${c.className} – ${sn(s.subjectId)}: ${perSubject.get(s.subjectId) ?? 0}/${s.periods}`], count: 1,
+        });
+      }
+    }
+    // Fixed slots keep the fixed subject.
+    for (const f of cfg.fixed?.slots ?? []) {
+      if (!c.subjects.some((s) => s.subjectId === cfg.fixed.subjectId)) continue;
+      const at = list.find((e) => e.weekday === f.weekday && e.period === f.period);
+      if (!at || at.subjectId !== cfg.fixed.subjectId) throw fail('FIXED_SLOT', { className: c.className, weekday: f.weekday, period: f.period });
+    }
+    entries[c.classId] = list.map((e) => ({ weekday: e.weekday, slotId: slotByPeriod.get(e.period), subjectId: e.subjectId, room: null }));
+  }
+  return { assign, entries };
+}
+
+export function applyAuto({ config: cfg, stamp, confirmOverwrite, draft }, user) {
+  return internals.guard(() =>
+    withTransaction(async (db) => {
+      // One run at a time per year: lock its classes (SCR-19 saves lock them too).
+      await teacherQueries.lockClassesOfYear(cfg.schoolYearId, db);
+      const ctx = await loadContext(cfg, db);
+      if (stamp !== ctx.stamp) throw conflict(ERROR_CODES.AUTO_STALE, 'Assignments or timetables changed after the draft was made.');
+      const { assign, entries } = checkDraft(cfg, ctx, draft);
+
+      const { start, end, assignEnd } = ctx.range;
+      const changedPairs = cfg.mode === 'TIMETABLE' ? [] : [...assign].filter(([k, t]) => ctx.current.get(k) !== t);
+      const overwrite = ctx.classes.filter((c) => (cfg.mode !== 'ASSIGN' && ctx.withTimetable.has(c.classId))
+        || changedPairs.some(([k]) => k.startsWith(`${c.classId}:`) && ctx.current.has(k)));
+      if (overwrite.length && !confirmOverwrite) {
+        throw conflict(ERROR_CODES.AUTO_CONFIRM, 'Some classes already have a timetable or assignments.', { classes: overwrite.map((c) => c.className) });
+      }
+
+      // Lessons of the run's classes in the range are generated again: free them first so that the new teachers of
+      // one class do not clash with the old lessons of another class of the run.
+      if (cfg.mode !== 'ASSIGN') {
+        await db.query(
+          `DELETE FROM timetable_slots ts
+           WHERE ts.class_id = ANY($1::bigint[]) AND ts."date" BETWEEN $2::date AND $3::date
+             AND NOT EXISTS (SELECT 1 FROM attendances a WHERE a.timetable_slot_id = ts.timetable_slot_id)`,
+          [cfg.classIds, start, end],
+        );
+      }
+      // Step A: one row per (class, subject) from `start` to the end of the year (history before it kept).
+      const clashes = [];
+      for (const [k, teacherId] of changedPairs) {
+        const [classId, subjectId] = k.split(':');
+        await teacherQueries.clearRange(classId, subjectId, start, assignEnd, db);
+        const busyNow = await teacherQueries.findTeacherClashes(teacherId, classId, subjectId, start, assignEnd, db);
+        if (busyNow.length) {
+          clashes.push({ className: ctx.classes.find((c) => c.classId === classId)?.className, subject: ctx.subjectName.get(subjectId), items: busyNow });
+          continue;
+        }
+        await teacherQueries.insertAssignment({ classId, subjectId, teacherId, startDate: start, endDate: assignEnd }, db);
+        await teacherQueries.mergeTouchingRows(classId, subjectId, db);
+        await teacherQueries.moveFreeSlotsToTeacher(teacherId, classId, subjectId, start, assignEnd, db);
+      }
+      if (clashes.length) {
+        throw conflict(ERROR_CODES.TIMETABLE_TEACHER_CLASH, 'A new teacher already teaches at lessons after this semester.', {
+          className: clashes[0].className,
+          items: clashes.flatMap((c) => c.items.map((i) => ({ ...i, teacher: '', subject: c.subject }))).slice(0, 10),
+        });
+      }
+      for (const classId of new Set(changedPairs.map(([k]) => k.split(':')[0]))) await syncClassTeachers(db, Number(classId));
+
+      // Step B: one timetable version per class for [start, end], periods generated (UC-71 code).
+      let generated = 0;
+      if (cfg.mode !== 'ASSIGN') {
+        for (const c of ctx.classes) {
+          const cls = await internals.classInfo(c.classId, db);
+          const r = await internals.saveVersion(db, { cls, start, end, entries: entries[c.classId], userId: user.userId });
+          generated += r.generated;
+        }
+      }
+      return {
+        classes: ctx.classes.length,
+        assignmentsChanged: changedPairs.length,
+        generated,
+        range: { start, end, assignEnd },
+      };
+    }),
+  );
 }
