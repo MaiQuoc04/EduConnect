@@ -10,6 +10,7 @@ import {
   requiredText,
   uploadedFiles,
 } from '../../utils/requestParsers.js';
+import * as reportsCore from '../../utils/commentReports.js';
 import * as service from './posts.service.js';
 
 // FE-05 Group Feed (owner: Khanh). Checks the request; rules and SQL live in posts.service.js.
@@ -103,6 +104,37 @@ export async function createComment(req, res) {
 // UC-42 Delete Comment / UC-45 (moderator)
 export async function removeComment(req, res) {
   res.json(await service.deleteComment(req.user, postIdOf(req), parseId(req.params.commentId, 'commentId')));
+}
+
+// Comment likes and reports (19/11/2026, as FE-08). PUT / DELETE …/comments/:commentId/like → { commentId, likeCount,
+// likedByMe }; POST …/comments/:commentId/report { reason, note? } → 201 (new) or 200 (already reported: nothing changes).
+const commentIdOf = (req) => parseId(req.params.commentId, 'commentId');
+
+export async function likeComment(req, res) {
+  res.json(await service.setCommentLike(req.user, postIdOf(req), commentIdOf(req), true));
+}
+
+export async function unlikeComment(req, res) {
+  res.json(await service.setCommentLike(req.user, postIdOf(req), commentIdOf(req), false));
+}
+
+export async function reportComment(req, res) {
+  const input = reportsCore.parseReportInput(req.body ?? {});
+  const result = await service.reportComment(req.user, postIdOf(req), commentIdOf(req), input);
+  res.status(result.created ? 201 : 200).json(result);
+}
+
+// GET /group-comment-reports?status=PENDING|RESOLVED|DISMISSED&page=&pageSize= (the feeds the user moderates)
+export async function listCommentReports(req, res) {
+  const status = optionalEnum(req.query, 'status', reportsCore.REPORT_STATUSES, 'PENDING');
+  res.json(await service.listGroupCommentReports(req.user, { status, ...paging(req.query) }));
+}
+
+// PATCH /group-comment-reports/:commentId { action: 'DELETE' | 'DISMISS' }
+export async function resolveCommentReport(req, res) {
+  const body = jsonBody(req, ['action']);
+  if (!reportsCore.REPORT_ACTIONS.includes(body.action)) throw invalid('action');
+  res.json(await service.resolveGroupCommentReport(req.user, commentIdOf(req), body.action));
 }
 
 // UC-44 Pin / Unpin Post

@@ -13,6 +13,11 @@ router.get('/groups/:groupId/posts', ...member, ctrl.list); // UC-36 (+ UC-46 qu
 router.post('/groups/:groupId/posts', ...member, ctrl.create); // UC-38
 router.put('/groups/:groupId/post-approval', ...member, ctrl.setApproval); // §5 approval switch (moderator)
 
+// Reported comments of the feeds the user moderates (19/11/2026): homeroom teacher (their class GENERAL feed), School
+// Manager (teacher group). Others get an empty list (moderates: false). School post comments: FE-08 /comment-reports.
+router.get('/group-comment-reports', ...member, ctrl.listCommentReports);
+router.patch('/group-comment-reports/:commentId', ...member, ctrl.resolveCommentReport);
+
 // File picker limits (before '/posts/:postId', which would read the path as an id).
 router.get('/posts/attachment-limits', ...member, ctrl.attachmentLimits); // UC-38 / UC-39
 router.get('/posts/:postId', ...member, ctrl.detail); // UC-37
@@ -23,6 +28,9 @@ router.delete('/posts/:postId/like', ...member, ctrl.unlike); // UC-43
 router.get('/posts/:postId/comments', ...member, ctrl.listComments); // UC-41
 router.post('/posts/:postId/comments', ...member, ctrl.createComment); // UC-41
 router.delete('/posts/:postId/comments/:commentId', ...member, ctrl.removeComment); // UC-42, UC-45
+router.put('/posts/:postId/comments/:commentId/like', ...member, ctrl.likeComment); // 19/11/2026, as FE-08
+router.delete('/posts/:postId/comments/:commentId/like', ...member, ctrl.unlikeComment);
+router.post('/posts/:postId/comments/:commentId/report', ...member, ctrl.reportComment); // 19/11/2026
 router.patch('/posts/:postId/pin', ...member, ctrl.pin); // UC-44
 router.patch('/posts/:postId/hide', ...member, ctrl.hide); // UC-45
 router.post('/posts/:postId/review', ...member, ctrl.review); // UC-46
