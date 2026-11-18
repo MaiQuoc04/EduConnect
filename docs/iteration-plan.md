@@ -732,7 +732,7 @@ hooks, marked FE-07).
 | ID | Use case | Actor |
 |---|---|---|
 | UC-67 | View Notifications | User |
-| UC-68 | View Notification Read Status | Teacher, School Manager |
+| UC-68 | View Notification Read Status | Teacher |
 | UC-69 | Send Event Reminders | Scheduler |
 
 ### Quoc: FE-12 Attendance Management (5 UC)

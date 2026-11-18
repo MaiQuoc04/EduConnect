@@ -131,7 +131,7 @@ Source: Report 3 section 4.2 (draft v1.3). Actor "User" = any signed-in account.
 | ID | Use case | Actor | Sub-feature | Description |
 |---|---|---|---|---|
 | UC-67 | View Notifications | User | In-app Notifications | View notifications, mark them as read and open the source item. |
-| UC-68 | View Notification Read Status | Teacher, School Manager | In-app Notifications | See who has not yet read a personal notification about an item one created, in order to remind them. |
+| UC-68 | View Notification Read Status | Teacher | In-app Notifications | See who has not yet read the notifications about a class event or an extracurricular activity one created, in order to remind them (School Manager / school announcements removed by the lead 18/11/2026). |
 | UC-69 | Send Event Reminders | Scheduler | Scheduled Reminders | Send a reminder 1 day before a class event to everyone who can see it. |
 
 ## FE-10 Schedule Management

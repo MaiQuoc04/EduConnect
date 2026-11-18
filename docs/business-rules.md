@@ -343,7 +343,7 @@ Boundaries that are easy to get wrong:
     sending is closed. Locked accounts are not offered and cannot be written to; their old chats stay readable.
   - 1-1 chats show full names, never the class nickname.
   - A message has at most 2000 characters. Messages cannot be edited (deleting: UC-113, below). No `CHAT`
-    notifications until FE-09.
+    notifications (lead, 18/11/2026: the chat list already shows unread messages).
   - A student who transfers back to a class does not rejoin its teams (only GENERAL + STUDENT); the old team's chat
     stays closed to them and they can create a new team.
 - **Chat history starts at the first joining** (04/11/2026): in every chat (group, team, teacher group, 1-1) a
@@ -467,8 +467,14 @@ Boundaries that are easy to get wrong:
   tomorrow, activity registration opened / deadline / cancelled…), shown on the personal notifications page; parents
   can filter by child (`notification_recipients.student_id`).
 - Storage: content once in `notifications`, **one row per recipient** in `notification_recipients` (`read_at`).
-- The creator of an item (teacher for class events / activities, SM for announcements) can see **who has not read**
-  a personal notification (UC-68).
+- The teacher who created a class event or an extracurricular activity can see **who has not read** its
+  notifications (UC-68), to remind them. School announcements are general news: no read status, also not for SM
+  (lead, 18/11/2026).
+- **FE-09 decisions (18/11/2026, lead):** the bell lists every notification (title only, unread count of all); the
+  personal page lists only `is_personal` ones with their detail and a child filter for parents; reading it in either
+  place marks it read. No `CHAT` notifications (§6). A parent with two children in the same class gets one
+  extracurricular notification carrying the first child (`student_id`), so the child filter may miss it for the
+  second child: accepted.
 - Parents **and the student** are notified when the student's attendance is anything other than "present", and
   on every later change of it (details in §12, 18/11/2026).
 
