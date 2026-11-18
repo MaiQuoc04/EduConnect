@@ -23,6 +23,7 @@ import gradeRoutes from './modules/grades/grades.routes.js';
 import schoolPostRoutes from './modules/schoolposts/schoolposts.routes.js';
 import uploadRoutes from './modules/uploads/uploads.routes.js';
 import parentRoutes from './modules/parents/parents.routes.js';
+import extracurricularRoutes from './modules/extracurricular/extracurricular.routes.js';
 
 // Each feature gets its own folder in src/modules and is mounted here, e.g.
 //   FE-01 account   -> /auth, /account (Quoc)
@@ -65,6 +66,7 @@ router.use('/school-events', schoolEventRoutes); // FE-10 school calendar (Dung)
 router.use('/grades', gradeRoutes);
 router.use('/school-posts', schoolPostRoutes);
 router.use('/parents', parentRoutes);
+router.use('/extracurricular-events', extracurricularRoutes); // FE-07 (Dung, It3)
 router.use('/admin', adminRoutes);
 router.use('/maintenance', maintenanceRoutes);
 router.use('/uploads', uploadRoutes);

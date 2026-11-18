@@ -6,6 +6,7 @@ import { getNumberSetting } from '../../utils/settings.js';
 import { emitToUsers } from '../../sockets/index.js';
 import { activeMemberIds } from '../conversations/conversations.service.js';
 import { findGroupForUser } from '../groups/groupAccess.js';
+import { activitiesOfPosts, assertNotActivity } from '../extracurricular/extracurricular.service.js';
 import { ATTACHMENT_TYPES } from '../uploads/uploads.service.js'; // the 15 types of the attachments bucket (read only)
 
 // FE-05 Group Feed (owner: Khanh), UC-36..UC-46. Rules: business-rules §5 (post states agreed by the lead 11/11/2026),
@@ -93,20 +94,27 @@ function permissionsOf(post, user, group) {
 // Likes, comment counts and files (count + first image) of a page of posts: a few queries for the whole page (no N+1).
 async function decorate(posts, user, group, db = pool) {
   const ids = posts.map((p) => p.postId);
-  const [likes, comments, attachments] = await Promise.all([
+  const [likes, comments, attachments, activities] = await Promise.all([
     feed.countLikes(POST, ids, user.userId, db),
     feed.countComments(POST, ids, db),
     files.summarizeAttachments(FILES, ids, db),
+    activitiesOfPosts(ids, db), // FE-07 (Dung): a post that carries an extracurricular activity
   ]);
-  return posts.map((post) => ({
-    ...post,
-    likeCount: likes.get(post.postId)?.likeCount ?? 0,
-    likedByMe: likes.get(post.postId)?.likedByMe ?? false,
-    commentCount: comments.get(post.postId) ?? 0,
-    attachmentCount: attachments.get(post.postId)?.attachmentCount ?? 0,
-    firstImageUrl: attachments.get(post.postId)?.firstImageUrl ?? null, // signed for one hour
-    can: permissionsOf(post, user, group),
-  }));
+  return posts.map((post) => {
+    const activity = activities.get(String(post.postId)) ?? null;
+    const can = permissionsOf(post, user, group);
+    return {
+      ...post,
+      likeCount: likes.get(post.postId)?.likeCount ?? 0,
+      likedByMe: likes.get(post.postId)?.likedByMe ?? false,
+      commentCount: comments.get(post.postId) ?? 0,
+      attachmentCount: attachments.get(post.postId)?.attachmentCount ?? 0,
+      firstImageUrl: attachments.get(post.postId)?.firstImageUrl ?? null, // signed for one hour
+      activity,
+      // FE-07: an activity's post is edited / cancelled through the activity screens (UC-51, UC-52), not here.
+      can: activity ? { ...can, edit: false, delete: false } : can,
+    };
+  });
 }
 
 /**
@@ -356,6 +364,7 @@ export async function updatePost(user, postId, { content, attachments = [], remo
     const { post, group } = await openPost(client, user, postId, { lock: 'update' });
     assertWritable(group);
     if (post.authorId !== user.userId) throw forbidden('FORBIDDEN', 'You can only edit your own posts.');
+    await assertNotActivity(client, post.postId); // FE-07: 409 MSG_POST_IS_ACTIVITY
     const filesChanged = await files.changeAttachments(
       filesOf(post.postId),
       { add: addRows, removeIds: removeAttachmentIds, uploadedBy: user.userId, max: MAX_ATTACHMENTS },
@@ -391,6 +400,7 @@ export async function deletePost(user, postId) {
     const opened = await openPost(client, user, postId, { lock: 'update' });
     assertWritable(opened.group);
     if (opened.post.authorId !== user.userId) throw forbidden('FORBIDDEN', 'You can only delete your own posts.');
+    await assertNotActivity(client, opened.post.postId); // FE-07: cancel the activity instead (UC-52)
     await client.query(`UPDATE posts SET deleted_at = NOW(), deleted_by = $2 WHERE post_id = $1`, [
       opened.post.postId,
       user.userId,

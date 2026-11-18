@@ -8,6 +8,7 @@ import Icon from '../../components/Icon.jsx';
 import { useSocket } from '../../context/SocketContext.jsx';
 import { useToast } from '../../context/ToastContext.jsx';
 import { errorText } from '../../messages.js';
+import ActivityFeedCard from '../extracurricular/ActivityFeedCard.jsx'; // FE-07 (Dung)
 import { useLiveRefresh } from '../schoolfeed/useLiveRefresh.js';
 import {
   feedPath,
@@ -212,6 +213,8 @@ export default function PostDetail({ g, postId, leading, trailing, editState, on
 
             {/* The server keeps the line breaks; pre-wrap shows them. */}
             <div className="feed-article-content is-body">{post.content}</div>
+            {/* FE-07 (Dung): the activity of an activity post. */}
+            {post.activity && <ActivityFeedCard activity={post.activity} />}
 
             {post.attachments?.length > 0 && (
               // Links signed for one hour; an expired one is renewed by reading the post again (refreshFiles).

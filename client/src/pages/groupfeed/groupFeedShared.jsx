@@ -14,6 +14,7 @@ import { useToast } from '../../context/ToastContext.jsx';
 import { errorText } from '../../messages.js';
 import { CommentCount, formatDateTime, isEdited, LikeButton, useLike } from '../schoolfeed/schoolFeedShared.jsx';
 import './GroupFeed.css';
+import ActivityFeedCard from '../extracurricular/ActivityFeedCard.jsx';
 
 // FE-05 Group Feed (owner: Khanh): pieces shared by SCR-35 Group Feed, SCR-37 Group Post Detail and the form
 // (SCR-36 / SCR-38). Since 14/11/2026 the feed looks like the school feed: cards, tabs, pager, states and the reading
@@ -188,6 +189,8 @@ export function PostCard({ post, groupId, onAction, onOpen }) {
               </button>
             )}
           </div>
+          {/* FE-07 (Dung): a post that carries an extracurricular activity shows its card (title, time, registration). */}
+          {post.activity && <ActivityFeedCard activity={post.activity} />}
           <PostMeta post={post} timeTo={postPopupPath(groupId, post.postId)} timeState={POPUP_STATE} />
         </div>
         <FeedCardImage src={post.firstImageUrl} />
