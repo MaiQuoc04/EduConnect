@@ -1,7 +1,8 @@
 /* FE-08 SCR-02 School Feed. Only this screen's own styles; every rule is scoped under .school-feed.
    Design: Stitch "SCR-34 School Feed" (team decision 08/11/2026). Tabs, cards, side panel, pager, empty / loading
    states and the "Có nội dung mới" pill are the shared components/feed (feed.css, 14/11/2026, shared with FE-05 Group
-   Feed). Like / comment controls (.sf-*) are in styles.css (FE-08 block). */
+   Feed). Like / comment controls (.sf-*) are in styles.css (FE-08 block). Own rules: search, pin colour and limit,
+   news padding, the card text's white space. The post pop-up is the shared FeedPostDialog (feed.css). */
 
 .school-feed { min-width: 0; }
 
@@ -32,22 +33,8 @@
   .school-feed .feed-card.is-news { padding-bottom: 14px; }
 }
 
-/* Long post on a card (17/11/2026): cut by the page (excerptOf of the FE-05 Group Feed, about 280 characters or 6
-   lines) with "Hiển thị thêm" / "Ẩn bớt", so no 3-line clamp here. Same look as the group feed's button.
-   Note: UC-58 sends contentPreview (300 characters, white space collapsed), not the whole content, so for now opening
-   shows at most those 300 characters; the detail page (SCR-05) always shows the whole post. */
-.school-feed .sf-text { display: grid; gap: 2px; justify-items: start; min-width: 0; }
-.school-feed .feed-preview.sf-excerpt { display: block; overflow: visible; white-space: pre-line; }
-.sf-more {
-  padding: 4px 0;
-  border: 0;
-  background: none;
-  font: 500 14px/20px var(--font-ui);
-  color: var(--ink-700);
-  cursor: pointer;
-}
-.sf-more:hover { text-decoration: underline; }
-.sf-more:focus-visible { outline: 2px solid var(--ink-400); outline-offset: 2px; border-radius: 2px; }
-@media (max-width: 640px) {
-  .sf-more { min-height: 44px; } /* a larger touch target */
-}
+/* Long post on a card: cut by the page (shared excerptOf, about 280 characters or 6 lines) with the shared
+   "Hiển thị thêm" / "Ẩn bớt" (.feed-text / .feed-more in feed.css, 18/11/2026), so no 3-line clamp here and the line
+   breaks of UC-58's contentPreview (1,000 characters) are kept. The school post keeps its preview colour and size
+   (it has a title; FE-05's .feed-preview.is-body is the body of an untitled post). */
+.school-feed .feed-preview.sf-excerpt { display: block; overflow: visible; white-space: pre-wrap; }

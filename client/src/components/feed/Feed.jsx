@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useId, useRef, useState } from 'react';
 import Icon from '../Icon.jsx';
 import './feed.css';
 
@@ -101,12 +101,153 @@ export function FeedCardImage({ src }) {
   );
 }
 
-// The whole card opens the post; links and buttons inside handle their own clicks.
+// The whole card opens the post; links and buttons inside handle their own clicks. A click that ends a text
+// selection (the reader marked some words to copy them) opens nothing – the FE-05 card's check (18/11/2026).
 export function openOnClick(navigate, to, state) {
   return (e) => {
-    if (e.target.closest('a, button, [role="menu"]')) return;
+    if (e.target.closest('a, button, [role="menu"]') || window.getSelection()?.toString()) return;
     navigate(to, { state });
   };
+}
+
+// Long posts on a card: cut after about 280 characters (or 6 lines) at a word boundary, with "…"; null when the text
+// is short enough. The card shows "Hiển thị thêm" / "Ẩn bớt" (.feed-text / .feed-more). Moved here unchanged from the
+// FE-05 group feed (groupFeedShared.jsx, 14/11/2026) on 18/11/2026 so both feeds cut the same way.
+const EXCERPT_CHARS = 280;
+const EXCERPT_LINES = 6;
+export function excerptOf(text) {
+  const lines = text.split('\n');
+  let cut = text;
+  if (lines.length > EXCERPT_LINES) cut = lines.slice(0, EXCERPT_LINES).join('\n');
+  if (cut.length > EXCERPT_CHARS) {
+    cut = cut.slice(0, EXCERPT_CHARS);
+    const space = cut.search(/\s\S*$/); // last whitespace: do not cut a word in two
+    if (space > EXCERPT_CHARS * 0.6) cut = cut.slice(0, space);
+  }
+  return cut.length < text.length ? `${cut.trimEnd()}…` : null;
+}
+
+/**
+ * The kind line of a post ("THÔNG BÁO · ĐÃ GHIM", "BÀI VIẾT", "CHỜ DUYỆT"…), the frame of FE-05's PostKind: each feed
+ * passes its own words. tone names the colour (feed.css .feed-kind.is-<tone>: news, pending, rejected, hidden; none =
+ * ink) – a tone without a rule keeps the ink colour. label may be text or nodes.
+ */
+export function FeedKind({ icon, label, tone, filled = false, id }) {
+  return (
+    <span id={id} className={`label-upper feed-kind${tone ? ` is-${tone}` : ''}`}>
+      <Icon name={icon} size="sm" filled={filled} />
+      {label}
+    </span>
+  );
+}
+
+const QUOTE_CHARS = 140;
+
+/**
+ * A confirmation in the feeds' style (native <dialog>, .sf-dialog in styles.css): icon + title, the post quoted
+ * (optional, cut after 140 characters), what will happen, the safe button focused. Render it only while asking: it
+ * opens when mounted and closes when unmounted. Esc = cancel, except while busy.
+ * config: { icon, title, body, label, busy, keep, danger }. quoteClassName: e.g. FE-05's body-font quote.
+ * Copied from FE-05's FeedConfirmDialog (groupFeedShared.jsx, 14/11/2026) on 18/11/2026, plus aria-describedby.
+ */
+export function FeedConfirmDialog({ config, quote, quoteClassName = '', busy, onCancel, onConfirm }) {
+  const ref = useRef(null);
+  const titleId = useId();
+  const descId = useId();
+  useEffect(() => {
+    const dialog = ref.current;
+    if (!dialog.open) dialog.showModal();
+    return () => dialog.open && dialog.close();
+  }, []);
+  const text = quote && quote.length > QUOTE_CHARS ? `${quote.slice(0, QUOTE_CHARS).trimEnd()}…` : quote;
+  return (
+    <dialog
+      ref={ref}
+      className="sf-dialog"
+      aria-labelledby={titleId}
+      aria-describedby={descId}
+      onCancel={(e) => {
+        e.preventDefault();
+        if (!busy) onCancel();
+      }}
+    >
+      <div className={`sf-dialog-head${config.danger ? ' is-danger' : ''}`}>
+        <Icon name={config.icon} />
+        <h2 id={titleId} className="title-sm">
+          {config.title}
+        </h2>
+      </div>
+      <div id={descId}>
+        {text && <p className={`sf-dialog-quote${quoteClassName ? ` ${quoteClassName}` : ''}`}>{text}</p>}
+        <div className={`notice${config.danger ? ' amber' : ''}`}>
+          <Icon name={config.danger ? 'warning' : 'info'} size="sm" />
+          <p>{config.body}</p>
+        </div>
+      </div>
+      <div className="sf-dialog-actions">
+        <button type="button" className="btn btn-secondary" onClick={onCancel} disabled={busy} autoFocus>
+          {config.keep}
+        </button>
+        <button
+          type="button"
+          className={`btn btn-primary${config.danger ? ' sf-btn-danger' : ''}`}
+          onClick={onConfirm}
+          disabled={busy}
+        >
+          <Icon name={busy ? 'progress_activity' : config.icon} size="sm" className={busy ? 'sf-spin' : undefined} />
+          {busy ? config.busy : config.label}
+        </button>
+      </div>
+    </dialog>
+  );
+}
+
+/**
+ * One post read in a pop-up over the feed: the feed stays where the reader left it. The page puts the post id in the
+ * address (?post=<id>), so Back closes it and a copied link opens it. Native <dialog>: Esc, a click on the dimmed area
+ * or the close button (FeedPostDialogClose, placed by the content) close it through onClose; the page behind does
+ * not scroll while it is open. Esc while a menu ([role="menu"]) is open only closes the menu (its own key handler).
+ * Esc or a click in a dialog opened from inside (a confirmation) is that dialog's own: only events of this <dialog>
+ * itself close it (React passes a nested dialog's cancel event up the tree).
+ * The shell of FE-05's PostDialog (14/11/2026), taken on 18/11/2026. children: the post (with its .feed-article-top).
+ */
+export function FeedPostDialog({ titleId, onClose, children }) {
+  const ref = useRef(null);
+  useEffect(() => {
+    const dialog = ref.current;
+    if (!dialog.open) dialog.showModal();
+    const { overflow } = document.body.style;
+    document.body.style.overflow = 'hidden';
+    return () => {
+      document.body.style.overflow = overflow;
+      if (dialog.open) dialog.close();
+    };
+  }, []);
+  return (
+    <dialog
+      ref={ref}
+      className="feed-post-dialog"
+      aria-labelledby={titleId}
+      onCancel={(e) => {
+        if (e.target !== e.currentTarget) return; // a confirmation inside handles its own Esc
+        e.preventDefault(); // close through the page, which also puts the address back
+        if (ref.current?.querySelector('[role="menu"]')) return;
+        onClose();
+      }}
+      onClick={(e) => e.target === e.currentTarget && onClose()} // a click on the dimmed area
+    >
+      <div className="feed-post-dialog-body">{children}</div>
+    </dialog>
+  );
+}
+
+/** The × of FeedPostDialog, for the content's top bar (after the action buttons). */
+export function FeedPostDialogClose({ onClose }) {
+  return (
+    <button type="button" className="btn btn-icon feed-post-dialog-close" onClick={onClose} aria-label="Đóng" title="Đóng">
+      <Icon name="close" />
+    </button>
+  );
 }
 
 /** A block of the right-hand column. */

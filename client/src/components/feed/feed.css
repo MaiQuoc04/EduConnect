@@ -79,7 +79,12 @@
 .feed-card.is-rejected { box-shadow: inset 3px 0 0 var(--red-pen); }
 .feed-card.is-hidden { box-shadow: inset 3px 0 0 var(--graphite-400); background: var(--graphite-50); }
 .feed-card-top { display: flex; align-items: center; justify-content: space-between; gap: 8px; min-height: 28px; }
-.feed-kind { display: inline-flex; align-items: center; gap: 4px; color: var(--ink-700); }
+.feed-kind { display: inline-flex; align-items: center; gap: 4px; }
+/* Two classes (18/11/2026): the kind line is always .label-upper too, and styles.css (.label-upper, grey) is bundled
+   after this file (main.jsx imports App first), so one class lost and "THÔNG BÁO" / "BÀI VIẾT" showed grey. The
+   variants below have two classes too and come later, so they still win. */
+.label-upper.feed-kind,
+.feed-kind { color: var(--ink-700); }
 .feed-kind.is-news { color: var(--blue); }
 .feed-kind.is-pending { color: var(--amber); }
 .feed-kind.is-rejected { color: var(--red-pen); }
@@ -111,6 +116,21 @@
 /* A group post has no title: its text is the body of the card, a little larger, line breaks kept. It is cut by the
    page itself (about 280 characters, "Hiển thị thêm" / "Ẩn bớt"), so no line clamp here. */
 .feed-preview.is-body { display: block; overflow: visible; white-space: pre-wrap; font-size: 15px; line-height: 23px; color: var(--graphite-900); }
+/* Long post on a card: the cut text + "Hiển thị thêm" / "Ẩn bớt" (excerptOf in Feed.jsx). Taken from the FE-05 group
+   feed (.gf-text / .gf-more, 14/11/2026) on 18/11/2026; the school feed uses these, the group feed still its .gf-*. */
+.feed-text { display: grid; gap: 2px; justify-items: start; min-width: 0; }
+.feed-more-row { display: flex; flex-wrap: wrap; align-items: center; gap: 0 16px; }
+.feed-more {
+  padding: 4px 0;
+  border: 0;
+  background: none;
+  font: 500 14px/20px var(--font-ui);
+  color: var(--ink-700);
+  text-decoration: none;
+  cursor: pointer;
+}
+.feed-more:hover { text-decoration: underline; }
+.feed-more:focus-visible { outline: 2px solid var(--ink-400); outline-offset: 2px; border-radius: 2px; }
 .feed-meta { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 6px; margin: 0; color: var(--graphite-600); }
 .feed-meta .author { color: var(--graphite-700); font-weight: 500; }
 .feed-meta .chip { font-size: 11px; }
@@ -294,6 +314,38 @@
 .feed-article-missing > .icon { font-size: 40px; color: var(--graphite-400); }
 .feed-article-missing .btn { margin-top: 8px; }
 
+/* ---------- one post in a pop-up over the feed (FeedPostDialog) ----------
+   The reading canvas inside a native <dialog>. Copied from the FE-05 group feed (.gf-post-dialog*, PostDialog.jsx,
+   14/11/2026) on 18/11/2026 with the same values; the school feed uses it, the group feed still its own copy. The top
+   bar (.feed-article-top) stays in sight while the post scrolls; full screen on a phone. */
+.feed-post-dialog {
+  width: min(896px, calc(100vw - 32px));
+  max-width: none;
+  max-height: calc(100dvh - 48px);
+  padding: 0;
+  border: 0;
+  border-radius: var(--radius-dialog);
+  background: var(--paper);
+  color: var(--graphite-900);
+  box-shadow: var(--shadow-dialog);
+  overflow: hidden;
+}
+.feed-post-dialog::backdrop { background: rgba(28, 27, 25, 0.45); }
+.feed-post-dialog-body { max-height: calc(100dvh - 48px); overflow-y: auto; padding: 0 24px 24px; }
+.feed-post-dialog .feed-article-top {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  align-items: center;
+  margin: 0 -24px 16px;
+  padding: 10px 12px 10px 24px;
+  background: var(--paper);
+  border-bottom: 1px solid var(--graphite-200);
+}
+.feed-post-dialog-title { color: var(--graphite-900); }
+.feed-post-dialog-close.btn { width: 40px; height: 40px; }
+.feed-post-dialog .feed-article-missing { padding: 32px 24px; }
+
 /* ---------- responsive ---------- */
 @media (max-width: 1080px) {
   .feed-layout { grid-template-columns: minmax(0, 1fr) 240px; gap: 20px; }
@@ -328,4 +380,15 @@
   .feed-article::before { left: 12px; }
   .feed-article-inner { padding-left: 12px; }
   .feed-article-title { font-size: 24px; line-height: 31px; }
+  /* "Hiển thị thêm": a 44px tap height (20px line + 2 × 12px) without moving the text (the -8px margins give back
+     the extra padding), the FE-05 way. ASSUMPTION: 12px / -8px instead of FE-05's 10px / -6px, which gives 40px. */
+  .feed-more { padding: 12px 0; margin: -8px 0; }
+  /* The pop-up: full screen; title and × on the first row, the action buttons under them. */
+  .feed-post-dialog { width: 100vw; height: 100dvh; max-height: 100dvh; border-radius: 0; }
+  .feed-post-dialog-body { max-height: 100dvh; height: 100%; padding: 0 12px 16px; }
+  .feed-post-dialog .feed-article-top { margin: 0 -12px 12px; padding: 8px 8px 8px 16px; gap: 8px; }
+  .feed-post-dialog .feed-article-actions { display: contents; }
+  .feed-post-dialog-title { flex: 1 0 calc(100% - 60px); order: 0; } /* room for × (44px + gap) on the same row */
+  .feed-post-dialog .feed-post-dialog-close.btn { order: 1; flex: 0 0 44px; width: 44px; height: 44px; min-height: 44px; }
+  .feed-post-dialog .feed-article-actions > .btn:not(.feed-post-dialog-close) { order: 2; flex: 1 1 auto; min-height: 44px; }
 }
