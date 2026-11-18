@@ -343,7 +343,7 @@ Boundaries that are easy to get wrong:
     sending is closed. Locked accounts are not offered and cannot be written to; their old chats stay readable.
   - 1-1 chats show full names, never the class nickname.
   - A message has at most 2000 characters. Messages cannot be edited (deleting: UC-113, below). No `CHAT`
-    notifications until FE-09.
+    notifications (lead, 18/11/2026: the chat list already shows unread messages).
   - A student who transfers back to a class does not rejoin its teams (only GENERAL + STUDENT); the old team's chat
     stays closed to them and they can create a new team.
 - **Chat history starts at the first joining** (04/11/2026): in every chat (group, team, teacher group, 1-1) a
@@ -467,8 +467,52 @@ Boundaries that are easy to get wrong:
   tomorrow, activity registration opened / deadline / cancelled…), shown on the personal notifications page; parents
   can filter by child (`notification_recipients.student_id`).
 - Storage: content once in `notifications`, **one row per recipient** in `notification_recipients` (`read_at`).
-- The creator of an item (teacher for class events / activities, SM for announcements) can see **who has not read**
-  a personal notification (UC-68).
+- The teacher who created a class event or an extracurricular activity can see **who has not read** its
+  notifications (UC-68), to remind them. School announcements are general news: no read status, also not for SM
+  (lead, 18/11/2026).
+- **FE-09 decisions (18/11/2026, lead):** the bell lists every notification (title only, unread count of all); the
+  personal page lists only `is_personal` ones with their detail and a child filter for parents; reading it in either
+  place marks it read. No `CHAT` notifications (§6). A parent with two children in the same class gets one
+  extracurricular notification carrying the first child (`student_id`), so the child filter may miss it for the
+  second child: accepted.
+- **FE-09 details (18/11/2026, lead):**
+  - **Per role:** each `notification_recipients` row is for ONE role (`role_code`, `patch_v0.3_notification_roles.sql`);
+    a user sees, counts and reads only the rows of the active role (no merging of roles). The sender gives the role
+    the person is reached under: student → STUDENT, parent → PARENT, teacher → TEACHER, school post → each role of
+    the user that is in the post's audience, maintenance → every role of the account, reset request → SYSTEM_ADMIN /
+    SCHOOL_MANAGER, locked teacher → SCHOOL_MANAGER. "Your comment was deleted" goes to every role of the author but
+    SYSTEM_ADMIN (a comment does not store the role it was written under).
+  - **Never to yourself (18/11/2026, lead):** the author of a post (school post, news, group post) is never notified of
+    their own post; other School Managers still get a school post.
+  - **Group feed posts (18/11/2026, lead):** a general notification (`GROUP_POST`, opens the post in the group feed
+    pop-up) to every active member of the group but the author, when the post becomes visible: created by the
+    moderator or with approval off, or approved by the moderator (an edited post approved again counts as new). A
+    pending post, an edit or a rejection sends nothing. Roles follow FE-04's group access (`groupScopeSql`); School
+    Managers only in the teacher group. A post that is hidden, not approved or deleted no longer lists its
+    notifications.
+  - **Approval notices (18/11/2026, lead), personal:**
+    - *Waiting for approval* → the moderator (homeroom teacher for the class group, every School Manager for the
+      teacher group), when a post is created pending or edited back to pending; it opens the post (approve / reject
+      there) and disappears once the post is approved, rejected or deleted.
+    - *Approved* / *not approved* → the author (under each role with which they see the group), when the moderator
+      decides; a rejected post can be edited from "Bài của tôi" and is sent for approval again.
+    - A post that comes onto the feed by an edit (approval off, or the moderator's own post) notifies the members as a
+      new post.
+  - **Order:** newest first, no priority groups. SCR-04 has two tabs, "Quan trọng" (personal, default) and "Tất cả";
+    "Chỉ chưa đọc"; parents filter by child; "Đánh dấu đã đọc tất cả" marks what the open list shows.
+  - **Click:** marks the row read and opens the item (school post / group post in its pop-up, class event, activity,
+    attendance of that child and month, reset request queue, teaching assignments); maintenance has no page.
+  - **Deleted item:** a notification whose item was deleted (school post, group post, class event, activity post,
+    maintenance window) is no longer listed after a reload; before the reload a click opens the item's page, which
+    says it no longer exists.
+  - **Real time:** a trigger sends `NOTIFY` on commit; the server LISTENs and pushes `notification:new` to the
+    user's room with the role; nothing is pushed for a rolled-back write. The badge also reloads when the socket
+    reconnects.
+  - **UC-69:** the server runs the class event and activity deadline reminders every hour (first run 1 minute after
+    start); `REMINDER_JOB=off` in `.env` stops it on that server (no screen; reminders never send twice).
+  - **UC-68:** page "Thông báo đã gửi" (teacher): every notification about the teacher's class events and activities
+    (creation, reminder, change, cancel) with read / total and the people who have not read, unread first, with their
+    role, child and phone (ASSUMPTION: phone shown so the teacher can call, as on the FE-07 registration list).
 - Parents **and the student** are notified when the student's attendance is anything other than "present", and
   on every later change of it (details in §12, 18/11/2026).
 

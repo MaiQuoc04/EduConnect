@@ -320,29 +320,44 @@ async function saveViewers(db, eventId, viewerIds) {
   }
 }
 
-// Everyone who sees the event except its creator (user id + the child concerned for parents).
+// Everyone who sees the event except its creator: user id, the ROLE they see it under (FE-09, 18/11/2026:
+// notification_recipients.role_code; a teacher who is also a parent of the class gets one row per role) and the child
+// concerned for parents. A picked viewer (class_event_viewers) gets the roles they have in this class: student of it,
+// parent of one of its students, teacher of it (assignment or homeroom) – the same people classPeople offers.
 export const AUDIENCE_SQL = `
-  WITH ev AS (SELECT * FROM class_events WHERE event_id = $1)
-  SELECT DISTINCT ON (x.user_id) x.user_id, x.student_id
+  WITH ev AS (SELECT * FROM class_events WHERE event_id = $1),
+  kids AS (SELECT ce.student_id FROM ev JOIN class_enrollments ce ON ce.class_id = ev.class_id AND ce.status = 'STUDYING')
+  SELECT DISTINCT ON (x.user_id, x.role_code) x.user_id, x.role_code, x.student_id
   FROM (
-    SELECT s.user_id, s.student_id FROM ev JOIN class_enrollments ce ON ce.class_id = ev.class_id AND ce.status = 'STUDYING'
-      JOIN students s ON s.student_id = ce.student_id WHERE ev.for_students
+    SELECT s.user_id, 'STUDENT' AS role_code, s.student_id FROM ev JOIN kids k ON TRUE
+      JOIN students s ON s.student_id = k.student_id WHERE ev.for_students
     UNION ALL
-    SELECT p.user_id, sp.student_id FROM ev JOIN class_enrollments ce ON ce.class_id = ev.class_id AND ce.status = 'STUDYING'
-      JOIN student_parents sp ON sp.student_id = ce.student_id JOIN parents p ON p.parent_id = sp.parent_id WHERE ev.for_parents
+    SELECT p.user_id, 'PARENT', sp.student_id FROM ev JOIN kids k ON TRUE
+      JOIN student_parents sp ON sp.student_id = k.student_id JOIN parents p ON p.parent_id = sp.parent_id WHERE ev.for_parents
     UNION ALL
-    SELECT t.user_id, NULL FROM ev JOIN teaching_assignments ta ON ta.class_id = ev.class_id AND ta.deleted_at IS NULL
+    SELECT t.user_id, 'TEACHER', NULL FROM ev JOIN teaching_assignments ta ON ta.class_id = ev.class_id AND ta.deleted_at IS NULL
       AND ${LOCAL_DAY('ev.start_at')} BETWEEN ta.start_date AND ta.end_date
       JOIN teachers t ON t.teacher_id = ta.teacher_id WHERE ev.for_subject_teachers
     UNION ALL
-    SELECT t.user_id, NULL FROM ev JOIN classes c ON c.class_id = ev.class_id JOIN teachers t ON t.teacher_id = c.homeroom_teacher_id
+    SELECT t.user_id, 'TEACHER', NULL FROM ev JOIN classes c ON c.class_id = ev.class_id JOIN teachers t ON t.teacher_id = c.homeroom_teacher_id
     UNION ALL
-    SELECT v.user_id, NULL FROM ev JOIN class_event_viewers v ON v.event_id = ev.event_id
+    SELECT v.user_id, 'STUDENT', s.student_id FROM ev JOIN class_event_viewers v ON v.event_id = ev.event_id
+      JOIN students s ON s.user_id = v.user_id JOIN kids k ON k.student_id = s.student_id
+    UNION ALL
+    SELECT v.user_id, 'PARENT', sp.student_id FROM ev JOIN class_event_viewers v ON v.event_id = ev.event_id
+      JOIN parents p ON p.user_id = v.user_id JOIN student_parents sp ON sp.parent_id = p.parent_id
+      JOIN kids k ON k.student_id = sp.student_id
+    UNION ALL
+    SELECT v.user_id, 'TEACHER', NULL FROM ev JOIN class_event_viewers v ON v.event_id = ev.event_id
+      JOIN teachers t ON t.user_id = v.user_id
+      WHERE EXISTS (SELECT 1 FROM classes c WHERE c.class_id = ev.class_id AND c.homeroom_teacher_id = t.teacher_id)
+         OR EXISTS (SELECT 1 FROM teaching_assignments ta WHERE ta.class_id = ev.class_id AND ta.teacher_id = t.teacher_id
+                    AND ta.deleted_at IS NULL)
   ) x JOIN users u ON u.user_id = x.user_id AND u.status = 'ACTIVE'
   WHERE x.user_id <> (SELECT created_by FROM ev)
-  ORDER BY x.user_id, x.student_id NULLS LAST`;
+  ORDER BY x.user_id, x.role_code, x.student_id NULLS LAST`;
 
-// One notification + one recipient row per person of the audience (business rules §9).
+// One notification + one recipient row per person and role of the audience (business rules §9).
 export async function notifyAudience(db, { eventId, title, detail, personal, createdBy }) {
   const { rows } = await db.query(
     `INSERT INTO notifications (type, title, detail, is_personal, target_type, target_id, created_by)
@@ -350,8 +365,8 @@ export async function notifyAudience(db, { eventId, title, detail, personal, cre
     [NOTIFICATION.TYPE, title.slice(0, 255), detail, personal, NOTIFICATION.TARGET, eventId, createdBy],
   );
   const { rowCount } = await db.query(
-    `INSERT INTO notification_recipients (notification_id, user_id, student_id)
-     SELECT $2, a.user_id, a.student_id FROM (${AUDIENCE_SQL}) a`,
+    `INSERT INTO notification_recipients (notification_id, user_id, role_code, student_id)
+     SELECT $2, a.user_id, a.role_code, a.student_id FROM (${AUDIENCE_SQL}) a`,
     [eventId, rows[0].id],
   );
   return rowCount;

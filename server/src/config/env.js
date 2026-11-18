@@ -34,6 +34,9 @@ export const env = {
   },
   uploadDir: process.env.UPLOAD_DIR || './uploads',
   storage: readStorage(),
+  // FE-09 UC-69: the hourly reminder job (class events, activity deadlines). On unless REMINDER_JOB=off; the reminders
+  // never send twice, so several servers on one database are safe – turn it off e.g. while debugging.
+  reminderJob: (process.env.REMINDER_JOB || '').trim().toLowerCase() !== 'off',
 };
 
 // File storage (Supabase Storage chosen 09/11/2026). STORAGE_DRIVER empty or "local": files stay on this server's disk

@@ -28,6 +28,33 @@ reactions, attachments) is merged into one place after both are on `develop`.
 
 ## Current status (read first; update after every merge, schema patch or new decision)
 
+- **FE-09 Notifications built (18/11/2026, Quoc, `feature/fe-09-notifications`; not merged):** UC-67..UC-69.
+  - **DB: `patch_v0.3_notification_roles.sql` (approved by the lead 18/11) – run on the shared DB 18/11 by Quoc
+    (481 old rows filled, none left without a role; PK, FK, index and trigger checked; a rolled-back insert sends no
+    NOTIFY).** Adds
+    `notification_recipients.role_code` (NOT NULL, FK roles, PK `(notification_id, user_id, role_code)`, old rows
+    filled once by rule) and the statement trigger `trg_notification_recipients_notify` (`pg_notify` on commit).
+    **Run it on the shared DB at the moment FE-09 is merged** – code without `role_code` can no longer write
+    notifications afterwards; then everyone pulls `develop`. `scripts/dev-local-db.js` now applies it.
+  - Server: `modules/notifications` (`/notifications`: list, unread count, read, read all, UC-68 `/sent`),
+    `sockets/notificationListener.js` (LISTEN → `notification:new`), `notifications.jobs.js` (UC-69 hourly, env
+    `REMINDER_JOB`), `config/db.js` exports `connectionConfig`, `config/env.js` `reminderJob`.
+  - **Other members' code touched (one change each: the role of every recipient row; lead's OK 18/11):**
+    `schoolposts.service.js` (Anh: `recipientsSql(..., { withRole })`), `utils/commentReports.js` (Anh: every role of
+    the author but SA), `calendar.service.js` (Dung: `AUDIENCE_SQL` returns `role_code`; picked viewers get the roles
+    they have in the class), `extracurricular.service.js` (Dung: PARENT / STUDENT), `maintenance.service.js` (Linh:
+    one row per role), `accountControl.service.js` (Linh: SCHOOL_MANAGER). Mine: `auth.service.js`,
+    `attendance.service.js`. Also (lead 18/11): `schoolposts.service.js` no longer notifies the author;
+    `posts.service.js` (Khanh: calls in create / update / review – `notifyGroupPost` when a post comes onto the feed,
+    `notifyPostPending` when it waits for approval, `notifyPostReviewed` on approve / reject) for the group feed
+    notifications (`modules/notifications/groupPostNotifications.js`; new target types `POST_PENDING`, `POST_REVIEW`).
+  - Client: bell in the top bar (`components/NotificationBell.jsx`), SCR-04 `/notifications`, UC-68
+    `/notifications/sent` (teacher), menu "Thông báo" / "Thông báo đã gửi".
+  - Tested on the local DB: 31 API steps (roles kept apart for a teacher who is also a parent, real-time push through
+    LISTEN/NOTIFY, read per role, read all, reminder sent once, UC-68 list / detail / other teacher 404 / SM 403,
+    deleted event hidden, maintenance per role). Server `npm test` and client `npm run build` pass. Not yet clicked
+    through in a browser.
+
 - **FE-12 Attendance merged into `develop` (18/11/2026, Quoc, `feature/fe-12-attendance`, merge `f90be11`; build and
   `npm test` pass on `develop`):** server
   `modules/attendance` mounted at `/attendances` (UC-90..UC-94: day view, sheet, save with the edit windows, history,
@@ -732,7 +759,7 @@ hooks, marked FE-07).
 | ID | Use case | Actor |
 |---|---|---|
 | UC-67 | View Notifications | User |
-| UC-68 | View Notification Read Status | Teacher, School Manager |
+| UC-68 | View Notification Read Status | Teacher |
 | UC-69 | Send Event Reminders | Scheduler |
 
 ### Quoc: FE-12 Attendance Management (5 UC)

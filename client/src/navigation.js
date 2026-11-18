@@ -68,6 +68,8 @@ export const NAV_SECTIONS = [
   {
     label: 'Tài khoản',
     items: [
+      { to: '/notifications', label: 'Thông báo', icon: 'notifications' }, // FE-09 SCR-04 UC-67
+      { to: '/notifications/sent', label: 'Thông báo đã gửi', icon: 'outgoing_mail', roles: ['TEACHER'] }, // FE-09 UC-68
       { to: '/profile', label: 'Hồ sơ của tôi', icon: 'person' }, // FE-01 UC-04
       { to: '/change-password', label: 'Đổi mật khẩu', icon: 'lock_reset' }, // FE-01 UC-05
     ],

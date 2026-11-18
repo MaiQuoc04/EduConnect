@@ -26,6 +26,7 @@ import uploadRoutes from './modules/uploads/uploads.routes.js';
 import parentRoutes from './modules/parents/parents.routes.js';
 import extracurricularRoutes from './modules/extracurricular/extracurricular.routes.js';
 import attendanceRoutes from './modules/attendance/attendance.routes.js';
+import notificationRoutes from './modules/notifications/notifications.routes.js';
 
 // Each feature gets its own folder in src/modules and is mounted here, e.g.
 //   FE-01 account   -> /auth, /account (Quoc)
@@ -71,6 +72,7 @@ router.use('/comment-reports', commentReportRoutes); // FE-08: School Manager's 
 router.use('/parents', parentRoutes);
 router.use('/extracurricular-events', extracurricularRoutes); // FE-07 (Dung, It3)
 router.use('/attendances', attendanceRoutes); // FE-12 (Quoc, It3)
+router.use('/notifications', notificationRoutes); // FE-09 (Quoc, It3)
 router.use('/admin', adminRoutes);
 router.use('/maintenance', maintenanceRoutes);
 router.use('/uploads', uploadRoutes);

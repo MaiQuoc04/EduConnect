@@ -1,0 +1,183 @@
+/* FE-09 Notifications (owner: Quoc): the bell popover and SCR-04, after Stitch "SCR-38 Notifications"
+   (400px popover with the 2-layer menu shadow, 14px radius; unread ink dot; icon boxes; child colour chips). */
+
+/* --- Bell ---------------------------------------------------------------------------------------------------- */
+.nb { position: relative; }
+.nb-button { position: relative; }
+.nb-badge {
+  position: absolute;
+  top: 2px;
+  right: 2px;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 5px;
+  border-radius: 9px;
+  background: var(--ink-600);
+  color: var(--white);
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 18px;
+  text-align: center;
+  box-shadow: 0 0 0 2px var(--paper);
+}
+.nb-pop {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  z-index: 60;
+  width: min(400px, calc(100vw - 24px));
+  background: var(--white);
+  border: 1px solid var(--graphite-200);
+  border-radius: var(--radius-dialog);
+  box-shadow: var(--shadow-menu);
+  overflow: hidden;
+}
+.nb-head { display: flex; align-items: center; gap: 8px; padding: 12px 16px; border-bottom: 1px solid var(--graphite-200); }
+.nb-new { font-size: 11px; font-weight: 500; padding: 1px 8px; border-radius: 10px; background: var(--ink-50); color: var(--ink-700); outline: 1px solid var(--ink-200); }
+.nb-readall { margin-left: auto; font-size: 12px; }
+.nb-body { max-height: min(520px, 60vh); overflow-y: auto; }
+.nb-pad { padding: 16px; }
+.nb-item {
+  display: grid;
+  grid-template-columns: 8px 32px minmax(0, 1fr);
+  gap: 10px;
+  align-items: start;
+  width: 100%;
+  padding: 10px 14px;
+  border: 0;
+  border-bottom: 1px solid var(--graphite-100);
+  background: var(--white);
+  font: inherit;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.nb-item:hover { background: var(--graphite-50); }
+.nb-item:focus-visible { outline: 2px solid var(--ink-400); outline-offset: -2px; }
+.nb-item.is-unread { background: color-mix(in srgb, var(--ink-50) 45%, var(--white)); }
+.nb-text { display: grid; gap: 2px; min-width: 0; }
+.nb-meta { display: flex; justify-content: space-between; gap: 8px; color: var(--ink-700); }
+.nb-title {
+  font-size: 13px;
+  line-height: 18px;
+  color: var(--graphite-800, var(--graphite-900));
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.nb-item.is-unread .nb-title { font-weight: 600; color: var(--graphite-900); }
+.nb-dot { width: 8px; height: 8px; margin-top: 6px; border-radius: 50%; background: transparent; display: inline-block; flex: none; }
+.nb-dot.is-on { background: var(--ink-600); }
+.nb-foot { padding: 10px; text-align: center; background: var(--graphite-50); border-top: 1px solid var(--graphite-200); }
+.nb-all { display: inline-flex; align-items: center; gap: 6px; font-weight: 600; color: var(--ink-700); }
+.nb-empty { display: grid; justify-items: center; gap: 8px; padding: 32px 16px; text-align: center; }
+.nb-empty .icon { font-size: 32px; color: var(--graphite-400); }
+
+/* Icon boxes (kind of notification) */
+.nt-icon { width: 32px; height: 32px; border-radius: var(--radius-control); display: inline-flex; align-items: center; justify-content: center; flex: none; }
+.nt-icon.is-red { background: var(--red-bg); color: var(--red-pen); }
+.nt-icon.is-amber { background: var(--amber-bg); color: var(--amber); }
+.nt-icon.is-blue { background: var(--blue-bg); color: var(--blue); }
+.nt-icon.is-ink { background: var(--ink-50); color: var(--ink-700); }
+.nt-icon.is-graphite { background: var(--graphite-100); color: var(--graphite-600); }
+
+/* --- SCR-04 page --------------------------------------------------------------------------------------------- */
+.nt-page { display: grid; gap: 16px; min-width: 0; }
+.nt-page .page-header { margin-bottom: 0; }
+.nt-toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: 12px 20px; padding-bottom: 12px; border-bottom: 1px solid var(--graphite-200); }
+.nt-check { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; cursor: pointer; }
+.nt-count { margin-left: auto; display: inline-flex; align-items: center; gap: 6px; }
+.nt-count .nb-dot { margin-top: 0; }
+.nt-chips { display: flex; flex-wrap: wrap; gap: 8px; }
+.nt-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 32px;
+  padding: 0 12px;
+  border-radius: 16px;
+  border: 1px solid var(--graphite-200);
+  background: var(--white);
+  font: inherit;
+  font-size: 13px;
+  color: var(--graphite-700);
+  cursor: pointer;
+}
+.nt-chip.is-on { background: var(--graphite-900); border-color: var(--graphite-900); color: var(--white); font-weight: 600; }
+.nt-child-dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; }
+.nt-child-dot.is-teal { background: #0f766e; }
+.nt-child-dot.is-coral { background: #b4441c; }
+.nt-child-dot.is-blue { background: #2d5bd0; }
+.nt-child-dot.is-olive { background: #4d6b12; }
+.nt-child { display: inline-flex; align-items: center; gap: 4px; padding: 1px 8px; border-radius: 4px; font-weight: 500; }
+.nt-child.is-teal { background: var(--green-bg); color: #0f766e; }
+.nt-child.is-coral { background: var(--red-bg); color: #b4441c; }
+.nt-child.is-blue { background: var(--blue-bg); color: #2d5bd0; }
+.nt-child.is-olive { background: var(--graphite-100); color: #4d6b12; }
+
+.nt-list { padding: 0; overflow: hidden; }
+.nt-row {
+  display: grid;
+  grid-template-columns: 8px 36px minmax(0, 1fr);
+  gap: 12px;
+  align-items: start;
+  padding: 16px 20px;
+  border-bottom: 1px solid var(--graphite-200);
+}
+.nt-row:last-child { border-bottom: 0; }
+.nt-row.is-unread { background: color-mix(in srgb, var(--ink-50) 40%, var(--white)); }
+.nt-row.is-focus { outline: 2px solid var(--ink-400); outline-offset: -2px; }
+.nt-row .nt-icon { width: 36px; height: 36px; }
+.nt-main { display: grid; gap: 4px; min-width: 0; justify-items: start; }
+.nt-meta { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.nt-title {
+  padding: 0;
+  border: 0;
+  background: none;
+  font: inherit;
+  font-size: 14px;
+  line-height: 20px;
+  color: var(--graphite-700);
+  text-align: left;
+  cursor: pointer;
+}
+.nt-title:hover { color: var(--ink-700); text-decoration: underline; }
+.nt-row.is-unread .nt-title { font-weight: 600; color: var(--graphite-900); }
+.nt-detail { font-size: 13px; line-height: 20px; color: var(--graphite-600); white-space: pre-line; overflow-wrap: anywhere; }
+.nt-open { display: inline-flex; align-items: center; gap: 4px; font-size: 12px; font-weight: 500; color: var(--ink-700); }
+.nt-more { display: flex; justify-content: center; align-items: center; gap: 12px; }
+
+/* --- UC-68 sent notifications ------------------------------------------------------------------------------- */
+.ns-items { display: grid; gap: 16px; }
+.ns-item { display: grid; gap: 12px; }
+.ns-item-head { display: flex; gap: 12px; align-items: flex-start; }
+.ns-item-head a { color: var(--graphite-900); }
+.ns-notes { border-top: 1px solid var(--graphite-200); }
+.ns-note { display: grid; gap: 8px; padding: 10px 0; border-bottom: 1px solid var(--graphite-100); }
+.ns-note:last-child { border-bottom: 0; }
+.ns-note-row { display: grid; grid-template-columns: minmax(0, 1fr) 160px auto; gap: 12px; align-items: center; }
+.ns-note-main { display: grid; gap: 2px; min-width: 0; }
+.ns-progress { display: flex; align-items: center; gap: 8px; }
+.ns-bar { flex: 1; height: 6px; border-radius: 3px; background: var(--graphite-100); overflow: hidden; }
+.ns-bar > span { display: block; height: 100%; background: var(--ink-600); }
+.ns-readers { padding: 8px 12px; border-radius: var(--radius-control); background: var(--graphite-50); display: grid; gap: 8px; }
+.ns-sub { color: var(--red-pen); }
+.ns-people { gap: 0; }
+.ns-person { display: grid; grid-template-columns: 8px minmax(0, 1fr) auto; gap: 10px; align-items: center; padding: 6px 0; }
+.ns-person .nb-dot { margin-top: 0; }
+.ns-person-main { display: grid; min-width: 0; }
+.ns-pad { padding: 8px 12px; }
+
+@media (max-width: 640px) {
+  .nt-toolbar { gap: 10px; }
+  .nt-count { margin-left: 0; }
+  .nt-row { padding: 14px 12px; grid-template-columns: 8px 32px minmax(0, 1fr); gap: 10px; }
+  .nt-row .nt-icon { width: 32px; height: 32px; }
+  .nt-title { font-size: 15px; line-height: 22px; min-height: 44px; display: flex; align-items: center; }
+  .nt-chip { flex: 1 1 auto; min-height: 44px; }
+  .nb-pop { position: fixed; top: 64px; right: 12px; left: 12px; width: auto; }
+  .nb-item { min-height: 56px; }
+  .ns-note-row { grid-template-columns: minmax(0, 1fr); }
+  .nt-page .page-header .btn { width: 100%; justify-content: center; }
+}

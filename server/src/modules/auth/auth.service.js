@@ -320,8 +320,10 @@ export async function requestAdminPasswordReset({ identifier, fullName, reason, 
     // Who can read the password (same scope as UC-100): every active SA; SMs too unless the account is an SA or SM.
     const roles = await getRoles(user.user_id);
     const smCanHandle = !roles.includes('SYSTEM_ADMIN') && !roles.includes('SCHOOL_MANAGER');
+    // FE-09 (18/11/2026): one recipient row per handling role (SYSTEM_ADMIN / SCHOOL_MANAGER), so it shows under that
+    // active role only (notification_recipients.role_code).
     const { rows: handlers } = await client.query(
-      `SELECT DISTINCT u.user_id FROM users u
+      `SELECT DISTINCT u.user_id, r.role_code FROM users u
        JOIN user_roles ur ON ur.user_id = u.user_id JOIN roles r ON r.role_id = ur.role_id
        WHERE u.status = 'ACTIVE' AND u.user_id <> $1
          AND (r.role_code = 'SYSTEM_ADMIN' OR (r.role_code = 'SCHOOL_MANAGER' AND $2::boolean))`,
@@ -329,7 +331,6 @@ export async function requestAdminPasswordReset({ identifier, fullName, reason, 
     );
     if (!handlers.length) return;
 
-    // ASSUMPTION: stored as a SYSTEM notification now; the bell / real-time push comes with FE-09 (It3).
     const { rows: [notification] } = await client.query(
       `INSERT INTO notifications (type, title, detail, is_personal, target_type, target_id)
        VALUES ('SYSTEM', $1, $2, TRUE, 'PASSWORD_RESET_REQUEST', $3)
@@ -341,8 +342,9 @@ export async function requestAdminPasswordReset({ identifier, fullName, reason, 
       ],
     );
     await client.query(
-      `INSERT INTO notification_recipients (notification_id, user_id) SELECT $1, UNNEST($2::bigint[])`,
-      [notification.notification_id, handlers.map((h) => h.user_id)],
+      `INSERT INTO notification_recipients (notification_id, user_id, role_code)
+       SELECT $1, UNNEST($2::bigint[]), UNNEST($3::varchar[])`,
+      [notification.notification_id, handlers.map((h) => h.user_id), handlers.map((h) => h.role_code)],
     );
   });
   await logActivity({

@@ -385,6 +385,9 @@ const ERROR_MESSAGES = {
   MSG_SCORE_INVALID: 'Điểm phải từ 0 đến 10, tối đa 2 chữ số thập phân.',
   MSG_GRADES_INCOMPLETE: ({ count } = {}) => `Chưa chốt được: ${count ?? 'một số'} học sinh đang học còn thiếu điểm.`,
   MSG_IMPORT_HAS_ERRORS: 'File còn dòng bị lỗi. Sửa file rồi thử lại; chưa có điểm nào được lưu.',
+  // FE-09 Notifications
+  MSG_NOTIFICATION_NOT_FOUND: 'Không tìm thấy thông báo.',
+  MSG_INVALID_PARAM: 'Yêu cầu không hợp lệ. Vui lòng tải lại trang.',
   // FE-12 Attendance Management
   MSG_LESSON_NOT_FOUND: 'Không tìm thấy tiết học.',
   MSG_ATTENDANCE_NOT_STARTED: 'Tiết học chưa bắt đầu nên chưa điểm danh được.',

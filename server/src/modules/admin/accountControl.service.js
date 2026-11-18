@@ -363,8 +363,9 @@ export async function lockAccount({ idParam, actor, reason, ip }) {
         ],
       );
       await client.query(
-        `INSERT INTO notification_recipients (notification_id, user_id)
-         SELECT $1, u.user_id FROM users u
+        // FE-09 (Quoc, 18/11/2026): shown under the SCHOOL_MANAGER role (notification_recipients.role_code).
+        `INSERT INTO notification_recipients (notification_id, user_id, role_code)
+         SELECT $1, u.user_id, 'SCHOOL_MANAGER' FROM users u
          JOIN user_roles ur ON ur.user_id = u.user_id JOIN roles r ON r.role_id = ur.role_id
          WHERE r.role_code = 'SCHOOL_MANAGER' AND u.status = 'ACTIVE'`,
         [rows[0].notification_id],

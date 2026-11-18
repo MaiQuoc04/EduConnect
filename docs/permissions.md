@@ -72,7 +72,7 @@ Source: Report 3 section 4.4 (draft v1.3). Full = all records; Restricted (n) = 
 | Attendance | View | No | Full | Restricted (12) | Restricted (12) | Restricted (7) | Restricted (7) |
 | Attendance statistics | View / export | No | Full | Restricted (12) | Restricted (12) | No | No |
 | Notification | View | Full | Full | Full | Full | Full | Full |
-| Notification read status | View | No | Restricted (18) | Restricted (18) | Restricted (18) | No | No |
+| Notification read status | View | No | No | Restricted (18) | Restricted (18) | No | No |
 
 Notes:
 
@@ -93,7 +93,8 @@ Notes:
 15. Announcements within the audience chosen by the author; news posts are view only.
 16. Own comments and any comment on their own posts; homeroom teacher: any comment in their class groups.
 17. Own comments only.
-18. Personal notifications about items they created (class events, extracurricular events, school announcements).
+18. Notifications about items they created: class events and extracurricular activities (lead, 18/11/2026: school
+    announcements are general news, so no read status for the School Manager).
 19. Own messages only, within the time limit (`chat.delete_for_everyone_minutes`), in chats the user may send in (notes 4 and 6).
 20. Import teacher accounts only (UC-116, FE-03, agreed 07/11/2026): same file and checks as UC-96, type fixed to Teacher.
 21. Whole-school dates and the dates of the grades of their own (or their children's) classes being studied.

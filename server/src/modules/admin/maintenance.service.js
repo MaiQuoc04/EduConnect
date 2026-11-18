@@ -68,7 +68,7 @@ async function readWindow(db, body = {}, exceptId = null) {
 
 const fmt = `to_char($1::timestamptz AT TIME ZONE 'Asia/Ho_Chi_Minh', 'HH24:MI DD/MM/YYYY')`;
 
-// Schedules a window and notifies every active account (one notification + one recipient row per account).
+// Schedules a window and notifies every active account (one notification + one recipient row per account and role).
 export async function createMaintenance({ body, actorId }) {
   return withTransaction(async (client) => {
     const w = await readWindow(client, body);
@@ -85,8 +85,11 @@ export async function createMaintenance({ body, actorId }) {
       [`Bảo trì hệ thống: ${w.title}`, `Từ ${times[0].s} đến ${times[0].e}. ${w.message}`, id, actorId],
     );
     await client.query(
-      `INSERT INTO notification_recipients (notification_id, user_id)
-       SELECT $1, user_id FROM users WHERE status = 'ACTIVE'`,
+      // FE-09 (Quoc, 18/11/2026): one row per role of each active account, so the notice shows under every role.
+      `INSERT INTO notification_recipients (notification_id, user_id, role_code)
+       SELECT $1, u.user_id, r.role_code FROM users u
+       JOIN user_roles ur ON ur.user_id = u.user_id JOIN roles r ON r.role_id = ur.role_id
+       WHERE u.status = 'ACTIVE'`,
       [n[0].notification_id],
     );
     return loadWindow(client, id);
