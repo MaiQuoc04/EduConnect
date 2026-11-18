@@ -28,7 +28,8 @@ reactions, attachments) is merged into one place after both are on `develop`.
 
 ## Current status (read first; update after every merge, schema patch or new decision)
 
-- **FE-12 Attendance built (18/11/2026, Quoc; not committed / not merged yet, branch to be made by Quoc):** server
+- **FE-12 Attendance merged into `develop` (18/11/2026, Quoc, `feature/fe-12-attendance`, merge `f90be11`; build and
+  `npm test` pass on `develop`):** server
   `modules/attendance` mounted at `/attendances` (UC-90..UC-94: day view, sheet, save with the edit windows, history,
   class report + Excel, student / parent view, school statistics + periods not taken + Excel; personal ATTENDANCE
   notifications written straight into `notifications` + `notification_recipients`). Client `pages/attendance/`
