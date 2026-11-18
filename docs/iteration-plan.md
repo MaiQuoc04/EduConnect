@@ -38,6 +38,9 @@ reactions, attachments) is merged into one place after both are on `develop`.
   business rules §12. Tested on the local DB: 63 API steps (scope, windows, deadline setting, homeroom switch, closed
   semester, SM entry of a missed period, notifications incl. a locked parent skipped, reports, statistics, exports);
   `npm test` and client `npm run build` pass. Not yet clicked through in a browser.
+  Substitute check (local DB, 18/11): SM reassigns a (class, subject) for today only (UC-18) → its periods without
+  attendance move to the new teacher, who can take them; the replaced teacher only views them (403
+  `MSG_ATTENDANCE_VIEW_ONLY` on save); periods already taken stay with the teacher who took them (§10).
 
 - **Docs aligned with the code (18/11/2026, lead):** features already built without a use case got **UC-117..UC-128**
   (`use-cases.md`: switch role, post approval on/off, report / handle / like school post comments, period times,
@@ -56,13 +59,12 @@ branch on the remote is now in `develop`. Patches `school_events`, `activity_tit
 `npm test` pass after each merge.
 Decided 18/11/2026 (lead, before FE-12): FE-12 Attendance is built before FE-09; why the homeroom teacher keeps
 excused ↔ unexcused until the semester closes, and attendance notifications (student + parents, one per period,
-on the first non-present take and every status change) – business rules §9 / §12. School feed: ANNOUNCEMENT shown
-as "Bài đăng", two tabs Bài đăng / Tin tức without "Tất cả" (§8; client text only, done by Quoc in Anh's FE-08 pages,
-Anh to be told; not committed yet). A school post now opens in a pop-up over the feed (`?post=<id>`,
-`SchoolPostDialog`, same as the group feed's PostDialog); `/school-feed/:id` stays for old links / notifications; after
-creating a post the feed opens with it in the pop-up (not yet clicked through in a browser). `GET /school-posts`
-(UC-58) now also returns the whole `content`, so "Hiển thị thêm" on a card shows the whole post (it stopped at the
-300-character `contentPreview` with "…"); `contentPreview` kept.
+on the first non-present take and every status change) – business rules §9 / §12. School feed (lead, 18/11): ANNOUNCEMENT shown
+as "Bài đăng", two tabs Bài đăng / Tin tức without "Tất cả" (§8), and a post opens in a pop-up (OK for Anh's
+`feature/fe-08-school-feed`, which already has the pop-up and the longer card text). **Owed:** the two tabs and the
+"Bài đăng" wording on top of Anh's branch once it is merged (Quoc's first version was taken out of the FE-12 branch to
+avoid a second pop-up); whether "Hiển thị thêm" shows the whole post or Anh's 1,000 characters + "Đọc toàn bài" is
+still to settle with Anh.
 Before: 17/11/2026 – FE-11 Grade Management (It3, Linh) merged into `develop` (UC-81..UC-89, no schema
 change) and FE-13 follow-ups merged (setting `chat.delete_for_everyone_minutes` checked 1–1440, `utils/excel.js`
 shared helpers, new Teachers / School Managers join the TEACHER_SCHOOL group). Linh's FE-11 assumptions accepted by
