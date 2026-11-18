@@ -295,6 +295,22 @@ Boundaries that are easy to get wrong:
   the group moderator.
 - Comments support **multi-level replies** (`parent_comment_id`).
 - Only **Like** (no other reactions). One like per user per post; unlike removes the row.
+- **Comment likes and reports** (Khanh's decision 19/11/2026, the same as the school feed, §8 / FE-08 17/11/2026):
+  - A comment can be **liked** (one per person, again = unlike) by whoever may interact with the post (a live post of
+    an open school year); not on a hidden, pending or last year's post. No notification.
+  - A comment can be **reported** (reason: inappropriate language, harassment, spam, false information, other – a
+    note is required for "other", ≤ 500 characters) by whoever may interact with the post, **except the group's
+    moderator**, who deletes comments directly. **The moderator's own comments cannot be reported** (option A, Khanh
+    19/11/2026: the report would land in their own queue; a complaint about the homeroom teacher, or a School Manager in
+    the teacher group, goes to the school directly). Not one's own comment; once per person (again changes nothing). A
+    report hides nothing (comments are deleted, never hidden). **Nobody learns who reported**, the moderator neither.
+  - **"Báo cáo bình luận nhóm"** (menu, `/group-comment-reports`): the moderator's queue – the homeroom teacher sees
+    the comments reported in their class's feed, the School Manager those of the teacher group (never a school post:
+    that queue is FE-08's "Báo cáo bình luận"). One card per comment with the number of reports, the reasons and
+    notes, the group and the post. **Xoá bình luận** deletes it (soft) and closes its reports; its author gets a
+    personal notification that names nobody. **Bỏ qua** keeps it and closes the reports. A comment deleted from the
+    thread (author, post author, moderator) closes its pending reports too. Tabs: waiting, deleted, dismissed. No
+    notification to the moderator when a report arrives (as the school feed today).
 - Images, files and videos can be attached to posts and messages: images / files ≤ 10 MB, video ≤ 50 MB.
   Files live in cloud storage; the DB stores the URL (`attachments`).
 - **Post states in detail** (Khanh's proposals, agreed by the lead 11/11/2026):
