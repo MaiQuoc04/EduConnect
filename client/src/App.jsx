@@ -73,6 +73,9 @@ import GradeControlPage from './pages/grades/GradeControlPage.jsx';
 import GradeEntryPage from './pages/grades/GradeEntryPage.jsx';
 import GradeHistoryPage from './pages/grades/GradeHistoryPage.jsx';
 import GradeResultsPage, { StudentResultsPage } from './pages/grades/GradeResultsPage.jsx';
+import AttendanceHome from './pages/attendance/AttendanceHome.jsx';
+import AttendanceStatsPage from './pages/attendance/AttendanceStatsPage.jsx';
+import StudentAttendancePage from './pages/attendance/StudentAttendancePage.jsx';
 import GradeStructurePage from './pages/grades/GradeStructurePage.jsx';
 import ProtectedRoute from './routes/ProtectedRoute.jsx';
 
@@ -458,6 +461,14 @@ export default function App() {
             </ProtectedRoute>
           }
         />
+        {/* FE-12 Attendance Management (Quoc) */}
+        {[
+          ['attendance', ['SCHOOL_MANAGER', 'TEACHER', 'STUDENT', 'PARENT'], <AttendanceHome />], // SCR-52 / SCR-56, SCR-53..55
+          ['attendance/stats', ['SCHOOL_MANAGER'], <AttendanceStatsPage />], // SCR-51 UC-94
+          ['attendance/students/:studentId', ['SCHOOL_MANAGER', 'TEACHER'], <StudentAttendancePage />], // UC-92 from UC-93
+        ].map(([path, roles, page]) => (
+          <Route key={path} path={path} element={<ProtectedRoute roles={roles}>{page}</ProtectedRoute>} />
+        ))}
         {/* FE-11 Grade Management */}
         {[
           ['grades/structure', ['SCHOOL_MANAGER'], <GradeStructurePage />], // SCR-25 UC-81, UC-82

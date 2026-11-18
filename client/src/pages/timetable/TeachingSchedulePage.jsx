@@ -100,6 +100,8 @@ export default function TeachingSchedulePage() {
           <WeekTimetable week={week} view={view} teacherView mineTag={false} secondLine={(l) => `Lớp ${l.className}`} emptyText={null}
             lessonActions={(l) => (
               <>
+                {/* FE-12 (Quoc, 18/11/2026): take / view the attendance of this period (SCR-56). */}
+                <Link to={`/attendance?date=${l.date}&lesson=${l.lessonId}`} className="btn btn-primary"><Icon name="fact_check" size="sm" /> Điểm danh</Link>
                 <LessonCalendarLinks lesson={l} canCreate />
                 <Link to={`/timetable?classId=${l.classId}&date=${l.date}`} className="btn btn-secondary"><Icon name="calendar_view_week" size="sm" /> TKB lớp {l.className}</Link>
               </>

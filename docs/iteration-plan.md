@@ -28,6 +28,24 @@ reactions, attachments) is merged into one place after both are on `develop`.
 
 ## Current status (read first; update after every merge, schema patch or new decision)
 
+- **FE-12 Attendance built (18/11/2026, Quoc; not committed / not merged yet, branch to be made by Quoc):** server
+  `modules/attendance` mounted at `/attendances` (UC-90..UC-94: day view, sheet, save with the edit windows, history,
+  class report + Excel, student / parent view, school statistics + periods not taken + Excel; personal ATTENDANCE
+  notifications written straight into `notifications` + `notification_recipients`). Client `pages/attendance/`
+  (SCR-56 / SCR-52 `/attendance`, SCR-53..55 `/attendance` for student / parent, SCR-51 `/attendance/stats`,
+  `/attendance/students/:id`), menu section "Điểm danh", button "Điểm danh" in the teaching schedule lesson detail
+  (Dung's SCR-57, one link). **No schema change.** Details agreed with the lead and the assumptions to confirm:
+  business rules §12. Tested on the local DB: 63 API steps (scope, windows, deadline setting, homeroom switch, closed
+  semester, SM entry of a missed period, notifications incl. a locked parent skipped, reports, statistics, exports);
+  `npm test` and client `npm run build` pass. Not yet clicked through in a browser.
+
+- **Docs aligned with the code (18/11/2026, lead):** features already built without a use case got **UC-117..UC-128**
+  (`use-cases.md`: switch role, post approval on/off, report / handle / like school post comments, period times,
+  automatic scheduling, timetable history, teacher schedule lookup, manage / view school calendar, export grade book),
+  pages without a screen number got **SCR-74..SCR-83** (`screens.md`; SCR-4 and SCR-51..56 marked planned until FE-09 /
+  FE-12 are built) and `permissions.md` got the matching rows (notes 21–22). Existing UC / SCR numbers unchanged.
+  Final reports R1–R7 due 26/11/2026; drafts in `docs/final/drafts/`.
+
 Last updated: 18/11/2026 – three branches merged into `develop`, one merge each: FE-10 Schedule (Dung,
 `feature/fe-10-class-calendar`: UC-70..UC-75 timetables, UC-76..UC-80 class calendar, school calendar, period times,
 automatic scheduling, timetable history, teacher schedule lookup; it contains `feature/fe-10-timetable`, which needs no
@@ -36,6 +54,15 @@ reports, pin limit 3 for both feeds, attachment order and cover picture, drafts,
 branch on the remote is now in `develop`. Patches `school_events`, `activity_title`, `attachment_order`,
 `comment_likes`, `comment_reports` found on the shared DB (read-only check 18/11: **55 tables**). Build and
 `npm test` pass after each merge.
+Decided 18/11/2026 (lead, before FE-12): FE-12 Attendance is built before FE-09; why the homeroom teacher keeps
+excused ↔ unexcused until the semester closes, and attendance notifications (student + parents, one per period,
+on the first non-present take and every status change) – business rules §9 / §12. School feed: ANNOUNCEMENT shown
+as "Bài đăng", two tabs Bài đăng / Tin tức without "Tất cả" (§8; client text only, done by Quoc in Anh's FE-08 pages,
+Anh to be told; not committed yet). A school post now opens in a pop-up over the feed (`?post=<id>`,
+`SchoolPostDialog`, same as the group feed's PostDialog); `/school-feed/:id` stays for old links / notifications; after
+creating a post the feed opens with it in the pop-up (not yet clicked through in a browser). `GET /school-posts`
+(UC-58) now also returns the whole `content`, so "Hiển thị thêm" on a card shows the whole post (it stopped at the
+300-character `contentPreview` with "…"); `contentPreview` kept.
 Before: 17/11/2026 – FE-11 Grade Management (It3, Linh) merged into `develop` (UC-81..UC-89, no schema
 change) and FE-13 follow-ups merged (setting `chat.delete_for_everyone_minutes` checked 1–1440, `utils/excel.js`
 shared helpers, new Teachers / School Managers join the TEACHER_SCHOOL group). Linh's FE-11 assumptions accepted by
@@ -240,7 +267,7 @@ It2: Anh FE-08 + FE-14, Khanh FE-05 + FE-06).
   - FE-08 School Feed (Anh, It2) – merged 11/11: UC-58..UC-66 (all 9 UC), screens SCR-02 School Feed, SCR-05
     School Post Detail, SCR-31 Create School Post, SCR-06 Update School Post. The school feed is the home screen
     (`HOME_BY_ROLE`) and the first menu item of every role except System Admin. Layout per Stitch: three tabs
-    Tất cả / Thông báo / Tin tức; the "Lịch sắp tới của trường" column shows the FE-10 school calendar (Dung, 13/11).
+    Tất cả / Thông báo / Tin tức (changed 18/11 by the lead: two tabs Bài đăng / Tin tức, business rules §8); the "Lịch sắp tới của trường" column shows the FE-10 school calendar (Dung, 13/11).
     Comments are a tree (top-level newest first, replies oldest first; `utils/feedInteractions.js`
     `listComments`, shared with FE-05). Attachments: built 11/11 on the shared storage layer (Supabase Storage, UC-60..UC-62).
   - FE-08 real time (approved by the lead 09/11): room `schoolpost:<id>` (client sends `schoolpost:join` /

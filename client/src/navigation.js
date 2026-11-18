@@ -56,6 +56,16 @@ export const NAV_SECTIONS = [
     ],
   },
   {
+    // FE-12 Attendance Management (Quoc)
+    label: 'Điểm danh',
+    items: [
+      { to: '/attendance', label: 'Điểm danh lớp', icon: 'fact_check', roles: ['TEACHER'] }, // SCR-56 UC-90, UC-91, UC-93
+      { to: '/attendance', label: 'Điểm danh', icon: 'fact_check', roles: ['STUDENT', 'PARENT'] }, // SCR-53..55 UC-92
+      { to: '/attendance/stats', label: 'Thống kê điểm danh', icon: 'monitoring', roles: ['SCHOOL_MANAGER'] }, // SCR-51 UC-94
+      { to: '/attendance', label: 'Sửa điểm danh', icon: 'edit_note', roles: ['SCHOOL_MANAGER'] }, // SCR-52 UC-91
+    ],
+  },
+  {
     label: 'Tài khoản',
     items: [
       { to: '/profile', label: 'Hồ sơ của tôi', icon: 'person' }, // FE-01 UC-04
