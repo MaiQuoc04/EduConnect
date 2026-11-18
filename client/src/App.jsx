@@ -23,6 +23,7 @@ import ActivityDetailPage from './pages/extracurricular/ActivityDetailPage.jsx';
 import ActivityFormPage from './pages/extracurricular/ActivityFormPage.jsx';
 import ActivityListPage from './pages/extracurricular/ActivityListPage.jsx';
 import RegistrationListPage from './pages/extracurricular/RegistrationListPage.jsx';
+import CommentReportsPage from './pages/schoolfeed/CommentReportsPage.jsx';
 import CreateSchoolPostPage from './pages/schoolfeed/CreateSchoolPostPage.jsx';
 import SchoolFeedPage from './pages/schoolfeed/SchoolFeedPage.jsx';
 import { SCHOOL_FEED_ROLES } from './pages/schoolfeed/schoolFeedShared.jsx';
@@ -137,6 +138,15 @@ export default function App() {
           element={
             <ProtectedRoute roles={['SCHOOL_MANAGER']}>
               <UpdateSchoolPostPage />
+            </ProtectedRoute>
+          }
+        />
+        {/* FE-08 reported comments of the school feed (17/11/2026): School Manager only; the server checks it too. */}
+        <Route
+          path="comment-reports"
+          element={
+            <ProtectedRoute roles={['SCHOOL_MANAGER']}>
+              <CommentReportsPage />
             </ProtectedRoute>
           }
         />

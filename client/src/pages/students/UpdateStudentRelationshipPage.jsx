@@ -226,15 +226,14 @@ function LinkedParent({ parent, disabled, onUnlink }) {
 // only the exact number is taken. users.phone is unique, so there is at most one.
 function parentWithPhone(items, phone) {
   const parent = items.find((p) => p.phone === phone);
-  // linkedStudentCount is what SelectedParent shows (it came from the old lookup); UC-104 calls it childrenCount.
+  // SelectedParent shows linkedStudentCount; UC-104 calls it childrenCount.
   return parent ? { ...parent, linkedStudentCount: parent.childrenCount } : null;
 }
 
 // Picking an EXISTING parent account, two read-only ways, both show the parent's name before linking:
 //  - "Tìm theo số điện thoại" (default): the phone identifies a parent (required for parents, business-rules §3) and
 //    School Manager has it in the student's file. Looked up with FE-14's UC-104 parent list (GET /parents?q=<phone>,
-//    PARENT accounts only, LOCKED ones included), replacing the temporary GET /students/parents/lookup (It1 closing
-//    item #3); an exact phone match is required.
+//    PARENT accounts only, LOCKED ones included); an exact phone match is required.
 //  - "Qua anh, chị, em": search a student who studies at the school (GET /students?q=), then pick one of THEIR
 //    linked parents (GET /students/:id/parents) – useful when the phone number is not at hand.
 function PhoneLookup({ disabled, onSelect }) {

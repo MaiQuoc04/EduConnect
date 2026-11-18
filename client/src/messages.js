@@ -111,7 +111,7 @@ const ERROR_MESSAGES = {
   MSG_POST_NOT_PENDING: 'Bài viết không còn chờ duyệt. Vui lòng tải lại.',
   MSG_POST_NOT_APPROVED: 'Chỉ ẩn được bài đã duyệt.',
   MSG_PIN_LIMIT: ({ max } = {}) =>
-    `Đã đạt giới hạn ${max ?? 5} bài ghim. Vui lòng bỏ ghim bài cũ trước khi ghim bài mới.`,
+    `Đã đạt giới hạn ${max ?? 3} bài ghim. Vui lòng bỏ ghim bài cũ trước khi ghim bài mới.`,
   MSG_TEXT_TOO_LONG: ({ max } = {}) => `Nội dung tối đa ${(max ?? 5000).toLocaleString('vi-VN')} ký tự.`,
   MSG_COMMENT_NOT_FOUND: 'Không tìm thấy bình luận.',
   MSG_TOO_MANY_ATTACHMENTS: ({ max } = {}) => `Mỗi bài viết có tối đa ${max ?? 10} tệp đính kèm.`,

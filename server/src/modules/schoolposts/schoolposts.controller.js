@@ -1,6 +1,7 @@
 import { env } from '../../config/env.js';
 import { badRequest } from '../../utils/AppError.js';
 import * as service from './schoolposts.service.js';
+import * as reportsCore from '../../utils/commentReports.js';
 
 // FE-08 School Feed (owner: Anh). Validates the request before anything reaches the database; SQL lives in the service.
 
@@ -66,7 +67,9 @@ const MAX_TITLE_LENGTH = 255; // school_posts.title VARCHAR(255)
 const CREATE_FIELDS = [
   'title', 'content', 'postType', 'sendNotification', 'gradeLevelIds', 'classIds', 'targetRoles', 'attachments',
 ];
-const UPDATE_FIELDS = ['title', 'content', 'gradeLevelIds', 'classIds', 'targetRoles', 'attachments', 'removeAttachmentIds'];
+const UPDATE_FIELDS = [
+  'title', 'content', 'gradeLevelIds', 'classIds', 'targetRoles', 'attachments', 'removeAttachmentIds', 'attachmentOrder',
+];
 const PIN_FIELDS = ['isPinned'];
 
 function jsonBody(req, allowed) {
@@ -158,6 +161,33 @@ function attachmentList(body) {
   return list;
 }
 
+/**
+ * Optional attachmentOrder of UC-61 (17/11/2026): the files of the post after the change, in the order chosen on
+ * SCR-06; each item is { attachmentId } (a file the post keeps) or { storageKey } (one of this request's new files),
+ * never both. Shape only here (array, at most MAX_ATTACHMENTS items, each named once → else 400 MSG_INVALID_PARAM);
+ * the service checks that it lists exactly the files of the post.
+ */
+function attachmentOrder(body) {
+  const value = body.attachmentOrder;
+  if (value === undefined || value === null) return undefined;
+  if (!Array.isArray(value) || value.length > service.MAX_ATTACHMENTS) throw invalid('attachmentOrder');
+  const list = value.map((item) => {
+    if (!item || typeof item !== 'object' || Array.isArray(item)) throw invalid('attachmentOrder');
+    const keys = Object.keys(item);
+    if (keys.length !== 1) throw invalid('attachmentOrder');
+    if (keys[0] === 'attachmentId' && Number.isSafeInteger(item.attachmentId) && item.attachmentId >= 1) {
+      return { attachmentId: item.attachmentId };
+    }
+    if (keys[0] === 'storageKey' && typeof item.storageKey === 'string' && item.storageKey && item.storageKey.length <= 500) {
+      return { storageKey: item.storageKey };
+    }
+    throw invalid('attachmentOrder');
+  });
+  const names = list.map((x) => (x.storageKey ? `k:${x.storageKey}` : `i:${x.attachmentId}`));
+  if (new Set(names).size !== names.length) throw invalid('attachmentOrder');
+  return list;
+}
+
 // UC-60 Create School Post
 export async function create(req, res) {
   const body = jsonBody(req, CREATE_FIELDS);
@@ -198,6 +228,9 @@ export async function update(req, res) {
   // in the service, which knows how many the post has.
   if ('attachments' in body) changes.attachments = attachmentList(body);
   if ('removeAttachmentIds' in body) changes.removeAttachmentIds = idList(body, 'removeAttachmentIds');
+  // The order of the files (all of them, after this change); left out → kept, new files go last.
+  const order = attachmentOrder(body);
+  if (order) changes.attachmentOrder = order;
   res.json(await service.updateSchoolPost(req.user, schoolPostId, changes));
 }
 
@@ -266,4 +299,49 @@ export async function removeComment(req, res) {
   const schoolPostId = parseId(req.params.schoolPostId, 'schoolPostId');
   const commentId = parseId(req.params.commentId, 'commentId');
   res.json(await service.deleteSchoolPostComment(req.user, schoolPostId, commentId));
+}
+
+// Like / unlike a comment of a school post (17/11/2026, post_likes.comment_id): PUT likes, DELETE unlikes, both
+// idempotent like UC-64. Who may: the same people as UC-65 (checked in the service).
+async function setCommentLike(req, res, liked) {
+  const schoolPostId = parseId(req.params.schoolPostId, 'schoolPostId');
+  const commentId = parseId(req.params.commentId, 'commentId');
+  res.json(await service.setSchoolPostCommentLike(req.user, schoolPostId, commentId, liked));
+}
+
+export const likeComment = (req, res) => setCommentLike(req, res, true);
+export const unlikeComment = (req, res) => setCommentLike(req, res, false);
+
+// --- Comment reports (17/11/2026; rules shared with FE-05 in utils/commentReports.js) -----------------------------
+
+// POST /school-posts/:schoolPostId/comments/:commentId/report { reason, note? } → 201 (new report) or 200 (this user had
+// already reported the comment: nothing changes). Who may: checked in the service.
+export async function reportComment(req, res) {
+  const schoolPostId = parseId(req.params.schoolPostId, 'schoolPostId');
+  const commentId = parseId(req.params.commentId, 'commentId');
+  const input = reportsCore.parseReportInput(req.body ?? {});
+  const result = await service.reportSchoolPostComment(req.user, schoolPostId, commentId, input);
+  res.status(result.created ? 201 : 200).json(result);
+}
+
+// GET /comment-reports?status=PENDING|RESOLVED|DISMISSED&page=&pageSize= (School Manager). Default PENDING.
+export async function listCommentReports(req, res) {
+  const query = req.query ?? {};
+  const status = optionalString(query, 'status') || 'PENDING';
+  if (!reportsCore.REPORT_STATUSES.includes(status)) throw invalid('status');
+  res.json(
+    await service.listSchoolCommentReports(req.user, {
+      status,
+      page: optionalInt(query, 'page', { fallback: 1 }),
+      pageSize: optionalInt(query, 'pageSize', { max: MAX_PAGE_SIZE, fallback: DEFAULT_PAGE_SIZE }),
+    }),
+  );
+}
+
+// PATCH /comment-reports/:commentId { action: 'DELETE' | 'DISMISS' } (School Manager).
+export async function resolveCommentReport(req, res) {
+  const commentId = parseId(req.params.commentId, 'commentId');
+  const body = jsonBody(req, ['action']);
+  if (!reportsCore.REPORT_ACTIONS.includes(body.action)) throw invalid('action');
+  res.json(await service.resolveSchoolCommentReport(req.user, commentId, body.action));
 }

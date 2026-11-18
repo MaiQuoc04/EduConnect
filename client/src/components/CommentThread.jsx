@@ -49,7 +49,21 @@ const COMMENT_MESSAGES = {
   MSG_INVALID_PARENT_COMMENT: 'Bình luận gốc không thuộc bài viết này.',
   MSG_PARENT_COMMENT_DELETED: 'Bình luận này đã bị xoá, không thể trả lời.',
   MSG_REQUIRED: 'Trường này là bắt buộc.',
+  MSG_CANNOT_REPORT_OWN_COMMENT: 'Bạn không thể báo cáo bình luận của chính mình.', // 17/11/2026
 };
+
+/**
+ * Reasons of a comment report (17/11/2026), same codes as comment_reports_reason_check and the server's
+ * utils/commentReports.js REPORT_REASONS. Also read by the School Manager's report queue.
+ */
+export const REPORT_REASONS = [
+  { code: 'INAPPROPRIATE_LANGUAGE', label: 'Ngôn từ không phù hợp' },
+  { code: 'HARASSMENT', label: 'Quấy rối, xúc phạm hoặc bắt nạt' },
+  { code: 'SPAM', label: 'Spam, quảng cáo hoặc nội dung lặp lại' },
+  { code: 'FALSE_INFORMATION', label: 'Thông tin sai sự thật' },
+  { code: 'OTHER', label: 'Lý do khác' },
+];
+export const MAX_REPORT_NOTE_LENGTH = 500; // comment_reports.note VARCHAR(500)
 const REPLY_TARGET_GONE = 'Bình luận này đã bị xoá. Nội dung bạn đang gõ đã được chuyển vào ô bình luận ở đầu danh sách.';
 
 const cleanContent = (text) => text.normalize('NFC').trim();
@@ -243,7 +257,68 @@ function Composer({ text, setText, onSubmit, placeholder, replyingTo, onCancel, 
   );
 }
 
-function CommentNode({ node, depth, parentName, reply, onDelete }) {
+/**
+ * Like of one comment (17/11/2026), shown only when the page gives api.like (FE-08 does; FE-05 does not yet, so its
+ * threads look as before). Optimistic like the post Like button (schoolFeedShared useLike): the click shows at once;
+ * clicks made while a request is on its way only change what is wanted, and requests follow until the server agrees;
+ * an error puts back the last numbers the server confirmed. Fresh numbers from a reload / sync are taken unless a
+ * request is on its way.
+ */
+function CommentLike({ node, like }) {
+  const likedByMe = node.likedByMe ?? false;
+  const likeCount = node.likeCount ?? 0;
+  const confirmed = useRef({ likedByMe, likeCount });
+  const wanted = useRef(likedByMe);
+  const busy = useRef(false);
+  const [view, setView] = useState({ likedByMe, likeCount });
+
+  useEffect(() => {
+    if (busy.current) return;
+    confirmed.current = { likedByMe, likeCount };
+    wanted.current = likedByMe;
+    setView({ likedByMe, likeCount });
+  }, [node.commentId, likedByMe, likeCount]);
+
+  async function send() {
+    busy.current = true;
+    try {
+      while (wanted.current !== confirmed.current.likedByMe) {
+        const answer = await like.send(node.commentId, wanted.current);
+        confirmed.current = { likedByMe: answer.likedByMe, likeCount: answer.likeCount };
+      }
+      setView({ ...confirmed.current });
+    } catch (err) {
+      wanted.current = confirmed.current.likedByMe;
+      setView({ ...confirmed.current });
+      like.onError(err);
+    } finally {
+      busy.current = false;
+    }
+  }
+
+  function toggle() {
+    wanted.current = !wanted.current;
+    const { likedByMe: was, likeCount: count } = confirmed.current;
+    setView({ likedByMe: wanted.current, likeCount: count + (wanted.current ? 1 : 0) - (was ? 1 : 0) });
+    if (!busy.current) send();
+  }
+
+  return (
+    <button
+      type="button"
+      className={`ct-action ct-like${view.likedByMe ? ' is-liked' : ''}`}
+      onClick={toggle}
+      aria-pressed={view.likedByMe}
+      aria-label={`${view.likedByMe ? 'Bỏ thích' : 'Thích'} bình luận của ${node.authorName}, ${view.likeCount} lượt thích`}
+    >
+      <Icon name="favorite" size="sm" filled={view.likedByMe} />
+      Thích
+      {view.likeCount > 0 && <span className="mono">{view.likeCount.toLocaleString('vi-VN')}</span>}
+    </button>
+  );
+}
+
+function CommentNode({ node, depth, parentName, reply, like, report, onDelete }) {
   const deleted = node.isDeleted;
   const edited = Boolean(node.updatedAt) && node.updatedAt !== node.createdAt;
   const flat = depth >= MAX_INDENT_DEPTH; // the replies of this node are not indented any further
@@ -282,12 +357,30 @@ function CommentNode({ node, depth, parentName, reply, onDelete }) {
             </div>
             <p className="ct-content">{node.content}</p>
             <div className="ct-actions">
+              {like && <CommentLike node={node} like={like} />}
               {reply.enabled && (
                 <button type="button" className="ct-action" onClick={() => reply.toggle(node.commentId)} aria-expanded={replying}>
                   <Icon name="reply" size="sm" />
                   Trả lời
                 </button>
               )}
+              {report && node.authorId !== report.userId &&
+                (report.isReported(node) ? (
+                  <span className="ct-action is-reported">
+                    <Icon name="flag" size="sm" filled />
+                    Đã báo cáo
+                  </span>
+                ) : (
+                  <button
+                    type="button"
+                    className="ct-action"
+                    onClick={() => report.open(node)}
+                    aria-label={`Báo cáo bình luận của ${node.authorName}`}
+                  >
+                    <Icon name="flag" size="sm" />
+                    Báo cáo
+                  </button>
+                ))}
               {node.canDelete && (
                 <button type="button" className="ct-action is-danger" onClick={() => onDelete(node)}>
                   <Icon name="delete" size="sm" />
@@ -323,6 +416,8 @@ function CommentNode({ node, depth, parentName, reply, onDelete }) {
               depth={depth + 1}
               parentName={deleted ? null : node.authorName}
               reply={reply}
+              like={like}
+              report={report}
               onDelete={onDelete}
             />
           ))}
@@ -383,6 +478,132 @@ function DeleteDialog({ comment, busy, onCancel, onConfirm }) {
 }
 
 /**
+ * Report of one comment (17/11/2026): a reason from REPORT_REASONS and an optional note ("Lý do khác" needs one, as the
+ * server). onSubmit({ reason, note }) resolves { ok: true } or { error: 'Vietnamese text' }; never rejects. The dialog
+ * says the author will not learn who reported (decided 17/11/2026) and that nothing changes until a moderator decides.
+ */
+function ReportDialog({ comment, onCancel, onSubmit }) {
+  const ref = useRef(null);
+  const id = useId();
+  const open = Boolean(comment);
+  const [reason, setReason] = useState('');
+  const [note, setNote] = useState('');
+  const [error, setError] = useState('');
+  const [busy, setBusy] = useState(false);
+  useEffect(() => {
+    const dialog = ref.current;
+    if (open && !dialog.open) {
+      setReason('');
+      setNote('');
+      setError('');
+      dialog.showModal();
+    }
+    if (!open && dialog.open) dialog.close();
+  }, [open]);
+  const noteLength = lengthOf(note);
+  const noteLeft = MAX_REPORT_NOTE_LENGTH - noteLength;
+  const needsNote = reason === 'OTHER' && noteLength === 0;
+  const canSend = Boolean(reason) && !needsNote && noteLeft >= 0 && !busy;
+
+  async function send(e) {
+    e.preventDefault();
+    if (!canSend) return;
+    setBusy(true);
+    setError('');
+    const result = await onSubmit({ reason, ...(noteLength ? { note: cleanContent(note) } : {}) });
+    setBusy(false);
+    if (result.error) setError(result.error);
+  }
+
+  return (
+    <dialog
+      ref={ref}
+      className="sf-dialog ct-report-dialog"
+      aria-labelledby={`${id}-title`}
+      onCancel={(e) => {
+        e.preventDefault();
+        if (!busy) onCancel();
+      }}
+    >
+      <form onSubmit={send} noValidate>
+        <div className="sf-dialog-head">
+          <Icon name="flag" />
+          <h2 id={`${id}-title`} className="title-sm">
+            Báo cáo bình luận
+          </h2>
+        </div>
+        {comment?.content && (
+          <p className="ct-dialog-quote">
+            <span className="ct-strong">{comment.authorName}:</span> {comment.content}
+          </p>
+        )}
+        <fieldset className="ct-report-reasons" disabled={busy}>
+          <legend className="ct-report-legend">Lý do báo cáo</legend>
+          {REPORT_REASONS.map((r) => (
+            <label key={r.code} className={`ct-report-reason${reason === r.code ? ' is-checked' : ''}`}>
+              <input
+                type="radio"
+                name={`${id}-reason`}
+                value={r.code}
+                checked={reason === r.code}
+                onChange={() => {
+                  setReason(r.code);
+                  setError('');
+                }}
+              />
+              <span>{r.label}</span>
+            </label>
+          ))}
+        </fieldset>
+        <div className="ct-report-note">
+          <label htmlFor={`${id}-note`} className="ct-report-legend">
+            Ghi chú{' '}
+            <span className="caption muted">
+              {reason === 'OTHER' ? '(bắt buộc khi chọn “Lý do khác”)' : '(không bắt buộc)'}
+            </span>
+          </label>
+          <textarea
+            id={`${id}-note`}
+            className="input"
+            rows={3}
+            value={note}
+            onChange={(e) => {
+              setNote(e.target.value);
+              setError('');
+            }}
+            disabled={busy}
+            placeholder="Mô tả thêm để người kiểm duyệt dễ xem xét…"
+            aria-invalid={noteLeft < 0}
+            aria-describedby={`${id}-note-count`}
+          />
+          <span id={`${id}-note-count`} className={`caption muted mono ct-report-count${noteLeft < 0 ? ' ct-over' : ''}`}>
+            {noteLength.toLocaleString('vi-VN')} / {MAX_REPORT_NOTE_LENGTH.toLocaleString('vi-VN')}
+          </span>
+        </div>
+        <div className="notice">
+          <Icon name="shield_person" size="sm" />
+          <p>Người viết bình luận sẽ không biết ai đã báo cáo. Bình luận vẫn hiển thị cho đến khi được xem xét.</p>
+        </div>
+        {error && (
+          <p className="field-error" role="alert">
+            {error}
+          </p>
+        )}
+        <div className="sf-dialog-actions">
+          <button type="button" className="btn btn-secondary" onClick={onCancel} disabled={busy}>
+            Huỷ
+          </button>
+          <button type="submit" className="btn btn-primary" disabled={!canSend}>
+            <Icon name={busy ? 'progress_activity' : 'flag'} size="sm" className={busy ? 'ct-spin' : undefined} />
+            {busy ? 'Đang gửi…' : 'Gửi báo cáo'}
+          </button>
+        </div>
+      </form>
+    </dialog>
+  );
+}
+
+/**
  * Comment tree of one post: count heading, composer, nested comments with reply / delete, "load more" by top-level
  * comment, optional real-time updates. Give it a `key` of the post id so it starts fresh for another post.
  *
@@ -391,6 +612,13 @@ function DeleteDialog({ comment, busy, onCancel, onConfirm }) {
  *   - list({ page, pageSize }, { signal }) → Promise<{ items, total, commentCount }>
  *   - create({ content, parentCommentId? }) → Promise<node>   (parentCommentId only for a reply)
  *   - remove(commentId) → Promise<{ commentCount }>
+ *   - like(commentId, liked) → Promise<{ likeCount, likedByMe }>   OPTIONAL (17/11/2026). Given: every comment that is
+ *     not deleted shows a "Thích" button with its count (nodes carry likeCount / likedByMe from the list). Not given
+ *     (FE-05 today): no button, nothing else changes. liked true = like (PUT), false = unlike (DELETE).
+ *   - report(commentId, { reason, note? }) → Promise<{ reportedByMe: true }>   OPTIONAL (17/11/2026). Given: every
+ *     comment that is not deleted and not the reader's own shows "Báo cáo" (dialog: reason + optional note); once sent
+ *     – or when the node already has reportedByMe from the list – it shows "Đã báo cáo" and cannot be sent again.
+ *     Not given (FE-05 today; FE-08 for a School Manager): no button, nothing else changes.
  * @param {number} [props.initialCount] the post's commentCount already known (shown until the first page arrives)
  * @param {(count: number) => void} [props.onCountChange] called when the count changes (to refresh a counter elsewhere)
  * @param {Record<string, string>} [props.messages] extra Vietnamese texts by error code for feature-specific codes
@@ -432,6 +660,8 @@ export default function CommentThread({
   const [replyText, setReplyText] = useState('');
   const [mainText, setMainText] = useState('');
   const [deleting, setDeleting] = useState(null); // { comment, busy }
+  const [reporting, setReporting] = useState(null); // the comment whose report dialog is open
+  const [reportedIds, setReportedIds] = useState(() => new Set()); // reported from this tab
   const [attempt, setAttempt] = useState(0);
   const [newAbove, setNewAbove] = useState([]); // ids of others' new comments inserted above the screen
   const mounted = useRef(true);
@@ -762,6 +992,52 @@ export default function CommentThread({
     }
   }
 
+  // Comment likes: only when the page gives api.like (FE-08) and the thread can be written to (canWrite false = read
+  // only, FE-05); otherwise null and no button anywhere.
+  const like = api.like && canWrite
+    ? {
+        send: (commentId, liked) => apiRef.current.like(commentId, liked),
+        onError: (err) => {
+          if (!mounted.current) return;
+          if (err?.code === 'MSG_COMMENT_NOT_FOUND') scheduleSync(); // deleted meanwhile: show the tree as it is now
+          toast(textOf(err, 'Không cập nhật được lượt thích. Vui lòng thử lại.', 'like'), { type: 'error' });
+        },
+      }
+    : null;
+
+  // Comment reports: only when the page gives api.report (FE-08 for Teacher / Student / Parent) and the thread can be
+  // written to; otherwise null and no button anywhere. Own comments never show it (the server refuses them too).
+  const report =
+    api.report && canWrite && user
+      ? {
+          userId: user.id, // /auth/me returns the user id as `id`
+          isReported: (node) => Boolean(node.reportedByMe) || reportedIds.has(node.commentId),
+          open: (node) => setReporting(node),
+        }
+      : null;
+
+  async function sendReport(input) {
+    const target = reporting;
+    if (!target) return { ok: true };
+    try {
+      await apiRef.current.report(target.commentId, input);
+      if (!mounted.current) return { ok: true };
+      setReportedIds((ids) => new Set(ids).add(target.commentId));
+      setReporting(null);
+      toast('Đã gửi báo cáo. Cảm ơn bạn đã góp phần giữ bảng tin lành mạnh.');
+      return { ok: true };
+    } catch (err) {
+      if (!mounted.current) return { ok: true };
+      if (err?.code === 'MSG_COMMENT_NOT_FOUND') {
+        setReporting(null);
+        toast('Bình luận này đã bị xoá.');
+        scheduleSync();
+        return { ok: true };
+      }
+      return { error: textOf(err, 'Không gửi được báo cáo. Vui lòng thử lại.', 'report') };
+    }
+  }
+
   const reply = {
     enabled: canWrite,
     enterToSend,
@@ -829,7 +1105,7 @@ export default function CommentThread({
       {status === 'ready' && roots.length > 0 && (
         <ul className="ct-list" ref={listRef}>
           {roots.map((node) => (
-            <CommentNode key={node.commentId} node={node} depth={0} parentName={null} reply={reply} onDelete={(c) => setDeleting({ comment: c, busy: false })} />
+            <CommentNode key={node.commentId} node={node} depth={0} parentName={null} reply={reply} like={like} report={report} onDelete={(c) => setDeleting({ comment: c, busy: false })} />
           ))}
         </ul>
       )}
@@ -853,6 +1129,7 @@ export default function CommentThread({
         onCancel={() => setDeleting(null)}
         onConfirm={confirmDelete}
       />
+      {report && <ReportDialog comment={reporting} onCancel={() => setReporting(null)} onSubmit={sendReport} />}
     </section>
   );
 }

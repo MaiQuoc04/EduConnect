@@ -1,0 +1,64 @@
+/* Reported comments of the school feed (FE-08, 17/11/2026). Ink & Paper: one card per reported comment. */
+.comment-reports { max-width: 880px; }
+.comment-reports .page-header .btn { flex: none; }
+.cr-toolbar { margin-bottom: 16px; overflow-x: auto; }
+.cr-list { display: grid; gap: 16px; }
+.cr-list.is-loading { opacity: 0.6; pointer-events: none; transition: opacity 0.15s; }
+
+.cr-item { display: grid; gap: 14px; padding: 20px 24px; }
+.cr-item-head { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 12px; }
+.cr-count {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 2px 10px 2px 8px;
+  border-radius: 999px;
+  background: var(--red-bg);
+  color: var(--red-pen);
+  font-size: 13px;
+  font-weight: 500;
+}
+.cr-count .mono { font-weight: 600; }
+
+.cr-comment { display: flex; gap: 12px; align-items: flex-start; }
+.cr-comment-body { flex: 1; min-width: 0; display: grid; gap: 4px; justify-items: start; }
+.cr-author { font-weight: 600; color: var(--graphite-900); overflow-wrap: anywhere; }
+.cr-author .caption { font-weight: 400; }
+.cr-content {
+  padding-left: 12px;
+  border-left: 2px solid var(--ink-200);
+  font-family: var(--font-serif);
+  line-height: 24px;
+  color: var(--graphite-700);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.cr-content.is-deleted { color: var(--graphite-500); text-decoration: line-through; text-decoration-color: var(--graphite-300); }
+
+.cr-post { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 6px; min-width: 0; }
+.cr-post > .icon { color: var(--ink-600); }
+.cr-post-title { font-weight: 500; overflow-wrap: anywhere; min-width: 0; }
+a.cr-post-title { color: var(--ink-700); text-decoration: none; }
+a.cr-post-title:hover { text-decoration: underline; }
+
+.cr-reasons { display: grid; gap: 8px; }
+.cr-notes { display: grid; gap: 4px; margin: 0; padding: 0 0 0 16px; color: var(--graphite-700); }
+.cr-notes li { overflow-wrap: anywhere; }
+
+.cr-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
+  padding-top: 14px;
+  border-top: 1px solid var(--graphite-100);
+}
+.cr-decided { display: flex; align-items: center; gap: 6px; padding-top: 12px; border-top: 1px solid var(--graphite-100); }
+.cr-spin { animation: cr-spin 0.9s linear infinite; }
+@keyframes cr-spin { to { transform: rotate(360deg); } }
+
+@media (max-width: 640px) {
+  .comment-reports .page-header { flex-direction: column; }
+  .cr-item { padding: 16px; }
+  .cr-actions .btn { flex: 1 1 0; height: 44px; justify-content: center; }
+}

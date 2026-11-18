@@ -323,28 +323,6 @@ export async function getStudentParents(studentId, db = pool) {
 
 export const RELATIONSHIP_TYPES = ['FATHER', 'MOTHER', 'GUARDIAN']; // student_parents.relationship_type has no CHECK
 
-// TEMPORARY until FE-14 has UC-104 View Parent List (see lookupParent in the controller): remove with it.
-// One parent account by its exact phone (users.phone is UNIQUE; `phone` is already normalised). Only an account
-// that really has the PARENT role (as linkParent checks) is returned: a teacher's or student's phone gives null,
-// so the lookup never reveals that another kind of account exists. LOCKED accounts are returned (they can still be
-// linked, see linkParent). linkedStudentCount = all students linked to this parent, so School Manager notices a
-// parent with several children (business-rules §3); there is no limit on children per parent.
-// address lives on users (moved from parents by the team lead on Supabase). Read only, not logged.
-export async function findParentByPhone(phone) {
-  const { rows } = await pool.query(
-    `SELECT p.parent_id AS "parentId", u.user_id AS "userId", u.full_name AS "fullName",
-            u.avatar_url AS "avatarUrl", u.phone, u.email, p.occupation, u.address, u.status AS "accountStatus",
-            (SELECT COUNT(*) FROM student_parents sp WHERE sp.parent_id = p.parent_id) AS "linkedStudentCount"
-     FROM users u
-     JOIN parents p ON p.user_id = u.user_id
-     WHERE u.phone = $1
-       AND EXISTS (SELECT 1 FROM user_roles ur JOIN roles r ON r.role_id = ur.role_id
-                   WHERE ur.user_id = u.user_id AND r.role_code = 'PARENT')`,
-    [phone],
-  );
-  return rows[0] ?? null;
-}
-
 // Classes whose groups a parent link concerns: every class the student is STUDYING in whose school year has not
 // ended yet. Usually one class; two after a promotion (UC-11 keeps last year's enrollment STUDYING) until the old
 // year ends. ASSUMPTION: a year that has ended is left out because its groups are read only (business-rules §4),

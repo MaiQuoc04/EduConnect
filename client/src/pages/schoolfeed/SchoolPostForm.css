@@ -299,3 +299,36 @@
 /* Footer line telling why "Đăng bài" / "Lưu thay đổi" is locked. */
 .spf-footer-note.is-blocked { color: var(--amber); }
 .spf-footer-note.is-blocked .icon { color: var(--amber); }
+
+/* Notes and guidance of SCR-31 / SCR-06 (17/11/2026): the grey 12px lines were hard to read. Same calm ink as the
+   rest of the "Ink & Paper" text, a token, never a warning colour: the type explanation, the audience and role help,
+   the notification help, the attachment note, the "locked" note of an edited post and the footer line (the blocked
+   footer line keeps its amber). Scoped to .is-school, so the FE-05 group form (same .spf-* shell) is unchanged. */
+.school-post-form.is-school .spf-type-help,
+.school-post-form.is-school .spf-audience-help,
+.school-post-form.is-school .spf-roles-help,
+.school-post-form.is-school .spf-switch-text .caption,
+.school-post-form.is-school .ap-help,
+.school-post-form.is-school .spf-locked-note,
+.school-post-form.is-school .spf-footer-note:not(.is-blocked) { color: var(--ink-800); }
+.school-post-form.is-school .spf-locked-note .icon,
+.school-post-form.is-school .spf-footer-note:not(.is-blocked) .icon { color: var(--ink-600); }
+
+/* SCR-31 draft (schoolPostDraft.js): "Đang tiếp tục bản nháp…" at the top of the sheet, "Đã lưu nháp lúc …" under
+   the page title. */
+.school-post-form .spf-draft-notice { align-items: center; margin: 24px 24px 0; }
+.school-post-form .spf-draft-notice p { flex: 1; min-width: 0; }
+.spf-draft-saved { display: inline-flex; align-items: center; gap: 6px; margin-top: 6px; color: var(--graphite-700); }
+.spf-draft-saved .icon { color: var(--ink-600); }
+@media (max-width: 640px) {
+  .school-post-form .spf-draft-notice { flex-wrap: wrap; margin: 16px 16px 0; }
+  .school-post-form .spf-draft-notice p { flex-basis: calc(100% - 36px); }
+  .school-post-form .spf-draft-notice .btn { margin-left: auto; }
+}
+
+/* Grade chosen in part (17/11/2026, "chọn khối rồi bỏ bớt lớp"): ink outline, dash in the box, "(3/4 lớp)"; clearly
+   between "off" (plain) and "cả khối" (solid ink with a tick). */
+.spf-chip.is-partial { border-color: var(--ink-600); background: var(--ink-50); color: var(--ink-800); }
+.spf-chip.is-partial .spf-chip-box { border-color: var(--ink-600); background: var(--white); }
+.spf-chip.is-partial .spf-chip-hint { color: var(--ink-700); font-weight: 500; }
+.spf-audience-help.spf-grade-rule { margin-top: -6px; }

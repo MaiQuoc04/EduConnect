@@ -131,6 +131,16 @@ export function audienceLabels(postType, audience, options, extraClasses = []) {
   const classes = new Set(audience.classIds);
   const labels = options.grades.filter((g) => grades.has(g.gradeLevelId)).map((g) => `Khối ${g.gradeLevelName}`);
   const named = new Set();
+  // A grade with only SOME of its classes (17/11/2026, "chọn khối rồi bỏ bớt lớp"): never "Khối 10", but
+  // "Khối 10 (3/4 lớp): 10A2, 10A3, 10D1", every class named. Classes of no known grade / of another year: "Lớp X".
+  for (const g of options.grades) {
+    if (grades.has(g.gradeLevelId)) continue;
+    const all = options.classes.filter((c) => c.gradeLevelName === g.gradeLevelName);
+    const chosen = all.filter((c) => classes.has(c.classId));
+    if (!chosen.length) continue;
+    chosen.forEach((c) => named.add(c.classId));
+    labels.push(`Khối ${g.gradeLevelName} (${chosen.length}/${all.length} lớp): ${chosen.map((c) => c.className).join(', ')}`);
+  }
   for (const c of [...options.classes, ...extraClasses]) {
     if (!classes.has(c.classId) || named.has(c.classId)) continue;
     named.add(c.classId);
@@ -144,19 +154,19 @@ export function audienceLabels(postType, audience, options, extraClasses = []) {
  * empty when off; on = solid ink chip with a white tick. `covered` = a class already inside a chosen grade (ticked,
  * dashed, not clickable). `hint` = a short muted note after the name ("chưa có lớp").
  */
-function OptionChip({ on, covered, bad, disabled, onClick, children, hint, title, describedBy }) {
+function OptionChip({ on, partial, covered, bad, disabled, onClick, children, hint, title, describedBy }) {
   return (
     <button
       type="button"
-      className={`spf-chip${on ? ' is-on' : ''}${covered ? ' is-covered' : ''}${bad ? ' is-bad' : ''}`}
-      aria-pressed={Boolean(on || covered)}
+      className={`spf-chip${on ? ' is-on' : ''}${partial ? ' is-partial' : ''}${covered ? ' is-covered' : ''}${bad ? ' is-bad' : ''}`}
+      aria-pressed={partial ? 'mixed' : Boolean(on || covered)}
       disabled={disabled || covered}
       onClick={onClick}
       title={title}
       aria-describedby={describedBy}
     >
       <span className="spf-chip-box" aria-hidden="true">
-        {(on || covered) && <Icon name="check" size="sm" />}
+        {partial ? <Icon name="remove" size="sm" /> : (on || covered) && <Icon name="check" size="sm" />}
       </span>
       <span className="spf-chip-text">{children}</span>
       {hint && <span className="spf-chip-hint">{hint}</span>}
@@ -207,8 +217,9 @@ function RoleRow({ id, roles, onChange, disabled }) {
  * The whole audience, top to bottom as a school office thinks it: grades, classes of the current year, "Bỏ chọn khối
  * và lớp", then the roles that narrow it, then one "Gửi tới" line for both dimensions.
  * Multi-select of grades and classes as toggle chips (wrapping rows, so nothing overflows on a narrow screen).
- * - Choosing a grade removes its classes from the selection (the grade already covers them); their chips show as
- *   covered. ASSUMPTION: a class inside a chosen grade adds nobody, so keeping both is pointless.
+ * - Choosing a grade removes its classes from the selection (the grade already covers them) and shows all its classes
+ *   ticked; un-ticking one of them sends the other classes instead of the grade (17/11/2026, see toggleClass).
+ *   ASSUMPTION: a class inside a chosen grade adds nobody, so keeping both is pointless.
  * - "Toàn trường" (NEWS) / "Bỏ chọn khối và lớp" (ANNOUNCEMENT) clears the selection (not the roles).
  * - staleClasses: targets of an edited post outside the current year; they can only be removed (UC-61 refuses them).
  */
@@ -253,19 +264,50 @@ export function AudiencePicker({
     .map((g) => ({ ...g, classes: needle ? g.classes.filter((c) => fold(c.className).includes(needle)) : g.classes }))
     .filter((g) => g.classes.length || (!needle && g.gradeLevelId !== null && options.classes.length > 0));
 
+  // "Chọn khối rồi bỏ bớt lớp" (17/11/2026), converted HERE only; the data sent stays { gradeLevelIds, classIds }:
+  //   - a whole grade  = its gradeLevelId (every class of it, also a class opened later in that grade);
+  //   - part of a grade = the chosen classIds only (the grade is not sent).
+  // A grade is in one of three states: off, whole (gradeLevelIds has it), partial (some of its classes in classIds).
+  const classesOf = (grade) => byGrade.find((g) => g.gradeLevelId === grade.gradeLevelId)?.classes ?? [];
+  const gradeOfClass = (classId) =>
+    byGrade.find((g) => g.gradeLevelId !== null && g.classes.some((c) => c.classId === classId)) ?? null;
+  const chosenIn = (grade) => classesOf(grade).filter((c) => chosenClasses.has(c.classId)).length;
+
+  // off → whole grade (its classes leave classIds: the grade covers them). whole → off. partial → off: un-ticking a
+  // grade removes every class of it. ASSUMPTION: a partial grade is cleared, not completed – a click never adds
+  // recipients the manager took out; a second click then chooses the whole grade.
   function toggleGrade(grade) {
-    if (chosenGrades.has(grade.gradeLevelId)) {
-      onChange({ ...value, gradeLevelIds: value.gradeLevelIds.filter((x) => x !== grade.gradeLevelId) });
+    const inGrade = new Set(classesOf(grade).map((c) => c.classId));
+    const classIds = value.classIds.filter((x) => !inGrade.has(x));
+    if (chosenGrades.has(grade.gradeLevelId) || chosenIn(grade) > 0) {
+      onChange({ gradeLevelIds: value.gradeLevelIds.filter((x) => x !== grade.gradeLevelId), classIds });
       return;
     }
-    const inGrade = new Set(options.classes.filter((c) => c.gradeLevelName === grade.gradeLevelName).map((c) => c.classId));
-    onChange({
-      gradeLevelIds: [...value.gradeLevelIds, grade.gradeLevelId],
-      classIds: value.classIds.filter((x) => !inGrade.has(x)),
-    });
+    onChange({ gradeLevelIds: [...value.gradeLevelIds, grade.gradeLevelId], classIds });
   }
+  // Un-ticking a class of a WHOLE grade turns the grade into its other classes. Ticking the last missing class of a
+  // grade turns the classes back into the whole grade.
+  // ASSUMPTION (17/11/2026): every class of a grade chosen = the gradeLevelId is sent ("cả khối"), as before this
+  // change: a class opened later in that grade gets the post too, as "Khối 10" says. The form says so under the
+  // classes. A post that already had every class of a grade one by one (UC-61) is left as it is until a class is clicked.
   function toggleClass(classId) {
+    const grade = gradeOfClass(classId);
+    if (grade && chosenGrades.has(grade.gradeLevelId)) {
+      onChange({
+        gradeLevelIds: value.gradeLevelIds.filter((x) => x !== grade.gradeLevelId),
+        classIds: [...value.classIds, ...grade.classes.map((c) => c.classId).filter((x) => x !== classId)],
+      });
+      return;
+    }
     const classIds = chosenClasses.has(classId) ? value.classIds.filter((x) => x !== classId) : [...value.classIds, classId];
+    const now = new Set(classIds);
+    if (grade && grade.classes.length && grade.classes.every((c) => now.has(c.classId))) {
+      onChange({
+        gradeLevelIds: [...value.gradeLevelIds, grade.gradeLevelId],
+        classIds: classIds.filter((x) => !grade.classes.some((c) => c.classId === x)),
+      });
+      return;
+    }
     onChange({ ...value, classIds });
   }
 
@@ -279,8 +321,13 @@ export function AudiencePicker({
       </legend>
       <p className="field-help spf-audience-help">
         {announcement
-          ? 'Thông báo cần ít nhất một khối hoặc một lớp. Chọn cả khối thì mọi lớp trong khối đều nhận. Sau đó có thể thu hẹp theo vai trò.'
-          : 'Không chọn khối hay lớp nào thì tin tức dành cho toàn trường. Chọn cả khối thì mọi lớp trong khối đều nhận. Sau đó có thể thu hẹp theo vai trò.'}
+          ? 'Thông báo cần ít nhất một khối hoặc một lớp. Chọn khối thì mọi lớp của khối được chọn; bỏ bớt lớp nào thì lớp đó không nhận bài. Sau đó có thể thu hẹp theo vai trò.'
+          : 'Không chọn khối hay lớp nào thì tin tức dành cho toàn trường. Chọn khối thì mọi lớp của khối được chọn; bỏ bớt lớp nào thì lớp đó không nhận bài. Sau đó có thể thu hẹp theo vai trò.'}
+      </p>
+      {/* 17/11/2026: "cả khối" and "some classes" do not mean the same thing for classes opened later. */}
+      <p className="field-help spf-audience-help spf-grade-rule">
+        Khi đủ mọi lớp của một khối, bài được gửi cho cả khối: lớp mở thêm sau này trong khối cũng nhận. Khi đã bỏ bớt
+        lớp, bài chỉ gửi cho đúng các lớp đang chọn.
       </p>
 
       {options.loading && <p className="caption muted spf-audience-loading">Đang tải danh sách khối và lớp…</p>}
@@ -310,18 +357,34 @@ export function AudiencePicker({
                   Toàn trường
                 </OptionChip>
               )}
-              {options.grades.map((g) => (
-                <OptionChip
-                  key={g.gradeLevelId}
-                  on={chosenGrades.has(g.gradeLevelId)}
-                  bad={badGrades.has(g.gradeLevelId)}
-                  disabled={disabled}
-                  onClick={() => toggleGrade(g)}
-                  hint={emptyGradeIds.has(g.gradeLevelId) ? 'chưa có lớp' : undefined}
-                >
-                  Khối {g.gradeLevelName}
-                </OptionChip>
-              ))}
+              {options.grades.map((g) => {
+                // Three states that look different: off (plain), whole grade (solid ink, tick, "cả khối"), partial
+                // (ink outline, dash, "(3/4 lớp)").
+                const whole = chosenGrades.has(g.gradeLevelId);
+                const total = classesOf(g).length;
+                const some = whole ? 0 : chosenIn(g);
+                const hint = emptyGradeIds.has(g.gradeLevelId)
+                  ? 'chưa có lớp'
+                  : whole
+                    ? 'cả khối'
+                    : some > 0
+                      ? `(${some}/${total} lớp)`
+                      : undefined;
+                return (
+                  <OptionChip
+                    key={g.gradeLevelId}
+                    on={whole}
+                    partial={some > 0}
+                    bad={badGrades.has(g.gradeLevelId)}
+                    disabled={disabled}
+                    onClick={() => toggleGrade(g)}
+                    hint={hint}
+                    title={some > 0 ? `Đang chọn ${some}/${total} lớp của Khối ${g.gradeLevelName}. Bấm để bỏ hết.` : undefined}
+                  >
+                    Khối {g.gradeLevelName}
+                  </OptionChip>
+                );
+              })}
             </div>
             {chosenEmptyGrades.length > 0 && (
               <div className="notice amber spf-empty-grade" role="status">
@@ -371,16 +434,17 @@ export function AudiencePicker({
                   ) : (
                     <div className="spf-chips">
                       {g.classes.map((c) => {
-                        const on = chosenClasses.has(c.classId);
+                        // A class of a whole grade is ticked too and can be un-ticked (the grade becomes its other
+                        // classes, see toggleClass).
+                        const on = gradeOn || chosenClasses.has(c.classId);
                         return (
                           <OptionChip
                             key={c.classId}
                             on={on}
-                            covered={gradeOn && !on}
                             bad={badClasses.has(c.classId)}
                             disabled={disabled}
                             onClick={() => toggleClass(c.classId)}
-                            title={gradeOn && !on ? `Đã gồm trong Khối ${g.gradeLevelName}` : undefined}
+                            title={gradeOn ? `Cả Khối ${g.gradeLevelName} đang được chọn. Bấm để bỏ riêng lớp này.` : undefined}
                           >
                             {c.className}
                           </OptionChip>
@@ -591,7 +655,9 @@ export function PostPreview({ postType, title, content, labels, roles, authorNam
   const announcement = postType === 'ANNOUNCEMENT';
   const cleanTitle = normalizeTitle(title);
   const text = normalizeContent(content);
-  const picture = files.find((f) => f.mimeType?.startsWith('image/') && f.previewUrl)?.previewUrl;
+  // The first image of the list is the picture of the card (17/11/2026: the author orders the files); without a
+  // preview of its own (a file kept by the draft) the card shows no picture rather than another image.
+  const picture = files.find((f) => f.mimeType?.startsWith('image/'))?.previewUrl;
   return (
     <aside className="spf-preview" aria-label="Xem trước trên bảng tin">
       <div className="spf-preview-head">

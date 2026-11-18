@@ -21,6 +21,14 @@ import { objectInfo, objectUrl, SIGNED_URL_TTL_SECONDS, signedUrl } from './stor
 //   - The file lives in the PRIVATE attachments bucket; the row keeps bucket + storage_key, and a short-lived link is
 //     signed every time the row is read (listAttachments). file_url is the unsigned URL, for reference only.
 //   - Rows are soft deleted (deleted_at); the object stays in the bucket, but nobody gets a link to it any more.
+//   - Order (17/11/2026, patch_v0.3_attachment_order.sql): attachments.sort_order is the position chosen by the author
+//     (0 = first), NULL when none was chosen. Every read sorts by sort_order NULLS LAST, then created_at, then
+//     attachment_id, so rows without an order (all FE-05 / FE-06 rows today) come in upload order as before. The first
+//     IMAGE in that order is the picture of the card (summarizeAttachments). Only FE-08 writes an order for now:
+//     insertAttachments with sortOrder on the rows, setAttachmentOrder for a reorder.
+
+// The order every read uses (see above). A constant, never built from input.
+const FILE_ORDER = 'sort_order NULLS LAST, created_at, attachment_id';
 
 // The only three column names that ever reach the SQL text (a column cannot be a $n placeholder).
 export const ATTACHMENT_COLUMNS = Object.freeze({ GROUP_POST: 'post_id', MESSAGE: 'message_id', SCHOOL_POST: 'school_post_id' });
@@ -50,9 +58,11 @@ function idOf(target) {
  * { column: 'message_id', id }, FE-08 { column: 'school_post_id', id }.
  * Refuses (400) a key that was not confirmed into this feature's folder, and (409 DUPLICATE) a file that is already
  * attached somewhere: one uploaded file belongs to one post or message.
+ * Optional sortOrder on a row (17/11/2026, FE-08): its position in the post (integer 0..32767). Rows without it get
+ * sort_order NULL; when NO row has it, the statement is exactly the one of before (FE-05 / FE-06 unchanged).
  * @param {{ column: 'post_id' | 'message_id' | 'school_post_id', id: number }} target
  * @param {Array<{ storageKey?: string, bucket?: string, fileUrl?: string, fileName: string, mimeType: string,
- *   sizeBytes: number, uploadedBy: number }>} rows
+ *   sizeBytes: number, uploadedBy: number, sortOrder?: number }>} rows
  * @returns {Promise<number[]>} the new attachment ids, in the order of rows
  */
 export async function insertAttachments(target, rows, db = pool) {
@@ -73,6 +83,7 @@ export async function insertAttachments(target, rows, db = pool) {
     );
     if (taken.length) throw new AppError(409, 'DUPLICATE', 'This file is already attached.');
   }
+  if (clean.some((r) => r.sortOrder !== null)) return insertOrdered(column, id, clean, db);
   const { rows: inserted } = await db.query(
     `INSERT INTO attachments (${column}, file_url, file_name, mime_type, size_bytes, uploaded_by, storage_key, bucket, created_at)
      SELECT $1, u.file_url, u.file_name, u.mime_type, u.size_bytes, u.uploaded_by, u.storage_key, u.bucket, NOW()
@@ -94,7 +105,42 @@ export async function insertAttachments(target, rows, db = pool) {
   return inserted.map((r) => r.attachmentId);
 }
 
+// insertAttachments with sort_order (some row has sortOrder): the same statement plus one column.
+async function insertOrdered(column, id, clean, db) {
+  const { rows: inserted } = await db.query(
+    `INSERT INTO attachments (${column}, file_url, file_name, mime_type, size_bytes, uploaded_by, storage_key, bucket, sort_order, created_at)
+     SELECT $1, u.file_url, u.file_name, u.mime_type, u.size_bytes, u.uploaded_by, u.storage_key, u.bucket, u.sort_order, NOW()
+     FROM unnest($2::varchar[], $3::varchar[], $4::varchar[], $5::bigint[], $6::bigint[], $7::varchar[], $8::varchar[], $9::smallint[])
+          WITH ORDINALITY AS u(file_url, file_name, mime_type, size_bytes, uploaded_by, storage_key, bucket, sort_order, ord)
+     ORDER BY u.ord
+     RETURNING attachment_id AS "attachmentId"`,
+    [
+      id,
+      clean.map((r) => r.fileUrl),
+      clean.map((r) => r.fileName),
+      clean.map((r) => r.mimeType),
+      clean.map((r) => r.sizeBytes),
+      clean.map((r) => r.uploadedBy),
+      clean.map((r) => r.storageKey),
+      clean.map((r) => r.bucket),
+      clean.map((r) => r.sortOrder),
+    ],
+  );
+  return inserted.map((r) => r.attachmentId);
+}
+
+function sortOrderOf(row) {
+  if (row?.sortOrder === undefined || row.sortOrder === null) return null;
+  const value = Number(row.sortOrder);
+  if (!Number.isInteger(value) || value < 0 || value > 32767) throw new Error('attachments: sortOrder must be 0..32767'); // caller bug -> 500
+  return value;
+}
+
 function cleanRow(row, column) {
+  return { ...cleanFile(row, column), sortOrder: sortOrderOf(row) };
+}
+
+function cleanFile(row, column) {
   const fileName = typeof row?.fileName === 'string' ? row.fileName.trim() : '';
   const mimeType = typeof row?.mimeType === 'string' ? row.mimeType.trim().toLowerCase() : '';
   const sizeBytes = Number(row?.sizeBytes);
@@ -120,7 +166,7 @@ function cleanRow(row, column) {
 }
 
 /**
- * Attachments of one post / message that are not deleted, oldest first, each with a link signed NOW from its
+ * Attachments of one post / message that are not deleted, in their order (sort_order, then oldest first), each with a link signed NOW from its
  * storage_key (private bucket, valid ttlSeconds, default 3600). A row without storage_key (local disk) gives its
  * file_url. If one file cannot be signed (object missing), its url is null and the others are still returned.
  * FE-05 passes { column: 'post_id', id }, FE-06 { column: 'message_id', id }, FE-08 { column: 'school_post_id', id }.
@@ -134,7 +180,7 @@ export async function listAttachments(target, db = pool, { ttlSeconds = SIGNED_U
             file_url AS "fileUrl", storage_key AS "storageKey", bucket, uploaded_by AS "uploadedBy", created_at AS "createdAt"
      FROM attachments
      WHERE ${column} = $1 AND deleted_at IS NULL
-     ORDER BY attachment_id`,
+     ORDER BY ${FILE_ORDER}`,
     [idOf(target)],
   );
   return Promise.all(
@@ -204,7 +250,7 @@ async function mapLimit(items, limit, fn) {
 }
 
 /**
- * For the cards of a list: Map id → { attachmentCount, firstImageUrl }. Two queries for the whole page (counts, first
+ * For the cards of a list: Map id → { attachmentCount, firstImageUrl } (the first image in the post's order). Two queries for the whole page (counts, first
  * image of each post), and only that first image is signed (at most 6 at a time). A link that cannot be signed gives
  * null: the card shows no picture. Ids without files are missing from the map.
  * @param {'post_id' | 'message_id' | 'school_post_id'} column
@@ -216,7 +262,7 @@ export async function summarizeAttachments(column, ids, db = pool) {
     `SELECT DISTINCT ON (${column}) ${column} AS "id", file_url AS "fileUrl", storage_key AS "storageKey", bucket
      FROM attachments
      WHERE ${column} = ANY($1::bigint[]) AND deleted_at IS NULL AND mime_type LIKE 'image/%'
-     ORDER BY ${column}, attachment_id`,
+     ORDER BY ${column}, ${FILE_ORDER}`,
     [[...counts.keys()]],
   );
   const firstImages = new Map(
@@ -283,6 +329,39 @@ export async function changeAttachments(target, { add = [], removeIds = [], uplo
   }
   if (add.length) await insertAttachments(target, add.map((r) => ({ ...r, uploadedBy })), db);
   return removing.length > 0 || add.length > 0;
+}
+
+/**
+ * Sets the order of the files of one post (17/11/2026, FE-08 UC-61), inside the caller's transaction (the caller
+ * holds the post's lock). orderedIds must be EXACTLY the attachments of this target that are not deleted, each once,
+ * in the new order; anything else → 400 MSG_INVALID_PARAM { field: 'attachmentOrder' }, nothing written. sort_order
+ * becomes 0..n-1 for every file. Same order as now (also for rows without sort_order) → no write.
+ * @returns {Promise<boolean>} true when the order was written
+ */
+export async function setAttachmentOrder(target, orderedIds, db = pool) {
+  const column = columnOf(target);
+  const id = idOf(target);
+  const { rows } = await db.query(
+    `SELECT attachment_id AS "attachmentId" FROM attachments
+     WHERE ${column} = $1 AND deleted_at IS NULL
+     ORDER BY ${FILE_ORDER}
+     FOR UPDATE`,
+    [id],
+  );
+  const now = rows.map((r) => r.attachmentId);
+  const wanted = (orderedIds ?? []).map(Number);
+  const live = new Set(now);
+  if (wanted.length !== now.length || new Set(wanted).size !== wanted.length || !wanted.every((x) => live.has(x))) {
+    throw badRequest('MSG_INVALID_PARAM', 'The order must list every file of this post once.', { field: 'attachmentOrder' });
+  }
+  if (wanted.every((x, i) => x === now[i])) return false;
+  await db.query(
+    `UPDATE attachments a SET sort_order = u.ord - 1
+     FROM unnest($2::bigint[]) WITH ORDINALITY AS u(attachment_id, ord)
+     WHERE a.attachment_id = u.attachment_id AND a.${column} = $1 AND a.deleted_at IS NULL`,
+    [id, wanted],
+  );
+  return true;
 }
 
 /**

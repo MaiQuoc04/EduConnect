@@ -178,12 +178,42 @@ It2: Anh FE-08 + FE-14, Khanh FE-05 + FE-06).
     system lines `MEMBER_ADDED` / `MEMBER_KICKED`, real time (group:changed / group:removed). New flags
     `canAddMembers` / `canRemoveMembers`; adding and removing on the Members tab (SCR-22). No schema change. Tested on the
     local DB (28 steps + the team / chat suites).
+  - **17/11 (Anh, on `feature/fe-08-school-feed`, not committed / merged yet): comment reports** (FE-08 first, shared
+    core for FE-05). Agreed before building: comments are still only deleted, never hidden (§5); the author of a
+    deleted comment gets a notification written straight into `notifications` + `notification_recipients` (§9, FE-09
+    not built yet); nobody learns who reported (no API returns a reporter's id or name, not even to the School Manager).
+    - **DB: `patch_v0.3_comment_reports.sql` – NOT run on the shared DB, waiting for the lead's OK.** Table
+      `comment_reports` (52 tables): `comment_id`, `reported_by`, `reason` (INAPPROPRIATE_LANGUAGE / HARASSMENT / SPAM /
+      FALSE_INFORMATION / OTHER), `note` (≤ 500, needed for OTHER), `status` PENDING / RESOLVED / DISMISSED,
+      `resolved_by` / `resolved_at`, `deleted_at`, UNIQUE `(comment_id, reported_by)`, RLS on. Tied to the comment, not
+      the post, so FE-05 needs no schema change. Schema file updated. Runs twice without error.
+    - Shared core `server/src/utils/commentReports.js` (data only, no permission check, like `feedInteractions.js`):
+      `parseReportInput`, `reportComment`, `withReportedByMe`, `findReportedComment`, `listReports` (one item per
+      comment with the report count, reasons, notes and the post; `source` SCHOOL_POST / GROUP_POST / ALL, `groupIds`
+      required for group comments), `countPendingReports`, `resolvePendingReports`, `resolveReport` (DELETE = soft
+      delete + every pending report RESOLVED, DISMISS = DISMISSED), `notifyCommentRemoved`.
+    - FE-08 endpoints: `POST /school-posts/:id/comments/:commentId/report` (Teacher / Student / Parent within the
+      post's audience, else 404; own comment 400 `MSG_CANNOT_REPORT_OWN_COMMENT`; deleted comment 404; reporting again
+      200 and nothing changes; School Manager 403 – they delete directly, UC-66). `GET /comment-reports` and
+      `PATCH /comment-reports/:commentId { action }`: School Manager only, **school post comments only** (§1: a group
+      comment is 404 and never listed); a second decision 409 `MSG_REPORT_ALREADY_HANDLED`. DELETE sends the author a
+      personal notification (`type` SCHOOL_POST, target the post, `is_personal` TRUE, names nobody) after COMMIT, plus
+      `schoolpost:comment-deleted`. UC-66 delete now also closes the comment's pending reports.
+    - Client: "Báo cáo" / "Đã báo cáo" in `CommentThread` only when the page passes `api.report` (FE-08 passes it except
+      for a School Manager; FE-05 does not, so its threads are unchanged); dialog with reason + note. New screen
+      `/comment-reports` (`pages/schoolfeed/CommentReportsPage.jsx`, menu "Báo cáo bình luận", School Manager only):
+      tabs Chờ xử lý / Đã xoá bình luận / Đã bỏ qua, pager, "Xoá bình luận" with confirmation, "Bỏ qua".
+    - Tested on the local DB: 64 API steps (permissions, audience 404, own comment, UNIQUE, three reporters → one item,
+      delete / dismiss / notification text, group comment hidden from the School Manager, FE-08 / FE-05 / FE-06
+      regressions) and 27 browser steps at 1440 / 768 / 390 px; `npm run build` passes.
+    - Waiting for the lead: screen number (proposed **SCR-74 "Báo cáo bình luận"**), wording for business rules
+      §5 / §8 / §9, the three new error codes (list below).
 - **Not merged yet:** none of It1. It2 branches start from `develop`. Still open in It2: FE-10 timetable (Dung).
   - FE-14 Parent Management (Anh, It2) – merged 11/11: UC-104 parent list, UC-105 parent detail with the linked
     children, UC-106 update profile (`fullName`, `occupation`, `address` only; login identifiers are not touched).
     Server `server/src/modules/parents/` (`GET /parents`, `GET /parents/:parentId`, `PATCH /parents/:parentId`,
     School Manager only). The UC-13 screen now uses `GET /parents`; the temporary `GET /students/parents/lookup`
-    (server) and `lookupParentByPhone` (`client/src/api/students.js`, no longer called) are not removed yet.
+    and `lookupParentByPhone` were removed 17/11 (closing item #3, on `feature/fe-08-school-feed`, not merged yet).
   - FE-08 School Feed (Anh, It2) – merged 11/11: UC-58..UC-66 (all 9 UC), screens SCR-02 School Feed, SCR-05
     School Post Detail, SCR-31 Create School Post, SCR-06 Update School Post. The school feed is the home screen
     (`HOME_BY_ROLE`) and the first menu item of every role except System Admin. Layout per Stitch: three tabs
@@ -250,7 +280,7 @@ It2: Anh FE-08 + FE-14, Khanh FE-05 + FE-06).
   |---|---|---|---|
   | 1 | Merge `fix/it1-follow-ups` (FE-03 group sync, FE-03 screen numbers – details below) | Quoc | 04/11 |
   | 2 | FE-13 departments: create / import pick from the `departments` list (details below) | Linh | **done**, merged 07/11 (the follow-up patch is still open) |
-  | 3 | Replace the temporary `GET /students/parents/lookup` with FE-14 UC-104 | Anh | with FE-14 (It2) |
+  | 3 | Replace the temporary `GET /students/parents/lookup` with FE-14 UC-104 | Anh | **done** 17/11 on `feature/fe-08-school-feed` (not merged yet): SCR-13 uses `GET /parents` since 11/11; route, `lookupParent`, `findParentByPhone` and the client's `lookupParentByPhone` removed, no error code left unused |
   | 4 | Shared Excel reading `utils/excel.js` for UC-96 / UC-14 / UC-27 (It2 clean-up, after the features merge) | Linh | It2 clean-up |
   | 5 | Decide: who adds a new department (SQL only today, or a screen for SM / SA) | Quoc | **decided 07/11**: School Manager, Departments screen (UC-114, FE-03, merged 11/11) |
   | 6 | Decide: the empty test school years on the shared DB (2025-2026, 2028-2029, 2030-2031; no classes; `school_years` has no `deleted_at`) – keep or remove | Quoc | 07/11 |
@@ -328,18 +358,22 @@ It2: Anh FE-08 + FE-14, Khanh FE-05 + FE-06).
         UC-10 / UC-11; UC-11 from a year that is not the one right before refused; 10 → 11 and 10 → 10 promoted,
         10 → 12 skipped; plus the API checks (401 / 403, list search, parent lookup, UC-14 template / preview,
         link path). `npm run build` passes.
-    - Left after the merge: FE-14 (Anh) replaces the temporary `GET /students/parents/lookup` with UC-104; the
-      `utils/excel.js` clean-up with FE-13 in It2 (done, merged 17/11).
+    - Left after the merge: FE-14 (Anh) replaces the temporary `GET /students/parents/lookup` with UC-104 (done
+      17/11, closing item #3); the `utils/excel.js` clean-up with FE-13 in It2 (done, merged 17/11).
   - FE-14 (Anh, It2 since 03/11): uses UC-104..UC-106; a parent's address is `users.address`, occupation stays
     `parents.occupation`.
   - FE-08 / FE-14 (Anh), owed since 09/11 (both merged 11/11):
-    - Now that FE-14 is merged: remove the temporary `GET /students/parents/lookup` (`students.routes.js`,
-      `lookupParent` in `students.controller.js`) and the client's `lookupParentByPhone` (closing item #3).
+    - Done 17/11 (closing item #3, not merged yet): the temporary `GET /students/parents/lookup` (`students.routes.js`,
+      `lookupParent` in `students.controller.js`, `findParentByPhone` in `students.service.js`) and the client's
+      `lookupParentByPhone` removed. Tested on the local DB: the old route gives 404; SCR-13 phone lookup through
+      `GET /parents` (10 digits, +84, dots) still shows the parent's name before linking; UC-12 / UC-13 / UC-14 and
+      FE-14 unchanged (regression suite 215/215); `npm run build` passes.
     - Error codes not in `client/src/messages.js` yet, waiting for the lead's OK (checked in the code 09/11; the
       pages keep their own texts meanwhile):
       - FE-08: `MSG_AUDIENCE_REQUIRED`, `MSG_CANNOT_PIN_NEWS`, `MSG_CANNOT_REACT_NEWS`, `MSG_CANNOT_COMMENT_NEWS`,
         `MSG_SCHOOL_POST_NOT_FOUND`, `MSG_GRADE_NOT_FOUND`, `MSG_COMMENT_NOT_FOUND`, `MSG_INVALID_PARENT_COMMENT`,
-        `MSG_PARENT_COMMENT_DELETED`, `MSG_FIELD_NOT_EDITABLE`, `MSG_NO_FIELDS_TO_UPDATE`.
+        `MSG_PARENT_COMMENT_DELETED`, `MSG_FIELD_NOT_EDITABLE`, `MSG_NO_FIELDS_TO_UPDATE`; comment reports (17/11):
+        `MSG_CANNOT_REPORT_OWN_COMMENT`, `MSG_REPORT_ALREADY_HANDLED`, `MSG_REPORT_NOT_FOUND`.
       - FE-14: `MSG_FIELD_NOT_EDITABLE`, `MSG_NO_FIELDS_TO_UPDATE` (also thrown by FE-02 UC-09).
       - `MSG_INVALID_PARAM` (both) stays a screen text, as for FE-02.
     - `CLAUDE.md` says to push with ``io.to(`group:${id}`)``, but `sockets/index.js` has no `group:<id>` room: only
@@ -355,6 +389,10 @@ It2: Anh FE-08 + FE-14, Khanh FE-05 + FE-06).
     - Khanh (FE-05) can pull from `feature/fe-08-school-feed`: `server/src/utils/feedInteractions.js` (likes and
       comment tree rows) and `client/src/components/CommentThread.jsx` (+ `.css`; gets its API calls and live
       signals as props).
+  - FE-05 (Khanh), after the comment reports are merged (17/11, optional until the lead decides): group comment
+    reports with `utils/commentReports.js` (how-to in its header comment): report route checked with the §5 rules,
+    a queue for the homeroom teacher / group moderator with `source: 'GROUP_POST'` and **their own `groupIds`**, call
+    `resolvePendingReports` after a comment is deleted from the thread, pass `api.report` to `CommentThread`.
   - Done by the lead 04/11 (branch `fix/it1-follow-ups`):
     - Group sync for FE-03 saves: `homeroom.service.js` (UC-19) and `teaching.service.js` (UC-18) call
       `syncClassTeachers(conn, classId)` for every class they change, in the same transaction, after saving.

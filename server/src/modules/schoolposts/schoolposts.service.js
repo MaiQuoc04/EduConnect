@@ -1,15 +1,17 @@
 import { pool, withTransaction } from '../../config/db.js';
 import { emitToSchoolPost, emitToUsers } from '../../sockets/index.js';
-import { badRequest, forbidden, notFound } from '../../utils/AppError.js';
+import { AppError, badRequest, forbidden, notFound } from '../../utils/AppError.js';
 // Attachment rows shared with FE-05 / FE-06 (data only, no permission check) and the storage they point to.
 import * as files from '../../utils/attachments.js';
-import { objectInfo, signedUrl } from '../../utils/storage.js';
+import { objectInfo } from '../../utils/storage.js';
 import { getNumberSetting } from '../../utils/settings.js';
 // The 15 types of the attachments bucket (read only; the shared upload module owns the list).
 import { ATTACHMENT_TYPES } from '../uploads/uploads.service.js';
 import { containsPattern, VI_TRANSLATE } from '../../utils/search.js';
 // Likes / comments rows shared with FE-05 Group Feed: data only; who may do what in the school feed (§8) is here.
 import * as feed from '../../utils/feedInteractions.js';
+// Comment reports shared with FE-05 (17/11/2026): data only; who may report / handle in the school feed is here.
+import * as reports from '../../utils/commentReports.js';
 // FE-02 (merged): the one rule for "the current school year" and "the class a student studies in this year".
 import { enrollmentsOfYear, resolveSchoolYearId } from '../students/students.service.js';
 
@@ -269,39 +271,14 @@ async function mapLimit(items, limit, fn) {
 }
 
 /**
- * Attachments per school post for the UC-58 cards: Map id → { attachmentCount, firstImageUrl }.
- * TWO queries for the whole page, whatever its size (DB_POOL_MAX=3): the counts (shared countAttachments) and the
- * first image of each post (DISTINCT ON). Only that first image is signed – one link per card, never every file – and
- * the signing is an HTTP call to Supabase Storage, not a DB query (at most 6 at a time). A link that cannot be signed
- * (object missing, Storage down) gives null: the card simply shows no picture. A row kept on local disk (no
- * storage_key) gives its file_url as before.
+ * Attachments per school post for the UC-58 cards: Map id → { attachmentCount, firstImageUrl }. The shared
+ * summarizeAttachments (17/11/2026; it was a copy here): TWO queries for the whole page whatever its size
+ * (DB_POOL_MAX=3), only the first image of each post signed (HTTP, at most 6 at a time), null when it cannot be signed.
+ * The first image follows the order chosen by the author (attachments.sort_order), so it is the "ảnh tiêu đề".
  */
-async function summarizeAttachments(schoolPostIds, db = pool) {
-  if (!schoolPostIds.length) return new Map();
-  const counts = await files.countAttachments(ATTACHMENT_COLUMN, schoolPostIds, db);
-  if (!counts.size) return new Map();
-  const { rows } = await db.query(
-    `SELECT DISTINCT ON (school_post_id) school_post_id AS "schoolPostId", file_url AS "fileUrl",
-            storage_key AS "storageKey", bucket
-     FROM attachments
-     WHERE school_post_id = ANY($1::bigint[]) AND deleted_at IS NULL AND mime_type LIKE 'image/%'
-     ORDER BY school_post_id, attachment_id`,
-    [[...counts.keys()]],
-  );
-  const firstImages = new Map(
-    await mapLimit(rows, 6, async ({ schoolPostId, fileUrl, storageKey, bucket }) => {
-      if (!storageKey) return [schoolPostId, fileUrl];
-      try {
-        return [schoolPostId, await signedUrl(bucket, storageKey)];
-      } catch (err) {
-        console.error(`[schoolposts] first image of post ${schoolPostId} not signed: ${err.message}`);
-        return [schoolPostId, null];
-      }
-    }),
-  );
-  return new Map(
-    [...counts].map(([id, attachmentCount]) => [id, { attachmentCount, firstImageUrl: firstImages.get(id) ?? null }]),
-  );
+function summarizeAttachments(schoolPostIds, db = pool) {
+  if (!schoolPostIds.length) return Promise.resolve(new Map());
+  return files.summarizeAttachments(ATTACHMENT_COLUMN, schoolPostIds, db);
 }
 
 // --- Attachments of UC-60 / UC-61 ----------------------------------------------------------------------------------
@@ -479,7 +456,11 @@ export async function listSchoolPosts(user, { postType, q, page, pageSize }) {
       firstImageUrl: attachments.get(post.schoolPostId)?.firstImageUrl ?? null,
     };
   });
-  return { items, page, pageSize, total: countRows[0].total };
+  // UC-63 limit (17/11/2026), for the School Manager's pin buttons only (they are the only ones who pin): the client
+  // greys the pin button when the limit is reached; the server still decides (pinSchoolPost).
+  const pinning =
+    user.activeRole === 'SCHOOL_MANAGER' ? { pinnedCount: await countPinned(), maxPinned: MAX_PINNED_SCHOOL_POSTS } : {};
+  return { items, page, pageSize, total: countRows[0].total, ...pinning };
 }
 
 // --- UC-59 View School Post Detail (SCR-05) ----------------------------------------------------------------------
@@ -631,6 +612,8 @@ async function notifySchoolPost(client, { schoolPostId, title, createdBy }) {
  * - attachments: what /uploads/confirm returned (controller: at most MAX_ATTACHMENTS, keys in school-posts/). Their
  *   objects are checked before the transaction (readAttachments); the rows are inserted in it, in the order sent, by
  *   the shared insertAttachments. NEWS and ANNOUNCEMENT alike (§5 / §8 do not tell them apart here).
+ *   The order of the list is the order of the post (sort_order 0..n-1, 17/11/2026): its first image is the picture of
+ *   the card.
  */
 export async function createSchoolPost(user, input) {
   const { title, content, postType, gradeLevelIds, classIds, targetRoles = [], attachments = [] } = input;
@@ -655,7 +638,7 @@ export async function createSchoolPost(user, input) {
     if (fileRows.length) {
       await files.insertAttachments(
         attachmentTarget(schoolPostId),
-        fileRows.map((row) => ({ ...row, uploadedBy: user.userId })),
+        fileRows.map((row, index) => ({ ...row, uploadedBy: user.userId, sortOrder: index })),
         client,
       );
     }
@@ -669,7 +652,8 @@ export async function createSchoolPost(user, input) {
 // Locks a post that is not deleted (two School Managers saving at once are applied one after the other), or 404.
 async function lockSchoolPost(client, schoolPostId) {
   const { rows } = await client.query(
-    `SELECT school_post_id AS "schoolPostId", post_type AS "postType", ${TARGET_ROLES('school_posts')} AS "targetRoles"
+    `SELECT school_post_id AS "schoolPostId", post_type AS "postType", is_pinned AS "isPinned",
+            ${TARGET_ROLES('school_posts')} AS "targetRoles"
      FROM school_posts WHERE school_post_id = $1 AND deleted_at IS NULL
      FOR UPDATE`,
     [schoolPostId],
@@ -712,7 +696,12 @@ const sameIds = (a, b) => {
  *   student_parents; the proposal to add them to business-rules §14 is with the lead). Same set as now → no write.
  *   ANNOUNCEMENT must keep at least one target (§8) → 400 MSG_AUDIENCE_REQUIRED; NEWS with none = whole school.
  * - attachments (new files, as in UC-60) / removeAttachmentIds (files of this post to take off): changeAttachments.
- *   Taking a file off soft deletes its row; the object stays in the bucket.
+ *   Taking a file off soft deletes its row; the object stays in the bucket. New files without attachmentOrder go after
+ *   the files the post has (their sort_order is NULL, sorted last).
+ * - attachmentOrder (17/11/2026): the whole list of files AFTER the change, in the new order; each item is
+ *   { attachmentId } (a file the post keeps) or { storageKey } (one of the new files of this request). Every file of
+ *   the post must be in it once (otherwise 400 MSG_INVALID_PARAM { field: 'attachmentOrder' }); sort_order becomes
+ *   0..n-1. Same order as now → no write. A new order alone is a change (updated_at moves, "updated" signal).
  * Something really changed → updated_at = NOW() (no trigger on school_posts). Nothing changed → still 200.
  * ASSUMPTION: an update sends no new notification (§8 does not say so; one per typo fix would be noise).
  * ASSUMPTION: also when the audience changes, people who are new in it get NO notification: the post's notification
@@ -729,10 +718,22 @@ export async function updateSchoolPost(user, schoolPostId, changes) {
   const addRows = await readAttachments(changes.attachments ?? []);
   const result = await withTransaction(async (client) => {
     const post = await lockSchoolPost(client, schoolPostId);
-    let changed = await changeAttachments(client, user, schoolPostId, {
+    const fileChange = await changeAttachments(client, user, schoolPostId, {
       add: addRows,
       removeIds: changes.removeAttachmentIds ?? [],
     });
+    let changed = fileChange.changed;
+    if (changes.attachmentOrder) {
+      const orderedIds = changes.attachmentOrder.map((item) => {
+        const attachmentId = item.storageKey ? fileChange.added.get(item.storageKey) : item.attachmentId;
+        if (!attachmentId) {
+          throw badRequest('MSG_INVALID_PARAM', 'attachmentOrder names a file that is not sent with this request.',
+            { field: 'attachmentOrder' });
+        }
+        return attachmentId;
+      });
+      if (await files.setAttachmentOrder(attachmentTarget(schoolPostId), orderedIds, client)) changed = true;
+    }
 
     const { audience, targetRoles } = changes;
     let targetsChanged = false;
@@ -798,10 +799,11 @@ export async function updateSchoolPost(user, schoolPostId, changes) {
  * - The post may not end with more than MAX_ATTACHMENTS files → 400 MSG_TOO_MANY_ATTACHMENTS { max }.
  * ASSUMPTION: rows are soft deleted one by one here because the shared softDeleteAttachments removes ALL the files of
  * a post (UC-62). Proposed to move into utils/attachments.js as a shared function (FE-05 needs the same for edits).
- * @returns {Promise<boolean>} true when a row was added or removed
+ * @returns {Promise<{ changed: boolean, added: Map<string, number> }>} changed = a row was added or removed; added =
+ *   storageKey → new attachment id (for UC-61 attachmentOrder)
  */
 async function changeAttachments(client, user, schoolPostId, { add, removeIds }) {
-  if (!add.length && !removeIds.length) return false;
+  if (!add.length && !removeIds.length) return { changed: false, added: new Map() };
   const { rows } = await client.query(
     `SELECT attachment_id AS id, deleted_at IS NOT NULL AS "isDeleted"
      FROM attachments WHERE school_post_id = $1
@@ -827,10 +829,12 @@ async function changeAttachments(client, user, schoolPostId, { add, removeIds })
       [schoolPostId, removing],
     );
   }
+  const added = new Map();
   if (add.length) {
-    await files.insertAttachments(attachmentTarget(schoolPostId), add.map((r) => ({ ...r, uploadedBy: user.userId })), client);
+    const ids = await files.insertAttachments(attachmentTarget(schoolPostId), add.map((r) => ({ ...r, uploadedBy: user.userId })), client);
+    add.forEach((r, i) => added.set(r.storageKey, ids[i]));
   }
-  return removing.length > 0 || add.length > 0;
+  return { changed: removing.length > 0 || add.length > 0, added };
 }
 
 /**
@@ -858,9 +862,25 @@ export async function deleteSchoolPost(user, schoolPostId) {
   return result;
 }
 
+// At most 3 pinned school posts at once (17/11/2026; first 5, lowered to 3 the same day for both feeds): the number and the error code of the FE-05 group feed
+// (business-rules §5, posts.service.js MAX_PINNED), so both feeds behave the same. Proposed for §8 in the FE-08 summary.
+export const MAX_PINNED_SCHOOL_POSTS = 3;
+// Transaction-level advisory lock taken while counting: the school feed has no parent row to lock (FE-05 locks the
+// group row), so two managers pinning two different posts at the same moment cannot both pass the limit.
+const PIN_LOCK_KEY = 580063; // "FE-08 UC-63"; any constant not used by another advisory lock in this app
+
+/** Pinned school posts now (not deleted; only announcements are ever pinned). Also UC-58's pinnedCount. */
+async function countPinned(db = pool) {
+  const { rows } = await db.query('SELECT COUNT(*) AS n FROM school_posts WHERE is_pinned AND deleted_at IS NULL');
+  return rows[0].n;
+}
+
 /**
  * UC-63 Pin / Unpin School Post. Only announcements can be pinned (§8): pinning NEWS → 400 MSG_CANNOT_PIN_NEWS.
- * No limit on how many posts are pinned at once (§8 sets none). Same value as now → no write, still 200.
+ * At most MAX_PINNED_SCHOOL_POSTS pinned at once → 409 MSG_PIN_LIMIT { max } (same code and number as FE-05 §5).
+ * Same value as now → no write, still 200: pinning a pinned post is not counted again. Unpinning is never limited.
+ * ASSUMPTION: posts pinned before the limit went from 5 to 3 stay pinned (nobody's pin is removed by the server); while
+ * 3 or more are pinned, no other post can be pinned until enough are unpinned.
  * ASSUMPTION: unpinning NEWS (isPinned false) is accepted as a no-op, since NEWS is never pinned.
  * ASSUMPTION: pinning is not an edit of the post, so updated_at is not touched.
  */
@@ -870,6 +890,14 @@ export async function pinSchoolPost(user, schoolPostId, isPinned) {
     const post = await lockSchoolPost(client, schoolPostId);
     if (isPinned && post.postType !== 'ANNOUNCEMENT') {
       throw badRequest('MSG_CANNOT_PIN_NEWS', 'Only announcements can be pinned.', { field: 'isPinned' });
+    }
+    if (isPinned && !post.isPinned) {
+      await client.query('SELECT pg_advisory_xact_lock($1)', [PIN_LOCK_KEY]);
+      if ((await countPinned(client)) >= MAX_PINNED_SCHOOL_POSTS) {
+        throw new AppError(409, 'MSG_PIN_LIMIT', `At most ${MAX_PINNED_SCHOOL_POSTS} pinned school posts.`, {
+          max: MAX_PINNED_SCHOOL_POSTS,
+        });
+      }
     }
     const { rowCount } = await client.query(
       'UPDATE school_posts SET is_pinned = $2 WHERE school_post_id = $1 AND is_pinned IS DISTINCT FROM $2',
@@ -991,7 +1019,12 @@ export async function listSchoolPostComments(user, schoolPostId, { page, pageSiz
   const post = await openSchoolPostForInteraction(pool, user, schoolPostId);
   if (post.postType !== 'ANNOUNCEMENT') return { items: [], page, pageSize, total: 0, commentCount: 0 };
   const result = await feed.listComments(post.target, { page, pageSize, canDelete: mayDeleteComment(user) });
-  return { ...result, commentCount: await commentCountOf(post.schoolPostId) };
+  // Comment likes (17/11/2026): one more query for the whole page (feed.withCommentLikes), never one per comment.
+  let items = await feed.withCommentLikes(result.items, user.userId);
+  // Comment reports (17/11/2026): reportedByMe on every node, one query. A School Manager does not report (they delete
+  // directly, UC-66), so the query is skipped for them.
+  if (user.activeRole !== 'SCHOOL_MANAGER') items = await reports.withReportedByMe(items, user.userId);
+  return { ...result, items, commentCount: await commentCountOf(post.schoolPostId) };
 }
 
 /**
@@ -1025,6 +1058,35 @@ const commentCountOf = async (schoolPostId, db = pool) =>
 const commentNotFound = () => notFound('MSG_COMMENT_NOT_FOUND', 'The comment was not found.');
 
 /**
+ * Like (liked = true) or unlike (false) a COMMENT of a school post (17/11/2026, post_likes.comment_id). Same rules as
+ * UC-64 for a post: PUT / DELETE, both idempotent (liking twice or unliking what one did not like is 200 and changes
+ * nothing); unlike HARD deletes the row (§14).
+ * Who: exactly who may comment (UC-65) – the post must be visible to the user (openSchoolPostForInteraction: the
+ * audience, plus every School Manager); otherwise 404 MSG_SCHOOL_POST_NOT_FOUND, so nobody learns the post exists.
+ * The comment must belong to THIS post and not be deleted → else 404 MSG_COMMENT_NOT_FOUND.
+ * ASSUMPTION: a soft-deleted comment answers 404 (not 400), for like AND unlike: for the API it no longer exists, the
+ * same answer UC-66 gives when deleting it again; its placeholder shows no Like button. A like given before the
+ * comment was deleted stays in post_likes (never read while the comment is deleted).
+ * ASSUMPTION: on a NEWS post comments do not exist for the API (UC-65 shows none) → 404 MSG_COMMENT_NOT_FOUND, as in
+ * deleteSchoolPostComment.
+ * The post is read FOR SHARE and the comment FOR SHARE: neither can be deleted until the like is written. No socket
+ * event (as UC-64): the client keeps its optimistic count.
+ * @returns {Promise<{ commentId: number, likeCount: number, likedByMe: boolean }>}
+ */
+export async function setSchoolPostCommentLike(user, schoolPostId, commentId, liked) {
+  return withTransaction(async (client) => {
+    const post = await openSchoolPostForInteraction(client, user, schoolPostId, { lock: true });
+    if (post.postType !== 'ANNOUNCEMENT') throw commentNotFound();
+    const comment = await feed.findComment(post.target, commentId, { forShare: true }, client);
+    if (!comment || comment.isDeleted) throw commentNotFound();
+    const target = { column: feed.FEED_COLUMNS.COMMENT, id: comment.commentId };
+    if (liked) await feed.addLike(target, user.userId, client);
+    else await feed.removeLike(target, user.userId, client);
+    return { commentId: comment.commentId, ...(await feed.likeSummary(target, user.userId, client)) };
+  });
+}
+
+/**
  * UC-66 Delete School Post Comment: SOFT delete (deleted_at = NOW(), deleted_by = user; §5 "deleted, never hidden").
  * School Manager: any comment (UC-66); Teacher / Student / Parent: their own only (permissions.md note 17) → else 403.
  * The comment does not exist, belongs to another post or is already deleted → 404 MSG_COMMENT_NOT_FOUND (checked
@@ -1043,6 +1105,9 @@ export async function deleteSchoolPostComment(user, schoolPostId, commentId) {
       throw forbidden('FORBIDDEN', 'You can only delete your own comments.');
     }
     await feed.softDeleteComment(post.target, commentId, user.userId, client);
+    // Comment reports (17/11/2026): a comment gone has nothing left to decide – its pending reports are closed
+    // (RESOLVED, by whoever deleted it) so the School Manager's queue never keeps them.
+    await reports.resolvePendingReports(commentId, user.userId, client);
     return { commentId, isDeleted: true, commentCount: await commentCountOf(post.schoolPostId, client) };
   });
   sendSafely(`schoolpost:comment-deleted #${schoolPostId}`, () =>
@@ -1052,4 +1117,75 @@ export async function deleteSchoolPostComment(user, schoolPostId, commentId) {
     }),
   );
   return result;
+}
+
+// --- Comment reports (17/11/2026; data layer shared with FE-05 in utils/commentReports.js) ------------------------
+// Who: reporting = the people who may comment (UC-65: the post's audience), School Manager excepted (see below);
+// handling = School Manager, comments of SCHOOL posts only – never group comments (business-rules §1: the School
+// Manager does not see class feeds). §5 stays as agreed: a comment is deleted (soft), never hidden.
+
+/**
+ * Report a comment of a school post. Body checked by the controller (reports.parseReportInput).
+ * - The post must be visible to the user (openSchoolPostForInteraction) → else 404 MSG_SCHOOL_POST_NOT_FOUND, the same
+ *   answer as for a post that does not exist (nobody outside the audience learns it exists).
+ * - The comment must belong to this post and not be deleted → else 404 MSG_COMMENT_NOT_FOUND (NEWS: comments do not
+ *   exist for the API, as for like / delete).
+ * - Not one's own comment → 400 MSG_CANNOT_REPORT_OWN_COMMENT (checked in reports.reportComment).
+ * - Reporting again → 200 { created: false }, nothing changes (reports.reportComment).
+ * School Manager: refused by the route (403 FORBIDDEN). ASSUMPTION: a School Manager deletes any comment of a school
+ * post directly (UC-66) and is the one who handles the reports, so a report from them would only land in their own
+ * queue; the client shows them no "Báo cáo" button.
+ * @returns {Promise<{ commentId: number, reportedByMe: true, created: boolean }>}
+ */
+export async function reportSchoolPostComment(user, schoolPostId, commentId, input) {
+  return withTransaction(async (client) => {
+    const post = await openSchoolPostForInteraction(client, user, schoolPostId, { lock: true });
+    if (post.postType !== 'ANNOUNCEMENT') throw commentNotFound();
+    const comment = await feed.findComment(post.target, commentId, { forShare: true }, client);
+    if (!comment || comment.isDeleted) throw commentNotFound();
+    const report = await reports.reportComment(comment.commentId, user.userId, input, client);
+    return { commentId: comment.commentId, reportedByMe: true, created: report.created };
+  });
+}
+
+// The School Manager's queue reads school post comments only (business-rules §1). Never 'ALL' / 'GROUP_POST' here.
+const SCHOOL_REPORTS = { source: reports.REPORT_SOURCES.SCHOOL_POST };
+
+/**
+ * GET /comment-reports (School Manager): one page of reported school post comments, one item per comment
+ * (reports.listReports), plus pendingCount (the badge of the "Chờ xử lý" tab).
+ */
+export async function listSchoolCommentReports(_user, { status, page, pageSize }) {
+  const result = await reports.listReports({ ...SCHOOL_REPORTS, status, page, pageSize });
+  return { ...result, pendingCount: await reports.countPendingReports(SCHOOL_REPORTS) };
+}
+
+const reportNotFound = () => notFound('MSG_REPORT_NOT_FOUND', 'No report was found for this comment.');
+
+/**
+ * PATCH /comment-reports/:commentId (School Manager): DELETE the comment (soft; every pending report → RESOLVED) or
+ * DISMISS the reports (→ DISMISSED, the comment stays). A comment of a GROUP post → 404 MSG_REPORT_NOT_FOUND, exactly as
+ * an id that does not exist (the School Manager never learns anything about class feeds, §1).
+ * After COMMIT, DELETE only (fire and forget, like the other real-time signals of this file):
+ *   - the author gets a personal notification that names nobody (reports.notifyCommentRemoved, §9);
+ *   - "schoolpost:comment-deleted" to the post's room, as UC-66, so open threads update.
+ * DISMISS sends nothing.
+ * ASSUMPTION: not written to activity_logs – business-rules §13 lists the logged actions and moderation is not one.
+ * @returns {Promise<{ commentId: number, status: 'RESOLVED' | 'DISMISSED', resolvedCount: number,
+ *   commentDeleted: boolean }>}
+ */
+export async function resolveSchoolCommentReport(user, commentId, action) {
+  const result = await withTransaction(async (client) => {
+    const comment = await reports.findReportedComment(commentId, { forUpdate: true }, client);
+    if (!comment || comment.column !== SCHOOL_POST) throw reportNotFound();
+    return reports.resolveReport(commentId, user.userId, action, client);
+  });
+  if (result.commentDeleted) {
+    sendSafely(`comment-removed notification #${commentId}`, () => reports.notifyCommentRemoved(result, user.userId));
+    sendSafely(`schoolpost:comment-deleted #${result.target.id}`, () =>
+      emitToSchoolPost(result.target.id, 'schoolpost:comment-deleted', { schoolPostId: result.target.id, commentId }),
+    );
+  }
+  const { commentDeleted, resolvedCount, status } = result;
+  return { commentId, status, resolvedCount, commentDeleted };
 }

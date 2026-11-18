@@ -1,12 +1,12 @@
-import { useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { createSchoolPost } from '../../api/schoolPosts.js';
-import AttachmentPicker, { useAttachmentUploads } from '../../components/AttachmentPicker.jsx';
+import AttachmentPicker, { arrangeAttachments, useAttachmentUploads } from '../../components/AttachmentPicker.jsx';
 import Icon from '../../components/Icon.jsx';
 import { UPLOAD_TARGETS } from '../../api/uploads.js';
 import { useAuth } from '../../context/AuthContext.jsx';
 import { useToast } from '../../context/ToastContext.jsx';
-import { LeaveDialog, useLeaveGuard } from './leaveGuard.jsx';
+import { DraftCancelDialog, LeaveDialog, useLeaveGuard } from './leaveGuard.jsx';
 import { AudienceLine, handOverPost, SHORT_SCOPE } from './schoolFeedShared.jsx';
 import {
   allRoles,
@@ -24,7 +24,6 @@ import {
   PostPreview,
   PostTypeSwitch,
   rolesToSend,
-  sameRoles,
   saveErrorOf,
   TitleCounter,
   UPLOADING_HINT,
@@ -32,6 +31,7 @@ import {
   useAudienceOptions,
   validatePost,
 } from './schoolPostForm.jsx';
+import { clearSchoolDraft, draftSavedTime, readSchoolDraft, writeSchoolDraft } from './schoolPostDraft.js';
 
 // SCR-31 Create School Post (FE-08, owner Anh): UC-60, School Manager only (permissions.md "School post – Create";
 // the route is wrapped in ProtectedRoute and the server checks the active role).
@@ -39,11 +39,17 @@ import {
 // components/AttachmentPicker uploads each file straight to Storage (images compressed first) while the post is being
 // written; "Đăng bài" is locked until every file is up, and the post carries the /uploads/confirm answers. Not built
 // here: the cover image of the design; pinning on create (UC-63, on the detail page and the feed).
+// Draft (17/11/2026, as the FE-05 group post form): title, content, type, audience, notification switch and the files
+// already uploaded are saved in this browser while writing (schoolPostDraft.js), so leaving the form loses nothing and
+// "Soạn bài" brings them back. Only a file still uploading would be lost, so the leave guard asks only then. "Huỷ"
+// asks whether to keep the draft or throw it away; posting removes it. SCR-06 (edit) keeps no draft.
 
 const FEED_PATH = '/school-feed';
 const SAVE_ERROR = 'Không đăng được bài viết. Vui lòng thử lại.';
 const FIELD_ORDER = ['title', 'content', 'audience'];
 const FIELD_FOCUS = { title: 'spf-title', content: 'spf-content', audience: 'spf-audience' };
+const DRAFT_SAVE_DELAY = 400; // ms after the last change, as the group post draft
+const draftFileId = (f) => `draft:${f.storageKey}`;
 
 const INITIAL = {
   postType: 'ANNOUNCEMENT',
@@ -54,6 +60,19 @@ const INITIAL = {
   targetRoles: allRoles(),
 };
 
+// The form as the draft left it (values already checked by readSchoolDraft).
+function formOf(draft) {
+  if (!draft) return INITIAL;
+  return {
+    postType: draft.postType,
+    title: draft.title,
+    content: draft.content,
+    sendNotification: draft.sendNotification ?? DEFAULT_SEND_NOTIFICATION[draft.postType],
+    audience: draft.audience,
+    targetRoles: draft.targetRoles ?? allRoles(),
+  };
+}
+
 export default function CreateSchoolPostPage() {
   const location = useLocation();
   const navigate = useNavigate();
@@ -62,10 +81,30 @@ export default function CreateSchoolPostPage() {
   const listSearch = location.state?.listSearch ?? '';
   const backTo = `${FEED_PATH}${listSearch}`;
 
+  // The draft found when the form opened, read once.
+  const [restored] = useState(() => readSchoolDraft(user?.id));
+  const [draftFiles, setDraftFiles] = useState(restored?.files ?? []); // uploaded earlier, kept by the draft
+  const [savedAt, setSavedAt] = useState(restored?.savedAt ?? null);
+  const [showRestored, setShowRestored] = useState(Boolean(restored));
+  const [discarding, setDiscarding] = useState(false);
+  const finished = useRef(false); // posted or discarded: the draft must not be written again
+
   const options = useAudienceOptions();
   const fileLimits = useAttachmentLimits();
-  const uploads = useAttachmentUploads({ target: UPLOAD_TARGETS.SCHOOL_POST, limits: fileLimits.limits });
-  const [form, setForm] = useState(INITIAL);
+  const uploads = useAttachmentUploads({
+    target: UPLOAD_TARGETS.SCHOOL_POST,
+    limits: fileLimits.limits,
+    existingCount: draftFiles.length,
+  });
+  // Order of the files chosen in the picker (keys of arrangeAttachments); the first image is the picture of the card.
+  const [fileOrder, setFileOrder] = useState([]);
+  const draftExisting = draftFiles.map((f) => ({ ...f, attachmentId: draftFileId(f) }));
+  const arranged = arrangeAttachments({ order: fileOrder, existing: draftExisting, items: uploads.items });
+  // What the post will have, in the order of the list: files of the draft and new uploads that are done.
+  const orderedFiles = arranged.live
+    .filter((e) => e.kind === 'existing' || e.item.status === 'done')
+    .map((e) => (e.kind === 'existing' ? draftFiles.find((f) => draftFileId(f) === e.file.attachmentId) : e.item.result));
+  const [form, setForm] = useState(() => formOf(restored));
   const [touched, setTouched] = useState({});
   const [submitted, setSubmitted] = useState(false);
   const [serverError, setServerError] = useState(null); // { field, text, bad }
@@ -73,12 +112,51 @@ export default function CreateSchoolPostPage() {
   const [saving, setSaving] = useState(false);
   const sending = useRef(false); // a second click before React re-renders must not send twice
 
-  // Stays true while saving: leave() then removes the guard's extra history entry itself before navigating.
-  const dirty =
+  // A grade or class of the draft that is no longer offered (deleted, or the school year changed) is dropped once the
+  // options are known, so the post never goes to a target that cannot be seen on the form.
+  const pruned = useRef(!restored);
+  useEffect(() => {
+    if (pruned.current || options.loading || options.error) return;
+    pruned.current = true;
+    const grades = new Set(options.grades.map((g) => g.gradeLevelId));
+    const classes = new Set(options.classes.map((c) => c.classId));
+    setForm((f) => ({
+      ...f,
+      audience: {
+        gradeLevelIds: f.audience.gradeLevelIds.filter((x) => grades.has(x)),
+        classIds: f.audience.classIds.filter((x) => classes.has(x)),
+      },
+    }));
+  }, [options.loading, options.error, options.grades, options.classes]);
+
+  // Draft autosave: a short delay after each change, and at once when the page is left or hidden.
+  const draftJson = JSON.stringify({ ...form, files: orderedFiles });
+  const pendingDraft = useRef(null);
+  const saveDraft = useCallback(() => {
+    if (finished.current || pendingDraft.current === null) return;
+    const at = writeSchoolDraft(user?.id, JSON.parse(pendingDraft.current));
+    pendingDraft.current = null;
+    setSavedAt(at);
+  }, [user?.id]);
+  useEffect(() => {
+    pendingDraft.current = draftJson;
+    const timer = setTimeout(saveDraft, DRAFT_SAVE_DELAY);
+    return () => clearTimeout(timer);
+  }, [draftJson, saveDraft]);
+  useEffect(() => {
+    window.addEventListener('pagehide', saveDraft);
+    return () => {
+      window.removeEventListener('pagehide', saveDraft);
+      saveDraft(); // leaving the form inside the app
+    };
+  }, [saveDraft]);
+
+  // The draft keeps everything but a file still uploading, so the leave guard only asks then. Stays true while
+  // saving: leave() then removes the guard's extra history entry itself before navigating.
+  const dirty = uploads.busy;
+  const hasDraft =
     normalizeTitle(form.title) !== '' || normalizeContent(form.content) !== '' || !isAudienceEmpty(form.audience) ||
-    !sameRoles(form.targetRoles, INITIAL.targetRoles) ||
-    form.postType !== INITIAL.postType || form.sendNotification !== DEFAULT_SEND_NOTIFICATION[form.postType] ||
-    uploads.items.length > 0;
+    draftFiles.length > 0 || uploads.items.length > 0;
   const { asking, setAsking, stay, leave } = useLeaveGuard(dirty);
 
   const errors = validatePost(form);
@@ -125,8 +203,12 @@ export default function CreateSchoolPostPage() {
         gradeLevelIds: form.audience.gradeLevelIds,
         classIds: form.audience.classIds,
         targetRoles: rolesToSend(form.targetRoles),
-        attachments: uploads.uploaded, // in the order of the list; files that failed are left out (told on screen)
+        // In the order of the list (17/11/2026: the author can reorder it; the first image is the picture of the card);
+        // files that failed are left out (told on screen).
+        attachments: orderedFiles,
       });
+      finished.current = true;
+      clearSchoolDraft(user?.id);
       toast(announcement ? 'Đã đăng thông báo.' : 'Đã đăng tin tức.');
       handOverPost(data);
       leave(() => navigate(`${FEED_PATH}/${data.post.schoolPostId}`, { replace: true, state: { listSearch } }));
@@ -143,8 +225,44 @@ export default function CreateSchoolPostPage() {
 
   function cancel(e) {
     e?.preventDefault();
-    if (dirty) setAsking({ cancel: true });
+    if (hasDraft) setDiscarding(true); // keep the draft or throw it away (asked)
+    else if (dirty) setAsking({ cancel: true });
     else leave(() => navigate(backTo));
+  }
+
+  // "Huỷ" → "Giữ bản nháp": write it now (no waiting for the delay) and go back to the feed.
+  function keepDraft() {
+    setDiscarding(false);
+    pendingDraft.current = draftJson;
+    saveDraft();
+    finished.current = true;
+    leave(() => navigate(backTo));
+  }
+
+  // Throws the draft away: "Bỏ bản nháp" of the restored notice (stay on an empty form) or of "Huỷ" (leave).
+  function discardDraft({ thenLeave }) {
+    clearSchoolDraft(user?.id);
+    pendingDraft.current = null;
+    setShowRestored(false);
+    setSavedAt(null);
+    setDiscarding(false);
+    if (thenLeave) {
+      finished.current = true;
+      leave(() => navigate(backTo));
+      return;
+    }
+    setForm(INITIAL);
+    setTouched({});
+    setSubmitted(false);
+    setServerError(null);
+    setDraftFiles([]);
+    setFileOrder([]);
+    uploads.items.forEach((item) => uploads.remove(item.id));
+  }
+
+  // A file of the draft is not on any post yet: taking it off simply drops it from the draft.
+  function removeDraftFile(attachmentId) {
+    setDraftFiles((list) => list.filter((f) => draftFileId(f) !== attachmentId));
   }
 
   function confirmLeave() {
@@ -161,7 +279,7 @@ export default function CreateSchoolPostPage() {
   const formError = serverError && !serverError.field ? serverError.text : '';
 
   return (
-    <div className="school-post-form">
+    <div className="school-post-form is-school">
       <nav className="breadcrumb" aria-label="Breadcrumb">
         <span>EduConnect</span>/<span>Trường</span>/<Link to={backTo}>Bảng tin trường</Link>/
         <span className="current">Soạn bài</span>
@@ -170,11 +288,29 @@ export default function CreateSchoolPostPage() {
         <div>
           <h1 className="headline-xl">Soạn bài đăng</h1>
           <p>Đăng thông báo hoặc tin tức chính thức của nhà trường lên bảng tin.</p>
+          {savedAt && (
+            <p className="caption spf-draft-saved" aria-live="polite">
+              <Icon name="cloud_done" size="sm" />
+              Đã lưu nháp lúc {draftSavedTime(savedAt)} trên trình duyệt này.
+            </p>
+          )}
         </div>
       </div>
 
       <div className="spf-layout">
         <form className="card card-outline spf-sheet" onSubmit={submit} noValidate>
+          {showRestored && (
+            <div className="notice ink spf-draft-notice" role="status">
+              <Icon name="history" />
+              <p>
+                Đang tiếp tục bản nháp bạn soạn lúc {draftSavedTime(restored.savedAt)}. Bản nháp chỉ lưu trên trình duyệt
+                này, không có trên máy khác.
+              </p>
+              <button type="button" className="btn btn-tertiary btn-sm" onClick={() => discardDraft({ thenLeave: false })}>
+                Bỏ bản nháp
+              </button>
+            </div>
+          )}
           <section className="spf-section" aria-labelledby="spf-type-label">
             <span id="spf-type-label" className="spf-label">
               Loại bài
@@ -242,7 +378,12 @@ export default function CreateSchoolPostPage() {
               limits={fileLimits.limits}
               limitsError={fileLimits.error}
               onReloadLimits={fileLimits.reload}
+              existing={draftExisting}
+              onToggleExisting={removeDraftFile}
               disabled={saving}
+              sortable
+              order={fileOrder}
+              onOrderChange={setFileOrder}
             />
           </section>
 
@@ -330,7 +471,7 @@ export default function CreateSchoolPostPage() {
           labels={labels}
           roles={form.targetRoles}
           authorName={user?.fullName}
-          files={uploads.items.filter((item) => item.status !== 'error')}
+          files={arranged.live.map((e) => (e.kind === 'existing' ? e.file : e.item))}
         />
       </div>
 
@@ -346,6 +487,13 @@ export default function CreateSchoolPostPage() {
         onConfirm={post}
       />
       <LeaveDialog open={Boolean(asking)} onStay={stay} onLeave={confirmLeave} />
+      <DraftCancelDialog
+        open={discarding}
+        uploading={uploads.busy}
+        onStay={() => setDiscarding(false)}
+        onKeep={keepDraft}
+        onDiscard={() => discardDraft({ thenLeave: true })}
+      />
     </div>
   );
 }

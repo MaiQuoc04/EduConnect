@@ -19,6 +19,7 @@
 
 /* ---------- card details of this feed ---------- */
 .school-feed .school-feed-pin.is-on { color: var(--ink-600); }
+.school-feed .school-feed-pin.is-limit { opacity: 0.45; cursor: not-allowed; } /* the pin limit is reached (UC-63, maxPinned from UC-58) */
 /* News has no like / comment foot: the same space below as above. */
 .school-feed .feed-card.is-news { padding-bottom: 16px; }
 .school-feed .feed-card.is-news .feed-card-foot { padding-top: 8px; }
@@ -29,4 +30,24 @@
   .school-feed-search { flex: none; margin-bottom: 0; }
   .school-feed-search .input { height: 44px; }
   .school-feed .feed-card.is-news { padding-bottom: 14px; }
+}
+
+/* Long post on a card (17/11/2026): cut by the page (excerptOf of the FE-05 Group Feed, about 280 characters or 6
+   lines) with "Hiển thị thêm" / "Ẩn bớt", so no 3-line clamp here. Same look as the group feed's button.
+   Note: UC-58 sends contentPreview (300 characters, white space collapsed), not the whole content, so for now opening
+   shows at most those 300 characters; the detail page (SCR-05) always shows the whole post. */
+.school-feed .sf-text { display: grid; gap: 2px; justify-items: start; min-width: 0; }
+.school-feed .feed-preview.sf-excerpt { display: block; overflow: visible; white-space: pre-line; }
+.sf-more {
+  padding: 4px 0;
+  border: 0;
+  background: none;
+  font: 500 14px/20px var(--font-ui);
+  color: var(--ink-700);
+  cursor: pointer;
+}
+.sf-more:hover { text-decoration: underline; }
+.sf-more:focus-visible { outline: 2px solid var(--ink-400); outline-offset: 2px; border-radius: 2px; }
+@media (max-width: 640px) {
+  .sf-more { min-height: 44px; } /* a larger touch target */
 }

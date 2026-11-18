@@ -156,3 +156,37 @@
 }
 .ct-new-pill:hover { background: var(--ink-800); }
 .ct-new-pill:focus-visible { outline: 2px solid var(--ink-400); outline-offset: 2px; }
+
+/* Like of a comment (17/11/2026, only when the page gives api.like): same look as the other actions, ink when liked. */
+.ct-like.is-liked { color: var(--ink-700); }
+.ct-like.is-liked .icon { color: var(--ink-600); }
+.ct-like .mono { font-size: 12px; }
+
+/* Comment reports (17/11/2026): "Báo cáo" / "Đã báo cáo" and the report dialog. */
+.ct-action.is-reported { cursor: default; color: var(--graphite-500); }
+.ct-action.is-reported:hover { background: transparent; color: var(--graphite-500); }
+.ct-report-dialog form { display: grid; gap: 16px; }
+.ct-report-dialog .sf-dialog-head { margin-bottom: 0; }
+.ct-report-dialog .notice { margin-top: 0; }
+.ct-report-dialog .field-error { margin: 0; }
+.ct-report-reasons { display: grid; gap: 6px; margin: 0; padding: 0; border: 0; min-width: 0; }
+.ct-report-legend { display: block; margin-bottom: 6px; font-weight: 600; font-size: 14px; color: var(--graphite-900); }
+.ct-report-reason {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 44px;
+  padding: 8px 12px;
+  border: 1px solid var(--graphite-200);
+  border-radius: var(--radius-control);
+  cursor: pointer;
+  color: var(--graphite-700);
+}
+.ct-report-reason:hover { background: var(--ink-50); }
+.ct-report-reason.is-checked { border-color: var(--ink-400); background: var(--ink-50); color: var(--graphite-900); }
+.ct-report-reason input { accent-color: var(--ink-600); width: 16px; height: 16px; margin: 0; flex: none; }
+.ct-report-reason:has(input:focus-visible) { outline: 2px solid var(--ink-400); outline-offset: 2px; }
+.ct-report-note { display: grid; gap: 4px; }
+.ct-report-note .ct-report-legend { margin-bottom: 2px; }
+.ct-report-note textarea { resize: vertical; min-height: 72px; }
+.ct-report-count { justify-self: end; }
