@@ -29,7 +29,9 @@ reactions, attachments) is merged into one place after both are on `develop`.
 ## Current status (read first; update after every merge, schema patch or new decision)
 
 - **FE-09 Notifications built (18/11/2026, Quoc, `feature/fe-09-notifications`; not merged):** UC-67..UC-69.
-  - **DB: `patch_v0.3_notification_roles.sql` (approved by the lead 18/11) – NOT run on the shared DB yet.** Adds
+  - **DB: `patch_v0.3_notification_roles.sql` (approved by the lead 18/11) – run on the shared DB 18/11 by Quoc
+    (481 old rows filled, none left without a role; PK, FK, index and trigger checked; a rolled-back insert sends no
+    NOTIFY).** Adds
     `notification_recipients.role_code` (NOT NULL, FK roles, PK `(notification_id, user_id, role_code)`, old rows
     filled once by rule) and the statement trigger `trg_notification_recipients_notify` (`pg_notify` on commit).
     **Run it on the shared DB at the moment FE-09 is merged** – code without `role_code` can no longer write
