@@ -41,6 +41,10 @@ reactions, attachments) is merged into one place after both are on `develop`.
   Substitute check (local DB, 18/11): SM reassigns a (class, subject) for today only (UC-18) → its periods without
   attendance move to the new teacher, who can take them; the replaced teacher only views them (403
   `MSG_ATTENDANCE_VIEW_ONLY` on save); periods already taken stay with the teacher who took them (§10).
+  Review 18/11 (lead): homeroom switch also ends with the school year; leave guard on the class attendance page;
+  no stale-sheet check (§12 "Decided after the first review"). **Owed to FE-09:** a click on an ATTENDANCE
+  notification (`target_type` ATTENDANCE, `target_id` = attendance_id, `student_id` set) must open `/attendance` on
+  that child; no real-time push of attendance notifications yet.
 
 - **Docs aligned with the code (18/11/2026, lead):** features already built without a use case got **UC-117..UC-128**
   (`use-cases.md`: switch role, post approval on/off, report / handle / like school post comments, period times,

@@ -174,7 +174,7 @@ async function sheetRows(db, lesson) {
 }
 
 function sheetOut(lesson, rows) {
-  const { recordCount, homeroomTeacherId, schoolYearId, beforeDeadline, ...info } = lesson;
+  const { recordCount, homeroomTeacherId, schoolYearId, beforeDeadline, yearEnded, ...info } = lesson;
   return {
     lesson: { ...info, taken: rows.some((r) => r.attendanceId) },
     mode: lesson.mode,
@@ -294,6 +294,7 @@ const MODE_ERRORS = {
   MSG_ATTENDANCE_NOT_STARTED: 'The period has not started yet.',
   MSG_ATTENDANCE_DEADLINE_PASSED: 'The time to take or edit this period has passed.',
   MSG_SEMESTER_CLOSED: 'The semester is closed.',
+  MSG_SCHOOL_YEAR_ENDED: 'The school year has ended.',
   MSG_ATTENDANCE_VIEW_ONLY: 'You can only view this period.',
 };
 

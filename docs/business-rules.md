@@ -711,6 +711,18 @@ Boundaries that are easy to get wrong:
     is quoted in the first notification.
   - Saving only a note (same status) writes no history row and sends nothing.
   - A student whose enrollment was reopened (transfer back, §4) appears on the sheets of the days they were away.
+- **Decided after the first review (18/11/2026, lead):**
+  - The homeroom teacher's excused ↔ unexcused switch also ends when the **school year has ended**, even if a semester
+    was left open (`MSG_SCHOOL_YEAR_ENDED`); SM can still correct.
+  - The homeroom right belongs to the **current** homeroom teacher of the class: a new homeroom teacher may switch
+    periods from before they took the class, the previous one no longer can.
+  - No check for a sheet changed by someone else while it was open (a sheet is taken at once, not left open); the last
+    save wins and every change is in the history.
+  - A period outside every semester is not expected (periods are always inside a semester); no special message.
+  - If System Admin sets the deadline earlier than a period's start (e.g. 17:00 for period 10 at 17:00), the subject
+    teacher can never take that period; only SM can. Accepted.
+  - Leaving the class attendance page with unsaved changes (menu, link, Back, closing the tab, another period / day /
+    class) asks first.
 
 ## 13. System administration (FE-13)
 - `system_settings` (key–value, loaded by SQL; SA edits values only): sign-in lock thresholds, upload limits, OTP

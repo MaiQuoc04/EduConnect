@@ -22,6 +22,7 @@ const BLOCKED_TEXT = {
   MSG_ATTENDANCE_NOT_STARTED: 'Tiết học chưa bắt đầu nên chưa điểm danh được.',
   MSG_ATTENDANCE_DEADLINE_PASSED: 'Đã quá hạn điểm danh của tiết này. Cần sửa thì liên hệ quản lý nhà trường.',
   MSG_SEMESTER_CLOSED: 'Học kỳ đã đóng nên không đổi được nữa. Cần sửa thì liên hệ quản lý nhà trường.',
+  MSG_SCHOOL_YEAR_ENDED: 'Năm học đã kết thúc nên không đổi được nữa. Cần sửa thì liên hệ quản lý nhà trường.',
   MSG_ATTENDANCE_VIEW_ONLY: 'Bạn chỉ xem được điểm danh của tiết này.',
 };
 

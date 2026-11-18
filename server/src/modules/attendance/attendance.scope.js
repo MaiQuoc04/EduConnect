@@ -1,7 +1,7 @@
 import { pool } from '../../config/db.js';
 import { badRequest, forbidden, notFound } from '../../utils/AppError.js';
 import { getSetting } from '../../utils/settings.js';
-import { DEFAULT_DEADLINE, LESSON_START_SQL, MODES, SETTING_DEADLINE, TZ } from './attendance.constants.js';
+import { DEFAULT_DEADLINE, LESSON_START_SQL, MODES, SETTING_DEADLINE, TODAY_SQL, TZ } from './attendance.constants.js';
 
 // FE-12 Attendance (owner: Quoc) – lookups, data scope and the edit windows of business rules §12 / permissions.md
 // notes 7, 12, 13, 14. Permissions follow the ACTIVE role; System Admin never reaches FE-12 (routes refuse it).
@@ -59,6 +59,7 @@ export const LESSON_COLUMNS = `ts.timetable_slot_id AS "lessonId", to_char(ts."d
   NOW() >= ${LESSON_START_SQL} AS "started",
   NOW() <= ((ts."date" + $1::time + INTERVAL '59 seconds') AT TIME ZONE '${TZ}') AS "beforeDeadline",
   se.semester_id AS "semesterId", se.semester_no AS "semesterNo", se.status AS "semesterStatus",
+  (SELECT sy.end_date < ${TODAY_SQL} FROM school_years sy WHERE sy.school_year_id = c.school_year_id) AS "yearEnded",
   (SELECT COUNT(*) FROM attendances a WHERE a.timetable_slot_id = ts.timetable_slot_id) AS "recordCount"`;
 export const LESSON_JOINS = `JOIN time_slots sl ON sl.slot_id = ts.slot_id
   JOIN classes c ON c.class_id = ts.class_id AND c.deleted_at IS NULL
@@ -95,6 +96,8 @@ export async function taughtSubjectIds(db, teacherId, classId) {
  * Manager, then the homeroom teacher's excused <-> unexcused switch.
  * ASSUMPTION: the homeroom teacher may switch excused <-> unexcused as soon as the period is taken (also on the same
  * day), not only after the subject teacher's deadline – a family often explains an absence the same morning.
+ * Lead 18/11/2026: the switch also ends when the school year has ended, even if a semester was left open; the
+ * homeroom teacher is the CURRENT one of the class (a new homeroom teacher may switch older periods too).
  */
 export function resolveMode(ctx, lesson) {
   const taken = Number(lesson.recordCount) > 0;
@@ -105,9 +108,10 @@ export function resolveMode(ctx, lesson) {
   const ownLesson = me !== '' && String(lesson.teacherId) === me;
   const homeroom = me !== '' && String(lesson.homeroomTeacherId ?? '') === me;
   if (ownLesson && lesson.started && lesson.beforeDeadline) return { mode: MODES.TEACHER };
-  if (homeroom && taken && lesson.semesterStatus === 'OPEN') return { mode: MODES.HOMEROOM };
+  if (homeroom && taken && lesson.semesterStatus === 'OPEN' && !lesson.yearEnded) return { mode: MODES.HOMEROOM };
   let blocked = 'MSG_ATTENDANCE_VIEW_ONLY';
   if (ownLesson && !lesson.started) blocked = 'MSG_ATTENDANCE_NOT_STARTED';
+  else if (homeroom && taken && lesson.yearEnded) blocked = 'MSG_SCHOOL_YEAR_ENDED';
   else if (homeroom && taken && lesson.semesterStatus !== 'OPEN') blocked = 'MSG_SEMESTER_CLOSED';
   else if (ownLesson || homeroom) blocked = 'MSG_ATTENDANCE_DEADLINE_PASSED';
   return { mode: MODES.VIEW, blocked };

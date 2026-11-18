@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { listAttendanceClasses, listClassLessons, listMyLessons } from '../../api/attendance.js';
 import Icon from '../../components/Icon.jsx';
@@ -7,6 +7,7 @@ import { errorText } from '../../messages.js';
 import AttendanceSheet from './AttendanceSheet.jsx';
 import { addDays, dmy, SemesterSelect, STATUS, useAttendanceOptions, weekday } from './attendanceShared.jsx';
 import ClassReport from './ClassReport.jsx';
+import useUnsavedGuard from './useUnsavedGuard.js';
 import './attendance.css';
 
 // SCR-56 Class Attendance (teacher) and SCR-52 Attendance Correction (School Manager) – UC-90, UC-91, UC-93.
@@ -98,15 +99,16 @@ export default function ClassAttendancePage() {
     };
   }, [tab, classId, date, isManager, reload]);
 
-  // Unsaved changes on the open sheet: ask before opening another period / day / class.
-  const dirty = useRef(false);
-  const onDirty = useCallback((v) => {
-    dirty.current = v;
-  }, []);
+  // Unsaved changes on the open sheet: asked before opening another period / day / class / tab, before following a
+  // link of the app, on the browser's Back button and when closing the tab (useUnsavedGuard).
+  const [dirty, setDirty] = useState(false);
+  const onDirty = useCallback((v) => setDirty(v), []);
+  const guard = useUnsavedGuard(dirty);
   const go = (changes) => {
-    if (dirty.current && !window.confirm('Bảng điểm danh đang có thay đổi chưa lưu. Bỏ các thay đổi này?')) return;
-    dirty.current = false;
-    update(changes);
+    guard.run(() => {
+      setDirty(false);
+      update(changes);
+    });
   };
 
   const title = isManager ? 'Sửa điểm danh' : 'Điểm danh lớp';
