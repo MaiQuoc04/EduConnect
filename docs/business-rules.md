@@ -455,6 +455,9 @@ Boundaries that are easy to get wrong:
     sends a notification by default.
   - **NEWS**: view only (no likes / comments), whole school by default, not pinned, no notification by default.
 - No audience rows = whole school; choosing grade levels sends notifications to those grades only.
+- **Names on screen (18/11/2026, lead):** ANNOUNCEMENT is shown as **"Bài đăng"**, NEWS as "Tin tức"; the word
+  "Thông báo" is kept for notifications (bell / personal page, §9). The school feed has **two tabs, Bài đăng and Tin
+  tức** (Bài đăng first, the default); there is no mixed "Tất cả" tab. Code values (`ANNOUNCEMENT`) do not change.
 - SM can delete any comment on announcements; users can delete their own.
 
 ## 9. Notifications (FE-09)
@@ -466,7 +469,8 @@ Boundaries that are easy to get wrong:
 - Storage: content once in `notifications`, **one row per recipient** in `notification_recipients` (`read_at`).
 - The creator of an item (teacher for class events / activities, SM for announcements) can see **who has not read**
   a personal notification (UC-68).
-- Parents are notified when their child's attendance is anything other than "present".
+- Parents **and the student** are notified when the student's attendance is anything other than "present", and
+  on every later change of it (details in §12, 18/11/2026).
 
 ## 10. Timetable and class calendar (FE-10)
 - SM enters or imports a **weekly pattern** per class plus a date range; the system generates **one
@@ -665,9 +669,60 @@ Boundaries that are easy to get wrong:
 - The subject teacher takes attendance for periods they teach and can edit until **23:59 the same day**. After that:
   the homeroom teacher (own class) can only switch excused ↔ unexcused, until the semester is closed; every other
   change is SM only.
+  Why (18/11/2026, lead): present / late / absent is what the subject teacher sees in the period, so it is fixed
+  early; whether an absence is excused depends on the family's explanation, which reaches the homeroom teacher days
+  later (there is no leave request in the system), and the excused / unexcused counts are final when the semester
+  closes. The homeroom teacher never changes absent ↔ present / late.
 - **Every action is logged** in `attendance_histories`, including the first take (`old_status` NULL).
+- **Notifications (18/11/2026, lead):** personal (`type` / `target_type` ATTENDANCE, `is_personal` TRUE,
+  `student_id` = the student) to the **student and their linked parents** (active accounts), **one per period**
+  (no grouping by day). Sent when attendance is saved: first take with a status other than PRESENT, and every
+  later change of status (subject teacher, homeroom teacher, SM) where the old or the new status is not PRESENT –
+  the text says "from X to Y". Nothing is sent for PRESENT on the first take or when only the note changes; the
+  server compares with the stored status, so saving the sheet twice sends nothing new.
 - Students, parents and teachers of the class view per period; SM sees school-wide statistics; export to Excel.
   Attendance does not affect grades.
+- **Details agreed before coding (18/11/2026, lead):**
+  1. A period can be taken from its start time (`time_slots.start_time`) until the edit deadline of that day.
+  2. The sheet of a period = students of the class on that date: `enrolled_at` on or before the date and not left
+     (`left_at` NULL or after the date). Records of students who left later stay.
+  3. The sheet opens with everyone PRESENT; the teacher changes the exceptions and saves the **whole class at once**
+     (no partial save). Each student has an optional note (`attendances.note`).
+  4. A period not taken by the deadline: the subject teacher and the homeroom teacher can no longer enter it; only SM
+     enters it, with a reason.
+  5. Reason (`attendance_histories.reason`): optional for the subject teacher on the day; **required** for the
+     homeroom teacher's excused ↔ unexcused switch and for every SM change.
+  6. SM can correct at any time (also a closed semester or an ended school year); every change is in the history.
+  7. A subject teacher sees only the periods of the subjects they teach in the class; the homeroom teacher sees every
+     period of their class.
+  8. Student / parent (UC-92): per-semester totals (late, excused, unexcused) and the list of periods that were not
+     PRESENT, filtered by month; mobile layout; a parent picks a child as in the timetable (SCR-53).
+  9. SM statistics (UC-94, Excel export): semester or date range, grade filter; per class: periods taken / periods
+     held, present rate, late, excused, unexcused; a class opens its students; a list of **periods not taken yet**.
+     No "too many absences" warning (no agreed threshold).
+  10. Teacher entry: "Điểm danh" in the lesson detail of the teaching schedule (SCR-57) and the "Điểm danh lớp" page
+      (SCR-56: class, date, period); SM corrects on SCR-52. Menu "Điểm danh" for Teacher, Student, Parent and SM.
+- **Assumptions made while building FE-12 (18/11/2026, Quoc – to confirm):**
+  - The homeroom teacher may switch excused ↔ unexcused as soon as a period is taken (also on the same day), not only
+    after the subject teacher's deadline.
+  - SM cannot enter a period that has not started yet (same as everyone).
+  - "Present rate" = (present + late) / records; late is also counted apart.
+  - The reason of a homeroom / SM change is quoted in the notification to the student and parents; the teacher's note
+    is quoted in the first notification.
+  - Saving only a note (same status) writes no history row and sends nothing.
+  - A student whose enrollment was reopened (transfer back, §4) appears on the sheets of the days they were away.
+- **Decided after the first review (18/11/2026, lead):**
+  - The homeroom teacher's excused ↔ unexcused switch also ends when the **school year has ended**, even if a semester
+    was left open (`MSG_SCHOOL_YEAR_ENDED`); SM can still correct.
+  - The homeroom right belongs to the **current** homeroom teacher of the class: a new homeroom teacher may switch
+    periods from before they took the class, the previous one no longer can.
+  - No check for a sheet changed by someone else while it was open (a sheet is taken at once, not left open); the last
+    save wins and every change is in the history.
+  - A period outside every semester is not expected (periods are always inside a semester); no special message.
+  - If System Admin sets the deadline earlier than a period's start (e.g. 17:00 for period 10 at 17:00), the subject
+    teacher can never take that period; only SM can. Accepted.
+  - Leaving the class attendance page with unsaved changes (menu, link, Back, closing the tab, another period / day /
+    class) asks first.
 
 ## 13. System administration (FE-13)
 - `system_settings` (key–value, loaded by SQL; SA edits values only): sign-in lock thresholds, upload limits, OTP

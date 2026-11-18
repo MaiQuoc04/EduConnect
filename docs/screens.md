@@ -1,13 +1,17 @@
-# Screen list (73)
+# Screen list (83)
 
 Source: Report 3 section 5.1 (draft v1.3). Screen numbers here are Report 3's; the numbering in `Screen_List_Report3_v1.2` (ordered by FE) differs. Besides desktop, 8 screens also need a mobile layout (decided 18/10): Login Page, Group Feed, Group Post Detail, Chat Room, School Feed, Timetable View, Academic Results, Child Attendance. No dashboard screen.
+
+SCR-74..SCR-83 (added 18/11/2026 by the lead): pages already running in the code that had no screen number. Existing
+numbers are never changed (code comments refer to them). Screens marked "(planned)" belong to FE-09 / FE-12, still being
+built in Iteration 3.
 
 | # | Screen | Feature | Description |
 |---|---|---|---|
 | 1 | Login Page | FE-01 | Allows User to authenticate using the school-issued account |
 | 2 | School Feed | FE-08 | Displays school-wide posts and provides access to school feed management. |
 | 3 | User Profile | FE-01 | Displays the User's profile information; a Parent also opens each linked child's profile from it (UC-109). |
-| 4 | Notifications | FE-09 | Displays notifications and reminders relevant to User. |
+| 4 | Notifications | FE-09 | Displays notifications and reminders relevant to User. (planned) |
 | 5 | School Post Detail | FE-08 | Displays details of a school announcement or news post. |
 | 6 | Update School Post | FE-08 | Allows School Manager to update an existing school announcement or news post. |
 | 7 | Student List | FE-02 | Displays students managed by the school. |
@@ -54,12 +58,12 @@ Source: Report 3 section 5.1 (draft v1.3). Screen numbers here are Report 3's; t
 | 48 | Class Ranking | FE-11 | Displays class ranking information according to the User's permissions. |
 | 49 | Conversation List | FE-06 | Displays conversations available to the current User. |
 | 50 | Chat Room | FE-06 | Displays a selected conversation and allows Users to exchange messages. |
-| 51 | Attendance Statistics | FE-12 | Displays attendance statistics according to the current user's role and scope. |
-| 52 | Attendance Correction | FE-12 | Allows School Manager to review and correct attendance records when necessary. |
-| 53 | Select Child | FE-12 | Allows a Parent linked to multiple students to select the child whose information will be viewed or managed. |
-| 54 | Child Attendance | FE-12 | Displays attendance information of the child selected by the Parent. |
-| 55 | Personal Attendance | FE-12 | Displays the Student's personal attendance record. |
-| 56 | Class Attendance | FE-12 | Allows Teacher to view and manage attendance records for an authorized class. |
+| 51 | Attendance Statistics | FE-12 | Displays attendance statistics according to the current user's role and scope. (planned) |
+| 52 | Attendance Correction | FE-12 | Allows School Manager to review and correct attendance records when necessary. (planned) |
+| 53 | Select Child | FE-12 | Allows a Parent linked to multiple students to select the child whose information will be viewed or managed. (planned) |
+| 54 | Child Attendance | FE-12 | Displays attendance information of the child selected by the Parent. (planned) |
+| 55 | Personal Attendance | FE-12 | Displays the Student's personal attendance record. (planned) |
+| 56 | Class Attendance | FE-12 | Allows Teacher to view and manage attendance records for an authorized class. (planned) |
 | 57 | Teaching Schedule | FE-10 | Displays the teaching schedule assigned to the Teacher. |
 | 58 | Teaching Schedule Detail | FE-10 | Displays detailed information about a selected teaching schedule entry. |
 | 59 | Account List | FE-13 | Displays user accounts managed at the system administration level. |
@@ -77,3 +81,13 @@ Source: Report 3 section 5.1 (draft v1.3). Screen numbers here are Report 3's; t
 | 71 | Password Reset Requests | FE-13 | Lists the automatic resets from password reset requests (tab waiting for sign-in / used): "sent by email" or "to hand over" with the temporary password; System Admin sees all, School Manager student, parent and teacher accounts (added 01/11/2026). |
 | 72 | Departments | FE-03 | Allows School Manager to create, rename and delete departments (tổ chuyên môn) and choose the subjects of each (UC-114, added 07/11/2026). |
 | 73 | Import Teachers | FE-03 | Allows School Manager to create teacher accounts from a file: template, preview, import, one-time password file (UC-116, same steps as Import Accounts; added 07/11/2026). |
+| 74 | Extracurricular Activities | FE-07 | Lists the extracurricular activities of the user's classes (homeroom classes for a teacher, own class for a student, children's classes for a parent), upcoming first; the homeroom teacher starts a new activity from it (UC-53, UC-50). |
+| 75 | Activity Detail | FE-07 | Displays an activity with its registration status; a parent registers or cancels a child; the homeroom teacher updates or cancels the activity and opens the registration list (UC-51..UC-55). |
+| 76 | Import Accounts | FE-13 | Allows System Admin to create accounts from a file: account type, template, preview, import of the valid rows, one-time file of usernames and temporary passwords (UC-96). |
+| 77 | Import Parent–Student Links | FE-02 | Allows School Manager to link parents and students from a file: template, preview, import of the valid rows (UC-14). |
+| 78 | Import Class Timetable | FE-10 | Allows School Manager to import the weekly timetables of one or more classes from Excel for a date range: upload, check, result; all classes are saved or none (UC-72). |
+| 79 | Timetable History | FE-10 | Shows every saved timetable of a class: who saved it and when, dates still in force, what replaced which dates, periods held, the weekly pattern; CSV export (UC-124). |
+| 80 | Automatic Scheduling | FE-10 | Allows School Manager to generate a draft of teaching assignments and / or timetables for a semester, review its warnings and apply it (UC-123). |
+| 81 | Period Times | FE-10 | Allows School Manager to set the start of each session and the length of a period (UC-122). |
+| 82 | School Calendar | FE-10 | Lists upcoming and past school-wide dates; School Manager adds, edits and deletes them (UC-126, UC-127). |
+| 83 | Comment Reports | FE-08 | Allows School Manager to review reported comments of school announcements and delete the comment or dismiss the reports (UC-120). |

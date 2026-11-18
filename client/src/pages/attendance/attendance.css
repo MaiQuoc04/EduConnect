@@ -1,0 +1,161 @@
+/* FE-12 Attendance (owner: Quoc): SCR-51 statistics, SCR-52 / SCR-56 class attendance, SCR-53..55 student view.
+   "Ink & Paper" tokens from styles.css; student / parent screens also have a phone layout (screens.md). */
+
+.att-page { display: grid; gap: 16px; min-width: 0; }
+.att-page .page-header { margin-bottom: 0; }
+.att-tabs { justify-self: start; }
+.is-refreshing { opacity: 0.6; transition: opacity 0.15s; }
+
+.att-filters { display: flex; flex-wrap: wrap; gap: 12px 16px; align-items: flex-end; }
+.att-filters .field { min-width: 180px; }
+.att-date { display: flex; align-items: center; gap: 4px; }
+.att-date .input { width: 170px; }
+
+/* Day view: periods on the left, the sheet on the right */
+.att-layout { display: grid; grid-template-columns: minmax(260px, 340px) minmax(0, 1fr); gap: 20px; align-items: start; }
+.att-lessons { display: grid; gap: 10px; }
+.att-lesson-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
+.att-lesson {
+  width: 100%;
+  display: grid;
+  grid-template-columns: 64px minmax(0, 1fr);
+  gap: 4px 12px;
+  padding: 12px;
+  text-align: left;
+  font: inherit;
+  color: inherit;
+  background: var(--white);
+  border: 0;
+  outline: 1px solid var(--graphite-200);
+  border-radius: var(--radius-card);
+  cursor: pointer;
+}
+.att-lesson:hover { outline-color: var(--ink-200); }
+.att-lesson.is-active { outline: 2px solid var(--ink-600); background: var(--ink-50); }
+.att-lesson:focus-visible { outline: 2px solid var(--ink-400); }
+.att-lesson-period, .att-lesson-main { display: grid; gap: 2px; min-width: 0; }
+.att-lesson-stamp { grid-column: 2; justify-self: start; }
+.att-lesson-counts { display: flex; gap: 8px; }
+.att-legend { display: flex; flex-wrap: wrap; gap: 4px 12px; }
+.att-dot { display: inline-flex; align-items: center; gap: 4px; }
+.att-dot::before { content: ''; width: 8px; height: 8px; border-radius: 50%; background: currentColor; }
+.att-dot.is-green { color: var(--green); }
+.att-dot.is-amber { color: var(--amber); }
+.att-dot.is-blue { color: var(--blue); }
+.att-dot.is-red { color: var(--red-pen); }
+.att-red { color: var(--red-pen); }
+.att-amber { color: var(--amber); }
+.att-green { color: var(--green); }
+.att-empty { padding: 8px 0; }
+.att-placeholder { display: grid; justify-items: center; gap: 8px; padding: 48px 24px; text-align: center; }
+.att-placeholder .icon { font-size: 32px; color: var(--ink-400); }
+
+/* The sheet */
+.att-sheet { display: grid; gap: 16px; min-width: 0; }
+.att-sheet-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; }
+.att-sheet-head .title-md { margin: 2px 0; }
+.att-sheet-bar { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px; }
+.att-counts { display: flex; flex-wrap: wrap; gap: 4px 14px; }
+.att-list { list-style: none; margin: 0; padding: 0; border-top: 1px solid var(--graphite-200); }
+.att-row {
+  display: grid;
+  grid-template-columns: 28px minmax(140px, 1fr) auto minmax(120px, 0.8fr);
+  gap: 8px 12px;
+  align-items: center;
+  padding: 8px 4px;
+  border-bottom: 1px solid var(--graphite-200);
+}
+.att-row.is-changed { background: var(--ink-50); }
+.att-no { color: var(--graphite-500); text-align: right; }
+.att-who { display: grid; min-width: 0; }
+.att-who strong { overflow-wrap: anywhere; }
+.att-seg { display: inline-flex; border-radius: var(--radius-control); outline: 1px solid var(--graphite-300); overflow: hidden; }
+.att-seg-btn {
+  min-height: 36px;
+  padding: 0 10px;
+  border: 0;
+  border-left: 1px solid var(--graphite-300);
+  background: var(--white);
+  font: inherit;
+  font-size: 13px;
+  color: var(--graphite-700);
+  cursor: pointer;
+  white-space: nowrap;
+}
+.att-seg-btn:first-child { border-left: 0; }
+.att-seg-btn:disabled { cursor: not-allowed; color: var(--graphite-400); }
+.att-seg-btn:focus-visible { outline: 2px solid var(--ink-400); outline-offset: -2px; }
+.att-seg-btn.is-on.is-green { background: var(--green-bg); color: var(--green); font-weight: 600; }
+.att-seg-btn.is-on.is-amber { background: var(--amber-bg); color: var(--amber); font-weight: 600; }
+.att-seg-btn.is-on.is-blue { background: var(--blue-bg); color: var(--blue); font-weight: 600; }
+.att-seg-btn.is-on.is-red { background: var(--red-bg); color: var(--red-pen); font-weight: 600; }
+.att-note { height: 36px; }
+.att-note-view { color: var(--graphite-600); overflow-wrap: anywhere; }
+.att-reason { height: auto; padding-top: 8px; resize: vertical; }
+.att-sheet-foot { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; }
+.att-history { border-top: 1px solid var(--graphite-200); padding-top: 12px; display: grid; gap: 8px; }
+.att-history-item { display: grid; gap: 2px; padding: 6px 0; border-bottom: 1px solid var(--graphite-100); }
+
+/* Totals and tables */
+.att-totals { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; }
+.att-total { display: grid; gap: 2px; padding: 12px 14px; border-radius: var(--radius-control); background: var(--green-bg); color: var(--green); }
+.att-total strong { font-size: 22px; line-height: 28px; }
+.att-total.is-amber { background: var(--amber-bg); color: var(--amber); }
+.att-total.is-blue { background: var(--blue-bg); color: var(--blue); }
+.att-total.is-red { background: var(--red-bg); color: var(--red-pen); }
+.att-report { display: grid; gap: 16px; }
+.att-report-head { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: flex-start; gap: 12px; }
+.att-table-card { padding: 0; overflow: hidden; }
+.att-table-wrap { overflow-x: auto; }
+.att-table th.num, .att-table td.num { text-align: right; white-space: nowrap; }
+.att-table tr.is-selected td { background: var(--ink-50); }
+.att-link { color: var(--ink-700); font-weight: 500; }
+.att-left { margin-left: 6px; }
+.att-missing-note { padding: 12px 16px 0; }
+.att-pager { display: flex; justify-content: center; align-items: center; gap: 12px; padding: 12px; }
+.att-own-card { display: grid; gap: 12px; }
+.att-own .card + .card, .att-own .is-refreshing > .card + .card { margin-top: 16px; }
+
+/* Student / parent */
+.att-children { display: flex; flex-wrap: wrap; gap: 8px; }
+.att-child {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 14px;
+  min-height: 44px;
+  border: 0;
+  outline: 1px solid var(--graphite-200);
+  border-radius: var(--radius-card);
+  background: var(--white);
+  font: inherit;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.att-child > span { display: grid; }
+.att-child.is-on { outline: 2px solid var(--ink-600); background: var(--ink-50); }
+.att-records { list-style: none; margin: 0; padding: 0; }
+.att-record { display: grid; grid-template-columns: 96px minmax(0, 1fr) auto; gap: 12px; align-items: center; padding: 10px 0; border-bottom: 1px solid var(--graphite-100); }
+.att-record:last-child { border-bottom: 0; }
+.att-record-when, .att-record-main { display: grid; gap: 2px; min-width: 0; }
+
+@media (max-width: 1100px) {
+  .att-layout { grid-template-columns: minmax(0, 1fr); }
+  .att-row { grid-template-columns: 28px minmax(0, 1fr); }
+  .att-row .att-seg, .att-row .att-status-view, .att-row .att-note, .att-row .att-note-view { grid-column: 2; }
+}
+
+@media (max-width: 640px) {
+  .att-filters { display: grid; grid-template-columns: minmax(0, 1fr); }
+  .att-filters .field { min-width: 0; }
+  .att-date .input { width: auto; flex: 1; min-width: 0; }
+  .att-totals { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .att-seg { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); width: 100%; }
+  .att-seg-btn { min-height: 44px; padding: 0 4px; white-space: normal; }
+  .att-sheet-head { flex-direction: column; }
+  .att-record { grid-template-columns: minmax(0, 1fr) auto; }
+  .att-record-when { grid-column: 1 / -1; display: flex; gap: 8px; align-items: baseline; }
+  .att-child { flex: 1 1 100%; }
+  .att-page .page-header { flex-direction: column; }
+}

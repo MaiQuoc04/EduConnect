@@ -385,6 +385,19 @@ const ERROR_MESSAGES = {
   MSG_SCORE_INVALID: 'Điểm phải từ 0 đến 10, tối đa 2 chữ số thập phân.',
   MSG_GRADES_INCOMPLETE: ({ count } = {}) => `Chưa chốt được: ${count ?? 'một số'} học sinh đang học còn thiếu điểm.`,
   MSG_IMPORT_HAS_ERRORS: 'File còn dòng bị lỗi. Sửa file rồi thử lại; chưa có điểm nào được lưu.',
+  // FE-12 Attendance Management
+  MSG_LESSON_NOT_FOUND: 'Không tìm thấy tiết học.',
+  MSG_ATTENDANCE_NOT_STARTED: 'Tiết học chưa bắt đầu nên chưa điểm danh được.',
+  MSG_ATTENDANCE_DEADLINE_PASSED: 'Đã quá hạn điểm danh của tiết này. Cần sửa thì liên hệ quản lý nhà trường.',
+  MSG_ATTENDANCE_VIEW_ONLY: 'Bạn chỉ xem được điểm danh của tiết này.',
+  MSG_ATTENDANCE_HOMEROOM_ONLY: 'Giáo viên chủ nhiệm chỉ đổi được giữa vắng có phép và vắng không phép.',
+  MSG_ATTENDANCE_REASON_REQUIRED: 'Vui lòng ghi lý do thay đổi.',
+  MSG_ATTENDANCE_INCOMPLETE: ({ missing } = {}) => `Còn ${missing ?? 'một số'} học sinh chưa có trạng thái. Vui lòng điểm danh cả lớp.`,
+  MSG_ATTENDANCE_NOT_IN_CLASS: 'Có học sinh không thuộc danh sách của tiết này. Vui lòng tải lại trang.',
+  MSG_ATTENDANCE_RECORDS: 'Dữ liệu điểm danh không hợp lệ. Vui lòng tải lại trang.',
+  MSG_ATTENDANCE_STATUS: 'Trạng thái điểm danh không hợp lệ.',
+  MSG_ATTENDANCE_NOTE_TOO_LONG: ({ max } = {}) => `Ghi chú tối đa ${max ?? 500} ký tự.`,
+  MSG_ATTENDANCE_RANGE: 'Khoảng ngày phải nằm trong học kỳ, ngày bắt đầu trước ngày kết thúc.',
 };
 
 // 'YYYY-MM-DD' -> 'DD/MM/YYYY' (kept local so messages.js has no imports)
