@@ -340,7 +340,8 @@ function ScheduleCard({ schedule, loading, onChangeWeek }) {
                   <div className="td-slot td-slot--empty">Không có tiết</div>
                 ) : (
                   slots.map((s) => (
-                    <div key={`${s.date}-${s.period}`} className="td-slot">
+                    <Link key={`${s.date}-${s.period}`} to={`/timetable?classId=${s.classId}&date=${s.date}`} className="td-slot td-slot--link"
+                      title={`Xem thời khoá biểu lớp ${s.className}`}>
                       <div className="td-slot-time">
                         Tiết {s.period} · {s.startTime}
                       </div>
@@ -349,7 +350,7 @@ function ScheduleCard({ schedule, loading, onChangeWeek }) {
                         {s.subjectName}
                         {s.room ? ` · ${s.room}` : ''}
                       </div>
-                    </div>
+                    </Link>
                   ))
                 )}
               </div>

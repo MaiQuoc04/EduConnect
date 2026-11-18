@@ -227,6 +227,9 @@ Boundaries that are easy to get wrong:
     teacher are joined. Timetable periods **inside the range without attendance** move to the new teacher; periods
     with attendance stay. A (class, subject) cannot be left without a teacher in a range that still has such
     periods.
+  - **Search on SCR-19 (18/11/2026):** the search box finds a class (name) or a teacher (whole name word first, else
+    the start of a name word, or part of the code; accents ignored). A teacher match shows only the classes where
+    that teacher is assigned in the range on screen, only the columns of their subjects, and highlights their cells.
   - **Viewing assignments by range (SCR-19):** SM picks "from" and "to"; each (class, subject) lists every teacher
     whose assignment overlaps the range, with its start and end dates (01/01–31/05 shows only A, 01/06–31/12 only
     B, 01/01–31/12 both). Changes are made for the range on screen and only when it starts today or later.
@@ -436,6 +439,53 @@ Boundaries that are easy to get wrong:
 - The DB blocks clashes: one class or one teacher cannot have two lessons in the same period of the same day.
 - **No substitute teaching**: the timetable teacher must match the teaching assignment.
 - Teachers' teaching schedules are built automatically; parents pick a child to view a timetable.
+- **How it is stored (10/11/2026, FE-10, agreed with the lead):** a class timetable is a **version** (`timetables`:
+  class, start date, end date) holding a **weekly pattern** (`timetable_entries`: weekday + period → subject + room).
+  The teacher is not stored in the pattern: each generated period takes the teacher whose teaching assignment covers
+  that date (§4), so a teaching change automatically changes the teacher of later periods.
+  - Create / update (UC-71, UC-73): SM chooses the range [start, end] (start **today or later**, end defaults to the
+    end of the school year). Only the range changes: a version running before it ends the day before, one inside it
+    is replaced, one running past it keeps its part after `end` (split). Periods of the range **without attendance**
+    are deleted and generated again; periods with attendance stay (a new period is not placed on top of them).
+  - **History (17/11/2026, Dung):** nothing of an old timetable is lost when a new one is saved (manual save, import
+    or automatic scheduling). A version row is never edited in place: the version that overlaps the new range is
+    soft-deleted (`deleted_at` = time of the save) and the parts that stay in force are inserted again with the same
+    pattern, creator and `created_at`. So rows of a class with the same `created_at` are one saved timetable (its
+    first row keeps the range and pattern as saved), and a row deleted at time T was replaced by the save of the
+    same class created at T. No schema change. Periods already held (before the start of a save) are never touched.
+    Screen: "Lịch sử" on SCR-27 / "Xem toàn bộ lịch sử" in the editor – `/timetables/classes/:classId/history`
+    (School Manager): every save with who / when, dates still in force, what replaced which dates, periods held and
+    with attendance, the weekly pattern (cells changed from the replaced timetable highlighted) and a CSV export.
+    Versions trimmed before 17/11/2026 only show the part left.
+  - Saving the same pattern for exactly the same dates as the version in force changes nothing (`unchanged: true`,
+    no new history entry); the editor keeps "Lưu" disabled until something changes. Automatic scheduling and import
+    always save (they also regenerate the periods). The apply dialog of automatic scheduling says that days before
+    its start date (also the past days of the current week) keep the old timetable.
+  - Signed in as a teacher (18/11/2026): in a class timetable the teacher's own lessons are coloured green with
+    "Bạn dạy" and the legend counts them for the week (`mine` / `myLessons` of the week API, worked out on the
+    server from the signed-in account). In the teaching schedule every lesson is theirs, so all are coloured.
+  - **Teacher schedule lookup (18/11/2026):** on the teaching assignment screen (SCR-19) the School Manager opens "Tra
+    lịch dạy giáo viên", types a name, teacher code, department or subject and sees that teacher's teaching schedule
+    week by week (same lessons as SCR-57; `GET /timetables/teachers/:teacherId/week`, School Manager only).
+  - **Finding the lessons (18/11/2026):** "Lịch dạy" (and the lookup above) shows "Lịch dạy sắp tới" – per class and
+    subject the lessons from today (first / last date, periods a week, how many left) and the dates of teaching
+    assignments whose class has no timetable yet (e.g. semester II). Opened on a week without lessons, it jumps once to
+    the first week with lessons (with "Về tuần này"); an empty week offers "Tuần có tiết trước / tiếp theo".
+  - Saving is refused (nothing changes) when a subject has **no assigned teacher** on some dates of the range, or a
+    teacher would teach **two classes in the same period**; the answer lists the dates / periods.
+  - Two School Managers on the same class: a save made from an editor opened before someone else's save is refused
+    (`MSG_TIMETABLE_STALE`, reload first). An empty pattern is allowed and removes the periods without attendance of
+    the range (the screen asks first). A school year that has ended is read only (no create / update / import).
+  - Subjects must be subjects of the class type for that year (`track_subjects`); one subject per period. The number
+    of periods per subject is shown against `track_subjects.periods_per_week` but not enforced (ASSUMPTION).
+  - ASSUMPTION: lessons are Monday–Saturday (no Sunday); periods come from `time_slots`; no holiday calendar yet –
+    SM shortens the range or changes the pattern for a holiday week.
+  - Import (UC-72): one .xlsx, one row per lesson (class, weekday 2–7, period, subject code or name, room) for one or
+    more classes, with one range chosen on the screen. Checked row by row and class by class (same rules as above,
+    clashes between classes of the same file included); **all classes are saved or none**.
+  - Viewing (UC-74): SM any class; teacher the homeroom class and classes they are assigned to; student own class;
+    parent the classes of linked children (picks a child first). Teaching schedule (UC-75): the teacher's own
+    periods. Week view, one day at a time on phones; a period opens its detail (time, room, teacher, attendance).
 - **Class events** (e.g. 15-minute test, parent meeting): a subject teacher creates events for their own subject;
   the homeroom teacher can also create general events (`subject_id` NULL). Category from a fixed list
   (`event_categories`: Test, Assignment deadline, Parent meeting, Class meeting, Other – no UI to edit it).
@@ -444,6 +494,86 @@ Boundaries that are easy to get wrong:
 - Events appear automatically in the viewers' day calendar – there is **no "add to timetable" button**.
 - One reminder **1 day before** the event (`class_events.reminded_at`; cleared when the time changes; events created
   less than a day ahead get no reminder). Only the creator updates / deletes an event.
+- **Class calendar as built (FE-10, Dung, 10/11/2026 – the ASSUMPTION items wait for the lead):**
+  - Who sees an event, by active role: teacher – creator, homeroom teacher of the class, subject teachers of the class
+    when "all subject teachers" is ticked (a teaching assignment in the class on the event's day), people picked one
+    by one; student – students **studying** in the class when "all students" is ticked, or picked; parent – parents of
+    a child studying in the class when "all parents" is ticked, or picked. School Manager / System Admin: no access.
+    Not allowed = not found. People picked one by one must belong to the class (students studying, their parents,
+    the class's teachers) and have an active account; at most 100 (ASSUMPTION). On update, people saved earlier who
+    have since left the class or been locked are dropped quietly; a newly picked person outside the class is refused.
+  - "Own subject" = a teaching assignment of the teacher for that class and subject covering the event's day
+    (ASSUMPTION). General events (no subject): homeroom teacher only.
+  - Times are Vietnam time; an event starts later than now, ends after it starts (end optional) **on the same day**
+    (ASSUMPTION: the form has one date; several days = several events), and stays inside the class's school year; an
+    ended school year is read only. Title 1–255 characters, description up to 2000
+    (ASSUMPTION).
+  - An event that has started can no longer be updated or deleted (ASSUMPTION: it is class history). Delete = soft.
+  - Two tabs / two people saving the same event: the update sends the version it was opened with (`stamp`, built
+    from the event's content); if the event was saved in between the server answers 409 `MSG_EVENT_CHANGED` and the
+    form offers "Tải lại". Leaving the form with unsaved changes asks first.
+  - Notifications: a general bell notification to the audience when an event is created (ASSUMPTION: none on update /
+    delete); the reminder is a **personal** notification (`CLASS_EVENT`, `created_by` NULL) sent by
+    `sendClassEventReminders()` in `server/src/modules/calendar/calendar.reminders.js` – the FE-09 job (UC-69) calls it
+    (hourly or daily; it never sends twice). An event moved to less than a day ahead is reminded at the next run
+    ("Hôm nay – …" when it is today, otherwise "Ngày mai – …"). Recipients: the audience except the creator; locked accounts are skipped;
+    a parent gets one row with `student_id` = the child concerned.
+  - Note for the lead: the `set_updated_at` trigger also fires when the reminder job sets `reminded_at`, so
+    `class_events.updated_at` is not "last edited by a person"; the detail hides an `updated_at` that only comes from
+    that reminder write.
+
+- **Period times (13/11/2026, Dung, requested for the School Manager – no UC id yet, waiting for the lead):** the School
+  Manager sets the **start of each session** (morning, afternoon) and **one length for every period** on
+  `/timetables/period-times` (button "Giờ học" on SCR-27); the **break after each period keeps its current length**.
+  Sessions are found from the current times (a break longer than 45 minutes starts a new session; seed: periods 1–5
+  morning, 6–10 afternoon). Rules (ASSUMPTION): a period lasts 30–60 minutes; lessons between 05:00 and 22:00; at
+  least 60 minutes between the end of one session and the start of the next. `time_slots` keeps no history and the
+  timetables store period numbers only, so **every day, past weeks included, shows the new times**. Two managers:
+  a save made from a page opened before someone else's save is refused (`MSG_PERIOD_TIMES_CHANGED`). Each change is
+  logged (`activity_logs` SETTING_CHANGE, target TIME_SLOTS). No notification is sent (ASSUMPTION).
+- **School calendar (13/11/2026, Dung – "Lịch sắp tới của trường" of Stitch SCR-34; table `school_events`, proposed
+  `patch_v0.3_school_events.sql`, waiting for the lead; no UC id yet):**
+  - The School Manager adds, edits and deletes school-wide dates (title, start, optional end – may be another day,
+    place, note) for the **whole school or one grade**. Start in the future (checked again only when it changes),
+    inside a school year; the end inside the same year. Past dates can be corrected or deleted too (Dung's request,
+    13/11; a date that already started may keep or get a past start). Delete is a soft delete. Stale save →
+    `MSG_SCHOOL_EVENT_CHANGED`. The same name (ignoring case and extra spaces) on the same day for the same audience
+    is refused as a duplicate (`MSG_SCHOOL_EVENT_DUPLICATE`). The page lists 10 dates per page (tabs Sắp tới / Đã qua).
+  - Who sees (ASSUMPTION – public inside the school): School Manager and teachers – every date; students and parents –
+    whole-school dates and the dates of the grades of their (children's) classes being studied.
+  - Shown on the school feed column (next 5 dates), on `/school-events` (menu "Lịch của trường": upcoming / past) and,
+    read only, in the class calendar (SCR-39) of the classes of that grade. No notification yet (ASSUMPTION; FE-09).
+
+- **Automatic scheduling (17/11/2026, Dung – no UC id, spec "Đặc tả: Tự động phân công & xếp thời khoá biểu"):**
+  School Manager, button "Xếp tự động" on SCR-27 (`/timetables/auto`). Three modes: assignment + timetable, assignment
+  only, timetable only (uses the running assignments). The server makes a **draft**; nothing is saved until "Áp dụng".
+  - Range: from today (or the semester's first day) to the semester's last day. New assignments run from that day to
+    the end of the school year (one teacher per class and subject); history before it is kept (same code as SCR-19).
+  - Week grid (default 5 mornings × 5 + Tuesday and Thursday afternoons × 2 = 29 cells; morning ≤ 5, afternoon ≤ 3,
+    ≤ 6 days – Công văn 7291). Periods per week from `track_subjects`, changeable for the semester being scheduled
+    (History: 1 in semester I, 2 in semester II). Fixed cells: Chào cờ (Monday period 1) and Sinh hoạt lớp (Friday
+    period 5) taken from HĐTN, a different teacher in every class (the homeroom teacher first); they do not count
+    towards the norm.
+  - Norm 17 periods/week, homeroom teacher 13 (Thông tư 05/2025), at most 4 over (ASSUMPTION: school's choice).
+  - Hard rules (never broken, re-checked on apply): qualified teacher, one teacher per (class, subject), weekly cap,
+    no teacher / class clash (lessons of classes not in the run included), exact periods per subject, only grid cells,
+    rooms per subject (e.g. Tin học 1 room), teacher busy cells, at most 2 periods of a subject per day.
+  - Soft rules (weighted penalty, weights editable): teacher gaps, two periods of a subject not adjacent, more than 4
+    periods a day, a subject packed into one day, heavy subjects (Toán, Văn, Anh) at periods 4–5 or afternoon,
+    afternoon subjects in the morning, empty cells before a lesson (empty cells go to the end of a session),
+    overload, imbalance, homeroom teacher not teaching their class.
+  - Checked before running (blocking): grid periods missing in `time_slots`, a class needing more periods than cells,
+    not enough teachers for a subject (need vs norm + overload of the qualified teachers), not enough teachers for
+    the fixed cells, too few rooms, timetable-only mode without running assignments.
+  - Apply: refused when assignments or timetables changed since the draft (`MSG_AUTO_STALE`), when a class already has
+    a timetable / assignments and the overwrite is not confirmed (`MSG_AUTO_CONFIRM`), or when the draft breaks a hard
+    rule or misses lessons. Lessons with attendance are kept; class groups follow the new assignments (FE-04 sync).
+  - Algorithm (Node, no external service): step A greedy with balancing + pairwise improvement; step B constraint
+    satisfaction – hardest lessons first, least-penalty cell, one-step repair, then local search (swaps) until the
+    time limit (default 5 s). Same data + seed = same draft; "Xếp lại" changes the seed.
+  - Sample data: `database/sample_auto_schedule.sql` (grade 10: 6 classes, 12 more teachers) and
+    `database/sample_grade_11_12.sql` (grades 11 and 12: 9 more classes, 20 more teachers; grade 11 already assigned
+    for "Chỉ xếp tiết", grade 12 not assigned for "Phân công + xếp tiết"). Both only add rows.
 
 ## 11. Grades (FE-11)
 - SM configures the grade structure per **subject × grade level × semester**: components with a weight and a number
@@ -517,7 +647,8 @@ Boundaries that are easy to get wrong:
 ## 14. Deleting data
 - **Every delete in the system is a soft delete** (`deleted_at`, often `deleted_by`): never `DELETE` business rows,
   always filter `deleted_at IS NULL`.
-- Hard delete is allowed only for technical / configuration rows: `department_subjects` (07/11/2026), `post_likes` (unlike), `message_reactions`
+- Hard delete is allowed only for technical / configuration rows: `department_subjects` (07/11/2026), `timetable_slots`
+  without attendance when a timetable range is generated again (§10, 10/11/2026), `post_likes` (unlike), `message_reactions`
   (reaction removed, §6), `class_event_viewers`,
   `teacher_subjects`, `user_roles`, `student_parents` (unlink), expired OTPs, `track_subjects` (a subject removed
   from a class type while the year has no grades, §4), `grade_components` (replaced while the structure has no

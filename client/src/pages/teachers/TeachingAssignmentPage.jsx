@@ -6,6 +6,7 @@ import { useToast } from '../../context/ToastContext.jsx';
 import { errorText } from '../../messages.js';
 import { formatDate } from '../../utils/format.js';
 import { foldVietnamese } from '../../utils/teacherValidation.js';
+import TeacherScheduleLookup from '../timetable/TeacherScheduleLookup.jsx';
 import './HomeroomAssignmentPage.css'; // shared toolbar / save bar styles (hr-*)
 import './TeachingAssignmentPage.css';
 
@@ -121,6 +122,7 @@ export default function TeachingAssignmentPage() {
   const [loadError, setLoadError] = useState(null);
   const [saveError, setSaveError] = useState(null);
   const [saving, setSaving] = useState(false);
+  const [lookup, setLookup] = useState(searchParams.get('lich') === '1'); // teacher schedule lookup panel
 
   const load = useCallback(async (params = {}) => {
     setLoading(true);
@@ -245,17 +247,38 @@ export default function TeachingAssignmentPage() {
     for (const c of classes) m.set(c.gradeLevel, (m.get(c.gradeLevel) ?? 0) + 1);
     return [...m.entries()];
   }, [classes]);
+  // The search box finds classes (name) and teachers (start of a name word or part of the code, accents ignored,
+  // every typed word must match).
+  // A teacher match keeps the classes where that teacher is assigned in the range (saved, unsaved or in the history
+  // of the cell) and highlights their cells, like ?teacherId= does. Dung, 18/11/2026.
   const q = fold(search.trim());
+  const qWords = q.split(/\s+/).filter(Boolean);
+  const matchedTeachers = useMemo(() => {
+    if (!qWords.length || (qWords.length === 1 && qWords[0].length < 2)) return new Set();
+    const all = Object.values(teacherById).map((t) => ({ t, names: fold(t.fullName).split(/\s+/), code: fold(t.teacherCode ?? '') }));
+    const by = (test) => all.filter((x) => qWords.every((w) => test(x, w) || x.code.includes(w))).map((x) => x.t.teacherId);
+    // Whole name words first ("Hoa" -> Lê Thị Hoa, not Hoàng …); else the start of a name word.
+    const exact = by((x, w) => x.names.includes(w));
+    return new Set(exact.length ? exact : by((x, w) => x.names.some((n) => n.startsWith(w))));
+  }, [teacherById, q]); // eslint-disable-line react-hooks/exhaustive-deps
+  const teachersOfCell = (k) => [valueOf(k), saved[k], ...(history[k] ?? []).map((a) => String(a.teacherId))].filter(Boolean);
+  const hit = (k) => teachersOfCell(k).some((id) => id === focusTeacher || matchedTeachers.has(id));
+  const highlighting = Boolean(focusTeacher) || matchedTeachers.size > 0;
+  const classByName = (c) => q && fold(c.className).includes(q);
   const visible = classes.filter((c) => {
     if (grade !== 'all' && c.gradeLevel !== grade) return false;
-    if (q && !fold(c.className).includes(q)) return false;
     const keys = Object.keys(c.subjects).map((sid) => keyOf(c.classId, sid));
+    if (q && !classByName(c) && !keys.some((k) => teachersOfCell(k).some((id) => matchedTeachers.has(id)))) return false;
     if (onlyTodo && !keys.some((k) => stateOf(k) !== 'ok' || k in draft)) return false;
     if (focusTeacher && !keys.some((k) => valueOf(k) === focusTeacher || saved[k] === focusTeacher)) return false;
     return true;
   });
-  // Only columns used by the visible classes
-  const columns = subjects.filter((s) => visible.some((c) => s.subjectId in c.subjects));
+  // Only columns used by the visible classes; when only teachers matched, only the columns of their subjects.
+  const teacherOnly = matchedTeachers.size > 0 && !visible.some(classByName);
+  const columns = subjects.filter((s) => visible.some((c) => s.subjectId in c.subjects
+    && (!teacherOnly || hit(keyOf(c.classId, s.subjectId)))));
+  const matchedNames = [...matchedTeachers].map((id) => teacherById[id]?.fullName).filter(Boolean)
+    .sort((a, b) => a.localeCompare(b, 'vi'));
 
   // Totals (whole year, after pending changes)
   let totalCells = 0;
@@ -379,6 +402,10 @@ export default function TeachingAssignmentPage() {
       )}
       {board && !board.schoolYear && <div className="hr-empty-card"><Icon name="event_busy" /> Chưa có năm học nào được tạo.</div>}
 
+      {board?.schoolYear && lookup && (
+        <TeacherScheduleLookup teachers={board.teachers} subjects={board.subjects} onClose={() => setLookup(false)} />
+      )}
+
       {board?.schoolYear && (
         <>
           <div className="ta-toolbar">
@@ -390,12 +417,22 @@ export default function TeachingAssignmentPage() {
             </div>
             <div className="ta-search">
               <Icon name="search" />
-              <input placeholder="Tìm lớp (vd: 10A1)…" value={search} maxLength={20} onChange={(e) => setSearch(e.target.value)} aria-label="Tìm lớp" />
+              <input placeholder="Tìm lớp hoặc giáo viên (vd: 10A1, Hoa, GV0114)…" value={search} maxLength={40} onChange={(e) => setSearch(e.target.value)} aria-label="Tìm lớp hoặc giáo viên" />
+              {search && <button type="button" className="ta-search-clear" aria-label="Xoá ô tìm" onClick={() => setSearch('')}><Icon name="close" size="sm" /></button>}
             </div>
             <label className="ta-check">
               <input type="checkbox" checked={onlyTodo} onChange={(e) => setOnlyTodo(e.target.checked)} />
               Chỉ lớp cần xử lý
             </label>
+            <button type="button" className={`btn ${lookup ? 'btn-primary' : 'btn-secondary'} ta-lookup-btn`} aria-expanded={lookup} onClick={() => setLookup((v) => !v)}>
+              <Icon name="person_search" size="sm" /> Tra lịch dạy giáo viên
+            </button>
+            {matchedNames.length > 0 && (
+              <span className="ta-focus" title={matchedNames.join(', ')}>
+                <Icon name="person_search" size="sm" />
+                {matchedNames.length === 1 ? `Đang tô các môn của ${matchedNames[0]}` : `Khớp ${matchedNames.length} giáo viên: ${matchedNames.slice(0, 3).join(', ')}${matchedNames.length > 3 ? '…' : ''}`}
+              </span>
+            )}
             {focusTeacher && (
               <span className="ta-focus">
                 <Icon name="person_search" size="sm" /> Đang xem lớp của {focusName ?? 'giáo viên'}
@@ -435,12 +472,13 @@ export default function TeachingAssignmentPage() {
                         const t = tid ? teacherById[tid] : null;
                         const st = stateOf(k);
                         const changed = k in draft;
-                        const dim = focusTeacher && tid !== focusTeacher && saved[k] !== focusTeacher;
+                        const focused = highlighting && hit(k);
+                        const dim = highlighting && !focused && !(matchedTeachers.size && !focusTeacher && classByName(c));
                         const isOpen = picker && picker.classId === c.classId && picker.subjectId === s.subjectId;
                         return (
                           <td key={s.subjectId} className={dim ? 'is-dim' : undefined}>
                             <button type="button"
-                              className={`ta-cell ta-cell--${st}${changed ? ' is-changed' : ''}${isOpen ? ' is-open' : ''}${focusTeacher && (tid === focusTeacher || saved[k] === focusTeacher) ? ' is-focus' : ''}`}
+                              className={`ta-cell ta-cell--${st}${changed ? ' is-changed' : ''}${isOpen ? ' is-open' : ''}${focused ? ' is-focus' : ''}`}
                               disabled={!editable}
                               aria-haspopup="dialog"
                               aria-label={`${c.className} – ${s.name}: ${t ? t.fullName : 'chưa có giáo viên'}`}

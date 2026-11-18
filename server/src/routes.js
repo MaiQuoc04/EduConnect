@@ -16,6 +16,9 @@ import departmentRoutes from './modules/teacher/department.routes.js';
 import homeroomRoutes from './modules/teacher/homeroom.routes.js';
 import teacherRoutes from './modules/teacher/teacher.routes.js';
 import teachingRoutes from './modules/teacher/teaching.routes.js';
+import timetableRoutes from './modules/timetable/timetable.routes.js';
+import calendarRoutes from './modules/calendar/calendar.routes.js';
+import schoolEventRoutes from './modules/calendar/schoolEvents.routes.js';
 import gradeRoutes from './modules/grades/grades.routes.js';
 import schoolPostRoutes from './modules/schoolposts/schoolposts.routes.js';
 import uploadRoutes from './modules/uploads/uploads.routes.js';
@@ -25,6 +28,8 @@ import parentRoutes from './modules/parents/parents.routes.js';
 //   FE-01 account   -> /auth, /account (Quoc)
 //   FE-02 students  -> /students      (Anh)
 //   FE-03 teachers  -> /teachers, /departments, /homeroom-assignments, /teaching-assignments (Dung)
+//   FE-10 timetable -> /timetables (Dung)
+//   FE-10 calendar  -> /class-events, /school-events (Dung, It3)
 //   FE-04 classes   -> /school-years, /classes, /groups, /subjects, /class-tracks (Khanh)
 //   FE-05 feed      -> /posts         (Khanh)
 //   FE-06 chat      -> /conversations (Khanh, + src/sockets)
@@ -54,6 +59,9 @@ router.use('/teachers', teacherRoutes);
 router.use('/departments', departmentRoutes);
 router.use('/homeroom-assignments', homeroomRoutes);
 router.use('/teaching-assignments', teachingRoutes);
+router.use('/timetables', timetableRoutes);
+router.use('/class-events', calendarRoutes);
+router.use('/school-events', schoolEventRoutes); // FE-10 school calendar (Dung)
 router.use('/grades', gradeRoutes);
 router.use('/school-posts', schoolPostRoutes);
 router.use('/parents', parentRoutes);
