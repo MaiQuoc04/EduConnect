@@ -24,6 +24,7 @@ import ActivityFormPage from './pages/extracurricular/ActivityFormPage.jsx';
 import ActivityListPage from './pages/extracurricular/ActivityListPage.jsx';
 import RegistrationListPage from './pages/extracurricular/RegistrationListPage.jsx';
 import CommentReportsPage from './pages/schoolfeed/CommentReportsPage.jsx';
+import GroupCommentReportsPage from './pages/groupfeed/GroupCommentReportsPage.jsx';
 import CreateSchoolPostPage from './pages/schoolfeed/CreateSchoolPostPage.jsx';
 import SchoolFeedPage from './pages/schoolfeed/SchoolFeedPage.jsx';
 import { SCHOOL_FEED_ROLES } from './pages/schoolfeed/schoolFeedShared.jsx';
@@ -152,6 +153,16 @@ export default function App() {
           element={
             <ProtectedRoute roles={['SCHOOL_MANAGER']}>
               <CommentReportsPage />
+            </ProtectedRoute>
+          }
+        />
+        {/* FE-05 reported comments of the group feeds (19/11/2026): the feeds' moderators – homeroom teachers, the School
+            Manager for the teacher group; the server lists only the feeds the user moderates. */}
+        <Route
+          path="group-comment-reports"
+          element={
+            <ProtectedRoute roles={['TEACHER', 'SCHOOL_MANAGER']}>
+              <GroupCommentReportsPage />
             </ProtectedRoute>
           }
         />
