@@ -28,7 +28,9 @@ reactions, attachments) is merged into one place after both are on `develop`.
 
 ## Current status (read first; update after every merge, schema patch or new decision)
 
-- **FE-09 Notifications built (18/11/2026, Quoc, `feature/fe-09-notifications`; not merged):** UC-67..UC-69.
+- **FE-09 Notifications merged into `develop` (18/11/2026, Quoc, `feature/fe-09-notifications`, merge `fd1f42c`;
+  build and `npm test` pass on `develop`):** UC-67..UC-69. **Everyone: pull `develop`** – since the patch, code
+  without FE-09 cannot write notifications on the shared DB.
   - **DB: `patch_v0.3_notification_roles.sql` (approved by the lead 18/11) – run on the shared DB 18/11 by Quoc
     (481 old rows filled, none left without a role; PK, FK, index and trigger checked; a rolled-back insert sends no
     NOTIFY).** Adds
