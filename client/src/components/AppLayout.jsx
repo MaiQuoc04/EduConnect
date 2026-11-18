@@ -6,6 +6,7 @@ import { navFor } from '../navigation.js';
 import MaintenanceBanner from '../pages/admin/MaintenanceBanner.jsx'; // FE-13 UC-103
 import Avatar from './Avatar.jsx';
 import Icon from './Icon.jsx';
+import NotificationBell from './NotificationBell.jsx'; // FE-09 UC-67
 
 // App shell from Stitch: 232px graphite-50 navigation rail + content on paper. Below 900px the rail becomes a drawer.
 export default function AppLayout() {
@@ -94,6 +95,7 @@ export default function AppLayout() {
             EduConnect
           </Link>
           <span className="spacer" />
+          <NotificationBell />
           <Link to="/profile" aria-label="Hồ sơ của tôi">
             <Avatar src={user.avatarUrl} name={user.fullName} size={36} />
           </Link>

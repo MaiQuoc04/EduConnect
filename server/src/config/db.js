@@ -23,14 +23,19 @@ function sslOptions() {
   return { ca: fs.readFileSync(caPath, 'utf8'), rejectUnauthorized: true };
 }
 
-// One shared pool for the whole app. pool.query(sql, params) returns { rows, rowCount }; placeholders are $1, $2…
-export const pool = new pg.Pool({
+// Connection settings shared by the pool and the one long-lived LISTEN client of FE-09 (sockets/notificationListener.js).
+export const connectionConfig = {
   host: env.db.host,
   port: env.db.port,
   user: env.db.user,
   password: env.db.password,
   database: env.db.database,
   ssl: sslOptions(),
+};
+
+// One shared pool for the whole app. pool.query(sql, params) returns { rows, rowCount }; placeholders are $1, $2…
+export const pool = new pg.Pool({
+  ...connectionConfig,
   max: env.db.poolMax, // the Supabase Free pooler is shared by the whole team
   idleTimeoutMillis: 30_000,
 });

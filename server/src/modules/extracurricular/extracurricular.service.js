@@ -291,13 +291,13 @@ export async function assertNotActivity(db, postId) {
 function audienceSql({ parents, students, extra = 'TRUE' }) {
   const parts = [];
   if (parents) {
-    parts.push(`SELECT pu.user_id, s.student_id FROM class_enrollments ce JOIN students s ON s.student_id = ce.student_id
+    parts.push(`SELECT pu.user_id, 'PARENT' AS role_code, s.student_id FROM class_enrollments ce JOIN students s ON s.student_id = ce.student_id
       JOIN student_parents sp ON sp.student_id = s.student_id JOIN parents pa ON pa.parent_id = sp.parent_id
       JOIN users pu ON pu.user_id = pa.user_id
       WHERE ce.class_id = $1 AND ce.status = ${STUDYING} AND pu.status = 'ACTIVE' AND ${extra}`);
   }
   if (students) {
-    parts.push(`SELECT su.user_id, s.student_id FROM class_enrollments ce JOIN students s ON s.student_id = ce.student_id
+    parts.push(`SELECT su.user_id, 'STUDENT' AS role_code, s.student_id FROM class_enrollments ce JOIN students s ON s.student_id = ce.student_id
       JOIN users su ON su.user_id = s.user_id
       WHERE ce.class_id = $1 AND ce.status = ${STUDYING} AND su.status = 'ACTIVE' AND ${extra}`);
   }
@@ -305,8 +305,8 @@ function audienceSql({ parents, students, extra = 'TRUE' }) {
 }
 
 /**
- * One personal notification and its recipients (one row per user: a parent of two children gets one, with the first
- * child as student_id). Returns the number of recipients. createdBy null = system (reminder job).
+ * One personal notification and its recipients (one row per user and role – FE-09, 18/11/2026, role_code: PARENT for
+ * parents, STUDENT for students; a parent of two children gets one row, with the first child as student_id). Returns the number of recipients. createdBy null = system (reminder job).
  */
 export async function notify(db, { classId, eventId, title, detail, createdBy, audience, skipUserId = null }) {
   const { rows } = await db.query(
@@ -316,11 +316,11 @@ export async function notify(db, { classId, eventId, title, detail, createdBy, a
        WHERE EXISTS (SELECT 1 FROM (${audienceSql(audience)}) a WHERE a.user_id IS DISTINCT FROM $8::bigint)
        RETURNING notification_id
      ), ins AS (
-       INSERT INTO notification_recipients (notification_id, user_id, student_id)
-       SELECT DISTINCT ON (a.user_id) n.notification_id, a.user_id, a.student_id
+       INSERT INTO notification_recipients (notification_id, user_id, role_code, student_id)
+       SELECT DISTINCT ON (a.user_id, a.role_code) n.notification_id, a.user_id, a.role_code, a.student_id
        FROM n CROSS JOIN (${audienceSql(audience)}) a
        WHERE a.user_id IS DISTINCT FROM $8::bigint
-       ORDER BY a.user_id, a.student_id
+       ORDER BY a.user_id, a.role_code, a.student_id
        RETURNING 1
      )
      SELECT COUNT(*)::int AS n FROM ins`,

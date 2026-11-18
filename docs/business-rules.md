@@ -475,6 +475,28 @@ Boundaries that are easy to get wrong:
   place marks it read. No `CHAT` notifications (§6). A parent with two children in the same class gets one
   extracurricular notification carrying the first child (`student_id`), so the child filter may miss it for the
   second child: accepted.
+- **FE-09 details (18/11/2026, lead):**
+  - **Per role:** each `notification_recipients` row is for ONE role (`role_code`, `patch_v0.3_notification_roles.sql`);
+    a user sees, counts and reads only the rows of the active role (no merging of roles). The sender gives the role
+    the person is reached under: student → STUDENT, parent → PARENT, teacher → TEACHER, school post → each role of
+    the user that is in the post's audience, maintenance → every role of the account, reset request → SYSTEM_ADMIN /
+    SCHOOL_MANAGER, locked teacher → SCHOOL_MANAGER. "Your comment was deleted" goes to every role of the author but
+    SYSTEM_ADMIN (a comment does not store the role it was written under).
+  - **Order:** newest first, no priority groups. SCR-04 has two tabs, "Quan trọng" (personal, default) and "Tất cả";
+    "Chỉ chưa đọc"; parents filter by child; "Đánh dấu đã đọc tất cả" marks what the open list shows.
+  - **Click:** marks the row read and opens the item (school post / group post in its pop-up, class event, activity,
+    attendance of that child and month, reset request queue, teaching assignments); maintenance has no page.
+  - **Deleted item:** a notification whose item was deleted (school post, group post, class event, activity post,
+    maintenance window) is no longer listed after a reload; before the reload a click opens the item's page, which
+    says it no longer exists.
+  - **Real time:** a trigger sends `NOTIFY` on commit; the server LISTENs and pushes `notification:new` to the
+    user's room with the role; nothing is pushed for a rolled-back write. The badge also reloads when the socket
+    reconnects.
+  - **UC-69:** the server runs the class event and activity deadline reminders every hour (first run 1 minute after
+    start); `REMINDER_JOB=off` in `.env` stops it on that server (no screen; reminders never send twice).
+  - **UC-68:** page "Thông báo đã gửi" (teacher): every notification about the teacher's class events and activities
+    (creation, reminder, change, cancel) with read / total and the people who have not read, unread first, with their
+    role, child and phone (ASSUMPTION: phone shown so the teacher can call, as on the FE-07 registration list).
 - Parents **and the student** are notified when the student's attendance is anything other than "present", and
   on every later change of it (details in §12, 18/11/2026).
 

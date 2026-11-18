@@ -76,6 +76,8 @@ import GradeResultsPage, { StudentResultsPage } from './pages/grades/GradeResult
 import AttendanceHome from './pages/attendance/AttendanceHome.jsx';
 import AttendanceStatsPage from './pages/attendance/AttendanceStatsPage.jsx';
 import StudentAttendancePage from './pages/attendance/StudentAttendancePage.jsx';
+import NotificationsPage from './pages/notifications/NotificationsPage.jsx';
+import SentNotificationsPage from './pages/notifications/SentNotificationsPage.jsx';
 import GradeStructurePage from './pages/grades/GradeStructurePage.jsx';
 import ProtectedRoute from './routes/ProtectedRoute.jsx';
 
@@ -461,6 +463,9 @@ export default function App() {
             </ProtectedRoute>
           }
         />
+        {/* FE-09 Notifications (Quoc): SCR-04 for every role, UC-68 for teachers */}
+        <Route path="notifications" element={<NotificationsPage />} />
+        <Route path="notifications/sent" element={<ProtectedRoute roles={['TEACHER']}><SentNotificationsPage /></ProtectedRoute>} />
         {/* FE-12 Attendance Management (Quoc) */}
         {[
           ['attendance', ['SCHOOL_MANAGER', 'TEACHER', 'STUDENT', 'PARENT'], <AttendanceHome />], // SCR-52 / SCR-56, SCR-53..55

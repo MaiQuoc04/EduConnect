@@ -438,8 +438,14 @@ export async function notifyCommentRemoved({ commentId, authorId, target, reason
       [school ? 'SCHOOL_POST' : 'GROUP_POST', detail, school ? 'SCHOOL_POST' : 'POST', target.id, createdBy],
     );
     const { notificationId } = rows[0];
+    // FE-09 (Quoc, 18/11/2026, lead): a comment does not store the role it was written under, so the author gets the
+    // notice under each of their roles that can read feeds (every role but SYSTEM_ADMIN); reading it under one role
+    // does not mark the others (notification_recipients.role_code).
     await client.query(
-      `INSERT INTO notification_recipients (notification_id, user_id, student_id, read_at) VALUES ($1, $2, NULL, NULL)`,
+      `INSERT INTO notification_recipients (notification_id, user_id, role_code, student_id, read_at)
+       SELECT $1, ur.user_id, r.role_code, NULL, NULL
+       FROM user_roles ur JOIN roles r ON r.role_id = ur.role_id
+       WHERE ur.user_id = $2 AND r.role_code <> 'SYSTEM_ADMIN'`,
       [notificationId, authorId],
     );
     return notificationId;

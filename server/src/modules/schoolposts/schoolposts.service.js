@@ -190,7 +190,8 @@ export function visibleSchoolPostsSql(audience, params, sp = 'sp') {
 /**
  * SELECT of the users who can see school post $postId – the same set as visibleSchoolPostsSql seen from the post's
  * side: a user is in it when ANY of their roles sees the post in UC-58 / UC-59 (one row per user, even with several
- * roles, as notification_recipients has PRIMARY KEY (notification_id, user_id)).
+ * roles; with { withRole: true } one row per user AND role, for notification_recipients.role_code – FE-09 18/11/2026,
+ * primary key (notification_id, user_id, role_code)).
  *   - every School Manager (they see every post);
  *   - every Teacher / Student / Parent when the post has no target (whole school);
  *   - otherwise a Teacher / Student / Parent whose role is in a target class or in a class of a target grade
@@ -204,14 +205,16 @@ export function visibleSchoolPostsSql(audience, params, sp = 'sp') {
  * when they are unlocked; the bell is only read after signing in anyway.
  * params[0] MUST be the current school year (resolveSchoolYearId, may be null).
  */
-function recipientsSql(params, postIdPlaceholder) {
+// withRole (FE-09, Quoc 18/11/2026): one row per (user, role) with "roleCode" – the role under which the user sees the
+// post, for notification_recipients.role_code. Without it: one row per user, as before (socket recipients, checks).
+function recipientsSql(params, postIdPlaceholder, { withRole = false } = {}) {
   const ca = classAudienceSql(params);
   const inClassOf = (column) => (col) => `EXISTS (SELECT 1 FROM ca
                    WHERE ca.user_id = ur.user_id AND ca.role_code = r.role_code AND ca.${column} = ${col})`;
   const homeroomOf = (column) => (col) => `EXISTS (SELECT 1 FROM ca
                    WHERE ca.user_id = ur.user_id AND ca.role_code = r.role_code AND ca.homeroom AND ca.${column} = ${col})`;
   return `WITH ca AS ${ca}
-     SELECT DISTINCT ur.user_id AS "userId"
+     SELECT DISTINCT ur.user_id AS "userId"${withRole ? ', r.role_code AS "roleCode"' : ''}
      FROM user_roles ur
      JOIN roles r ON r.role_id = ur.role_id
      JOIN school_posts sp ON sp.school_post_id = ${postIdPlaceholder} AND sp.deleted_at IS NULL
@@ -599,11 +602,12 @@ async function notifySchoolPost(client, { schoolPostId, title, createdBy }) {
   const { notificationId } = rows[0];
   const params = [await resolveSchoolYearId({}, client)];
   params.push(schoolPostId);
-  const recipients = recipientsSql(params, `$${params.length}`);
+  const recipients = recipientsSql(params, `$${params.length}`, { withRole: true });
   params.push(notificationId);
+  // FE-09 (Quoc, 18/11/2026): one row per role under which the user sees the post (notification_recipients.role_code).
   await client.query(
-    `INSERT INTO notification_recipients (notification_id, user_id, student_id, read_at)
-     SELECT $${params.length}, r."userId", NULL, NULL
+    `INSERT INTO notification_recipients (notification_id, user_id, role_code, student_id, read_at)
+     SELECT $${params.length}, r."userId", r."roleCode", NULL, NULL
      FROM (${recipients}) r`,
     params,
   );

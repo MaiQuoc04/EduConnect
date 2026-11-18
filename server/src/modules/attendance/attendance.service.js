@@ -260,10 +260,11 @@ const dmy = (iso) => `${iso.slice(8, 10)}/${iso.slice(5, 7)}/${iso.slice(0, 4)}`
 // One personal notification to the student and their linked parents (active accounts), §9 / §12 – one per period.
 async function notifyStudent(client, { lesson, row, oldStatus, newStatus, reason, actorId }) {
   const { rows: recipients } = await client.query(
-    `SELECT u.user_id FROM students s JOIN users u ON u.user_id = s.user_id
+    // FE-09 (18/11/2026): the student under STUDENT, each linked parent under PARENT (notification_recipients.role_code).
+    `SELECT u.user_id, 'STUDENT' AS role_code FROM students s JOIN users u ON u.user_id = s.user_id
      WHERE s.student_id = $1 AND u.status = 'ACTIVE'
      UNION
-     SELECT u.user_id FROM student_parents sp JOIN parents p ON p.parent_id = sp.parent_id JOIN users u ON u.user_id = p.user_id
+     SELECT u.user_id, 'PARENT' FROM student_parents sp JOIN parents p ON p.parent_id = sp.parent_id JOIN users u ON u.user_id = p.user_id
      WHERE sp.student_id = $1 AND u.status = 'ACTIVE'`,
     [row.studentId],
   );
@@ -283,9 +284,9 @@ async function notifyStudent(client, { lesson, row, oldStatus, newStatus, reason
     [[...title].slice(0, 255).join(''), detail, row.attendanceId, actorId],
   );
   await client.query(
-    `INSERT INTO notification_recipients (notification_id, user_id, student_id)
-     SELECT $1, UNNEST($2::bigint[]), $3`,
-    [rows[0].id, recipients.map((r) => r.user_id), row.studentId],
+    `INSERT INTO notification_recipients (notification_id, user_id, role_code, student_id)
+     SELECT $1, UNNEST($2::bigint[]), UNNEST($3::varchar[]), $4`,
+    [rows[0].id, recipients.map((r) => r.user_id), recipients.map((r) => r.role_code), row.studentId],
   );
   return recipients.length;
 }
