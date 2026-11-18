@@ -37,6 +37,9 @@ const COMMENT_MESSAGES = {
   MSG_POST_NOT_FOUND: 'Không tìm thấy bài viết.',
   MSG_POST_NOT_INTERACTIVE: 'Chỉ bình luận được bài đã duyệt và đang hiển thị.',
   MSG_TEXT_TOO_LONG: 'Bình luận tối đa 2.000 ký tự.',
+  MSG_MODERATOR_CANNOT_REPORT: 'Người duyệt nhóm xoá bình luận trực tiếp, không cần báo cáo.', // 19/11/2026
+  MSG_CANNOT_REPORT_MODERATOR: 'Không báo cáo được bình luận của người duyệt nhóm. Hãy liên hệ trực tiếp nhà trường.',
+  MSG_GROUP_READ_ONLY: 'Nhóm chỉ còn để xem lại.',
 };
 
 export default function PostDetail({ g, postId, leading, trailing, editState, onDeleted, onChanged, titleId, actionsMenu }) {
@@ -123,7 +126,11 @@ export default function PostDetail({ g, postId, leading, trailing, editState, on
     setCommentsKey((n) => n + 1);
   });
 
-  const commentApi = useMemo(() => groupPostCommentApi(postId), [postId]);
+  // 19/11/2026 (as FE-08): "Thích" on comments when the reader may interact, "Báo cáo" too unless they moderate the
+  // group (the server decides both: post.can.interact / post.can.report).
+  const canLike = Boolean(state.post?.can?.interact);
+  const canReport = Boolean(state.post?.can?.report);
+  const commentApi = useMemo(() => groupPostCommentApi(postId, { canLike, canReport }), [postId, canLike, canReport]);
   const onCommentCount = useCallback((commentCount) => {
     setState((s) => (s.post && s.post.commentCount !== commentCount ? { ...s, post: { ...s.post, commentCount } } : s));
   }, []);
