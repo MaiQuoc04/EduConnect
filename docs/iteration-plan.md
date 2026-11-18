@@ -42,7 +42,9 @@ reactions, attachments) is merged into one place after both are on `develop`.
     the author but SA), `calendar.service.js` (Dung: `AUDIENCE_SQL` returns `role_code`; picked viewers get the roles
     they have in the class), `extracurricular.service.js` (Dung: PARENT / STUDENT), `maintenance.service.js` (Linh:
     one row per role), `accountControl.service.js` (Linh: SCHOOL_MANAGER). Mine: `auth.service.js`,
-    `attendance.service.js`.
+    `attendance.service.js`. Also (lead 18/11): `schoolposts.service.js` no longer notifies the author;
+    `posts.service.js` (Khanh: two calls to `notifyGroupPost` – on create when approved at once, on approval) for
+    the new group feed notification (`modules/notifications/groupPostNotifications.js`).
   - Client: bell in the top bar (`components/NotificationBell.jsx`), SCR-04 `/notifications`, UC-68
     `/notifications/sent` (teacher), menu "Thông báo" / "Thông báo đã gửi".
   - Tested on the local DB: 31 API steps (roles kept apart for a teacher who is also a parent, real-time push through

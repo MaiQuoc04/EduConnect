@@ -482,6 +482,14 @@ Boundaries that are easy to get wrong:
     the user that is in the post's audience, maintenance → every role of the account, reset request → SYSTEM_ADMIN /
     SCHOOL_MANAGER, locked teacher → SCHOOL_MANAGER. "Your comment was deleted" goes to every role of the author but
     SYSTEM_ADMIN (a comment does not store the role it was written under).
+  - **Never to yourself (18/11/2026, lead):** the author of a post (school post, news, group post) is never notified of
+    their own post; other School Managers still get a school post.
+  - **Group feed posts (18/11/2026, lead):** a general notification (`GROUP_POST`, opens the post in the group feed
+    pop-up) to every active member of the group but the author, when the post becomes visible: created by the
+    moderator or with approval off, or approved by the moderator (an edited post approved again counts as new). A
+    pending post, an edit or a rejection sends nothing. Roles follow FE-04's group access (`groupScopeSql`); School
+    Managers only in the teacher group. A post that is hidden, not approved or deleted no longer lists its
+    notifications.
   - **Order:** newest first, no priority groups. SCR-04 has two tabs, "Quan trọng" (personal, default) and "Tất cả";
     "Chỉ chưa đọc"; parents filter by child; "Đánh dấu đã đọc tất cả" marks what the open list shows.
   - **Click:** marks the row read and opens the item (school post / group post in its pop-up, class event, activity,

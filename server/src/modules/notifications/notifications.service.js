@@ -19,7 +19,8 @@ const PAGE_MAX = 50;
 const ALIVE_SQL = `(
   CASE n.target_type
     WHEN 'SCHOOL_POST' THEN EXISTS (SELECT 1 FROM school_posts x WHERE x.school_post_id = n.target_id AND x.deleted_at IS NULL)
-    WHEN 'POST' THEN EXISTS (SELECT 1 FROM posts x WHERE x.post_id = n.target_id AND x.deleted_at IS NULL)
+    WHEN 'POST' THEN EXISTS (SELECT 1 FROM posts x WHERE x.post_id = n.target_id AND x.deleted_at IS NULL
+                             AND x.approval_status = 'APPROVED' AND NOT x.is_hidden)
     WHEN 'CLASS_EVENT' THEN EXISTS (SELECT 1 FROM class_events x WHERE x.event_id = n.target_id AND x.deleted_at IS NULL)
     WHEN 'EXTRACURRICULAR_EVENT' THEN EXISTS (SELECT 1 FROM extracurricular_events x JOIN posts p ON p.post_id = x.post_id
                                               WHERE x.event_id = n.target_id AND p.deleted_at IS NULL)

@@ -589,8 +589,8 @@ async function saveTargets(client, schoolPostId, { gradeLevelIds, classIds }) {
 // business-rules §9: ONE notifications row (general, bell: is_personal = FALSE; opens the post through target_type /
 // target_id) and ONE notification_recipients row per recipient (read_at NULL; student_id NULL, as it is not about one
 // child), inserted with a single INSERT … SELECT (a school has thousands of accounts).
-// Recipients = recipientsSql, i.e. exactly the users who see the post in UC-58 / UC-59, School Managers included.
-// ASSUMPTION: the author is a School Manager and sees the post, so they get a row too (same set as the readers).
+// Recipients = recipientsSql, i.e. exactly the users who see the post in UC-58 / UC-59, School Managers included –
+// except the author (lead 18/11/2026: nobody is notified of their own post).
 // ASSUMPTION: detail stays NULL: §9 keeps detailed text for personal notifications; the bell shows the title.
 async function notifySchoolPost(client, { schoolPostId, title, createdBy }) {
   const { rows } = await client.query(
@@ -603,12 +603,15 @@ async function notifySchoolPost(client, { schoolPostId, title, createdBy }) {
   const params = [await resolveSchoolYearId({}, client)];
   params.push(schoolPostId);
   const recipients = recipientsSql(params, `$${params.length}`, { withRole: true });
+  params.push(createdBy);
+  const author = `$${params.length}`;
   params.push(notificationId);
   // FE-09 (Quoc, 18/11/2026): one row per role under which the user sees the post (notification_recipients.role_code).
   await client.query(
     `INSERT INTO notification_recipients (notification_id, user_id, role_code, student_id, read_at)
      SELECT $${params.length}, r."userId", r."roleCode", NULL, NULL
-     FROM (${recipients}) r`,
+     FROM (${recipients}) r
+     WHERE r."userId" IS DISTINCT FROM ${author}::bigint`,
     params,
   );
   return notificationId;
