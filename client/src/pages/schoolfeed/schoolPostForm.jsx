@@ -31,8 +31,8 @@ export const POST_TYPE_INFO = {
   ANNOUNCEMENT: {
     icon: 'campaign',
     text:
-      'Bài đăng chính thức gửi tới khối hoặc lớp được chọn. Người nhận thích và bình luận được, nhận thông báo trong ' +
-      'chuông; bài đăng có thể được ghim lên đầu bảng tin.',
+      'Thông báo chính thức gửi tới khối hoặc lớp được chọn. Người nhận thích và bình luận được, nhận thông báo trong ' +
+      'chuông; thông báo có thể được ghim lên đầu bảng tin.',
   },
   NEWS: {
     icon: 'newspaper',
@@ -321,7 +321,7 @@ export function AudiencePicker({
       </legend>
       <p className="field-help spf-audience-help">
         {announcement
-          ? 'Bài đăng cần ít nhất một khối hoặc một lớp. Chọn khối thì mọi lớp của khối được chọn; bỏ bớt lớp nào thì lớp đó không nhận bài. Sau đó có thể thu hẹp theo vai trò.'
+          ? 'Thông báo cần ít nhất một khối hoặc một lớp. Chọn khối thì mọi lớp của khối được chọn; bỏ bớt lớp nào thì lớp đó không nhận bài. Sau đó có thể thu hẹp theo vai trò.'
           : 'Không chọn khối hay lớp nào thì tin tức dành cho toàn trường. Chọn khối thì mọi lớp của khối được chọn; bỏ bớt lớp nào thì lớp đó không nhận bài. Sau đó có thể thu hẹp theo vai trò.'}
       </p>
       {/* 17/11/2026: "cả khối" and "some classes" do not mean the same thing for classes opened later. */}
@@ -578,9 +578,9 @@ export function TitleCounter({ value, id }) {
 
 // --- Checks and server errors ----------------------------------------------------------------------------------
 
-export const AUDIENCE_REQUIRED = 'Bài đăng phải chọn ít nhất một khối hoặc một lớp.';
+export const AUDIENCE_REQUIRED = 'Thông báo phải chọn ít nhất một khối hoặc một lớp.';
 // Why "Đăng bài" / "Lưu thay đổi" is locked (footer line and button title).
-export const AUDIENCE_REQUIRED_HINT = 'Bài đăng phải gửi tới ít nhất một khối hoặc một lớp. Hãy chọn ở mục Đối tượng nhận.';
+export const AUDIENCE_REQUIRED_HINT = 'Thông báo phải gửi tới ít nhất một khối hoặc một lớp. Hãy chọn ở mục Đối tượng nhận.';
 
 // Same limits as the server, so a request that would be refused is never sent.
 export function validatePost({ title, content, postType, audience }) {

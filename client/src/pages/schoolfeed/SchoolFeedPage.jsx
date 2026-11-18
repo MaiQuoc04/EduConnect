@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { Link, useLocation, useNavigate, useSearchParams } from 'react-router-dom';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { listSchoolPosts, setSchoolPostPinned } from '../../api/schoolPosts.js';
 import Avatar from '../../components/Avatar.jsx';
 import {
@@ -11,6 +11,7 @@ import {
   FeedSkeleton,
   FeedTabs,
   NewContentPill,
+  openOnClick,
   useNewContent,
 } from '../../components/feed/Feed.jsx';
 import Icon from '../../components/Icon.jsx';
@@ -24,7 +25,6 @@ import SchoolCalendarBox from '../calendar/SchoolCalendarBox.jsx'; // FE-10 scho
 import { excerptOf } from '../groupfeed/groupFeedShared.jsx';
 import { useLiveRefresh } from './useLiveRefresh.js';
 import { readSchoolDraft } from './schoolPostDraft.js';
-import SchoolPostDialog from './SchoolPostDialog.jsx';
 import {
   CommentCount,
   FeedAudience,
@@ -37,30 +37,20 @@ import './SchoolFeedPage.css';
 
 // SCR-02 School Feed (FE-08, owner Anh): UC-58 View School Feed & News, UC-63 Pin / Unpin, UC-64 Like.
 // Layout: Stitch "SCR-34 School Feed" (team decision 08/11/2026, replaces the Report 3 2/3 + 1/3 split): one list
-// per tab and the "Lịch sắp tới" block on the right. Tabs changed 18/11/2026 (lead): two tabs Bài đăng / Tin tức, no
-// mixed "Tất cả" tab; ANNOUNCEMENT is shown as "Bài đăng" so the word "Thông báo" is left to notifications (FE-09).
+// with three tabs (Tất cả / Thông báo / Tin tức) and the "Lịch sắp tới" block on the right.
 // Tabs, cards, pager, empty / loading states and the "Có nội dung mới" pill are the shared components/feed (14/11/2026,
 // shared with FE-05 Group Feed so both feeds look the same).
-// A post opens in a pop-up over the feed (SchoolPostDialog, ?post=<id> in the address, 18/11/2026, as the group feed),
-// not on another page; /school-feed/:id stays for old links and notifications.
-
-// The ?post= value: a positive id, else nothing is open.
-const readPostId = (sp) => {
-  const v = sp.get('post') ?? '';
-  return /^\d{1,16}$/.test(v) && Number(v) > 0 ? Number(v) : null;
-};
-// Router state of an opening from the feed: closing then goes back one step instead of adding one.
-const POPUP_STATE = { fromFeed: true };
 
 const SEARCH_DELAY_MS = 350; // same as the FE-02 lists
 // ASSUMPTION: 10 posts per page (the API allows up to 50; a feed page stays short to read).
 const PAGE_SIZE = 10;
 const MAX_Q_LENGTH = 100; // server limit
 
-// URL value of ?tab= -> postType sent to GET /school-posts. The first tab is the default (no ?tab= in the URL); an
-// unknown value (e.g. an old link with ?tab=all or ?tab=announcements) opens it too.
+// URL value of ?tab= -> postType sent to GET /school-posts. "Tất cả" sends no postType: the server returns both
+// types already ordered (pinned first, then newest), so the client never merges two lists.
 const TABS = [
-  { key: 'posts', label: 'Bài đăng', postType: 'ANNOUNCEMENT', noun: 'bài đăng' },
+  { key: 'all', label: 'Tất cả', postType: undefined, noun: 'bài viết' },
+  { key: 'announcements', label: 'Thông báo', postType: 'ANNOUNCEMENT', noun: 'thông báo' },
   { key: 'news', label: 'Tin tức', postType: 'NEWS', noun: 'tin tức' },
 ];
 const number = (n) => n.toLocaleString('vi-VN');
@@ -114,30 +104,27 @@ function AnnouncementFoot({ post, onLikeError }) {
 }
 
 /**
- * One card for both types; the type shows at a glance: the kind line
- * (icon + "BÀI ĐĂNG" in ink / "TIN TỨC" in blue) and, for news, a blue bar on the left edge.
+ * One card for both types; in "Tất cả" they sit in the same list, so the type shows at a glance: the kind line
+ * (icon + "THÔNG BÁO" in ink / "TIN TỨC" in blue) and, for news, a blue bar on the left edge.
  * News is view only (business-rules §8): no Like, no counts, no pin button.
  */
-function PostCard({ post, canPin, pinFull, pinBusy, onPin, popupTo, onOpen, onLikeError }) {
+function PostCard({ post, canPin, pinFull, pinBusy, onPin, listState, onLikeError }) {
+  const navigate = useNavigate();
   const [expanded, setExpanded] = useState(false);
-  // The card text: the whole content (UC-58 sends it since 18/11/2026, so "Hiển thị thêm" opens all of it); the
-  // 300-character contentPreview is only a fallback.
+  // The card text: the whole content when the API sends it, else UC-58's contentPreview (300 characters, white space
+  // collapsed, "…" when the server cut it – then "Hiển thị thêm" can only open up to that preview, see SchoolFeedPage.css).
   const text = post.content ?? post.contentPreview ?? '';
   const excerpt = excerptOf(text);
+  const to = `/school-feed/${post.schoolPostId}`;
   const announcement = post.postType === 'ANNOUNCEMENT';
   const pinned = announcement && post.isPinned;
   const classes = ['feed-card', announcement ? 'is-announcement' : 'is-news', pinned && 'is-pinned'];
-  // The whole card opens the pop-up; links and buttons inside handle their own clicks (as components/feed openOnClick).
-  const onCardClick = (e) => {
-    if (e.target.closest('a, button, [role="menu"]')) return;
-    onOpen(post);
-  };
   return (
-    <article className={classes.filter(Boolean).join(' ')} onClick={onCardClick}>
+    <article className={classes.filter(Boolean).join(' ')} onClick={openOnClick(navigate, to, listState)}>
       <div className="feed-card-top">
         <span className={`label-upper feed-kind${announcement ? '' : ' is-news'}`}>
           <Icon name={pinned ? 'push_pin' : announcement ? 'campaign' : 'newspaper'} size="sm" filled={pinned} />
-          {announcement ? 'Bài đăng' : 'Tin tức'}
+          {announcement ? 'Thông báo' : 'Tin tức'}
           {pinned && ' · Đã ghim'}
         </span>
         {canPin && announcement && (
@@ -161,7 +148,7 @@ function PostCard({ post, canPin, pinFull, pinBusy, onPin, popupTo, onOpen, onLi
       <div className="feed-card-body">
         <div className="feed-card-text">
           <h3 className="feed-title">
-            <Link to={popupTo(post)} state={POPUP_STATE}>
+            <Link to={to} state={listState}>
               {post.title}
             </Link>
           </h3>
@@ -226,43 +213,16 @@ export default function SchoolFeedPage() {
   const toast = useToast();
   const [searchParams, setSearchParams] = useSearchParams();
   const params = readParams(searchParams);
-  const openPostId = readPostId(searchParams);
-  // The feed's own ?q=&tab=&page= (without ?post=): where the forms come back to.
-  const listParams = new URLSearchParams(searchParams);
-  listParams.delete('post');
-  const query = listParams.toString();
-  const listSearch = query ? `?${query}` : '';
-  const listState = { listSearch };
+  const query = searchParams.toString();
+  const listState = { listSearch: query ? `?${query}` : '' };
   const isManager = activeRole === 'SCHOOL_MANAGER';
 
-  // Pop-up: the post id goes into the address (Back closes it). Close: one step back when the feed opened it, else
-  // (a copied link) the parameter is simply removed.
-  const navigate = useNavigate();
-  const location = useLocation();
-  const popupTo = (post) => {
-    const p = new URLSearchParams(listParams);
-    p.set('post', String(post.schoolPostId));
-    return `/school-feed?${p}`;
-  };
-  const openPost = (post) => navigate(popupTo(post), { state: POPUP_STATE });
-  const closePost = () => {
-    if (location.state?.fromFeed) navigate(-1);
-    else
-      setSearchParams(
-        (p) => {
-          p.delete('post');
-          return p;
-        },
-        { replace: true },
-      );
-  };
-
   // Changes start from the address bar, not from this render's searchParams: the debounced search and a click on
-  // a pager meanwhile would otherwise overwrite each other. Default values (first tab, page 1) are left out.
+  // a pager meanwhile would otherwise overwrite each other. Default values (tab "all", page 1) are left out.
   function updateParams(changes, { replace = false } = {}) {
     const next = new URLSearchParams(window.location.search);
     for (const [key, value] of Object.entries(changes)) {
-      if (value === '' || value === null || value === undefined || value === 1 || value === TABS[0].key) next.delete(key);
+      if (value === '' || value === null || value === undefined || value === 1 || value === 'all') next.delete(key);
       else next.set(key, String(value));
     }
     setSearchParams(next, { replace });
@@ -309,7 +269,7 @@ export default function SchoolFeedPage() {
     setPinningId(post.schoolPostId);
     try {
       await setSchoolPostPinned(post.schoolPostId, !post.isPinned);
-      toast(post.isPinned ? 'Đã bỏ ghim bài đăng.' : 'Đã ghim bài đăng lên đầu bảng tin.');
+      toast(post.isPinned ? 'Đã bỏ ghim thông báo.' : 'Đã ghim thông báo lên đầu bảng tin.');
       if (!post.isPinned && params.page !== 1) updateParams({ page: 1 });
       else setReloadKey((n) => n + 1);
     } catch (err) {
@@ -379,7 +339,7 @@ export default function SchoolFeedPage() {
       <div className="page-header">
         <div>
           <h1 className="headline-lg">Bảng tin trường</h1>
-          <p>Bài đăng và tin tức của nhà trường dành cho bạn.</p>
+          <p>Thông báo và tin tức của nhà trường dành cho bạn.</p>
         </div>
         {isManager && (
           <div className="actions-row">
@@ -407,8 +367,8 @@ export default function SchoolFeedPage() {
             value={qInput}
             maxLength={MAX_Q_LENGTH}
             onChange={(e) => setQInput(e.target.value)}
-            placeholder={`Tìm trong ${tab.noun}…`}
-            aria-label={`Tìm trong ${tab.noun}`}
+            placeholder={`Tìm trong ${tab.key === 'all' ? 'thông báo và tin tức' : tab.noun}…`}
+            aria-label={`Tìm trong ${tab.key === 'all' ? 'thông báo và tin tức' : tab.noun}`}
           />
         </div>
       </div>
@@ -432,8 +392,7 @@ export default function SchoolFeedPage() {
                   pinFull={pinFull}
                   pinBusy={pinningId !== null}
                   onPin={handlePin}
-                  popupTo={popupTo}
-                  onOpen={openPost}
+                  listState={listState}
                   onLikeError={onLikeError}
                 />
               ))}
@@ -449,18 +408,6 @@ export default function SchoolFeedPage() {
         </section>
         <UpcomingCalendar />
       </div>
-      {openPostId && (
-        <SchoolPostDialog
-          key={openPostId}
-          schoolPostId={openPostId}
-          listSearch={listSearch}
-          onClose={() => {
-            closePost();
-            setReloadKey((n) => n + 1); // the cards show the likes / comments given in the pop-up
-          }}
-          onChanged={() => setReloadKey((n) => n + 1)}
-        />
-      )}
     </div>
   );
 }

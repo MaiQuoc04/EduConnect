@@ -51,30 +51,24 @@ const COMMENT_MESSAGES = {
 // 404 for a post that does not exist, was deleted OR is not addressed to the reader: the server answers the same on
 // purpose, so the page never talks about permissions. `gone`: the post was open and disappeared meanwhile (deleted,
 // or the audience changed and the reader is no longer in it – real time "schoolpost:changed").
-// In the pop-up (onClose given) the button closes it instead of leaving the page.
-function NotFound({ backTo, gone = false, onClose, titleId }) {
-  const section = (
-    <section className="card card-outline feed-article-missing" role={gone ? 'status' : undefined}>
-      <Icon name={gone ? 'article_shortcut' : 'article'} />
-      <h1 id={titleId} className="title-md">{gone ? 'Bài viết không còn tồn tại' : 'Không tìm thấy bài viết'}</h1>
-      <p className="muted">
-        {gone
-          ? 'Bài viết vừa được gỡ hoặc không còn dành cho bạn.'
-          : 'Bài viết có thể đã bị gỡ hoặc đường dẫn không còn đúng.'}
-      </p>
-      {onClose ? (
-        <button type="button" className="btn btn-primary" onClick={onClose}>
-          Đóng
-        </button>
-      ) : (
+function NotFound({ backTo, gone = false }) {
+  return (
+    <div className="feed-article-page school-post-detail">
+      <section className="card card-outline feed-article-missing" role={gone ? 'status' : undefined}>
+        <Icon name={gone ? 'article_shortcut' : 'article'} />
+        <h1 className="title-md">{gone ? 'Bài viết không còn tồn tại' : 'Không tìm thấy bài viết'}</h1>
+        <p className="muted">
+          {gone
+            ? 'Bài viết vừa được gỡ hoặc không còn dành cho bạn.'
+            : 'Bài viết có thể đã bị gỡ hoặc đường dẫn không còn đúng.'}
+        </p>
         <Link to={backTo} className="btn btn-primary">
           <Icon name="arrow_back" size="sm" />
           Về bảng tin trường
         </Link>
-      )}
-    </section>
+      </section>
+    </div>
   );
-  return onClose ? section : <div className="feed-article-page school-post-detail">{section}</div>;
 }
 
 /**
@@ -137,27 +131,15 @@ function Interactions({ post, onLikeError }) {
   );
 }
 
-// SCR-05 as a page (old links, notifications): /school-feed/:schoolPostId. From the feed a post opens in a pop-up
-// instead (SchoolFeedPage → SchoolPostDialog, 18/11/2026, as the group feed); both show SchoolPostDetail.
 export default function SchoolPostDetailPage() {
   const { schoolPostId } = useParams();
   const location = useLocation();
-  return <SchoolPostDetail key={schoolPostId} schoolPostId={schoolPostId} listSearch={location.state?.listSearch ?? ''} />;
-}
-
-/**
- * One school post read in full. Props: schoolPostId (string from the URL), listSearch (the feed's ?q=&tab=&page= to
- * come back to). In the pop-up: onClose (close button, after a delete, "Đóng" when the post is gone), onChanged (after
- * pin / delete, the feed reads its page again) and titleId (the dialog's label).
- */
-export function SchoolPostDetail({ schoolPostId, listSearch = '', onClose, onChanged, titleId }) {
   const navigate = useNavigate();
   const { activeRole } = useAuth();
   const toast = useToast();
   const isManager = activeRole === 'SCHOOL_MANAGER';
-  const inDialog = Boolean(onClose);
   // Back to the feed with the same search / pages / tab it was opened from (same pattern as FE-02).
-  const backTo = `${FEED_PATH}${listSearch}`;
+  const backTo = `${FEED_PATH}${location.state?.listSearch ?? ''}`;
   const validId = /^\d+$/.test(schoolPostId ?? '');
 
   // Just saved by SCR-31 / SCR-06: show the server's answer without a new request.
@@ -203,8 +185,7 @@ export function SchoolPostDetail({ schoolPostId, listSearch = '', onClose, onCha
     try {
       const data = await setSchoolPostPinned(post.schoolPostId, !post.isPinned);
       setState((s) => ({ ...s, data }));
-      toast(post.isPinned ? 'Đã bỏ ghim bài đăng.' : 'Đã ghim bài đăng lên đầu bảng tin.');
-      onChanged?.();
+      toast(post.isPinned ? 'Đã bỏ ghim thông báo.' : 'Đã ghim thông báo lên đầu bảng tin.');
     } catch (err) {
       toast(feedErrorText(err, 'Không cập nhật được trạng thái ghim. Vui lòng thử lại.'), { type: 'error' });
     } finally {
@@ -212,27 +193,20 @@ export function SchoolPostDetail({ schoolPostId, listSearch = '', onClose, onCha
     }
   }
 
-  // UC-62: back to the feed afterwards (replace: the deleted post's page is not kept in the history); in the pop-up
-  // it closes and the feed reads its page again.
+  // UC-62: back to the feed afterwards (replace: the deleted post's page is not kept in the history).
   const [deleting, setDeleting] = useState(null); // null | 'asking' | 'busy'
-  const leaveDeleted = () => {
-    if (inDialog) {
-      onChanged?.();
-      onClose();
-    } else navigate(backTo, { replace: true });
-  };
   async function handleDelete() {
     if (deleting === 'busy') return;
     setDeleting('busy');
     try {
       await deleteSchoolPost(state.data.post.schoolPostId);
       toast('Đã xoá bài viết.');
-      leaveDeleted();
+      navigate(backTo, { replace: true });
     } catch (err) {
       setDeleting(null);
       if (err.status === 404 || err.code === 'MSG_SCHOOL_POST_NOT_FOUND') {
         toast('Bài viết đã bị xoá trước đó.');
-        leaveDeleted();
+        navigate(backTo, { replace: true });
         return;
       }
       toast(feedErrorText(err, 'Không xoá được bài viết. Vui lòng thử lại.'), { type: 'error' });
@@ -351,75 +325,48 @@ export function SchoolPostDetail({ schoolPostId, listSearch = '', onClose, onCha
     setCommentsRefreshKey((n) => n + 1);
   });
 
+  if (state.notFound || gone) return <NotFound backTo={backTo} gone={gone} />;
+
   const post = state.data?.post;
   const attachments = state.data?.attachments ?? [];
   const typeLabel = post ? POST_TYPE_LABELS[post.postType] ?? post.postType : '';
   const announcement = post?.postType === 'ANNOUNCEMENT';
-  const closeButton = inDialog && (
-    <button type="button" className="btn btn-icon sf-post-dialog-close" onClick={onClose} aria-label="Đóng" title="Đóng">
-      <Icon name="close" />
-    </button>
-  );
-
-  if (state.notFound || gone) {
-    if (!inDialog) return <NotFound backTo={backTo} gone={gone} />;
-    return (
-      <>
-        <div className="feed-article-top">
-          <span className="title-sm sf-post-dialog-title">Bài viết</span>
-          <div className="actions-row feed-article-actions">{closeButton}</div>
-        </div>
-        <NotFound gone={gone} onClose={onClose} titleId={titleId} />
-      </>
-    );
-  }
 
   return (
-    <div className={inDialog ? 'school-post-detail' : 'feed-article-page school-post-detail'}>
+    <div className="feed-article-page school-post-detail">
       <div className="feed-article-top">
-        {inDialog ? (
-          <span className="title-sm sf-post-dialog-title">Bài viết</span>
-        ) : (
-          <div>
-            <Link to={backTo} className="back-link">
-              <Icon name="arrow_back" size="sm" />
-              Bảng tin trường
-            </Link>
-            <nav className="breadcrumb" aria-label="Breadcrumb">
-              <span>EduConnect</span>/<Link to={backTo}>Bảng tin trường</Link>/
-              {typeLabel && <span>{typeLabel}</span>}
-              {typeLabel && '/'}
-              <span className="current">Chi tiết</span>
-            </nav>
-          </div>
-        )}
-        {((isManager && post) || inDialog) && (
+        <div>
+          <Link to={backTo} className="back-link">
+            <Icon name="arrow_back" size="sm" />
+            Bảng tin trường
+          </Link>
+          <nav className="breadcrumb" aria-label="Breadcrumb">
+            <span>EduConnect</span>/<Link to={backTo}>Bảng tin trường</Link>/
+            {typeLabel && <span>{typeLabel}</span>}
+            {typeLabel && '/'}
+            <span className="current">Chi tiết</span>
+          </nav>
+        </div>
+        {isManager && post && (
           <div className="actions-row feed-article-actions">
-            {isManager && post && announcement && (
+            {announcement && (
               <button type="button" className="btn btn-secondary" onClick={handlePin} disabled={pinning}>
                 <Icon name="push_pin" size="sm" filled={post.isPinned} />
                 {post.isPinned ? 'Bỏ ghim' : 'Ghim'}
               </button>
             )}
-            {isManager && post && (
-              <>
-                {/* fromDetail: the form goes one step back when done, i.e. to this page or to the feed with the
-                    pop-up open again (?post=<id>). */}
-                <Link
-                  to={`${FEED_PATH}/${post.schoolPostId}/edit`}
-                  state={{ fromDetail: true, listSearch }}
-                  className="btn btn-secondary"
-                >
-                  <Icon name="edit" size="sm" />
-                  Sửa
-                </Link>
-                <button type="button" className="btn btn-danger" onClick={() => setDeleting('asking')} disabled={Boolean(deleting)}>
-                  <Icon name="delete" size="sm" />
-                  Xoá
-                </button>
-              </>
-            )}
-            {closeButton}
+            <Link
+              to={`${FEED_PATH}/${post.schoolPostId}/edit`}
+              state={{ fromDetail: true, listSearch: location.state?.listSearch ?? '' }}
+              className="btn btn-secondary"
+            >
+              <Icon name="edit" size="sm" />
+              Sửa
+            </Link>
+            <button type="button" className="btn btn-danger" onClick={() => setDeleting('asking')} disabled={Boolean(deleting)}>
+              <Icon name="delete" size="sm" />
+              Xoá
+            </button>
           </div>
         )}
       </div>
@@ -460,7 +407,7 @@ export function SchoolPostDetail({ schoolPostId, listSearch = '', onClose, onCha
                 </>
               )}
             </p>
-            <h1 id={titleId} className="headline-xl feed-article-title">{post.title}</h1>
+            <h1 className="headline-xl feed-article-title">{post.title}</h1>
             <div className="feed-article-meta caption">
               <Avatar src={post.authorAvatarUrl} name={post.authorName} size={24} />
               <span className="author">{post.authorName}</span>

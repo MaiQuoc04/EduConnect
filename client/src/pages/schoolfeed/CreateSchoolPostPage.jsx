@@ -209,11 +209,9 @@ export default function CreateSchoolPostPage() {
       });
       finished.current = true;
       clearSchoolDraft(user?.id);
-      toast(announcement ? 'Đã đăng bài.' : 'Đã đăng tin tức.');
+      toast(announcement ? 'Đã đăng thông báo.' : 'Đã đăng tin tức.');
       handOverPost(data);
-      // The feed, on the tab of the new post (page 1, no search), with the post open in the pop-up (18/11/2026).
-      const tab = announcement ? '' : 'tab=news&';
-      leave(() => navigate(`${FEED_PATH}?${tab}post=${data.post.schoolPostId}`, { replace: true }));
+      leave(() => navigate(`${FEED_PATH}/${data.post.schoolPostId}`, { replace: true, state: { listSearch } }));
     } catch (err) {
       sending.current = false;
       setSaving(false);
@@ -288,8 +286,8 @@ export default function CreateSchoolPostPage() {
       </nav>
       <div className="page-header">
         <div>
-          <h1 className="headline-xl">Soạn bài</h1>
-          <p>Đăng bài hoặc tin tức chính thức của nhà trường lên bảng tin.</p>
+          <h1 className="headline-xl">Soạn bài đăng</h1>
+          <p>Đăng thông báo hoặc tin tức chính thức của nhà trường lên bảng tin.</p>
           {savedAt && (
             <p className="caption spf-draft-saved" aria-live="polite">
               <Icon name="cloud_done" size="sm" />
@@ -362,7 +360,7 @@ export default function CreateSchoolPostPage() {
                 value={form.content}
                 onChange={(e) => change({ content: e.target.value })}
                 onBlur={() => setTouched((t) => ({ ...t, content: true }))}
-                placeholder="Nhập nội dung bài. Xuống dòng được giữ nguyên khi hiển thị."
+                placeholder="Nhập nội dung bài đăng. Xuống dòng được giữ nguyên khi hiển thị."
                 rows={10}
                 disabled={saving}
                 aria-invalid={Boolean(contentError)}
@@ -416,7 +414,7 @@ export default function CreateSchoolPostPage() {
                 <span className="spf-switch-title">Gửi thông báo tới người nhận</span>
                 <span id="spf-notify-help" className="caption muted">
                   Người nhận sẽ thấy thông báo trong chuông.
-                  {announcement ? ' Mặc định bật với bài đăng.' : ' Mặc định tắt với tin tức.'}
+                  {announcement ? ' Mặc định bật với thông báo.' : ' Mặc định tắt với tin tức.'}
                 </span>
               </span>
             </label>
@@ -444,7 +442,7 @@ export default function CreateSchoolPostPage() {
               <span id="spf-footer-note" className="caption muted spf-footer-note" aria-live="polite">
                 <Icon name="info" size="sm" />
                 <span>
-                  Bài hiển thị ngay với: <AudienceLine scopeLabels={labels} roles={form.targetRoles} max={SHORT_SCOPE} />
+                  Bài đăng hiển thị ngay với: <AudienceLine scopeLabels={labels} roles={form.targetRoles} max={SHORT_SCOPE} />
                 </span>
               </span>
             )}
