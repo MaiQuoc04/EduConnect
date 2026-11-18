@@ -28,7 +28,15 @@ reactions, attachments) is merged into one place after both are on `develop`.
 
 ## Current status (read first; update after every merge, schema patch or new decision)
 
-Last updated: 17/11/2026 – FE-11 Grade Management (It3, Linh) merged into `develop` (UC-81..UC-89, no schema
+Last updated: 18/11/2026 – three branches merged into `develop`, one merge each: FE-10 Schedule (Dung,
+`feature/fe-10-class-calendar`: UC-70..UC-75 timetables, UC-76..UC-80 class calendar, school calendar, period times,
+automatic scheduling, timetable history, teacher schedule lookup; it contains `feature/fe-10-timetable`, which needs no
+merge of its own), FE-07 Extracurricular (Dung, UC-50..UC-57) and FE-08 follow-ups (Anh: comment likes, comment
+reports, pin limit 3 for both feeds, attachment order and cover picture, drafts, closing item #3). Every feature
+branch on the remote is now in `develop`. Patches `school_events`, `activity_title`, `attachment_order`,
+`comment_likes`, `comment_reports` found on the shared DB (read-only check 18/11: **55 tables**). Build and
+`npm test` pass after each merge.
+Before: 17/11/2026 – FE-11 Grade Management (It3, Linh) merged into `develop` (UC-81..UC-89, no schema
 change) and FE-13 follow-ups merged (setting `chat.delete_for_everyone_minutes` checked 1–1440, `utils/excel.js`
 shared helpers, new Teachers / School Managers join the TEACHER_SCHOOL group). Linh's FE-11 assumptions accepted by
 the lead and written into business rules §11 (rounding per Circular 22, students / parents see finalized books only,
@@ -73,6 +81,11 @@ It2: Anh FE-08 + FE-14, Khanh FE-05 + FE-06).
   `groups.leader_id` (the 5 active teams got their leader) and `messages.message_type` / `system_event` /
   `target_user_id` with two checks. **Code on `feature/fe-05-group-feed` needs it; branches without that code are
   not affected** (new columns only, with defaults).
+  **+ found on the shared DB 18/11 (read-only check by the lead; the code merged 18/11 needs them):**
+  `patch_v0.3_school_events.sql` (FE-10: table `school_events`), `patch_v0.3_activity_title.sql` (FE-07:
+  `extracurricular_events.title`), `patch_v0.3_attachment_order.sql` (FE-08: `attachments.sort_order`),
+  `patch_v0.3_comment_likes.sql` (FE-08: `post_likes.comment_id` + target check), `patch_v0.3_comment_reports.sql`
+  (FE-08: table `comment_reports`). **55 tables** on the shared DB.
 - **Sample data added to the shared DB (03/11, Anh, accepted by the lead 03/11), through the app API (UC-96, UC-14, UC-28),
   no SQL:** 90 student accounts `HS7001..HS7090` (no class yet), 90 parent accounts with phones
   `0977000001..0977000090` (all with `must_change_password`), 65 links (HS7001–7020 two parents, HS7021–7045 one,
@@ -115,7 +128,17 @@ It2: Anh FE-08 + FE-14, Khanh FE-05 + FE-06).
     the settings screen; account import / export use the shared `utils/excel.js` (`loadTemplateSheet`,
     `templateHeaderKey`, `workbookBuffer`); new Teacher / School Manager accounts join the TEACHER_SCHOOL group
     (`server/src/modules/admin/schoolGroup.js`, also used by UC-116).
-  - **On `feature/fe-05-group-feed`, not merged yet (12/11, Khanh): FE-05 attachments.** Group posts take files like
+  - FE-10 Schedule (Dung) merged 18/11 (`feature/fe-10-class-calendar`, contains `feature/fe-10-timetable`): module
+    `server/src/modules/timetables/` and `calendar/`, screens SCR-27 / SCR-19 / SCR-39..42, school calendar
+    `/school-events`, teacher schedule lookup for the School Manager. Also touches FE-03 (search for teachers on the
+    teaching assignment screen, "Tra lịch dạy giáo viên" button). Sample files `sample_auto_schedule.sql`,
+    `sample_grade_11_12.sql`, `sample_fill_assignments.sql`, `sample_school_events.sql` (demo only).
+  - FE-07 Extracurricular (Dung) merged 18/11: UC-50..UC-57, `/extracurricular-events`, `pages/extracurricular/`, an
+    activity card in the class feed (3 small FE-05 hooks in `posts.service.js`). Sample `sample_fe07_activities.sql`.
+  - FE-08 follow-ups (Anh) merged 18/11: comment likes, comment reports (`/comment-reports`, menu "Báo cáo bình
+    luận"), pin limit 3 (FE-05 too), attachment order and cover picture (`AttachmentPicker`, `setAttachmentOrder`),
+    school post drafts, long posts cut with FE-05's `excerptOf`, closing item #3.
+  - **FE-05 attachments (12/11, Khanh; merged with `feature/fe-05-group-feed`).** Group posts take files like
     school posts: upload target `post` (folder `posts/`), `POST /groups/:groupId/posts` and `PATCH /posts/:postId`
     accept `attachments` (and `removeAttachmentIds` on edit), `GET /posts/attachment-limits`, posts carry
     `attachmentCount` / `firstImageUrl` in lists and `attachments` in the detail; deleting a post soft deletes its
@@ -129,7 +152,7 @@ It2: Anh FE-08 + FE-14, Khanh FE-05 + FE-06).
     the browser's localStorage per account and group while typing, restored when the form opens again, removed when
     the post is sent or "Huỷ" → "Bỏ bản nháp"; the feed's composer says "Tiếp tục bản nháp". ASSUMPTION: kept 30 days.
     No schema change; a draft does not follow the user to another device.
-  - **On `feature/fe-05-group-feed`, not merged yet (12/11, Khanh): FE-06 chat attachments.** Upload target `message`
+  - **FE-06 chat attachments (12/11, Khanh; merged with `feature/fe-05-group-feed`).** Upload target `message`
     (folder `messages/<groupId>/`, only that chat's files accepted); `POST /conversations/:groupId/messages` takes
     `attachments`; a message may be files only (`messages.content` NULL, as the schema says); every message carries
     `attachments` (one query per page, links signed for one hour), quotes and the conversation list carry
@@ -178,11 +201,11 @@ It2: Anh FE-08 + FE-14, Khanh FE-05 + FE-06).
     system lines `MEMBER_ADDED` / `MEMBER_KICKED`, real time (group:changed / group:removed). New flags
     `canAddMembers` / `canRemoveMembers`; adding and removing on the Members tab (SCR-22). No schema change. Tested on the
     local DB (28 steps + the team / chat suites).
-  - **17/11 (Anh, on `feature/fe-08-school-feed`, not committed / merged yet): comment reports** (FE-08 first, shared
+  - **17/11 (Anh; merged into `develop` 18/11): comment reports** (FE-08 first, shared
     core for FE-05). Agreed before building: comments are still only deleted, never hidden (§5); the author of a
     deleted comment gets a notification written straight into `notifications` + `notification_recipients` (§9, FE-09
     not built yet); nobody learns who reported (no API returns a reporter's id or name, not even to the School Manager).
-    - **DB: `patch_v0.3_comment_reports.sql` – NOT run on the shared DB, waiting for the lead's OK.** Table
+    - **DB: `patch_v0.3_comment_reports.sql` – found on the shared DB 18/11 (read-only check).** Table
       `comment_reports` (52 tables): `comment_id`, `reported_by`, `reason` (INAPPROPRIATE_LANGUAGE / HARASSMENT / SPAM /
       FALSE_INFORMATION / OTHER), `note` (≤ 500, needed for OTHER), `status` PENDING / RESOLVED / DISMISSED,
       `resolved_by` / `resolved_at`, `deleted_at`, UNIQUE `(comment_id, reported_by)`, RLS on. Tied to the comment, not
@@ -208,12 +231,12 @@ It2: Anh FE-08 + FE-14, Khanh FE-05 + FE-06).
       regressions) and 27 browser steps at 1440 / 768 / 390 px; `npm run build` passes.
     - Waiting for the lead: screen number (proposed **SCR-74 "Báo cáo bình luận"**), wording for business rules
       §5 / §8 / §9, the three new error codes (list below).
-- **Not merged yet:** none of It1. It2 branches start from `develop`. Still open in It2: FE-10 timetable (Dung).
+- **Not merged yet:** nothing (18/11: every feature branch on the remote is in `develop`).
   - FE-14 Parent Management (Anh, It2) – merged 11/11: UC-104 parent list, UC-105 parent detail with the linked
     children, UC-106 update profile (`fullName`, `occupation`, `address` only; login identifiers are not touched).
     Server `server/src/modules/parents/` (`GET /parents`, `GET /parents/:parentId`, `PATCH /parents/:parentId`,
     School Manager only). The UC-13 screen now uses `GET /parents`; the temporary `GET /students/parents/lookup`
-    and `lookupParentByPhone` were removed 17/11 (closing item #3, on `feature/fe-08-school-feed`, not merged yet).
+    and `lookupParentByPhone` were removed 17/11 (closing item #3, merged 18/11).
   - FE-08 School Feed (Anh, It2) – merged 11/11: UC-58..UC-66 (all 9 UC), screens SCR-02 School Feed, SCR-05
     School Post Detail, SCR-31 Create School Post, SCR-06 Update School Post. The school feed is the home screen
     (`HOME_BY_ROLE`) and the first menu item of every role except System Admin. Layout per Stitch: three tabs
@@ -280,7 +303,7 @@ It2: Anh FE-08 + FE-14, Khanh FE-05 + FE-06).
   |---|---|---|---|
   | 1 | Merge `fix/it1-follow-ups` (FE-03 group sync, FE-03 screen numbers – details below) | Quoc | 04/11 |
   | 2 | FE-13 departments: create / import pick from the `departments` list (details below) | Linh | **done**, merged 07/11 (the follow-up patch is still open) |
-  | 3 | Replace the temporary `GET /students/parents/lookup` with FE-14 UC-104 | Anh | **done** 17/11 on `feature/fe-08-school-feed` (not merged yet): SCR-13 uses `GET /parents` since 11/11; route, `lookupParent`, `findParentByPhone` and the client's `lookupParentByPhone` removed, no error code left unused |
+  | 3 | Replace the temporary `GET /students/parents/lookup` with FE-14 UC-104 | Anh | **done**, merged 18/11: SCR-13 uses `GET /parents` since 11/11; route, `lookupParent`, `findParentByPhone` and the client's `lookupParentByPhone` removed, no error code left unused |
   | 4 | Shared Excel reading `utils/excel.js` for UC-96 / UC-14 / UC-27 (It2 clean-up, after the features merge) | Linh | It2 clean-up |
   | 5 | Decide: who adds a new department (SQL only today, or a screen for SM / SA) | Quoc | **decided 07/11**: School Manager, Departments screen (UC-114, FE-03, merged 11/11) |
   | 6 | Decide: the empty test school years on the shared DB (2025-2026, 2028-2029, 2030-2031; no classes; `school_years` has no `deleted_at`) – keep or remove | Quoc | 07/11 |
@@ -293,12 +316,16 @@ It2: Anh FE-08 + FE-14, Khanh FE-05 + FE-06).
   Rules in business rules §4 "Teachers". Touches FE-13 files (Linh, please review): `admin/departments.js`
   (department names compared with FE-03's `departmentKey`, so "Tổ Toán - Tin" typed with "-" matches "Tổ Toán – Tin")
   and `pages/admin/ImportAccountsPage.jsx` (optional `config` prop; System Admin page unchanged).
-- **FE-10 class calendar (Dung, It3, started 10/11):** server done in `server/src/modules/calendar/` (`/class-events`:
+- **FE-10 class calendar (Dung, It3, started 10/11; merged 18/11):** server done in `server/src/modules/calendar/` (`/class-events`:
   list by range, detail, options, people of a class, create / update / delete; rules and ASSUMPTIONS in business rules
   §10). No schema change (tables already in v0.3). Screens SCR-39..42 built from the Stitch export 11/11 (`/calendar`, `/calendar/events/new`, `/calendar/events/:id`, `…/edit`, menu "Lịch lớp"). The 1-day reminder
   is `sendClassEventReminders()` (`calendar.reminders.js`): **FE-09 (Quoc) – please call it from the UC-69 job**.
-  FE-07 starts after FE-05 (posts in the class feed) is on `develop`.
+  FE-07 (built on the FE-05 class feed) merged 18/11.
 - **Follow-ups owed:**
+  - After the 18/11 merges (lead): `client/src/messages.js` declares `MSG_INVALID_INPUT` and `MSG_SEMESTER_NOT_FOUND`
+    twice (already on `develop` before 18/11; the second one wins) – keep one text each. Delete the remote branch
+    `feature/fe-10-timetable` (fully inside `feature/fe-10-class-calendar`). Record who ran the five patches found on
+    the shared DB 18/11.
   - FE-10 (Dung, It2): the timetable uses the date ranges of `teaching_assignments` – a period's teacher is the one
     whose assignment covers that date (no substitute teaching outside an assignment).
   - FE-13 (Linh): pull `develop` and continue from it; do not run SQL patches on the shared DB before the lead
@@ -363,7 +390,7 @@ It2: Anh FE-08 + FE-14, Khanh FE-05 + FE-06).
   - FE-14 (Anh, It2 since 03/11): uses UC-104..UC-106; a parent's address is `users.address`, occupation stays
     `parents.occupation`.
   - FE-08 / FE-14 (Anh), owed since 09/11 (both merged 11/11):
-    - Done 17/11 (closing item #3, not merged yet): the temporary `GET /students/parents/lookup` (`students.routes.js`,
+    - Done 17/11, merged 18/11 (closing item #3): the temporary `GET /students/parents/lookup` (`students.routes.js`,
       `lookupParent` in `students.controller.js`, `findParentByPhone` in `students.service.js`) and the client's
       `lookupParentByPhone` removed. Tested on the local DB: the old route gives 404; SCR-13 phone lookup through
       `GET /parents` (10 digits, +84, dots) still shows the parent's name before linking; UC-12 / UC-13 / UC-14 and
@@ -600,7 +627,7 @@ Added 13/11/2026 at Dung's request (no UC ids yet – the lead decides; business
 - **Timetable history** (17/11, School Manager): "Lịch sử" per class on SCR-27 – every saved timetable kept (old ones
   soft-deleted, never edited), what replaced what, periods held, CSV export. No schema change (business rules §10).
 - **School calendar** (School Manager manages, everyone reads): `/school-events`, the "Lịch sắp tới của trường" column
-  of the school feed and the class calendar. Needs `patch_v0.3_school_events.sql` (proposed, waiting for the lead).
+  of the school feed and the class calendar. Needs `patch_v0.3_school_events.sql` (found on the shared DB 18/11).
 
 ### Dung: FE-07 Extracurricular Event Management (8 UC)
 
@@ -615,10 +642,10 @@ Added 13/11/2026 at Dung's request (no UC ids yet – the lead decides; business
 | UC-56 | View Registration List | Homeroom Teacher |
 | UC-57 | Export Registration List | Homeroom Teacher |
 
-Status (Dung, 12/11/2026): built on `feature/fe-07-extracurricular` from `develop` – module
+Status: merged into `develop` 18/11 (built by Dung from 12/11 on `feature/fe-07-extracurricular`) – module
 `server/src/modules/extracurricular/` (`/api/v1/extracurricular-events`), client `client/src/pages/extracurricular/`
 (menu "Ngoại khoá"; SCR-66 form with live preview, SCR-67 registration list from Stitch; detail page for UC-53).
-Waiting for the lead: `database/patch_v0.3_activity_title.sql` (new column `extracurricular_events.title`) – until it
+`database/patch_v0.3_activity_title.sql` (new column `extracurricular_events.title`, found on the shared DB 18/11) – until it
 runs, the API answers 503 `MSG_ACTIVITY_NOT_READY` and the feed works as before. Rules and ASSUMPTIONs: business
 rules §7 "As built". Follow-ups: FE-09 (Quoc) calls `sendActivityDeadlineReminders()` from the UC-69 job; FE-05
 (Khanh) – `posts.service.js` now adds `activity` to posts and refuses edit / delete of an activity's post (3 small
