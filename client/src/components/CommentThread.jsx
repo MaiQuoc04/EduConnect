@@ -364,7 +364,9 @@ function CommentNode({ node, depth, parentName, reply, like, report, onDelete })
                   Trả lời
                 </button>
               )}
-              {report && node.authorId !== report.userId &&
+              {/* canReport (FE-05, 19/11/2026, opt-in): false on a comment that may not be reported (the group
+                  moderator's); FE-08 nodes do not carry it, so nothing changes there. */}
+              {report && node.authorId !== report.userId && node.canReport !== false &&
                 (report.isReported(node) ? (
                   <span className="ct-action is-reported">
                     <Icon name="flag" size="sm" filled />
