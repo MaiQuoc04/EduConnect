@@ -490,6 +490,14 @@ Boundaries that are easy to get wrong:
     pending post, an edit or a rejection sends nothing. Roles follow FE-04's group access (`groupScopeSql`); School
     Managers only in the teacher group. A post that is hidden, not approved or deleted no longer lists its
     notifications.
+  - **Approval notices (18/11/2026, lead), personal:**
+    - *Waiting for approval* → the moderator (homeroom teacher for the class group, every School Manager for the
+      teacher group), when a post is created pending or edited back to pending; it opens the post (approve / reject
+      there) and disappears once the post is approved, rejected or deleted.
+    - *Approved* / *not approved* → the author (under each role with which they see the group), when the moderator
+      decides; a rejected post can be edited from "Bài của tôi" and is sent for approval again.
+    - A post that comes onto the feed by an edit (approval off, or the moderator's own post) notifies the members as a
+      new post.
   - **Order:** newest first, no priority groups. SCR-04 has two tabs, "Quan trọng" (personal, default) and "Tất cả";
     "Chỉ chưa đọc"; parents filter by child; "Đánh dấu đã đọc tất cả" marks what the open list shows.
   - **Click:** marks the row read and opens the item (school post / group post in its pop-up, class event, activity,

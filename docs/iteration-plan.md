@@ -43,8 +43,9 @@ reactions, attachments) is merged into one place after both are on `develop`.
     they have in the class), `extracurricular.service.js` (Dung: PARENT / STUDENT), `maintenance.service.js` (Linh:
     one row per role), `accountControl.service.js` (Linh: SCHOOL_MANAGER). Mine: `auth.service.js`,
     `attendance.service.js`. Also (lead 18/11): `schoolposts.service.js` no longer notifies the author;
-    `posts.service.js` (Khanh: two calls to `notifyGroupPost` – on create when approved at once, on approval) for
-    the new group feed notification (`modules/notifications/groupPostNotifications.js`).
+    `posts.service.js` (Khanh: calls in create / update / review – `notifyGroupPost` when a post comes onto the feed,
+    `notifyPostPending` when it waits for approval, `notifyPostReviewed` on approve / reject) for the group feed
+    notifications (`modules/notifications/groupPostNotifications.js`; new target types `POST_PENDING`, `POST_REVIEW`).
   - Client: bell in the top bar (`components/NotificationBell.jsx`), SCR-04 `/notifications`, UC-68
     `/notifications/sent` (teacher), menu "Thông báo" / "Thông báo đã gửi".
   - Tested on the local DB: 31 API steps (roles kept apart for a teacher who is also a parent, real-time push through

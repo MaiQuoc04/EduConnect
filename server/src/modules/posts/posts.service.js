@@ -8,7 +8,9 @@ import { activeMemberIds } from '../conversations/conversations.service.js';
 import { findGroupForUser } from '../groups/groupAccess.js';
 import { activitiesOfPosts, assertNotActivity } from '../extracurricular/extracurricular.service.js';
 import { ATTACHMENT_TYPES } from '../uploads/uploads.service.js'; // the 15 types of the attachments bucket (read only)
-import { notifyGroupPost } from '../notifications/groupPostNotifications.js'; // FE-09 (Quoc, 18/11/2026)
+// FE-09 (Quoc, 18/11/2026, lead): notifications of the group feed – new live post (members), post waiting for approval
+// (moderator), approved / rejected (author). Written inside the same transaction, pushed on COMMIT.
+import { notifyGroupPost, notifyPostPending, notifyPostReviewed } from '../notifications/groupPostNotifications.js';
 
 // FE-05 Group Feed (owner: Khanh), UC-36..UC-46. Rules: business-rules §5 (post states agreed by the lead 11/11/2026),
 // permissions.md "Group feed" rows (notes 4, 5, 6, 16).
@@ -340,8 +342,9 @@ export async function createPost(user, groupId, { content, attachments = [] }) {
       [g.groupId, user.userId, content, status],
     );
     await files.insertAttachments(filesOf(rows[0].postId), fileRows.map((r) => ({ ...r, uploadedBy: user.userId })), client);
-    // FE-09 (lead 18/11/2026): a live post notifies the other members (bell); a pending one waits for its approval.
+    // FE-09 (lead 18/11/2026): a live post notifies the other members (bell); a pending one tells the moderator.
     if (status === 'APPROVED') await notifyGroupPost(client, { postId: rows[0].postId });
+    else await notifyPostPending(client, { postId: rows[0].postId });
     return { group: g, post: await readPost(client, user, g, rows[0].postId) };
   });
   postChanged(group, post, 'created', false);
@@ -388,6 +391,10 @@ export async function updatePost(user, postId, { content, attachments = [], remo
        WHERE post_id = $1`,
       [post.postId, content, status],
     );
+    // FE-09 (lead 18/11/2026): back to waiting → tell the moderator; a post that was not on the feed and now is
+    // (approval off, or the moderator's own post) → tell the members, as a new post.
+    if (status === 'PENDING' && post.approvalStatus !== 'PENDING') await notifyPostPending(client, { postId: post.postId });
+    if (status === 'APPROVED' && !isLive(post)) await notifyGroupPost(client, { postId: post.postId });
     return { group, before: post, changed: true, post: await readPost(client, user, group, post.postId) };
   });
   if (result.changed) postChanged(result.group, result.post, 'updated', isLive(result.before));
@@ -584,7 +591,8 @@ export function reviewPost(user, postId, decision) {
        WHERE post_id = $1`,
       [post.postId, status, user.userId, repost],
     );
-    // FE-09 (lead 18/11/2026): the approved post now reaches the members – notify them (not the author).
+    // FE-09 (lead 18/11/2026): the author learns the decision; an approved post now reaches the members (not the author).
+    await notifyPostReviewed(client, { postId: post.postId, approved: status === 'APPROVED', reviewerId: user.userId });
     if (status === 'APPROVED') await notifyGroupPost(client, { postId: post.postId });
     return true;
   });
