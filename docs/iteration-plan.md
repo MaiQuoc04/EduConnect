@@ -62,7 +62,6 @@ reports, pin limit 3 for both feeds, attachment order and cover picture, drafts,
 branch on the remote is now in `develop`. Patches `school_events`, `activity_title`, `attachment_order`,
 `comment_likes`, `comment_reports` found on the shared DB (read-only check 18/11: **55 tables**). Build and
 `npm test` pass after each merge.
-<<<<<<< HEAD
 Decided 18/11/2026 (lead, before FE-12): FE-12 Attendance is built before FE-09; why the homeroom teacher keeps
 excused ↔ unexcused until the semester closes, and attendance notifications (student + parents, one per period,
 on the first non-present take and every status change) – business rules §9 / §12. School feed (lead, 18/11): ANNOUNCEMENT shown
@@ -71,12 +70,10 @@ as "Bài đăng", two tabs Bài đăng / Tin tức without "Tất cả" (§8), a
 "Bài đăng" wording on top of Anh's branch once it is merged (Quoc's first version was taken out of the FE-12 branch to
 avoid a second pop-up); whether "Hiển thị thêm" shows the whole post or Anh's 1,000 characters + "Đọc toàn bài" is
 still to settle with Anh.
-=======
-Also 18/11, **not merged yet** (Anh, `feature/fe-08-school-feed`): the school feed follows the FE-05 group feed where
+Also 18/11, **merged into `develop`** (Anh, `feature/fe-08-school-feed`, merge `7b8a420`): the school feed follows the FE-05 group feed where
 both use the shared `components/feed/` – post pop-up, longer card text from UC-58, shared `FeedKind` /
-`FeedConfirmDialog` / `excerptOf`, label colour fix for both feeds. No schema change. The pop-up waits for the
-lead's OK (SCR-05 is a page in `screens.md`); details under "Merged so far" and "Follow-ups owed".
->>>>>>> origin/feature/fe-08-school-feed
+`FeedConfirmDialog` / `excerptOf`, label colour fix for both feeds. No schema change. The pop-up was
+OK'd by the lead 18/11 (the SCR-05 page stays for notifications and old links); details under "Merged so far" and "Follow-ups owed".
 Before: 17/11/2026 – FE-11 Grade Management (It3, Linh) merged into `develop` (UC-81..UC-89, no schema
 change) and FE-13 follow-ups merged (setting `chat.delete_for_everyone_minutes` checked 1–1440, `utils/excel.js`
 shared helpers, new Teachers / School Managers join the TEACHER_SCHOOL group). Linh's FE-11 assumptions accepted by
@@ -179,7 +176,7 @@ It2: Anh FE-08 + FE-14, Khanh FE-05 + FE-06).
   - FE-08 follow-ups (Anh) merged 18/11: comment likes, comment reports (`/comment-reports`, menu "Báo cáo bình
     luận"), pin limit 3 (FE-05 too), attachment order and cover picture (`AttachmentPicker`, `setAttachmentOrder`),
     school post drafts, long posts cut with FE-05's `excerptOf`, closing item #3.
-  - **18/11 (Anh, not merged yet): school feed in line with the group feed** (only what both feeds share; nothing
+  - **18/11 (Anh, merged 18/11 `7b8a420`): school feed in line with the group feed** (only what both feeds share; nothing
     of FE-05's approval / hiding / "Bài của tôi", and nothing of FE-08 removed). Tested on the local DB with headless
     Chrome (1440 / 768 / 390 px), FE-05 and FE-06 checked again; `npm run build` passes.
     - Shared `components/feed/` (only additions, plus one colour fix): `excerptOf` moved here from
@@ -387,8 +384,9 @@ It2: Anh FE-08 + FE-14, Khanh FE-05 + FE-06).
   is `sendClassEventReminders()` (`calendar.reminders.js`): **FE-09 (Quoc) – please call it from the UC-69 job**.
   FE-07 (built on the FE-05 class feed) merged 18/11.
 - **Follow-ups owed:**
-  - FE-08 school feed sync (18/11, Anh, not merged): **lead** – OK or not for opening a school post in a pop-up
-    (SCR-05 is a page in `screens.md`; the page still works, so dropping the pop-up only touches `SchoolFeedPage.jsx`).
+  - FE-08 school feed sync (18/11, Anh): pop-up **OK'd by the lead and merged**. Still owed on top of it (Quoc or
+    Anh): two tabs Bài đăng / Tin tức without "Tất cả" and "Bài đăng" instead of "Thông báo" for ANNOUNCEMENT (§8);
+    to settle with Anh: "Hiển thị thêm" = whole post or 1,000 characters + "Đọc toàn bài".
   - FE-05 (Khanh), after the FE-08 sync is merged – move to the shared `components/feed/` (no rush, nothing breaks
     meanwhile):
     - **Bug:** in `PostDialog`, Esc in the "Xoá bài?" / "Ẩn bài?" confirmation closes the pop-up too (its `onCancel`
