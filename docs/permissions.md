@@ -10,6 +10,7 @@ Source: Report 3 section 4.4 (draft v1.3). Full = all records; Restricted (n) = 
 | Password reset request | Send (Forgot Password screen, not signed in) | Full | Full | Full | Full | Full | Full |
 | Password reset request | View (incl. the one-time password of accounts without email) | Full | Restricted (1) | No | No | No | No |
 | Own account | Sign in, change password, change avatar, update address | Full | Full | Full | Full | Full | Full |
+| Own account | Switch the active role (UC-117, accounts with several roles) | Full | Full | Full | Full | Full | Full |
 | Own parent profile | Update occupation | No | No | No | No | No | Full |
 | Linked child's profile | View (read only) | No | No | No | No | No | Restricted (7) |
 | System settings, maintenance banner | View / change | Full | No | No | No | No | No |
@@ -47,9 +48,18 @@ Source: Report 3 section 4.4 (draft v1.3). Full = all records; Restricted (n) = 
 | School post | View | No | Full | Restricted (8) | Restricted (8) | Restricted (8) | Restricted (8) |
 | School post (announcement) | React / comment | No | Full | Restricted (15) | Restricted (15) | Restricted (15) | Restricted (15) |
 | School post comment | Delete | No | Full | Restricted (17) | Restricted (17) | Restricted (17) | Restricted (17) |
+| School post comment | Like (UC-121) | No | Full | Restricted (15) | Restricted (15) | Restricted (15) | Restricted (15) |
+| School post comment | Report (UC-119) | No | No | Restricted (22) | Restricted (22) | Restricted (22) | Restricted (22) |
+| Reported comment | View queue, delete comment, dismiss reports (UC-120) | No | Full | No | No | No | No |
 | Class timetable | Create / import / update | No | Full | No | No | No | No |
 | Class timetable | View | No | Full | Restricted (4) | Restricted (4) | Restricted (7) | Restricted (7) |
+| Period times | Configure (UC-122) | No | Full | No | No | No | No |
+| Automatic scheduling | Run / apply (UC-123) | No | Full | No | No | No | No |
+| Timetable history | View / export (UC-124) | No | Full | No | No | No | No |
+| School calendar | Create / update / delete (UC-126) | No | Full | No | No | No | No |
+| School calendar | View (UC-127) | No | Full | Full | Full | Restricted (21) | Restricted (21) |
 | Teaching schedule | View | No | No | Restricted (9) | Restricted (9) | No | No |
+| Any teacher's teaching schedule | Look up (UC-125) | No | Full | No | No | No | No |
 | Class calendar event | Create / update / delete | No | No | Restricted (10) | Restricted (10) | No | No |
 | Class calendar event | View | No | No | Restricted (8) | Restricted (8) | Restricted (8) | Restricted (8) |
 | Grade structure | Configure / copy | No | Full | No | No | No | No |
@@ -86,3 +96,5 @@ Notes:
 18. Personal notifications about items they created (class events, extracurricular events, school announcements).
 19. Own messages only, within the time limit (`chat.delete_for_everyone_minutes`), in chats the user may send in (notes 4 and 6).
 20. Import teacher accounts only (UC-116, FE-03, agreed 07/11/2026): same file and checks as UC-96, type fixed to Teacher.
+21. Whole-school dates and the dates of the grades of their own (or their children's) classes being studied.
+22. Comments of other people on announcements they can see; one report per comment (UC-119, added 18/11/2026).

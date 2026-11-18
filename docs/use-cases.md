@@ -1,4 +1,7 @@
-# Use cases (116) – numbering after the 20/10/2026 database review
+# Use cases (128) – numbering after the 20/10/2026 database review
+
+UC-117..UC-128 (added 18/11/2026 by the lead): features already built in the code that had no use case yet; each is
+listed under its feature below.
 
 Source: Report 3 section 4.2 (draft v1.3). Actor "User" = any signed-in account. "Homeroom Teacher" is not a role: it is a Teacher who is `classes.homeroom_teacher_id` of that class.
 
@@ -15,6 +18,7 @@ Source: Report 3 section 4.2 (draft v1.3). Actor "User" = any signed-in account.
 | UC-107 | Update Address | User | Personal Profile | Update or clear one's own address, the only profile field users edit themselves (added 28/10/2026). |
 | UC-108 | Update Occupation | Parent | Personal Profile | Update or clear one's own occupation (added 29/10/2026). |
 | UC-109 | View Child Profile | Parent | Personal Profile | View the profile of a linked child: personal, school and class information, read only (added 01/11/2026). |
+| UC-117 | Switch Active Role | User | Authentication | An account with several roles switches the active role from the header; menus, home screen and permissions follow the chosen role (added 18/11/2026). |
 
 ## FE-02 Student Management
 
@@ -78,6 +82,7 @@ Source: Report 3 section 4.2 (draft v1.3). Actor "User" = any signed-in account.
 | UC-44 | Pin / Unpin Post | Homeroom Teacher (class), School Manager (teacher group) | Moderation | Pin or unpin a post. |
 | UC-45 | Hide Post / Delete Comment | Homeroom Teacher (class), School Manager (teacher group) | Moderation | Hide an inappropriate post, or delete any comment in the group. |
 | UC-46 | Approve / Reject Post | Homeroom Teacher (class), School Manager (teacher group) | Moderation | Approve or reject pending posts. |
+| UC-118 | Turn Post Approval On / Off | Homeroom Teacher (class), School Manager (teacher group) | Moderation | Turn post approval on or off for the group feed from the group detail screen; approval is on by default (added 18/11/2026). |
 
 ## FE-06 Messaging
 
@@ -117,6 +122,9 @@ Source: Report 3 section 4.2 (draft v1.3). Actor "User" = any signed-in account.
 | UC-64 | React to School Post | Teacher, Student, Parent, School Manager | Feed Interaction | React to a school announcement (news posts are view only). |
 | UC-65 | Comment on School Post | Teacher, Student, Parent, School Manager | Feed Interaction | Comment on a school announcement (news posts are view only). |
 | UC-66 | Delete School Post Comment | School Manager | School Announcements | Delete an inappropriate comment on a school announcement. |
+| UC-119 | Report School Post Comment | Teacher, Student, Parent | Feed Interaction | Report someone else's comment on a school announcement with a reason (inappropriate language, harassment, spam, false information, other with a note); one report per person per comment; the author never learns who reported (added 18/11/2026). |
+| UC-120 | Handle Comment Reports | School Manager | School Announcements | Review the queue of reported comments (pending / handled) and either delete the comment (its author is notified) or dismiss the reports (the comment stays); one decision closes every report of that comment (added 18/11/2026). |
+| UC-121 | Like School Post Comment | Teacher, Student, Parent, School Manager | Feed Interaction | Like or unlike a comment on a school announcement (added 18/11/2026). |
 
 ## FE-09 Notifications
 
@@ -141,6 +149,12 @@ Source: Report 3 section 4.2 (draft v1.3). Actor "User" = any signed-in account.
 | UC-78 | Create Calendar Event | Teacher | Class Calendar Events | Create a class event for one's own subject (homeroom teacher: also general class events) and choose its audience. |
 | UC-79 | Update Calendar Event | Teacher (event creator) | Class Calendar Events | Update one's own event. |
 | UC-80 | Delete Calendar Event | Teacher (event creator) | Class Calendar Events | Delete one's own event. |
+| UC-122 | Configure Period Times | School Manager | Class Timetable | Set the start of each session and one length for every period; every timetable, past weeks included, shows the new times (added 18/11/2026). |
+| UC-123 | Schedule Automatically | School Manager | Class Timetable | Make a draft of teaching assignments and / or class timetables for a semester that follows the hard and soft scheduling rules, review it and apply it; nothing is saved before applying (added 18/11/2026). |
+| UC-124 | View Timetable History | School Manager | Class Timetable | View every saved timetable of a class (who saved it and when, dates still in force, what replaced it, periods held) and export the history to CSV (added 18/11/2026). |
+| UC-125 | Look Up Teacher Schedule | School Manager | Teaching Schedule | From the teaching assignment screen, find a teacher by name, code, department or subject and view their teaching schedule week by week (added 18/11/2026). |
+| UC-126 | Manage School Calendar | School Manager | School Calendar | Add, edit and delete school-wide dates (title, start, optional end, venue, note) for the whole school or one grade (added 18/11/2026). |
+| UC-127 | View School Calendar | Teacher, Student, Parent, School Manager | School Calendar | View upcoming and past school dates; students and parents see whole-school dates and those of their (children's) grades; the next dates also show on the school feed and in the class calendar (added 18/11/2026). |
 
 ## FE-11 Grade Management
 
@@ -155,6 +169,7 @@ Source: Report 3 section 4.2 (draft v1.3). Actor "User" = any signed-in account.
 | UC-87 | View Grade Change History | School Manager | Grade Control | View who changed which grade and when. |
 | UC-88 | View Grades | Teacher, Student, Parent, School Manager | Results & Ranking | View grades and semester / year averages within the role's scope (student / parent: finalized grade books only). |
 | UC-89 | View Class Ranking | Teacher, Student, Parent, School Manager | Results & Ranking | View the class ranking (student / parent: own rank only). |
+| UC-128 | Export Grade Book | Teacher, School Manager | Results & Ranking | Export a grade book (class × subject × semester) to Excel, finalized or not: each score, the semester average, the book status and a note (added 18/11/2026). |
 
 ## FE-12 Attendance Management
 
