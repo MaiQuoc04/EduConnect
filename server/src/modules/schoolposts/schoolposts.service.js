@@ -419,6 +419,9 @@ export async function listSchoolPosts(user, { postType, q, page, pageSize }) {
   const { rows: countRows } = await pool.query(`SELECT COUNT(*) AS total FROM school_posts sp WHERE ${where}`, params);
   const { rows: posts } = await pool.query(
     `SELECT sp.school_post_id AS "schoolPostId", sp.title,
+            -- Whole text too (18/11/2026, lead): the card's "Hiển thị thêm" opens all of it, line breaks kept, as
+            -- the group feed (FE-05 lists send content). contentPreview stays for older clients.
+            sp.content,
             CASE WHEN char_length(pv.flat) > ${PREVIEW_LENGTH} THEN left(pv.flat, ${PREVIEW_LENGTH}) || '…'
                  ELSE pv.flat END AS "contentPreview",
             sp.post_type AS "postType", sp.is_pinned AS "isPinned",

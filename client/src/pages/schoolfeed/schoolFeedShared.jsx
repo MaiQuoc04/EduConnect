@@ -9,14 +9,15 @@ import { formatDate } from '../../utils/format.js';
 // Roles that see the school feed (permissions.md "School post – View"). System Admin sees no content (§1).
 export const SCHOOL_FEED_ROLES = ['SCHOOL_MANAGER', 'TEACHER', 'STUDENT', 'PARENT'];
 
-export const POST_TYPE_LABELS = { ANNOUNCEMENT: 'Thông báo', NEWS: 'Tin tức' };
+// ANNOUNCEMENT is shown as "Bài đăng" (lead, 18/11/2026): "Thông báo" means notifications (FE-09) only.
+export const POST_TYPE_LABELS = { ANNOUNCEMENT: 'Bài đăng', NEWS: 'Tin tức' };
 
 // TODO FE-08: move these to messages.js once the lead approves the codes (waiting list in the FE-08 summary).
 // MSG_INVALID_PARAM is not in messages.js yet either.
 const PENDING_MESSAGES = {
   MSG_SCHOOL_POST_NOT_FOUND: 'Không tìm thấy bài viết.',
   MSG_CANNOT_REACT_NEWS: 'Không thể bày tỏ cảm xúc với tin tức.',
-  MSG_CANNOT_PIN_NEWS: 'Chỉ ghim được thông báo, không ghim được tin tức.',
+  MSG_CANNOT_PIN_NEWS: 'Chỉ ghim được bài đăng, không ghim được tin tức.',
   MSG_INVALID_PARAM: 'Yêu cầu không hợp lệ. Vui lòng tải lại trang.',
 };
 

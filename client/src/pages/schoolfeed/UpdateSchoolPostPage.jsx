@@ -216,7 +216,7 @@ export default function UpdateSchoolPostPage() {
       <div className="school-post-form is-school" aria-busy="true">
         <div className="page-header">
           <div>
-            <h1 className="headline-xl">Sửa bài đăng</h1>
+            <h1 className="headline-xl">Sửa bài</h1>
             <p>Đang tải bài viết…</p>
           </div>
         </div>
@@ -319,7 +319,7 @@ export default function UpdateSchoolPostPage() {
       </nav>
       <div className="page-header">
         <div>
-          <h1 className="headline-xl">Sửa bài đăng</h1>
+          <h1 className="headline-xl">Sửa bài</h1>
           <p>
             Đăng lúc {formatDateTime(post.createdAt)} bởi {post.authorName}
           </p>
