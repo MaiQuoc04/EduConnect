@@ -62,6 +62,7 @@ reports, pin limit 3 for both feeds, attachment order and cover picture, drafts,
 branch on the remote is now in `develop`. Patches `school_events`, `activity_title`, `attachment_order`,
 `comment_likes`, `comment_reports` found on the shared DB (read-only check 18/11: **55 tables**). Build and
 `npm test` pass after each merge.
+<<<<<<< HEAD
 Decided 18/11/2026 (lead, before FE-12): FE-12 Attendance is built before FE-09; why the homeroom teacher keeps
 excused ↔ unexcused until the semester closes, and attendance notifications (student + parents, one per period,
 on the first non-present take and every status change) – business rules §9 / §12. School feed (lead, 18/11): ANNOUNCEMENT shown
@@ -70,6 +71,12 @@ as "Bài đăng", two tabs Bài đăng / Tin tức without "Tất cả" (§8), a
 "Bài đăng" wording on top of Anh's branch once it is merged (Quoc's first version was taken out of the FE-12 branch to
 avoid a second pop-up); whether "Hiển thị thêm" shows the whole post or Anh's 1,000 characters + "Đọc toàn bài" is
 still to settle with Anh.
+=======
+Also 18/11, **not merged yet** (Anh, `feature/fe-08-school-feed`): the school feed follows the FE-05 group feed where
+both use the shared `components/feed/` – post pop-up, longer card text from UC-58, shared `FeedKind` /
+`FeedConfirmDialog` / `excerptOf`, label colour fix for both feeds. No schema change. The pop-up waits for the
+lead's OK (SCR-05 is a page in `screens.md`); details under "Merged so far" and "Follow-ups owed".
+>>>>>>> origin/feature/fe-08-school-feed
 Before: 17/11/2026 – FE-11 Grade Management (It3, Linh) merged into `develop` (UC-81..UC-89, no schema
 change) and FE-13 follow-ups merged (setting `chat.delete_for_everyone_minutes` checked 1–1440, `utils/excel.js`
 shared helpers, new Teachers / School Managers join the TEACHER_SCHOOL group). Linh's FE-11 assumptions accepted by
@@ -172,6 +179,29 @@ It2: Anh FE-08 + FE-14, Khanh FE-05 + FE-06).
   - FE-08 follow-ups (Anh) merged 18/11: comment likes, comment reports (`/comment-reports`, menu "Báo cáo bình
     luận"), pin limit 3 (FE-05 too), attachment order and cover picture (`AttachmentPicker`, `setAttachmentOrder`),
     school post drafts, long posts cut with FE-05's `excerptOf`, closing item #3.
+  - **18/11 (Anh, not merged yet): school feed in line with the group feed** (only what both feeds share; nothing
+    of FE-05's approval / hiding / "Bài của tôi", and nothing of FE-08 removed). Tested on the local DB with headless
+    Chrome (1440 / 768 / 390 px), FE-05 and FE-06 checked again; `npm run build` passes.
+    - Shared `components/feed/` (only additions, plus one colour fix): `excerptOf` moved here from
+      `groupFeedShared.jsx`; `openOnClick` ignores a click that ends a text selection (FE-05's check); `FeedKind` (the
+      frame of FE-05's `PostKind`, words passed in); `FeedConfirmDialog` (copy of FE-05's, plus `aria-describedby`);
+      `FeedPostDialog` + `FeedPostDialogClose` (the shell of FE-05's `PostDialog`; Esc inside a nested dialog only
+      closes that dialog); CSS `.feed-text` / `.feed-more` (FE-05's `.gf-more`; on a phone a 44px tap height without
+      moving the text) and `.feed-post-dialog*` (copy of `.gf-post-dialog*`).
+    - **Label colour fix (changes FE-05 too):** `.feed-kind` lost to `.label-upper` (styles.css is bundled after
+      feed.css), so "THÔNG BÁO", "BÀI VIẾT" and "ĐÃ GHIM" were grey; now `.label-upper.feed-kind` is ink. The
+      pending / rejected / hidden / news colours are unchanged. Also the label in FE-05's post form preview.
+    - UC-58 `contentPreview`: the first **1,000** characters **with line breaks** (was 300, white space collapsed) +
+      `contentTruncated`. "Hiển thị thêm" now opens up to 1,000 characters, then "Đọc toàn bài". ASSUMPTION: not the
+      whole post as FE-05 (school posts have no length limit). Page of 10 long posts: 7.7 kB → 15.4 kB; short posts
+      unchanged. The "Có nội dung mới" signature does not include the content, so it needs no change.
+    - Post pop-up: a card opens the post over the feed (`?post=<id>` next to `q` / `tab` / `page`; Back closes it, a
+      copied link opens it). `SchoolPostDetail.jsx` (content) is shared by the pop-up and the SCR-05 page
+      (`SchoolPostDetailPage.jsx`, kept for notifications and old links). Room `schoolpost:<id>` joined while the
+      pop-up is open; delete closes it; edit comes back to it; not found shows inside it. ASSUMPTION: the list is read
+      again once when the pop-up closes (not after every like). A post saved on SCR-31 still opens on the SCR-05 page.
+    - FE-08 own CSS now: search, pin colour and limit, news padding, the card text's white space, the audience line.
+      `.sf-more` / `.sf-text` and the page's own `DeleteDialog` removed. Cards have `aria-label`.
   - **FE-05 attachments (12/11, Khanh; merged with `feature/fe-05-group-feed`).** Group posts take files like
     school posts: upload target `post` (folder `posts/`), `POST /groups/:groupId/posts` and `PATCH /posts/:postId`
     accept `attachments` (and `removeAttachmentIds` on edit), `GET /posts/attachment-limits`, posts carry
@@ -199,7 +229,8 @@ It2: Anh FE-08 + FE-14, Khanh FE-05 + FE-06).
     (`Feed.jsx`: FeedTabs, FeedSkeleton, FeedEmpty, FeedError, FeedPager, FeedCardImage, FeedPanel, NewContentPill,
     useNewContent, openOnClick; `feed.css`: `.feed-*` cards, tabs, side panels, states, pager, reading canvas
     `.feed-article*`), values taken from the FE-08 screens. FE-08 `SchoolFeedPage` / `SchoolPostDetailPage` now use it
-    (same look; their CSS keeps only search, pin colour, news padding and the audience line) – **Anh to check**.
+    (same look; their CSS keeps only search, pin colour, news padding and the audience line) – checked by Anh 18/11:
+    true until 17/11, then the long-post rules copied `.gf-more`; cleaned up 18/11 (see the 18/11 entry above).
     FE-05 rebuilt on it: cards with a kind line (Bài viết / Đã ghim / Chờ duyệt / Đã bị từ chối / Đã ẩn + left bar),
     pager (10 per page), "Có nội dung mới — Tải lại" pill, right column "Bài đã ghim" + "Duyệt bài"; SCR-37 as the
     school reading canvas with the actions at the top; SCR-36/38 in the school form shell (`SchoolPostForm.css`
@@ -356,6 +387,19 @@ It2: Anh FE-08 + FE-14, Khanh FE-05 + FE-06).
   is `sendClassEventReminders()` (`calendar.reminders.js`): **FE-09 (Quoc) – please call it from the UC-69 job**.
   FE-07 (built on the FE-05 class feed) merged 18/11.
 - **Follow-ups owed:**
+  - FE-08 school feed sync (18/11, Anh, not merged): **lead** – OK or not for opening a school post in a pop-up
+    (SCR-05 is a page in `screens.md`; the page still works, so dropping the pop-up only touches `SchoolFeedPage.jsx`).
+  - FE-05 (Khanh), after the FE-08 sync is merged – move to the shared `components/feed/` (no rush, nothing breaks
+    meanwhile):
+    - **Bug:** in `PostDialog`, Esc in the "Xoá bài?" / "Ẩn bài?" confirmation closes the pop-up too (its `onCancel`
+      does not check `e.target === e.currentTarget`). Using `FeedPostDialog` fixes it.
+    - `.gf-more` / `.gf-text` → `.feed-more` / `.feed-text` (note: `.gf-more` on a phone is 40px high, the shared
+      one 44px).
+    - Import `excerptOf` from `components/feed/Feed.jsx` and delete it from `groupFeedShared.jsx`.
+    - `PostDialog` on `FeedPostDialog` + `FeedPostDialogClose`, then delete `.gf-post-dialog*` (keep the "⋮" menu
+      rules of the pop-up in `GroupFeed.css`).
+    - `PostKind` on `FeedKind`; `FeedConfirmDialog` from `Feed.jsx` with `quoteClassName="gf-dialog-quote"`.
+    - Optional: the card click with the shared `openOnClick` (it now has the text-selection check).
   - After the 18/11 merges (lead): `client/src/messages.js` declares `MSG_INVALID_INPUT` and `MSG_SEMESTER_NOT_FOUND`
     twice (already on `develop` before 18/11; the second one wins) – keep one text each. Delete the remote branch
     `feature/fe-10-timetable` (fully inside `feature/fe-10-class-calendar`). Record who ran the five patches found on

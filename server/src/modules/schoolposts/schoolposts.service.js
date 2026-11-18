@@ -389,8 +389,15 @@ async function interactionsOf(posts, userId, db = pool) {
 
 // --- UC-58 View School Feed & News (SCR-02) ----------------------------------------------------------------------
 
-// ASSUMPTION: the list shows the first 300 characters of the content, white space collapsed, with "…" when cut.
-export const PREVIEW_LENGTH = 300;
+// The card text of the list (18/11/2026): the first PREVIEW_LENGTH characters of the content WITH its line breaks
+// (CR LF -> LF, ends trimmed), and contentTruncated = true when the post is longer (the client then adds "…" and
+// "Đọc toàn bài"). The card cuts it again (about 280 characters or 6 lines, "Hiển thị thêm" / "Ẩn bớt", as the FE-05
+// group feed). Before: 300 characters with the white space collapsed, so "Hiển thị thêm" opened only about 20 more
+// characters and the 6-line rule never applied.
+// ASSUMPTION: 1,000 characters, not the whole post as the FE-05 group list does: a group post is limited to 5,000
+// characters (business-rules §5) but a school post has no limit, and a page of 10 long posts on every feed read would
+// cost shared Supabase egress. 1,000 is about 3.5 times the card excerpt (about 15 lines) and about 1.5 kB per post.
+export const PREVIEW_LENGTH = 1000;
 
 /**
  * UC-58: the posts the reader may see, pinned first, then newest first. One list for both types: SCR-02 shows the
@@ -419,15 +426,17 @@ export async function listSchoolPosts(user, { postType, q, page, pageSize }) {
   const { rows: countRows } = await pool.query(`SELECT COUNT(*) AS total FROM school_posts sp WHERE ${where}`, params);
   const { rows: posts } = await pool.query(
     `SELECT sp.school_post_id AS "schoolPostId", sp.title,
-            CASE WHEN char_length(pv.flat) > ${PREVIEW_LENGTH} THEN left(pv.flat, ${PREVIEW_LENGTH}) || '…'
-                 ELSE pv.flat END AS "contentPreview",
+            CASE WHEN char_length(pv.body) > ${PREVIEW_LENGTH} THEN rtrim(left(pv.body, ${PREVIEW_LENGTH}), E' \\t\\n')
+                 ELSE pv.body END AS "contentPreview",
+            char_length(pv.body) > ${PREVIEW_LENGTH} AS "contentTruncated",
             sp.post_type AS "postType", sp.is_pinned AS "isPinned",
             sp.created_at AS "createdAt", sp.updated_at AS "updatedAt",
             sp.author_id AS "authorId", u.full_name AS "authorName", u.avatar_url AS "authorAvatarUrl",
             ${AUDIENCE_TYPE('sp')} AS "audienceType", ${TARGET_ROLES('sp')} AS "targetRoles"
      FROM school_posts sp
      JOIN users u ON u.user_id = sp.author_id
-     CROSS JOIN LATERAL (SELECT regexp_replace(btrim(sp.content), '\\s+', ' ', 'g') AS flat) pv
+     CROSS JOIN LATERAL (SELECT regexp_replace(regexp_replace(sp.content, '\\r\\n?', E'\\n', 'g'), '^\\s+|\\s+$', '', 'g')
+                         AS body) pv
      WHERE ${where}
      ORDER BY sp.is_pinned DESC, sp.created_at DESC, sp.school_post_id DESC
      LIMIT $${params.length + 1} OFFSET $${params.length + 2}`,

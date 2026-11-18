@@ -1,13 +1,17 @@
-import { useEffect, useRef, useState } from 'react';
-import { Link, useNavigate, useSearchParams } from 'react-router-dom';
+import { useCallback, useEffect, useId, useRef, useState } from 'react';
+import { Link, useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 import { listSchoolPosts, setSchoolPostPinned } from '../../api/schoolPosts.js';
 import Avatar from '../../components/Avatar.jsx';
 import {
+  excerptOf,
   FeedCardImage,
   FeedEmpty,
   FeedError,
+  FeedKind,
   FeedPager,
   FeedPanel,
+  FeedPostDialog,
+  FeedPostDialogClose,
   FeedSkeleton,
   FeedTabs,
   NewContentPill,
@@ -20,17 +24,16 @@ import { errorText } from '../../messages.js';
 import { useSocket } from '../../context/SocketContext.jsx';
 import { useToast } from '../../context/ToastContext.jsx';
 import SchoolCalendarBox from '../calendar/SchoolCalendarBox.jsx'; // FE-10 school calendar (Dung)
-// Long posts on a card: the FE-05 Group Feed rule (about 280 characters or 6 lines, "Hiển thị thêm" / "Ẩn bớt"),
-// imported, not copied, so both feeds cut the same way.
-import { excerptOf } from '../groupfeed/groupFeedShared.jsx';
 import { useLiveRefresh } from './useLiveRefresh.js';
 import { readSchoolDraft } from './schoolPostDraft.js';
+import SchoolPostDetail from './SchoolPostDetail.jsx';
 import {
   CommentCount,
   FeedAudience,
   feedErrorText,
   formatDateTime,
   LikeButton,
+  POST_TYPE_LABELS,
   useLike,
 } from './schoolFeedShared.jsx';
 import './SchoolFeedPage.css';
@@ -40,6 +43,9 @@ import './SchoolFeedPage.css';
 // with three tabs (Tất cả / Thông báo / Tin tức) and the "Lịch sắp tới" block on the right.
 // Tabs, cards, pager, empty / loading states and the "Có nội dung mới" pill are the shared components/feed (14/11/2026,
 // shared with FE-05 Group Feed so both feeds look the same).
+// 18/11/2026, as FE-05: a post opens in a pop-up over the feed (FeedPostDialog, ?post=<id> next to ?q=&tab=&page=:
+// Back closes it, a copied link opens it); the SCR-05 page stays for notifications and old links. Long posts are cut
+// on their card (excerptOf, "Hiển thị thêm" / "Ẩn bớt").
 
 const SEARCH_DELAY_MS = 350; // same as the FE-02 lists
 // ASSUMPTION: 10 posts per page (the API allows up to 50; a feed page stays short to read).
@@ -56,14 +62,41 @@ const TABS = [
 const number = (n) => n.toLocaleString('vi-VN');
 
 // Search, tab and page live in the URL (?q=&tab=&page=), so a refresh, the back button or a shared link shows the
-// same feed. Values the API would reject are dropped here.
+// same feed. Values the API would reject are dropped here. ?post=<id>: the post open in the pop-up (null: none).
 function readParams(sp) {
   const n = Number(sp.get('page'));
+  const post = sp.get('post') ?? '';
   return {
     q: (sp.get('q') ?? '').slice(0, MAX_Q_LENGTH),
     page: Number.isInteger(n) && n >= 1 ? n : 1,
     tab: TABS.find((t) => t.key === sp.get('tab')) ?? TABS[0],
+    post: /^\d{1,16}$/.test(post) && Number(post) > 0 ? Number(post) : null,
   };
+}
+
+// The feed address with one post open in the pop-up: the current ?q=&tab=&page= kept, post set. state.fromFeed:
+// opened from the feed, so closing goes one step back instead of adding one (FE-05's POPUP_STATE).
+const POPUP_STATE = { fromFeed: true };
+function popupPath(search, schoolPostId) {
+  const next = new URLSearchParams(search);
+  next.set('post', String(schoolPostId));
+  return `/school-feed?${next}`;
+}
+// The feed's own query (without ?post=), what the post forms and the SCR-05 page come back to.
+function listQuery(search) {
+  const next = new URLSearchParams(search);
+  next.delete('post');
+  const text = next.toString();
+  return text ? `?${text}` : '';
+}
+
+// The card text is UC-58's contentPreview: the first 1,000 characters with their line breaks, contentTruncated when
+// the post is longer (the rest is read in the post). Cut at a word boundary then, with "…".
+function cardText(post) {
+  const text = post.content ?? post.contentPreview ?? '';
+  if (!post.contentTruncated) return text;
+  const space = text.search(/\s\S*$/);
+  return `${(space > text.length * 0.6 ? text.slice(0, space) : text).trimEnd()}…`;
 }
 
 /**
@@ -108,25 +141,29 @@ function AnnouncementFoot({ post, onLikeError }) {
  * (icon + "THÔNG BÁO" in ink / "TIN TỨC" in blue) and, for news, a blue bar on the left edge.
  * News is view only (business-rules §8): no Like, no counts, no pin button.
  */
-function PostCard({ post, canPin, pinFull, pinBusy, onPin, listState, onLikeError }) {
+function PostCard({ post, canPin, pinFull, pinBusy, onPin, search, onLikeError }) {
   const navigate = useNavigate();
   const [expanded, setExpanded] = useState(false);
-  // The card text: the whole content when the API sends it, else UC-58's contentPreview (300 characters, white space
-  // collapsed, "…" when the server cut it – then "Hiển thị thêm" can only open up to that preview, see SchoolFeedPage.css).
-  const text = post.content ?? post.contentPreview ?? '';
+  const text = cardText(post);
   const excerpt = excerptOf(text);
-  const to = `/school-feed/${post.schoolPostId}`;
+  // The card, its title and "Đọc toàn bài" open the post in the pop-up (an address that can be copied).
+  const to = popupPath(search, post.schoolPostId);
   const announcement = post.postType === 'ANNOUNCEMENT';
   const pinned = announcement && post.isPinned;
   const classes = ['feed-card', announcement ? 'is-announcement' : 'is-news', pinned && 'is-pinned'];
   return (
-    <article className={classes.filter(Boolean).join(' ')} onClick={openOnClick(navigate, to, listState)}>
+    <article
+      className={classes.filter(Boolean).join(' ')}
+      onClick={openOnClick(navigate, to, POPUP_STATE)}
+      aria-label={`${POST_TYPE_LABELS[post.postType] ?? ''}: ${post.title}`}
+    >
       <div className="feed-card-top">
-        <span className={`label-upper feed-kind${announcement ? '' : ' is-news'}`}>
-          <Icon name={pinned ? 'push_pin' : announcement ? 'campaign' : 'newspaper'} size="sm" filled={pinned} />
-          {announcement ? 'Thông báo' : 'Tin tức'}
-          {pinned && ' · Đã ghim'}
-        </span>
+        <FeedKind
+          icon={pinned ? 'push_pin' : announcement ? 'campaign' : 'newspaper'}
+          filled={pinned}
+          tone={announcement ? undefined : 'news'}
+          label={`${announcement ? 'Thông báo' : 'Tin tức'}${pinned ? ' · Đã ghim' : ''}`}
+        />
         {canPin && announcement && (
           // UC-63 limit (17/11/2026): when pinFull (the text of MSG_PIN_LIMIT) the button is greyed and says why; it is
           // aria-disabled, not disabled, so the tooltip still shows on hover. The server still decides.
@@ -148,16 +185,29 @@ function PostCard({ post, canPin, pinFull, pinBusy, onPin, listState, onLikeErro
       <div className="feed-card-body">
         <div className="feed-card-text">
           <h3 className="feed-title">
-            <Link to={to} state={listState}>
+            <Link to={to} state={POPUP_STATE}>
               {post.title}
             </Link>
           </h3>
-          <div className="sf-text">
+          <div className="feed-text">
             <p className="feed-preview sf-excerpt">{excerpt && !expanded ? excerpt : text}</p>
             {excerpt && (
-              <button type="button" className="sf-more" onClick={() => setExpanded((v) => !v)} aria-expanded={expanded}>
-                {expanded ? 'Ẩn bớt' : 'Hiển thị thêm'}
-              </button>
+              <div className="feed-more-row">
+                <button
+                  type="button"
+                  className="feed-more"
+                  onClick={() => setExpanded((v) => !v)}
+                  aria-expanded={expanded}
+                >
+                  {expanded ? 'Ẩn bớt' : 'Hiển thị thêm'}
+                </button>
+                {/* ASSUMPTION: opened as far as the list goes (UC-58 sends 1,000 characters), a link to the rest. */}
+                {expanded && post.contentTruncated && (
+                  <Link to={to} state={POPUP_STATE} className="feed-more">
+                    Đọc toàn bài
+                  </Link>
+                )}
+              </div>
             )}
           </div>
           <p className="feed-meta caption">
@@ -213,9 +263,12 @@ export default function SchoolFeedPage() {
   const toast = useToast();
   const [searchParams, setSearchParams] = useSearchParams();
   const params = readParams(searchParams);
-  const query = searchParams.toString();
-  const listState = { listSearch: query ? `?${query}` : '' };
+  const search = searchParams.toString();
+  const listSearch = listQuery(search); // without ?post=
+  const listState = { listSearch };
   const isManager = activeRole === 'SCHOOL_MANAGER';
+  const navigate = useNavigate();
+  const location = useLocation();
 
   // Changes start from the address bar, not from this render's searchParams: the debounced search and a click on
   // a pager meanwhile would otherwise overwrite each other. Default values (tab "all", page 1) are left out.
@@ -323,6 +376,41 @@ export default function SchoolFeedPage() {
     }
   }
 
+  // --- The post pop-up (?post=<id>, 18/11/2026, as FE-05's PostDialog). Close: one step back when the feed opened it
+  // (the address before it is the same feed), else (a copied link) only ?post= is removed. What the reader changed
+  // in the post (pin, like, comments) shows on its card when the pop-up closes: the page is read again once then;
+  // a deletion closes it and reads the page at once.
+  // ASSUMPTION: one re-read on close rather than after every like / comment (FE-05 re-reads after each action), so the
+  // list behind the pop-up does not flicker; a post saved on SCR-31 still opens on the SCR-05 page (unchanged).
+  const popupTitleId = useId();
+  const popupChanged = useRef(false);
+  const closePost = useCallback(() => {
+    if (popupChanged.current) {
+      popupChanged.current = false;
+      setReloadKey((n) => n + 1);
+    }
+    if (location.state?.fromFeed) navigate(-1);
+    else {
+      const next = new URLSearchParams(window.location.search);
+      next.delete('post');
+      setSearchParams(next, { replace: true });
+    }
+  }, [location.state, navigate, setSearchParams]);
+  // Back (or Forward) closed / opened the pop-up from the outside: keep the pending reload of a closed one.
+  useEffect(() => {
+    if (!params.post && popupChanged.current) {
+      popupChanged.current = false;
+      setReloadKey((n) => n + 1);
+    }
+  }, [params.post]);
+  const onPostDeleted = useCallback(() => {
+    popupChanged.current = true;
+    closePost();
+  }, [closePost]);
+  const onPostChanged = useCallback(() => {
+    popupChanged.current = true;
+  }, []);
+
   const { tab } = params;
   const items = list.result?.items ?? [];
   const emptyText = params.q.trim()
@@ -392,7 +480,7 @@ export default function SchoolFeedPage() {
                   pinFull={pinFull}
                   pinBusy={pinningId !== null}
                   onPin={handlePin}
-                  listState={listState}
+                  search={search}
                   onLikeError={onLikeError}
                 />
               ))}
@@ -408,6 +496,25 @@ export default function SchoolFeedPage() {
         </section>
         <UpcomingCalendar />
       </div>
+
+      {params.post && (
+        <FeedPostDialog key={params.post} titleId={popupTitleId} onClose={closePost}>
+          <SchoolPostDetail
+            schoolPostId={params.post}
+            titleId={popupTitleId}
+            listSearch={listSearch}
+            onBack={closePost}
+            onDeleted={onPostDeleted}
+            onChanged={onPostChanged}
+            leading={(post) => (
+              <span className="title-sm feed-post-dialog-title">
+                {post ? POST_TYPE_LABELS[post.postType] ?? 'Bài viết' : 'Bài viết'}
+              </span>
+            )}
+            trailing={<FeedPostDialogClose onClose={closePost} />}
+          />
+        </FeedPostDialog>
+      )}
     </div>
   );
 }
