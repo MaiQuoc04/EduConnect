@@ -141,31 +141,7 @@
 .update-relationship-account-note .icon { flex: none; color: var(--ink-600); }
 .update-relationship-fieldset { display: grid; gap: 16px; min-width: 0; margin: 0; padding: 0; border: 0; }
 .update-relationship-fieldset legend { margin-bottom: 8px; padding: 0; }
-.update-relationship-fieldset:disabled .update-relationship-modes,
 .update-relationship-fieldset:disabled .field { opacity: 0.7; }
-
-/* Segmented choice between the two ways of picking a parent. */
-.update-relationship-modes {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 4px;
-  padding: 4px;
-  border-radius: var(--radius-control);
-  background: var(--graphite-100);
-}
-.update-relationship-modes button {
-  min-height: 36px;
-  padding: 0 10px;
-  border: 0;
-  border-radius: 4px;
-  background: transparent;
-  font: 500 13px/18px var(--font-ui);
-  color: var(--graphite-600);
-  cursor: pointer;
-}
-.update-relationship-modes button.active { background: var(--white); color: var(--ink-700); box-shadow: 0 1px 2px rgba(28, 27, 25, 0.08); }
-.update-relationship-modes button:focus-visible { outline: 2px solid var(--ink-400); outline-offset: 1px; }
-.update-relationship-modes button:disabled { cursor: default; }
 
 .update-relationship .update-relationship-search { padding-left: 38px; }
 .update-relationship-input-icon,
@@ -204,9 +180,6 @@
 .update-relationship-option:disabled { opacity: 0.6; cursor: default; }
 .update-relationship-option.active { border-color: var(--ink-600); background: var(--ink-50); }
 .update-relationship-option.active > .icon { color: var(--ink-600); }
-
-.update-relationship-sibling { display: grid; gap: 8px; }
-.update-relationship-sibling-head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 4px 8px; }
 
 .update-relationship-selected {
   display: flex;
@@ -304,11 +277,9 @@
   .update-relationship .update-relationship-parent { padding: 16px; }
   .update-relationship-student { align-items: flex-start; }
   .update-relationship-contact { grid-template-columns: minmax(0, 1fr); }
-  .update-relationship-modes button { min-height: 44px; }
   .update-relationship .input { height: 44px; }
   .update-relationship .update-relationship-submit,
-  .update-relationship-parent-foot .btn,
-  .update-relationship-sibling-head .btn { width: 100%; height: 44px; }
+  .update-relationship-parent-foot .btn { width: 100%; height: 44px; }
   .update-relationship-option { min-height: 56px; }
   .update-relationship .update-relationship-rules { padding-left: 32px; }
   .update-relationship-rules::before { left: 16px; }
