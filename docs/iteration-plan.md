@@ -28,14 +28,34 @@ reactions, attachments) is merged into one place after both are on `develop`.
 
 ## Current status (read first; update after every merge, schema patch or new decision)
 
+- **FE-04 / FE-06 follow-ups merged into `develop` (21/11/2026, Quoc, `feature/fe-05-group-feed`, merge `7eb509b`;
+  client `npm run build` and server `npm test` (20/20) pass on `develop`):** six commits of Khanh, 20–21/11.
+  - **FE-04 class types per grade only** (UC-26, SCR-70, business rules §4): no more "every grade" type, tab and
+    option "Mọi khối" removed, `createTrack` / `updateTrack` need a grade (`MSG_TRACK_GRADE_REQUIRED`), "Thêm loại
+    lớp" hidden once the selected school year has grades. **DB: `patch_v0.3_class_track_split_all_grades.sql`
+    (data only) – run on the shared DB 20/11 by Khanh** (each old every-grade type split into one per grade, new
+    ids 33–40, subjects copied, classes moved). Read-only check 21/11: no active type without a grade.
+  - **FE-06 unread badge** on "Trò chuyện" in the menu (`GET /conversations/unread-count`, `useChatUnread.js`).
+  - **FE-06 UC-132 Hide Conversation** (proposed by Khanh, approved by the lead 20/11; business rules §6): a member
+    hides a 1-1 chat or a team from their own list until something new happens in it; class groups and the teacher
+    group cannot be hidden. **DB: `patch_v0.3_conversation_hidden.sql` (`group_members.hidden_at TIMESTAMPTZ NULL`)
+    – run on the shared DB 20/11 by Khanh;** read-only check 21/11: column there, **55 tables**. Schema file updated,
+    so `scripts/dev-local-db.js` gets the column.
+  - **Follow-up owed (Khanh):** the small seed still creates "Khối A–D" with no grade
+    (`educonnect_seed_small_v0.3.sql`, from `npm run seed:generate:small`), so a fresh local DB has every-grade types
+    the new SCR-70 cannot show; the seed generator should give each type a grade (or `dev-local-db.js` should apply
+    the split patch).
+  - Not yet clicked through in a browser on `develop`. Still not merged: `feature/fe-08-school-feed` `baaa3a5` (see
+    below).
+
 - **FE-05 group feed comment likes and reports merged into `develop` (20/11/2026, Quoc,
   `feature/fe-05-group-feed`, merge `f55d990`; client `npm run build` and server `npm test` (20/20) pass on
   `develop`):** Khanh's 19/11 work (details under "Merged so far", 19/11 entry). **No schema change** (uses
   `comment_likes` / `comment_reports`, already on the shared DB). Comment-removed notifications go through Anh's
   `utils/commentReports.js` `notifyCommentRemoved`, which already writes `role_code` (FE-09), so it works on the
   shared DB. Shared code touched: `components/CommentThread.jsx` (hides "Báo cáo" only when a node has
-  `canReport` false; FE-08 unchanged); business rules §5 and `permissions.md` updated. New screen "Báo cáo bình luận
-  nhóm" (`groupfeed/GroupCommentReportsPage.jsx`) has no SCR number yet. Not yet clicked through in a browser on
+  `canReport` false; FE-08 unchanged); business rules §5 and `permissions.md` updated. Use cases UC-129..UC-131 and
+  screen SCR-84 "Báo cáo bình luận nhóm" (`groupfeed/GroupCommentReportsPage.jsx`) added by the lead 20/11. Not yet clicked through in a browser on
   `develop`. **Not merged yet:** `feature/fe-08-school-feed` has one new commit after its 18/11 merge (`baaa3a5`, Anh,
   19/11, "Bo lien ket phu huynh bang anh chi em" – removes linking a parent through a sibling), waiting for review.
 
