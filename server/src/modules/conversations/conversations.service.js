@@ -364,6 +364,37 @@ export async function listMessages(user, groupId, query) {
 // "Xoá ở phía tôi" leaves nothing behind (15/11/2026): a deleted-for-everyone placeholder older than the viewer's latest
 // delete-for-me in that chat is no longer the preview – the latest ordinary message is (a chat left with placeholders
 // only still shows one, so a 1-1 chat does not drop off the list).
+// Shared by the list (UC-48) and the menu badge (unreadTotal), so both always count the same chats and messages.
+// $1 = viewer, $2 = active role.
+const MY_MEMBERSHIP_JOIN = `JOIN LATERAL (SELECT MIN(vm.joined_at) AS joined_at, MAX(vm.last_read_at) AS last_read_at
+                   FROM group_members vm
+                   WHERE vm.group_id = g.group_id AND vm.user_id = $1
+                   HAVING bool_or(vm.left_at IS NULL)) gm ON TRUE`;
+const UNREAD_COUNT_SQL = `(SELECT COUNT(*) FROM messages x
+             WHERE x.group_id = g.group_id AND x.deleted_at IS NULL AND x.sender_id <> $1
+               AND NOT ${hiddenFor('$1', 'x')}
+               AND x.sent_at >= gm.joined_at
+               AND (gm.last_read_at IS NULL
+                    OR COALESCE(x.deleted_for_everyone_at, x.sent_at) > gm.last_read_at))`;
+const MY_CHATS_WHERE = `(
+             (${groupScopeSql('$1', '$2')} AND NOT ($2 = 'SCHOOL_MANAGER' AND g.class_id IS NOT NULL))
+             -- UC-49 1-1 chats under every role (membership checked by the gm join)
+             OR (g.group_type = 'DIRECT' AND g.deleted_at IS NULL)
+           )`;
+
+// Menu badge of "Trò chuyện" (20/11/2026): the unread messages of every chat of the conversation list, summed.
+export async function unreadTotal(user) {
+  const { rows } = await pool.query(
+    `SELECT COALESCE(SUM(c.n), 0)::int AS total
+     FROM (SELECT ${UNREAD_COUNT_SQL} AS n
+           FROM groups g
+           ${MY_MEMBERSHIP_JOIN}
+           WHERE ${MY_CHATS_WHERE}) c`,
+    [user.userId, user.activeRole],
+  );
+  return rows[0].total;
+}
+
 export async function listConversations(user) {
   const { rows } = await pool.query(
     `SELECT g.group_id AS "groupId", g.group_type AS "groupType",
@@ -376,17 +407,9 @@ export async function listConversations(user) {
             u.full_name AS "senderName", e.nickname AS "senderNickname",
             peer.user_id AS "peerId", peer.full_name AS "peerName", peer.avatar_url AS "peerAvatarUrl",
             peer.status AS "peerStatus",
-            (SELECT COUNT(*) FROM messages x
-             WHERE x.group_id = g.group_id AND x.deleted_at IS NULL AND x.sender_id <> $1
-               AND NOT ${hiddenFor('$1', 'x')}
-               AND x.sent_at >= gm.joined_at
-               AND (gm.last_read_at IS NULL
-                    OR COALESCE(x.deleted_for_everyone_at, x.sent_at) > gm.last_read_at)) AS "unreadCount"
+            ${UNREAD_COUNT_SQL} AS "unreadCount"
      FROM groups g
-     JOIN LATERAL (SELECT MIN(vm.joined_at) AS joined_at, MAX(vm.last_read_at) AS last_read_at
-                   FROM group_members vm
-                   WHERE vm.group_id = g.group_id AND vm.user_id = $1
-                   HAVING bool_or(vm.left_at IS NULL)) gm ON TRUE
+     ${MY_MEMBERSHIP_JOIN}
      LEFT JOIN LATERAL (SELECT m.message_id, m.content, m.sent_at, m.sender_id, m.message_type, m.system_event,
                                m.target_user_id, m.deleted_for_everyone_at IS NOT NULL AS is_deleted,
                                COALESCE(m.deleted_for_everyone_at, m.sent_at) AS activity_at
@@ -406,11 +429,7 @@ export async function listConversations(user) {
                         FROM group_members pm JOIN users pu ON pu.user_id = pm.user_id
                         WHERE g.group_type = 'DIRECT' AND pm.group_id = g.group_id AND pm.user_id <> $1
                         ORDER BY pm.member_id LIMIT 1) peer ON TRUE
-     WHERE (
-             (${groupScopeSql('$1', '$2')} AND NOT ($2 = 'SCHOOL_MANAGER' AND g.class_id IS NOT NULL))
-             -- UC-49 1-1 chats under every role (membership checked by the gm join)
-             OR (g.group_type = 'DIRECT' AND g.deleted_at IS NULL)
-           )`,
+     WHERE ${MY_CHATS_WHERE}`,
     [user.userId, user.activeRole],
   );
   return rows.map((r) => ({

@@ -337,6 +337,10 @@ textarea.input { height: auto; min-height: 88px; padding: 10px 14px; resize: ver
   font-size: 15px;
 }
 .nav-item:hover { background: var(--graphite-100); text-decoration: none; }
+/* FE-06 (20/11/2026): unread chat messages on "Trò chuyện"; a dot on the menu button when the rail is a drawer */
+.nav-badge { margin-left: auto; min-width: 20px; height: 20px; padding: 0 6px; border-radius: 999px; background: var(--ink-600); color: #fff; font: 600 11px/20px var(--font-ui); text-align: center; }
+.topbar .menu-button { position: relative; }
+.menu-dot { position: absolute; top: 6px; right: 6px; width: 8px; height: 8px; border-radius: 50%; background: var(--ink-600); box-shadow: 0 0 0 2px var(--paper); }
 .nav-item.active { background: var(--ink-50); color: var(--ink-700); font-weight: 500; }
 .nav-item.active::before {
   content: '';

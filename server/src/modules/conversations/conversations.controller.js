@@ -21,6 +21,11 @@ export async function list(req, res) {
   res.json(await service.listConversations(req.user));
 }
 
+// Badge of "Trò chuyện" in the menu: unread messages of all my chats
+export async function unreadCount(req, res) {
+  res.json({ unreadCount: await service.unreadTotal(req.user) });
+}
+
 export async function messages(req, res) {
   const { before, limit, from, after } = req.query;
   res.json(await service.listMessages(req.user, req.params.groupId, { before, limit, from, after }));

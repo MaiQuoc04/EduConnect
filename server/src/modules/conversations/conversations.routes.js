@@ -10,6 +10,7 @@ const router = Router();
 router.use(requireAuth, requireRole('SCHOOL_MANAGER', 'TEACHER', 'STUDENT', 'PARENT'));
 
 router.get('/', ctrl.list); // UC-48 View Conversation List (last message, unread count)
+router.get('/unread-count', ctrl.unreadCount); // menu badge: unread messages of all my chats (20/11/2026)
 router.get('/attachment-limits', ctrl.attachmentLimits); // UC-47 file button: count, sizes, types
 router.get('/contacts', ctrl.contacts); // UC-49 Send Private Message: who one may write to
 router.post('/direct', ctrl.openDirect); // UC-49: open (or create) the 1-1 chat with someone
