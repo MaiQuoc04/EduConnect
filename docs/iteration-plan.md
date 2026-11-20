@@ -28,6 +28,17 @@ reactions, attachments) is merged into one place after both are on `develop`.
 
 ## Current status (read first; update after every merge, schema patch or new decision)
 
+- **FE-05 group feed comment likes and reports merged into `develop` (20/11/2026, Quoc,
+  `feature/fe-05-group-feed`, merge `f55d990`; client `npm run build` and server `npm test` (20/20) pass on
+  `develop`):** Khanh's 19/11 work (details under "Merged so far", 19/11 entry). **No schema change** (uses
+  `comment_likes` / `comment_reports`, already on the shared DB). Comment-removed notifications go through Anh's
+  `utils/commentReports.js` `notifyCommentRemoved`, which already writes `role_code` (FE-09), so it works on the
+  shared DB. Shared code touched: `components/CommentThread.jsx` (hides "Báo cáo" only when a node has
+  `canReport` false; FE-08 unchanged); business rules §5 and `permissions.md` updated. New screen "Báo cáo bình luận
+  nhóm" (`groupfeed/GroupCommentReportsPage.jsx`) has no SCR number yet. Not yet clicked through in a browser on
+  `develop`. **Not merged yet:** `feature/fe-08-school-feed` has one new commit after its 18/11 merge (`baaa3a5`, Anh,
+  19/11, "Bo lien ket phu huynh bang anh chi em" – removes linking a parent through a sibling), waiting for review.
+
 - **FE-09 Notifications merged into `develop` (18/11/2026, Quoc, `feature/fe-09-notifications`, merge `fd1f42c`;
   build and `npm test` pass on `develop`):** UC-67..UC-69. **Everyone: pull `develop`** – since the patch, code
   without FE-09 cannot write notifications on the shared DB.
@@ -292,7 +303,8 @@ It2: Anh FE-08 + FE-14, Khanh FE-05 + FE-06).
     system lines `MEMBER_ADDED` / `MEMBER_KICKED`, real time (group:changed / group:removed). New flags
     `canAddMembers` / `canRemoveMembers`; adding and removing on the Members tab (SCR-22). No schema change. Tested on the
     local DB (28 steps + the team / chat suites).
-  - **19/11 (Khanh): group feed comment likes and reports, as the school feed** (business-rules §5, permissions;
+  - **19/11 (Khanh; merged into `develop` 20/11, merge `f55d990`): group feed comment likes and reports, as the
+    school feed** (business-rules §5, permissions;
     Khanh's decision). Server (FE-05, with Anh's shared `utils/feedInteractions.js` / `utils/commentReports.js`, no
     schema change): `PUT|DELETE /posts/:postId/comments/:commentId/like`, `POST …/report` (not the moderator: 403
     `MSG_MODERATOR_CANNOT_REPORT`; the moderator's own comments cannot be reported: 403 `MSG_CANNOT_REPORT_MODERATOR`, node
