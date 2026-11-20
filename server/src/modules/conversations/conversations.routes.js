@@ -10,12 +10,15 @@ const router = Router();
 router.use(requireAuth, requireRole('SCHOOL_MANAGER', 'TEACHER', 'STUDENT', 'PARENT'));
 
 router.get('/', ctrl.list); // UC-48 View Conversation List (last message, unread count)
+router.get('/unread-count', ctrl.unreadCount); // menu badge: unread messages of all my chats (20/11/2026)
 router.get('/attachment-limits', ctrl.attachmentLimits); // UC-47 file button: count, sizes, types
 router.get('/contacts', ctrl.contacts); // UC-49 Send Private Message: who one may write to
 router.post('/direct', ctrl.openDirect); // UC-49: open (or create) the 1-1 chat with someone
 router.get('/:groupId/messages', ctrl.messages); // UC-47 Chat in Group (read)
 router.post('/:groupId/messages', ctrl.send); // UC-47 Chat in Group (send)
 router.post('/:groupId/read', ctrl.read); // UC-47 read receipts
+router.post('/:groupId/hide', ctrl.hide); // UC-132 Hide Conversation (1-1 chats and teams only)
+router.delete('/:groupId/hide', ctrl.unhide); // UC-132: show it again ("Hoàn tác")
 router.put('/:groupId/messages/:messageId/reaction', ctrl.setReaction); // UC-111 React to Message
 router.delete('/:groupId/messages/:messageId/reaction', ctrl.removeReaction);
 router.delete('/:groupId/messages/:messageId', ctrl.deleteMessage); // UC-113 Delete Message, ?scope=everyone | me

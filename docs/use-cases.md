@@ -1,8 +1,9 @@
-# Use cases (131) – numbering after the 20/10/2026 database review
+# Use cases (132) – numbering after the 20/10/2026 database review
 
 UC-117..UC-128 (added 18/11/2026 by the lead): features already built in the code that had no use case yet; each is
 listed under its feature below. UC-129..UC-131 (added 20/11/2026 by the lead): the group feed comment likes and
-reports merged on 19/11/2026 (FE-05, Khanh; business rules §5).
+reports merged on 19/11/2026 (FE-05, Khanh; business rules §5). UC-132 (proposed by Khanh, approved by the lead 20/11/2026):
+hide a 1-1 chat or a team from one's own conversation list (FE-06; business rules §6).
 
 Source: Report 3 section 4.2 (draft v1.3). Actor "User" = any signed-in account. "Homeroom Teacher" is not a role: it is a Teacher who is `classes.homeroom_teacher_id` of that class.
 
@@ -57,7 +58,7 @@ Source: Report 3 section 4.2 (draft v1.3). Actor "User" = any signed-in account.
 | UC-23 | View Subject Detail | School Manager | Academic Year & Subject Setup | View a subject and where it is taught. |
 | UC-24 | Create Subject | School Manager | Academic Year & Subject Setup | Add a subject. |
 | UC-25 | Update Subject | School Manager | Academic Year & Subject Setup | Update a subject. |
-| UC-26 | Manage Class Types | School Manager | Academic Year & Subject Setup | Define class types (each for one grade or every grade) and, for each school year, their subjects and periods per week; subjects lock once grades exist. Every subject weight is 1 (not shown). |
+| UC-26 | Manage Class Types | School Manager | Academic Year & Subject Setup | Define class types (each for one grade, at least one grade required) and, for each school year, their subjects and periods per week; subjects lock once grades exist. Every subject weight is 1 (not shown). |
 | UC-27 | Import Class List | School Manager | Class Groups | Import classes and their students (accounts must exist; only students not studying in a class of the previous school year); automatically creates the general, student and parent groups of each class. |
 | UC-28 | Create Class Group | School Manager | Class Groups | Create a class manually (its three groups are created too) and add students not studying in a class of the previous school year nor this year, also to an existing class (max 45 studying students). |
 | UC-29 | View Group List | Teacher, Student, Parent, School Manager | Class Groups | View the groups the user belongs to (School Manager: all class groups, without their feeds or chats). |
@@ -93,12 +94,13 @@ Source: Report 3 section 4.2 (draft v1.3). Actor "User" = any signed-in account.
 | ID | Use case | Actor | Sub-feature | Description |
 |---|---|---|---|---|
 | UC-47 | Chat in Group | Teacher, Student, Parent, School Manager (teacher group) | Group & Team Chat | Send and receive real-time messages in a group or team. |
-| UC-48 | View Conversation List | Teacher, Student, Parent, School Manager | Private Messaging | View group, team and private conversations. |
+| UC-48 | View Conversation List | Teacher, Student, Parent, School Manager | Private Messaging | View group, team and private conversations; the menu shows the total number of unread messages (20/11/2026). |
 | UC-49 | Send Private Message | Teacher, Student, Parent, School Manager (teacher group) | Private Messaging | Search a member within one's classes (School Manager: within the teacher group) and chat one-to-one. |
 | UC-110 | Reply to Message | Teacher, Student, Parent, School Manager (teacher group) | Message Actions | Answer a message with a quote of it; clicking the quote goes to the original (added 07/11/2026). |
 | UC-111 | React to Message | Teacher, Student, Parent, School Manager (teacher group) | Message Actions | Add, change or remove one's reaction from a fixed set of six; see who reacted (added 07/11/2026). |
 | UC-112 | Insert Emoji | Teacher, Student, Parent, School Manager (teacher group) | Message Actions | Choose an emoji from a list while writing a message (added 07/11/2026). |
 | UC-113 | Delete Message | Teacher, Student, Parent, School Manager (teacher group) | Message Actions | Delete one's own message for everyone within the time limit, or any visible message for oneself (added 07/11/2026). |
+| UC-132 | Hide Conversation | Teacher, Student, Parent, School Manager | Private Messaging | Hide a 1-1 chat or a team from one's own conversation list until something new happens in it; class groups and the teacher group cannot be hidden (added 20/11/2026). |
 
 ## FE-07 Extracurricular Event Management
 

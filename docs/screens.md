@@ -56,7 +56,7 @@ built in Iteration 3. SCR-84 (added 20/11/2026): the group comment report queue 
 | 46 | Time Table Detail | FE-10 | Displays detailed information about a selected timetable entry. |
 | 47 | Academic Results | FE-11 | Displays academic results according to the User's permissions. |
 | 48 | Class Ranking | FE-11 | Displays class ranking information according to the User's permissions. |
-| 49 | Conversation List | FE-06 | Displays conversations available to the current User. |
+| 49 | Conversation List | FE-06 | Displays conversations available to the current User; "⋯" on a 1-1 chat or a team hides it (UC-132, 20/11/2026). |
 | 50 | Chat Room | FE-06 | Displays a selected conversation and allows Users to exchange messages. |
 | 51 | Attendance Statistics | FE-12 | Displays attendance statistics according to the current user's role and scope. (planned) |
 | 52 | Attendance Correction | FE-12 | Allows School Manager to review and correct attendance records when necessary. (planned) |
@@ -77,7 +77,7 @@ built in Iteration 3. SCR-84 (added 20/11/2026): the group comment report queue 
 | 67 | Registration List | FE-07 | Allows Homeroom Teacher to view the students registered for an event and to export the list to Excel. |
 | 68 | Grade Control | FE-11 | Allows School Manager to unlock finalized grades of a class, subject and semester, view a grade book read only (tabs Học kỳ 1 / Học kỳ 2 / Cả năm), export it to Excel and view who changed which grade and when. |
 | 69 | Parent List | FE-14 | Allows School Manager to search and filter parents. |
-| 70 | Class Types & Subject Weights | FE-04 | Allows School Manager to define class types (each for one grade or every grade) and set their subjects and periods per week for a school year (shown as "Loại lớp & số tiết"; every weight is 1). |
+| 70 | Class Types & Subject Weights | FE-04 | Allows School Manager to define class types (each for one grade) and set their subjects and periods per week for a school year (shown as "Loại lớp & số tiết"; every weight is 1). |
 | 71 | Password Reset Requests | FE-13 | Lists the automatic resets from password reset requests (tab waiting for sign-in / used): "sent by email" or "to hand over" with the temporary password; System Admin sees all, School Manager student, parent and teacher accounts (added 01/11/2026). |
 | 72 | Departments | FE-03 | Allows School Manager to create, rename and delete departments (tổ chuyên môn) and choose the subjects of each (UC-114, added 07/11/2026). |
 | 73 | Import Teachers | FE-03 | Allows School Manager to create teacher accounts from a file: template, preview, import, one-time password file (UC-116, same steps as Import Accounts; added 07/11/2026). |

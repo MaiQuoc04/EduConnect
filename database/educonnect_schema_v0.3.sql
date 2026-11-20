@@ -40,6 +40,9 @@
 -- 17/11/2026: + comment_reports (52 tables; FE-08: a user reports a comment, the moderator deletes it or dismisses the
 --   report; shared with FE-05 because it points to the comment, not the post). Existing database: run
 --   patch_v0.3_comment_reports.sql.
+-- 20/11/2026: + group_members.hidden_at (FE-06 UC-132: a member hides a 1-1 chat or a team from their conversation
+--   list until something new happens in it). Existing database: run patch_v0.3_conversation_hidden.sql (approved by
+--   the lead, run on the shared database 20/11/2026).
 -- How to run: Supabase > SQL Editor > paste the whole file > Run (on an empty database).
 -- Conventions:
 --   * Soft delete everywhere (deleted_at / deleted_by). Hard delete only for: post_likes (unlike),
@@ -460,6 +463,7 @@ CREATE TABLE group_members (
   joined_at    TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
   left_at      TIMESTAMPTZ NULL,
   last_read_at TIMESTAMPTZ NULL,                     -- read receipts (3d)
+  hidden_at    TIMESTAMPTZ NULL,                     -- UC-132: hidden from my conversation list (DIRECT / TEAM_CHAT)
   FOREIGN KEY (group_id) REFERENCES groups(group_id),
   FOREIGN KEY (user_id)  REFERENCES users(user_id)
 );

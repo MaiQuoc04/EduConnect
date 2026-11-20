@@ -174,11 +174,14 @@ Boundaries that are easy to get wrong:
   copied from the previous year by default; editable, but subjects can no longer be added or removed **once the year
   has grades** (periods per week stay editable). Removing a subject from a type hard-deletes its `track_subjects`
   row (allowed only while the year has no grades and has not ended, §14).
-- A class type belongs to **one grade** (10, 11 or 12) or to **every grade** (`class_tracks.grade_level_id`, NULL =
-  every grade; patch `patch_v0.3_class_track_grade.sql`, 02/11/2026), so subjects and periods can differ per grade.
-  A class only uses a type of its grade or one for every grade. A name is unique per grade (case-insensitive, among
-  types not deleted) and is used either for every grade or per grade, not both. A type's grade cannot change while
-  classes of another grade use it.
+- A class type belongs to **one grade** (10, 11 or 12) (`class_tracks.grade_level_id`; patch
+  `patch_v0.3_class_track_grade.sql`, 02/11/2026), so subjects and periods can differ per grade. Creating a type
+  needs at least one grade (one type per chosen grade). Since 20/11/2026 there is **no "every grade" type** (SCR-70
+  has no "Mọi khối" tab): `patch_v0.3_class_track_split_all_grades.sql` split the old ones into one type per grade
+  (subjects copied, each class moved to the type of its grade); the column stays nullable only for deleted old rows.
+  SCR-70 hides "Thêm loại lớp" while the selected school year has grades (20/11/2026, UI only: a type is not tied
+  to a year). A class only uses a type of its grade. A name is unique per grade (case-insensitive, among types not deleted). A
+  type's grade cannot change while classes of another grade use it.
 - **Every subject weight is 1** (agreed 01/11/2026, in line with Circular 22/2021): `track_subjects.weight` is
   always 1.00 and is not shown.
 - **Classes** (FE-04, agreed 03/11/2026): a class name is the grade followed by 1–8 letters or digits, no spaces or
@@ -420,6 +423,23 @@ Boundaries that are easy to get wrong:
     attempt refused because the user may no longer write (read-only year, 1-1 out of reach, account locked, no longer
     a member) closes the box with the reason. ASSUMPTION / not done (other owners' modules): real-time signals when
     an account is locked, a school year ends or a student is transferred out of a class group.
+- **Unread badge and hiding a conversation** (Khanh 20/11/2026; UC-132 and its database column approved by the lead 20/11/2026):
+  - **Badge:** the menu item "Trò chuyện" shows the total of the unread counts of the conversation list ("99+" above
+    99), kept up to date in real time; on a phone a dot on the menu button. Hidden chats are not counted.
+  - **Hide (UC-132):** only a **1-1 chat or a team**; the class groups (GENERAL / STUDENT / PARENT) and the teacher group
+    cannot be hidden. "⋯" on the row → "Ẩn cuộc trò chuyện", no confirmation; a toast with "Hoàn tác" (5 s). Per
+    account, so under every role. Nobody else sees a change, no system line, no notification, not logged; the read
+    state is not touched (the others do not see it as read), and nothing is deleted. A team leader who hides the team
+    stays leader. "Nhóm của tôi" still lists the team.
+  - **It comes back by itself** when anything newer than the hiding happens in it: a message from anyone (mine too,
+    from any tab or device), a delete for everyone, a team system line. Reactions and my "delete for me" do not bring
+    it back. It comes back with all its unread messages, the old ones included.
+  - The open chat stays listed while it is open (e.g. found through the search box) and leaves the list when the user
+    moves on without writing; hiding the open chat closes it. While searching, hidden chats are listed too.
+  - **Database:** `group_members.hidden_at` (`patch_v0.3_conversation_hidden.sql`, **approved by the lead and run on the
+    shared database 20/11/2026**). "Hidden" is worked out when the list is read (hidden_at newer than the chat's latest
+    activity), so sending a message writes nothing more. Without the column the list shows every chat and hiding
+    answers MSG_CHAT_HIDE_UNAVAILABLE.
 
 ## 7. Extracurricular activities (FE-07)
 - The homeroom teacher posts an activity in the class feed (a `posts` row + `extracurricular_events` row) with a

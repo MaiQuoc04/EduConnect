@@ -176,11 +176,12 @@ function mapDuplicate(err) {
   return err;
 }
 
-// The grades a new class type is created for: [] or missing = one type for every grade.
+// The grades a new class type is created for – at least one. Since 20/11/2026 a new type is never for every grade
+// (the "Mọi khối" tab is gone, patch_v0.3_class_track_split_all_grades.sql split the old ones per grade).
 async function gradeIds(db, gradeLevelIds) {
-  if (gradeLevelIds === undefined || gradeLevelIds === null) return [null];
-  if (!Array.isArray(gradeLevelIds)) throw badRequest('MSG_REQUIRED', 'Please send the list of grades.');
-  if (!gradeLevelIds.length) return [null];
+  if (!Array.isArray(gradeLevelIds) || !gradeLevelIds.length) {
+    throw badRequest('MSG_TRACK_GRADE_REQUIRED', 'Please choose at least one grade.');
+  }
   const ids = [];
   for (const id of gradeLevelIds) ids.push(await assertGrade(db, id));
   if (new Set(ids).size !== ids.length) throw badRequest('MSG_TRACK_GRADE_DUPLICATE', 'A grade is listed twice.');
@@ -188,7 +189,7 @@ async function gradeIds(db, gradeLevelIds) {
 }
 
 // UC-26 create a class type – one per chosen grade ("Khối A" for grades 10 and 11 = two types, each with its own
-// subjects) or one for every grade. Their subjects are set per school year afterwards. Returns { tracks }.
+// subjects). Their subjects are set per school year afterwards. Returns { tracks }.
 export async function createTrack(input) {
   const { name, desc } = validateTrack(input);
   const ids = await withTransaction(async (client) => {
@@ -213,7 +214,7 @@ export async function createTrack(input) {
 }
 
 // UC-26 rename a class type or change its grade. The name is only a label, so it can change even when classes use
-// the type; the grade can only become one that every class using the type has (or every grade).
+// the type; the grade can only become one that every class using the type has, never "every grade" (20/11/2026).
 export async function updateTrack(idParam, input) {
   const id = parseId(idParam, 'Class type not found.');
   const { name, desc } = validateTrack(input);
@@ -221,7 +222,10 @@ export async function updateTrack(idParam, input) {
     await client.query('LOCK TABLE class_tracks IN SHARE ROW EXCLUSIVE MODE');
     const track = await loadTrack(client, id);
     let grade = track.gradeLevelId;
-    if (input.gradeLevelId !== undefined) grade = input.gradeLevelId ? await assertGrade(client, input.gradeLevelId) : null;
+    if (input.gradeLevelId !== undefined) {
+      if (!input.gradeLevelId) throw badRequest('MSG_TRACK_GRADE_REQUIRED', 'Please choose a grade.');
+      grade = await assertGrade(client, input.gradeLevelId);
+    }
     if (grade && grade !== track.gradeLevelId && (await usedGradeIds(client, id)).some((g) => g !== grade)) {
       throw conflict('MSG_TRACK_GRADE_IN_USE', 'Classes of another grade use this class type.');
     }

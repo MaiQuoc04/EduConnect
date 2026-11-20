@@ -58,6 +58,7 @@ const ERROR_MESSAGES = {
   MSG_SUBJECT_NAME_TAKEN: 'Đã có môn học cùng tên.',
   MSG_SUBJECT_NAME_LENGTH: 'Tên môn học tối đa 150 ký tự.',
   MSG_TRACK_NAME_TAKEN: 'Khối này đã có loại lớp cùng tên.',
+  MSG_TRACK_GRADE_REQUIRED: 'Vui lòng chọn ít nhất một khối.',
   MSG_TRACK_NAME_SCOPE: 'Tên này đang dùng cho loại lớp “mọi khối” hoặc loại lớp theo khối, không dùng được cho cả hai.',
   MSG_TRACK_NAME_LENGTH: 'Tên loại lớp tối đa 100 ký tự.',
   MSG_TRACK_GRADE_DUPLICATE: 'Một khối bị chọn hai lần.',
@@ -118,6 +119,8 @@ const ERROR_MESSAGES = {
   // FE-06 Messaging
   MSG_CHAT_NO_ACCESS: 'Quản lý trường không xem tin nhắn của nhóm lớp.',
   MSG_CHAT_NOT_MEMBER: 'Bạn không còn là thành viên của cuộc trò chuyện này.',
+  MSG_CHAT_CANNOT_HIDE: 'Chỉ ẩn được tin nhắn riêng và team, không ẩn được nhóm mặc định của lớp.', // UC-132
+  MSG_CHAT_HIDE_UNAVAILABLE: 'Chức năng ẩn cuộc trò chuyện chưa sẵn sàng. Vui lòng thử lại sau.', // UC-132 (DB patch not run)
   MSG_MESSAGE_EMPTY: 'Vui lòng nhập nội dung tin nhắn.',
   MSG_MESSAGE_TOO_LONG: ({ max } = {}) => `Tin nhắn có tối đa ${max ?? 2000} ký tự.`,
   MSG_INVALID_INPUT: 'Dữ liệu gửi lên không hợp lệ.',

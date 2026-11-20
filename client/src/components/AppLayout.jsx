@@ -4,6 +4,8 @@ import { useAuth } from '../context/AuthContext.jsx';
 import { ROLE_LABELS } from '../messages.js';
 import { navFor } from '../navigation.js';
 import MaintenanceBanner from '../pages/admin/MaintenanceBanner.jsx'; // FE-13 UC-103
+import { unreadLabel } from '../pages/chat/chatText.js';
+import { useChatUnreadTotal } from '../pages/chat/useChatUnread.js'; // FE-06 menu badge
 import Avatar from './Avatar.jsx';
 import Icon from './Icon.jsx';
 import NotificationBell from './NotificationBell.jsx'; // FE-09 UC-67
@@ -14,6 +16,10 @@ export default function AppLayout() {
   const navigate = useNavigate();
   const location = useLocation();
   const [navOpen, setNavOpen] = useState(false);
+  const sections = navFor(activeRole);
+  // FE-06 (20/11/2026): unread chat messages on "Trò chuyện", for the roles that have it in the menu.
+  const chatUnread = useChatUnreadTotal(sections.some((s) => s.items.some((i) => i.to === '/chat')));
+  const BADGES = { '/chat': chatUnread };
 
   useEffect(() => setNavOpen(false), [location.pathname]);
 
@@ -41,15 +47,28 @@ export default function AppLayout() {
         </div>
 
         <nav className="sidebar-nav">
-          {navFor(activeRole).map((section) => (
+          {sections.map((section) => (
             <div className="nav-section" key={section.label}>
               <div className="label-upper">{section.label}</div>
-              {section.items.map((item) => (
-                <NavLink key={item.to} to={item.to} className="nav-item">
-                  <Icon name={item.icon} />
-                  {item.label}
-                </NavLink>
-              ))}
+              {section.items.map((item) => {
+                const badge = BADGES[item.to] ?? 0;
+                return (
+                  <NavLink
+                    key={item.to}
+                    to={item.to}
+                    className="nav-item"
+                    aria-label={badge ? `${item.label}, ${badge} tin nhắn chưa đọc` : undefined}
+                  >
+                    <Icon name={item.icon} />
+                    {item.label}
+                    {badge > 0 && (
+                      <span className="nav-badge" aria-hidden="true">
+                        {unreadLabel(badge)}
+                      </span>
+                    )}
+                  </NavLink>
+                );
+              })}
             </div>
           ))}
         </nav>
@@ -88,8 +107,14 @@ export default function AppLayout() {
 
       <div className="main">
         <header className="topbar">
-          <button type="button" className="btn btn-icon menu-button" onClick={() => setNavOpen(true)} aria-label="Mở menu">
+          <button
+            type="button"
+            className="btn btn-icon menu-button"
+            onClick={() => setNavOpen(true)}
+            aria-label={chatUnread ? `Mở menu, ${chatUnread} tin nhắn chưa đọc` : 'Mở menu'}
+          >
             <Icon name="menu" />
+            {chatUnread > 0 && <span className="menu-dot" aria-hidden="true" />}
           </button>
           <Link to="/" className="brand">
             EduConnect
