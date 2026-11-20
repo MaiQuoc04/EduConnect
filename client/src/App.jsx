@@ -391,7 +391,7 @@ export default function App() {
         <Route path="school-events" element={<ProtectedRoute roles={['SCHOOL_MANAGER', 'TEACHER', 'STUDENT', 'PARENT']}><SchoolEventsPage /></ProtectedRoute>} />
         <Route path="timetables/auto" element={<ProtectedRoute roles={['SCHOOL_MANAGER']}><TimetableAutoPage /></ProtectedRoute>} />
         <Route path="timetables/period-times" element={<ProtectedRoute roles={['SCHOOL_MANAGER']}><PeriodTimesPage /></ProtectedRoute>} />
-        {/* School Manager settings (Dung, 21/11/2026; proposed, no SCR id yet) */}
+        {/* School Manager settings (Dung, 21/11/2026; no SCR id yet) */}
         <Route path="school-settings" element={<ProtectedRoute roles={['SCHOOL_MANAGER']}><SchoolSettingsPage /></ProtectedRoute>} />
         <Route path="timetables/import" element={<ProtectedRoute roles={['SCHOOL_MANAGER']}><TimetableImportPage /></ProtectedRoute>} />
         <Route path="timetables/classes/:classId/edit" element={<ProtectedRoute roles={['SCHOOL_MANAGER']}><TimetableEditorPage /></ProtectedRoute>} />

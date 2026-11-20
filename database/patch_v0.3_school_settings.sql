@@ -1,11 +1,12 @@
--- PROPOSED by Dung 21/11/2026 – NOT approved by the team lead (Quoc) yet, NOT run on the shared DB.
+-- Written by Dung, approved by the team lead (Quoc) 21/11/2026, run on the shared DB 21/11/2026 by Dung.
+-- Same definitions as in educonnect_schema_v0.3.sql.
 -- Patch for a database already created from schema v0.3: settings the School Manager edits ("Cài đặt hệ thống" of the
 -- School Manager). First group: the teaching load used by automatic scheduling (moved from part "4. Giáo viên" of the
 -- automatic scheduling screen). Same shape as system_settings, but a separate table: system_settings is edited by the
 -- System Admin only (UC-102, business rules §13) and its screen lists every row of that table.
 -- Without this patch the server uses the built-in defaults (17 / 13 / 4 / 4) and saving answers 503
 -- MSG_SCHOOL_SETTINGS_NOT_READY.
--- How to run (after the lead's OK): Supabase > SQL Editor > paste > Run (once; safe to run again).
+-- How to run: Supabase > SQL Editor > paste > Run (once; safe to run again).
 
 BEGIN;
 

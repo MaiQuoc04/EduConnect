@@ -10,7 +10,7 @@ import './schoolSettings.css';
 // "Cài đặt hệ thống" of the School Manager (Dung, 21/11/2026). First group: the teaching load used by automatic
 // scheduling, moved here from part "4. Giáo viên" of the automatic scheduling screen. The System Admin has its own
 // settings page (/admin/settings, UC-102); these values are the school's, not the system's.
-// ASSUMPTION: proposed screen, no UC / SCR id yet (waiting for the team lead).
+// ASSUMPTION: no UC / SCR id yet (to be given by the team lead). Table: patch_v0.3_school_settings.sql (run 21/11/2026).
 
 const FIELDS = [
   { key: 'norm', label: 'Định mức giáo viên', unit: 'tiết/tuần', help: 'Số tiết một giáo viên dạy trong tuần (Thông tư 05/2025: 17 tiết với giáo viên THPT).' },

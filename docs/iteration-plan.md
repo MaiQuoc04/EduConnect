@@ -28,6 +28,16 @@ reactions, attachments) is merged into one place after both are on `develop`.
 
 ## Current status (read first; update after every merge, schema patch or new decision)
 
+- **FE-10 School Manager settings (21/11/2026, Dung, `feature/fe-10-school-settings`, not merged yet):** new page
+  "Cài đặt hệ thống" for the School Manager (`/school-settings`, menu "Quản trị hệ thống"; `GET` / `PUT
+  /api/v1/school-settings`, module `server/src/modules/school-settings`). First group, moved from part "4. Giáo viên"
+  of automatic scheduling (SCR-80): teacher norm, homeroom teacher norm, periods over the norm, periods a day.
+  Automatic scheduling reads them on every run and apply (no longer in the request) and shows them read only; the
+  busy teachers list stays on SCR-80. **DB: `patch_v0.3_school_settings.sql` (new table `school_settings`, 4 rows
+  17 / 13 / 4 / 4) – approved by the lead, run on the shared DB 21/11 by Dung; 56 tables.** Schema file updated, so
+  `scripts/dev-local-db.js` gets the table and its rows. Separate from `system_settings` (System Admin only, UC-102).
+  **Owed:** UC / SCR id for the page (lead), use-cases.md / screens.md / permissions.md rows, SRS screen description.
+
 - **FE-04 / FE-06 follow-ups merged into `develop` (21/11/2026, Quoc, `feature/fe-05-group-feed`, merge `7eb509b`;
   client `npm run build` and server `npm test` (20/20) pass on `develop`):** six commits of Khanh, 20–21/11.
   - **FE-04 class types per grade only** (UC-26, SCR-70, business rules §4): no more "every grade" type, tab and

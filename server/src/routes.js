@@ -33,7 +33,7 @@ import notificationRoutes from './modules/notifications/notifications.routes.js'
 //   FE-01 account   -> /auth, /account (Quoc)
 //   FE-02 students  -> /students      (Anh)
 //   FE-03 teachers  -> /teachers, /departments, /homeroom-assignments, /teaching-assignments (Dung)
-//   FE-10 timetable -> /timetables, /school-settings (Dung; School Manager settings, proposed 21/11)
+//   FE-10 timetable -> /timetables, /school-settings (Dung; School Manager settings, 21/11)
 //   FE-10 calendar  -> /class-events, /school-events (Dung, It3)
 //   FE-04 classes   -> /school-years, /classes, /groups, /subjects, /class-tracks (Khanh)
 //   FE-05 feed      -> /posts         (Khanh)
@@ -65,7 +65,7 @@ router.use('/departments', departmentRoutes);
 router.use('/homeroom-assignments', homeroomRoutes);
 router.use('/teaching-assignments', teachingRoutes);
 router.use('/timetables', timetableRoutes);
-router.use('/school-settings', schoolSettingsRoutes); // School Manager settings (Dung, proposed 21/11/2026)
+router.use('/school-settings', schoolSettingsRoutes); // School Manager settings (Dung, 21/11/2026)
 router.use('/class-events', calendarRoutes);
 router.use('/school-events', schoolEventRoutes); // FE-10 school calendar (Dung)
 router.use('/grades', gradeRoutes);

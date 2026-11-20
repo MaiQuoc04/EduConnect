@@ -2,9 +2,9 @@
 // load used by automatic scheduling (moved here from part "4. Giáo viên" of SCR-80): the weekly norm of a teacher and
 // of a homeroom teacher, how many periods a teacher may go over the norm, and the most periods a teacher should teach
 // in one day.
-// ASSUMPTION: proposed screen / use case, not yet agreed by the team lead (no UC / SCR id yet). The values live in
-// school_settings (database/patch_v0.3_school_settings.sql, NOT run on the shared DB yet). Until the patch is run the
-// built-in defaults are used and saving answers 503 MSG_SCHOOL_SETTINGS_NOT_READY.
+// The values live in school_settings (database/patch_v0.3_school_settings.sql, approved by the lead and run on the
+// shared DB 21/11/2026). On a database without the table the built-in defaults are used and saving answers 503
+// MSG_SCHOOL_SETTINGS_NOT_READY. ASSUMPTION: no UC / SCR id yet (to be given by the lead).
 // school_settings is separate from system_settings on purpose: system_settings is edited by the System Admin only
 // (UC-102, business rules §13) and its screen lists every row of that table.
 import { pool, withTransaction } from '../../config/db.js';
