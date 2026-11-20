@@ -107,7 +107,8 @@ export function useTeamActions(g, { onLeft, onChanged }) {
 }
 
 /** The team's actions as a "⋮" menu (chat header). */
-export function TeamMenu({ items }) {
+// label / icon / className (20/11/2026): the same menu on a row of the conversation list (UC-132 "Ẩn cuộc trò chuyện").
+export function TeamMenu({ items, label = 'Thao tác với nhóm', icon = 'more_vert', className = '' }) {
   const [open, setOpen] = useState(false);
   const ref = useRef(null);
   const menuId = useId();
@@ -124,17 +125,18 @@ export function TeamMenu({ items }) {
   }, [open]);
   if (!items.length) return null;
   return (
-    <div className="team-menu" ref={ref}>
+    <div className={`team-menu${className ? ` ${className}` : ''}${open ? ' is-open' : ''}`} ref={ref}>
       <button
         type="button"
         className="btn btn-icon"
-        aria-label="Thao tác với nhóm"
+        aria-label={label}
+        title={label}
         aria-haspopup="menu"
         aria-expanded={open}
         aria-controls={open ? menuId : undefined}
         onClick={() => setOpen((v) => !v)}
       >
-        <Icon name="more_vert" />
+        <Icon name={icon} />
       </button>
       {open && (
         <div className="team-menu-list" role="menu" id={menuId}>

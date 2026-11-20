@@ -44,6 +44,7 @@ Source: Report 3 section 4.4 (draft v1.3). Full = all records; Restricted (n) = 
 | Chat message | Reply / react | No | Restricted (6) | Restricted (4) | Restricted (4) | Restricted (4) | Restricted (4) |
 | Chat message | Delete for everyone | No | Restricted (19) | Restricted (19) | Restricted (19) | Restricted (19) | Restricted (19) |
 | Chat message | Delete for me | No | Restricted (6) | Restricted (4) | Restricted (4) | Restricted (4) | Restricted (4) |
+| Conversation | Hide from own list (UC-132, 20/11/2026) | No | Restricted (23) | Restricted (23) | Restricted (23) | Restricted (23) | Restricted (23) |
 | Extracurricular event | Create / update / cancel / export list | No | No | Restricted (5) | No | No | No |
 | Extracurricular event | View | No | No | Restricted (5) | No | Restricted (4) | Restricted (4) |
 | Extracurricular event | Register / cancel child | No | No | No | No | No | Restricted (7) |
@@ -102,3 +103,4 @@ Notes:
 20. Import teacher accounts only (UC-116, FE-03, agreed 07/11/2026): same file and checks as UC-96, type fixed to Teacher.
 21. Whole-school dates and the dates of the grades of their own (or their children's) classes being studied.
 22. Comments of other people on announcements they can see; one report per comment (UC-119, added 18/11/2026).
+23. Own 1-1 chats and teams only, in their own list; the class groups and the teacher group cannot be hidden. Nobody else sees a change.

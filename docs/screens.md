@@ -56,7 +56,7 @@ built in Iteration 3. SCR-84 (added 20/11/2026): the group comment report queue 
 | 46 | Time Table Detail | FE-10 | Displays detailed information about a selected timetable entry. |
 | 47 | Academic Results | FE-11 | Displays academic results according to the User's permissions. |
 | 48 | Class Ranking | FE-11 | Displays class ranking information according to the User's permissions. |
-| 49 | Conversation List | FE-06 | Displays conversations available to the current User. |
+| 49 | Conversation List | FE-06 | Displays conversations available to the current User; "⋯" on a 1-1 chat or a team hides it (UC-132, 20/11/2026). |
 | 50 | Chat Room | FE-06 | Displays a selected conversation and allows Users to exchange messages. |
 | 51 | Attendance Statistics | FE-12 | Displays attendance statistics according to the current user's role and scope. (planned) |
 | 52 | Attendance Correction | FE-12 | Allows School Manager to review and correct attendance records when necessary. (planned) |

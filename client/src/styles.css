@@ -798,6 +798,8 @@ a.link-row .icon:last-child { color: var(--graphite-400); }
 .toast .icon.err { color: #ff9b8f; }
 .toast p { flex: 1; }
 .toast button { background: none; border: 0; color: var(--graphite-300); cursor: pointer; padding: 0; }
+.toast .toast-action { flex: none; color: #9cc3ff; font: 600 14px/20px var(--font-ui); } /* e.g. "Hoàn tác" (FE-06 UC-132) */
+.toast .toast-action:hover { text-decoration: underline; }
 .loading { display: grid; place-items: center; min-height: 40vh; color: var(--graphite-600); }
 
 /* ---------- responsive ---------- */
@@ -1148,6 +1150,16 @@ a.mc-head:hover { text-decoration: none; }
 .chat-item:hover { background: var(--graphite-100); text-decoration: none; }
 .chat-item.active { background: var(--ink-50); box-shadow: inset 3px 0 0 var(--ink-600); }
 .chat-item.active .chat-item-name { color: var(--ink-700); }
+/* FE-06 UC-132: "⋯" on a 1-1 chat or a team row (Ẩn cuộc trò chuyện); shown on hover / keyboard focus, always on touch */
+.chat-row { position: relative; }
+.chat-row.has-menu > .chat-item { padding-right: 36px; }
+/* .chat-row prefix: wins over .team-menu { position: relative } further down */
+.chat-row .chat-item-menu { position: absolute; top: 50%; right: 4px; transform: translateY(-50%); z-index: 2; opacity: 0; transition: opacity 0.12s; }
+.chat-row .chat-item-menu > .btn-icon { width: 28px; height: 28px; min-height: 0; border-radius: 50%; background: var(--white); box-shadow: 0 0 0 1px var(--graphite-200); }
+.chat-row .chat-item-menu > .btn-icon:hover { background: var(--graphite-100); }
+.chat-row .chat-item-menu .team-menu-list { top: calc(100% + 2px); }
+.chat-row:hover .chat-item-menu, .chat-row .chat-item-menu:focus-within, .chat-row .chat-item-menu.is-open { opacity: 1; }
+@media (hover: none) { .chat-row .chat-item-menu { opacity: 1; } }
 .chat-item-text { display: grid; min-width: 0; }
 .chat-item-name { font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .chat-item-text .caption { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }

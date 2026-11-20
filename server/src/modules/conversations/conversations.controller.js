@@ -21,6 +21,14 @@ export async function list(req, res) {
   res.json(await service.listConversations(req.user));
 }
 
+// UC-132 Hide Conversation: POST hides, DELETE shows it again (undo)
+export async function hide(req, res) {
+  res.json(await service.setConversationHidden(req.user, req.params.groupId, true));
+}
+export async function unhide(req, res) {
+  res.json(await service.setConversationHidden(req.user, req.params.groupId, false));
+}
+
 // Badge of "Trò chuyện" in the menu: unread messages of all my chats
 export async function unreadCount(req, res) {
   res.json({ unreadCount: await service.unreadTotal(req.user) });

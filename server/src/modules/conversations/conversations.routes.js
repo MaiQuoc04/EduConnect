@@ -17,6 +17,8 @@ router.post('/direct', ctrl.openDirect); // UC-49: open (or create) the 1-1 chat
 router.get('/:groupId/messages', ctrl.messages); // UC-47 Chat in Group (read)
 router.post('/:groupId/messages', ctrl.send); // UC-47 Chat in Group (send)
 router.post('/:groupId/read', ctrl.read); // UC-47 read receipts
+router.post('/:groupId/hide', ctrl.hide); // UC-132 Hide Conversation (1-1 chats and teams only)
+router.delete('/:groupId/hide', ctrl.unhide); // UC-132: show it again ("Hoàn tác")
 router.put('/:groupId/messages/:messageId/reaction', ctrl.setReaction); // UC-111 React to Message
 router.delete('/:groupId/messages/:messageId/reaction', ctrl.removeReaction);
 router.delete('/:groupId/messages/:messageId', ctrl.deleteMessage); // UC-113 Delete Message, ?scope=everyone | me

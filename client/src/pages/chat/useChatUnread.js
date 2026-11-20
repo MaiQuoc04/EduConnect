@@ -35,9 +35,18 @@ export function useChatUnreadTotal(enabled) {
 
   useEffect(() => {
     if (!socket || !enabled) return undefined;
-    const onNew = ({ message }) => message?.senderId !== me && refresh();
+    // Every new message, mine too: mine may show a hidden chat again (UC-132) with its older unread messages.
+    const onNew = () => refresh();
     const onRead = ({ userId }) => userId === me && refresh();
-    const others = ['message:deleted', 'message:hidden', 'chat:access-changed', 'group:changed', 'group:removed', 'connect'];
+    const others = [
+      'message:deleted',
+      'message:hidden',
+      'chat:access-changed',
+      'group:changed',
+      'group:removed',
+      'conversation:hidden', // UC-132: a hidden chat leaves the badge, shown again it comes back
+      'connect',
+    ];
     socket.on('message:new', onNew);
     socket.on('message:read', onRead);
     others.forEach((e) => socket.on(e, refresh));

@@ -32,6 +32,11 @@ const NOT_FOUND_PERSON = 'Không phải thành viên trong nhóm mà bạn đã 
 // "Quay lại" button at the top left; it is passed on while the user switches chats so the way back stays.
 // 17/11/2026 (business-rules §6): a chat with a draft that is not open and has nothing unread shows "Bản nháp: …";
 // the list is read again on every socket (re)connection and when who may write in a chat changed (chat:access-changed).
+// UC-132 Hide Conversation (20/11/2026, business-rules §6): "⋯" on a 1-1 chat or a team → "Ẩn cuộc trò chuyện" takes it
+// out of my list (toast with "Hoàn tác"); the class groups and the teacher group have no such menu. It comes back by
+// itself when something new happens in it (the server works it out: GET /conversations gives hidden). The open chat
+// stays listed while it is open (found by the search box); hiding the open chat closes it. While searching, hidden
+// chats are listed too.
 export default function ChatPage() {
   const { groupId } = useParams();
   const navigate = useNavigate();
@@ -158,7 +163,10 @@ export default function ChatPage() {
           return all;
         }
         const counts = message.senderId !== me && gid !== openRef.current;
-        return { ...all, [gid]: { ...cur, lastMessage: message, unreadCount: cur.unreadCount + (counts ? 1 : 0) } };
+        return {
+          ...all,
+          [gid]: { ...cur, hidden: false, lastMessage: message, unreadCount: cur.unreadCount + (counts ? 1 : 0) },
+        };
       });
     };
     const onRead = ({ groupId: gid, userId }) => {
@@ -188,7 +196,12 @@ export default function ChatPage() {
     };
     socket.on('group:changed', onGroupChanged);
     socket.on('group:removed', onGroupRemoved);
+    // UC-132: hidden or shown again in another tab / on another device
+    const onHidden = ({ groupId: gid, hidden }) =>
+      setSummaries((all) => (all[gid] ? { ...all, [gid]: { ...all[gid], hidden } } : all));
+    socket.on('conversation:hidden', onHidden);
     return () => {
+      socket.off('conversation:hidden', onHidden);
       socket.off('group:changed', onGroupChanged);
       socket.off('group:removed', onGroupRemoved);
       socket.off('message:new', onNew);
@@ -200,19 +213,47 @@ export default function ChatPage() {
     };
   }, [socket, me, loadGroups, loadSummaries, toast, navigate, backState]);
 
+  // UC-132: hide a 1-1 chat or a team from my list; "Hoàn tác" shows it again.
+  const setHidden = useCallback(
+    (gid, hidden) =>
+      setSummaries((all) => (all[gid] ? { ...all, [gid]: { ...all[gid], hidden } } : all)),
+    [],
+  );
+  async function hideChat(gid) {
+    try {
+      await api.post(`/conversations/${gid}/hide`);
+      setHidden(gid, true);
+      if (gid === openRef.current) navigate('/chat', { replace: true, state: backState });
+      toast('Đã ẩn cuộc trò chuyện. Nó sẽ hiện lại khi có tin nhắn mới.', {
+        action: {
+          label: 'Hoàn tác',
+          run: () =>
+            api
+              .delete(`/conversations/${gid}/hide`)
+              .then(() => setHidden(gid, false))
+              .catch((err) => toast(errorText(err), { type: 'error' })),
+        },
+      });
+    } catch (err) {
+      toast(errorText(err), { type: 'error' });
+    }
+  }
+
   // One section per class (its groups, then my teams), then the school-wide teacher group.
   const sections = useMemo(() => {
     const data = list.data;
     if (!data) return [];
     const q = fold(query.trim());
     const keep = (title) => !q || fold(title).includes(q);
+    // UC-132: a hidden chat is not listed, unless it is the open one or the user is searching.
+    const shown = (gid) => Boolean(q) || gid === openId || !summaries[gid]?.hidden;
     const result = (manager ? [] : data.classes).map((c) => ({
       key: `c${c.classId}`,
       title: `Lớp ${c.className}`,
       items: [
         ...c.groups.map((g) => ({ ...g, title: GROUP_TYPE_LABELS[g.groupType] })),
         ...c.teams.map((t) => ({ ...t, title: t.groupName })),
-      ].filter((i) => keep(`${c.className} ${i.title}`)),
+      ].filter((i) => shown(i.groupId) && keep(`${c.className} ${i.title}`)),
     }));
     if (data.teacherGroup) {
       const g = data.teacherGroup;
@@ -220,14 +261,14 @@ export default function ChatPage() {
         key: 'school',
         title: 'Toàn trường',
         items: [{ ...g, title: g.groupName }, ...(data.teacherTeams ?? []).map((t) => ({ ...t, title: t.groupName }))].filter(
-          (i) => keep(i.title),
+          (i) => shown(i.groupId) && keep(i.title),
         ),
       });
     }
     // UC-49: 1-1 chats first, latest activity first (a new message, or one deleted for everyone). A chat without a message is not listed: it can be open on the
     // right, it appears with its first message, and nothing stays behind when the user moves on without writing.
     const direct = Object.values(summaries)
-      .filter((c) => c.groupType === 'DIRECT' && c.peer && c.lastMessage && keep(c.peer.fullName))
+      .filter((c) => c.groupType === 'DIRECT' && c.peer && c.lastMessage && shown(c.groupId) && keep(c.peer.fullName))
       .sort(
         (a, b) =>
           timeKey(activityOf(b.lastMessage)) - timeKey(activityOf(a.lastMessage)) ||
@@ -236,7 +277,7 @@ export default function ChatPage() {
       .map((c) => ({ groupId: c.groupId, groupType: 'DIRECT', title: c.peer.fullName, peer: c.peer }));
     if (direct.length) result.unshift({ key: 'direct', title: 'Tin nhắn riêng', items: direct });
     return result.filter((s) => s.items.length);
-  }, [list.data, query, manager, summaries]);
+  }, [list.data, query, manager, summaries, openId]);
 
   const openSummary = openId !== null ? summaries[openId] : null;
   const canCreateTeam =
@@ -313,7 +354,7 @@ export default function ChatPage() {
                       const direct = g.groupType === 'DIRECT';
                       const draft = g.groupId !== openId && !unread ? readChatDraft(me, g.groupId) : null;
                       return (
-                        <li key={g.groupId}>
+                        <li key={g.groupId} className={summary?.canHide ? 'chat-row has-menu' : 'chat-row'}>
                           <NavLink
                             to={`/chat/${g.groupId}`}
                             state={backState}
@@ -349,6 +390,14 @@ export default function ChatPage() {
                               </span>
                             </span>
                           </NavLink>
+                          {summary?.canHide && (
+                            <TeamMenu
+                              className="chat-item-menu"
+                              icon="more_horiz"
+                              label={`Thao tác với cuộc trò chuyện ${g.title}`}
+                              items={[{ key: 'hide', icon: 'visibility_off', label: 'Ẩn cuộc trò chuyện', run: () => hideChat(g.groupId) }]}
+                            />
+                          )}
                         </li>
                       );
                     })}

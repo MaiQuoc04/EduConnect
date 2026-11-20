@@ -423,6 +423,23 @@ Boundaries that are easy to get wrong:
     attempt refused because the user may no longer write (read-only year, 1-1 out of reach, account locked, no longer
     a member) closes the box with the reason. ASSUMPTION / not done (other owners' modules): real-time signals when
     an account is locked, a school year ends or a student is transferred out of a class group.
+- **Unread badge and hiding a conversation** (Khanh 20/11/2026; UC-132 and its database column approved by the lead 20/11/2026):
+  - **Badge:** the menu item "Trò chuyện" shows the total of the unread counts of the conversation list ("99+" above
+    99), kept up to date in real time; on a phone a dot on the menu button. Hidden chats are not counted.
+  - **Hide (UC-132):** only a **1-1 chat or a team**; the class groups (GENERAL / STUDENT / PARENT) and the teacher group
+    cannot be hidden. "⋯" on the row → "Ẩn cuộc trò chuyện", no confirmation; a toast with "Hoàn tác" (5 s). Per
+    account, so under every role. Nobody else sees a change, no system line, no notification, not logged; the read
+    state is not touched (the others do not see it as read), and nothing is deleted. A team leader who hides the team
+    stays leader. "Nhóm của tôi" still lists the team.
+  - **It comes back by itself** when anything newer than the hiding happens in it: a message from anyone (mine too,
+    from any tab or device), a delete for everyone, a team system line. Reactions and my "delete for me" do not bring
+    it back. It comes back with all its unread messages, the old ones included.
+  - The open chat stays listed while it is open (e.g. found through the search box) and leaves the list when the user
+    moves on without writing; hiding the open chat closes it. While searching, hidden chats are listed too.
+  - **Database:** `group_members.hidden_at` (`patch_v0.3_conversation_hidden.sql`, **approved by the lead and run on the
+    shared database 20/11/2026**). "Hidden" is worked out when the list is read (hidden_at newer than the chat's latest
+    activity), so sending a message writes nothing more. Without the column the list shows every chat and hiding
+    answers MSG_CHAT_HIDE_UNAVAILABLE.
 
 ## 7. Extracurricular activities (FE-07)
 - The homeroom teacher posts an activity in the class feed (a `posts` row + `extracurricular_events` row) with a

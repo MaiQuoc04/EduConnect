@@ -46,20 +46,32 @@ const FILES = files.ATTACHMENT_COLUMNS.MESSAGE;
 const fileCountSql = (alias) =>
   `(SELECT COUNT(*) FROM attachments fa WHERE fa.message_id = ${alias}.message_id AND fa.deleted_at IS NULL)`;
 
-// patch_v0.3_message_client_id.sql run on this database? Asked once (true / false); null until then.
+// Optional columns of a patch. "Present" is remembered for good; "missing" is asked again after 30 s, so a patch run
+// while the server is up is picked up without a restart.
+const columnChecks = new Map(); // key → { has, at }
+const MISSING_RECHECK_MS = 30_000;
+async function hasColumn(table, column) {
+  const key = `${table}.${column}`;
+  const known = columnChecks.get(key);
+  if (known && (known.has || Date.now() - known.at < MISSING_RECHECK_MS)) return known.has;
+  const { rows } = await pool.query(
+    `SELECT EXISTS (SELECT 1 FROM information_schema.columns
+                    WHERE table_schema = current_schema() AND table_name = $1 AND column_name = $2) AS "has"`,
+    [table, column],
+  );
+  columnChecks.set(key, { has: rows[0].has, at: Date.now() });
+  return rows[0].has;
+}
+
+// patch_v0.3_message_client_id.sql run on this database? null until asked.
 let clientIdColumn = null;
 const UUID_TEXT = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 async function hasClientIdColumn() {
-  if (clientIdColumn === null) {
-    const { rows } = await pool.query(
-      `SELECT EXISTS (SELECT 1 FROM information_schema.columns
-                      WHERE table_schema = current_schema() AND table_name = 'messages'
-                        AND column_name = 'client_message_id') AS "has"`,
-    );
-    clientIdColumn = rows[0].has;
-  }
+  clientIdColumn = await hasColumn('messages', 'client_message_id');
   return clientIdColumn;
 }
+// patch_v0.3_conversation_hidden.sql (UC-132) run on this database?
+const hasHiddenColumn = () => hasColumn('group_members', 'hidden_at');
 
 /** The optional clientMessageId of a new message: a UUID, lower case; null when not given. */
 function parseClientId(value) {
@@ -365,11 +377,21 @@ export async function listMessages(user, groupId, query) {
 // delete-for-me in that chat is no longer the preview – the latest ordinary message is (a chat left with placeholders
 // only still shows one, so a 1-1 chat does not drop off the list).
 // Shared by the list (UC-48) and the menu badge (unreadTotal), so both always count the same chats and messages.
-// $1 = viewer, $2 = active role.
-const MY_MEMBERSHIP_JOIN = `JOIN LATERAL (SELECT MIN(vm.joined_at) AS joined_at, MAX(vm.last_read_at) AS last_read_at
+// $1 = viewer, $2 = active role. gm.hidden_at: UC-132, from the active member row (NULL without the patch).
+const membershipJoin = (withHidden) => `JOIN LATERAL (SELECT MIN(vm.joined_at) AS joined_at, MAX(vm.last_read_at) AS last_read_at,
+                          ${withHidden ? 'MAX(vm.hidden_at) FILTER (WHERE vm.left_at IS NULL)' : 'NULL::timestamptz'} AS hidden_at
                    FROM group_members vm
                    WHERE vm.group_id = g.group_id AND vm.user_id = $1
                    HAVING bool_or(vm.left_at IS NULL)) gm ON TRUE`;
+// UC-132 Hide Conversation (business-rules §6, 20/11/2026): a 1-1 chat or a team I hid stays out of my list while
+// nothing happened in it since: no message from anyone (mine included), no delete for everyone, no team system line.
+// Reactions and my "delete for me" change nothing. Worked out here, so sending never has to write anything.
+const HIDDEN_SQL = `(g.group_type IN ('DIRECT', 'TEAM_CHAT') AND gm.hidden_at IS NOT NULL
+               AND gm.hidden_at >= COALESCE((SELECT MAX(COALESCE(h.deleted_for_everyone_at, h.sent_at)) FROM messages h
+                                             WHERE h.group_id = g.group_id AND h.deleted_at IS NULL
+                                               AND h.sent_at >= gm.joined_at AND NOT ${hiddenFor('$1', 'h')}),
+                                            '-infinity'))`;
+export const HIDEABLE_GROUP_TYPES = ['DIRECT', 'TEAM_CHAT'];
 const UNREAD_COUNT_SQL = `(SELECT COUNT(*) FROM messages x
              WHERE x.group_id = g.group_id AND x.deleted_at IS NULL AND x.sender_id <> $1
                AND NOT ${hiddenFor('$1', 'x')}
@@ -383,19 +405,42 @@ const MY_CHATS_WHERE = `(
            )`;
 
 // Menu badge of "Trò chuyện" (20/11/2026): the unread messages of every chat of the conversation list, summed.
+// Hidden chats (UC-132) are left out: the badge never counts a chat the list does not show.
 export async function unreadTotal(user) {
+  const withHidden = await hasHiddenColumn();
   const { rows } = await pool.query(
     `SELECT COALESCE(SUM(c.n), 0)::int AS total
      FROM (SELECT ${UNREAD_COUNT_SQL} AS n
            FROM groups g
-           ${MY_MEMBERSHIP_JOIN}
-           WHERE ${MY_CHATS_WHERE}) c`,
+           ${membershipJoin(withHidden)}
+           WHERE ${MY_CHATS_WHERE}${withHidden ? ` AND NOT ${HIDDEN_SQL}` : ''}) c`,
     [user.userId, user.activeRole],
   );
   return rows[0].total;
 }
 
+// UC-132 Hide Conversation: hide (hidden = true) or show again (false, the "Hoàn tác" of the toast) a 1-1 chat or a
+// team in my own list. Nobody else sees a change; the read state is not touched. All my tabs and devices are told
+// ("conversation:hidden"). The class groups and the teacher group cannot be hidden.
+export async function setConversationHidden(user, groupId, hidden) {
+  if (!(await hasHiddenColumn())) {
+    throw new AppError(503, 'MSG_CHAT_HIDE_UNAVAILABLE', 'Hiding a conversation needs patch_v0.3_conversation_hidden.sql.');
+  }
+  const group = await openChat(pool, user, groupId);
+  if (!HIDEABLE_GROUP_TYPES.includes(group.groupType)) {
+    throw badRequest('MSG_CHAT_CANNOT_HIDE', 'Only a private chat or a team can be hidden.');
+  }
+  await pool.query(
+    `UPDATE group_members SET hidden_at = ${hidden ? 'NOW()' : 'NULL'}
+     WHERE group_id = $1 AND user_id = $2 AND left_at IS NULL`,
+    [group.groupId, user.userId],
+  );
+  emitToUsers([user.userId], 'conversation:hidden', { groupId: group.groupId, hidden });
+  return { groupId: group.groupId, hidden };
+}
+
 export async function listConversations(user) {
+  const withHidden = await hasHiddenColumn();
   const { rows } = await pool.query(
     `SELECT g.group_id AS "groupId", g.group_type AS "groupType",
             lm.message_id AS "messageId", lm.is_deleted AS "isDeleted", lm.message_type AS "type",
@@ -407,9 +452,10 @@ export async function listConversations(user) {
             u.full_name AS "senderName", e.nickname AS "senderNickname",
             peer.user_id AS "peerId", peer.full_name AS "peerName", peer.avatar_url AS "peerAvatarUrl",
             peer.status AS "peerStatus",
-            ${UNREAD_COUNT_SQL} AS "unreadCount"
+            ${UNREAD_COUNT_SQL} AS "unreadCount",
+            ${withHidden ? HIDDEN_SQL : 'FALSE'} AS hidden
      FROM groups g
-     ${MY_MEMBERSHIP_JOIN}
+     ${membershipJoin(withHidden)}
      LEFT JOIN LATERAL (SELECT m.message_id, m.content, m.sent_at, m.sender_id, m.message_type, m.system_event,
                                m.target_user_id, m.deleted_for_everyone_at IS NOT NULL AS is_deleted,
                                COALESCE(m.deleted_for_everyone_at, m.sent_at) AS activity_at
@@ -436,6 +482,8 @@ export async function listConversations(user) {
     groupId: r.groupId,
     groupType: r.groupType,
     unreadCount: r.unreadCount,
+    hidden: r.hidden, // UC-132: the client leaves it out of the list (unless it is the open chat)
+    canHide: HIDEABLE_GROUP_TYPES.includes(r.groupType),
     peer: r.peerId
       ? { userId: r.peerId, fullName: r.peerName, avatarUrl: r.peerAvatarUrl, status: r.peerStatus }
       : null,
