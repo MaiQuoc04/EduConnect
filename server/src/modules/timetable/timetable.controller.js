@@ -1,6 +1,6 @@
 import * as timetableImport from './timetable.import.js';
 import * as auto from './timetable.auto.js';
-import { autoApplyRequest, autoOptionsQuery, autoRunRequest } from './timetable.auto.validation.js';
+import { autoApplyRequest, autoCheckRequest, autoOptionsQuery, autoRunRequest } from './timetable.auto.validation.js';
 import * as timetableHistory from './timetable.history.js';
 import * as periodTimes from './timetable.periods.js';
 import * as timetableService from './timetable.service.js';
@@ -81,6 +81,11 @@ export async function autoOptions(req, res) {
 
 export async function autoRun(req, res) {
   res.json(await auto.runAuto(autoRunRequest(req)));
+}
+
+// POST /api/v1/timetables/auto/check { config, draft } – a draft edited by hand, checked again (nothing saved)
+export async function autoCheck(req, res) {
+  res.json(await auto.checkAuto(autoCheckRequest(req)));
 }
 
 export async function autoApply(req, res) {

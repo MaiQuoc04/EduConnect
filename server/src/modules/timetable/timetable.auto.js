@@ -13,6 +13,7 @@ import { syncClassTeachers } from '../classes/classGroups.js';
 import * as teacherQueries from '../teacher/teacher.queries.js';
 import { assignTeachers, countedPeriods, MORNING_LAST, solveTimetable } from './timetable.auto.solver.js';
 import { teachingLoad } from '../school-settings/schoolSettings.service.js';
+import { reviewDraft } from './timetable.auto.review.js';
 import { AUTO_LIMITS, ERROR_CODES } from './timetable.constants.js';
 import { internals } from './timetable.service.js';
 
@@ -173,16 +174,24 @@ async function loadContext(cfg, db = pool) {
 
   // Lessons of the other classes in the range: their teachers are busy at that weekday + period.
   const { rows: busyRows } = await db.query(
-    `SELECT DISTINCT ts.teacher_id::text AS "teacherId", EXTRACT(ISODOW FROM ts."date")::int AS "weekday", sl.period_number AS "period"
-     FROM timetable_slots ts JOIN time_slots sl ON sl.slot_id = ts.slot_id
-     WHERE ts."date" BETWEEN $1::date AND $2::date AND NOT (ts.class_id = ANY($3::bigint[]))`,
+    `SELECT ts.teacher_id::text AS "teacherId", EXTRACT(ISODOW FROM ts."date")::int AS "weekday", sl.period_number AS "period",
+            string_agg(DISTINCT c.class_name, ', ') AS "classNames"
+     FROM timetable_slots ts JOIN time_slots sl ON sl.slot_id = ts.slot_id JOIN classes c ON c.class_id = ts.class_id
+     WHERE ts."date" BETWEEN $1::date AND $2::date AND NOT (ts.class_id = ANY($3::bigint[])) AND ts.teacher_id IS NOT NULL
+     GROUP BY ts.teacher_id, EXTRACT(ISODOW FROM ts."date"), sl.period_number`,
     [start, semester.endDate, cfg.classIds],
   );
   const busy = new Map();
+  // Why a teacher is busy at a cell (shown when a draft is edited by hand): the other classes taught then, or null for a
+  // cell marked busy on the screen.
+  const busyWhy = new Map();
   for (const b of [...busyRows, ...cfg.busy]) {
     const id = String(b.teacherId);
+    const cell = `${b.weekday}-${b.period}`;
     if (!busy.has(id)) busy.set(id, new Set());
-    busy.get(id).add(`${b.weekday}-${b.period}`);
+    busy.get(id).add(cell);
+    if (!busyWhy.has(id)) busyWhy.set(id, new Map());
+    if (!busyWhy.get(id).get(cell)) busyWhy.get(id).set(cell, b.classNames ?? null);
   }
   const teachers = teacherRows.map((t) => ({
     ...t,
@@ -208,7 +217,7 @@ async function loadContext(cfg, db = pool) {
     [cfg.schoolYearId],
   );
   return {
-    day, year, semester, range, classes, teachers, subjectName, current, slots,
+    day, year, semester, range, classes, teachers, subjectName, current, slots, busyWhy,
     withTimetable: new Set(versions.map((v) => v.classId)),
     stamp: createHash('md5').update(`${fp[0].stamp}|${start}`).digest('hex'),
   };
@@ -329,6 +338,7 @@ export function runAuto(input) {
     const check = preCheck(cfg, ctx);
     const base = {
       teaching,
+      ...editInfo(ctx),
       range: ctx.range,
       semester: ctx.semester,
       stamp: ctx.stamp,
@@ -401,10 +411,38 @@ export function runAuto(input) {
       violations: timetable?.violations ?? [],
       score: timetable?.score ?? 0,
       loads: teacherLoads,
+      // The same checks as a draft edited by hand (POST /auto/check), so the screen shows one kind of list.
+      review: reviewDraft(cfg, ctx, {
+        assignments: Object.entries(assignments).map(([k, teacherId]) => {
+          const [classId, subjectId] = k.split(':');
+          return { classId, subjectId, teacherId: String(teacherId) };
+        }),
+        timetables: Object.fromEntries(Object.entries(timetable?.entries ?? {}).map(([cid, list]) => [cid, list.map((e) => ({ weekday: e.weekday, period: e.period, subjectId: String(e.subjectId) }))])),
+      }),
       teacherNames: Object.fromEntries(ctx.teachers.map((t) => [t.teacherId, t.name])),
       subjectNames: Object.fromEntries(ctx.subjectName),
       loadsBefore: loads,
     };
+  });
+}
+
+// What the screen needs to edit a draft by hand: subjects and periods of each class, its homeroom teacher, and when
+// each teacher is busy (other classes taught then, or null = marked busy on the screen).
+function editInfo(ctx) {
+  return {
+    classSubjects: Object.fromEntries(ctx.classes.map((c) => [c.classId, c.subjects])),
+    homerooms: Object.fromEntries(ctx.classes.map((c) => [c.classId, c.homeroomTeacherId ?? null])),
+    busy: Object.fromEntries([...ctx.busyWhy].map(([t, m]) => [t, Object.fromEntries(m)])),
+  };
+}
+
+// ── check: a draft edited by hand, nothing saved (Dung, 21/11/2026) ──────────
+
+export function checkAuto({ config, draft }) {
+  return internals.guard(async () => {
+    const cfg = { ...config, ...(await teachingLoad()) };
+    const ctx = await loadContext(cfg);
+    return { stamp: ctx.stamp, ...reviewDraft(cfg, ctx, draft) };
   });
 }
 

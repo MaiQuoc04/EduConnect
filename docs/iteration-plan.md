@@ -37,6 +37,14 @@ reactions, attachments) is merged into one place after both are on `develop`.
   17 / 13 / 4 / 4) – approved by the lead, run on the shared DB 21/11 by Dung; 56 tables.** Schema file updated, so
   `scripts/dev-local-db.js` gets the table and its rows. Separate from `system_settings` (System Admin only, UC-102).
   **Owed:** UC / SCR id for the page (lead), use-cases.md / screens.md / permissions.md rows, SRS screen description.
+- **FE-10 automatic scheduling: draft edited by hand before "Áp dụng" (21/11/2026, Dung, same branch, not merged
+  yet):** on SCR-80 the School Manager can move a lesson (click or drag onto another cell of the class = swap), put
+  another subject in a cell or leave it empty, and change the teacher of a class and subject (qualified teachers
+  only in the list). Every change is checked again by `POST /api/v1/timetables/auto/check` (nothing saved;
+  `timetable.auto.review.js`): the same hard rules as `/auto/apply` (errors block "Áp dụng") and the soft rules S1–S9 /
+  GAP (warnings with their weights), each with its cell, shown on the grids and in "Cần chú ý"; undo and "Về bản
+  gốc". `/auto/run` also returns this review, the subjects of each class and when each teacher is busy (other classes
+  / marked). **No schema change.** `/auto/apply` unchanged (still re-checks everything).
 
 - **FE-04 / FE-06 follow-ups merged into `develop` (21/11/2026, Quoc, `feature/fe-05-group-feed`, merge `7eb509b`;
   client `npm run build` and server `npm test` (20/20) pass on `develop`):** six commits of Khanh, 20–21/11.

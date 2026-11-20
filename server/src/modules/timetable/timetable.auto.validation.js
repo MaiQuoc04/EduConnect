@@ -124,7 +124,22 @@ export function autoApplyRequest(req) {
   const config = autoConfig(b.config);
   if (typeof b.stamp !== 'string' || !b.stamp || b.stamp.length > 100) throw bad('stamp', 'REQUIRED');
   if (b.confirmOverwrite !== undefined && typeof b.confirmOverwrite !== 'boolean') throw bad('confirmOverwrite', 'FORMAT');
-  const d = b.draft;
+  return { config, stamp: b.stamp, confirmOverwrite: b.confirmOverwrite ?? false, draft: draftOf(b.draft, config) };
+}
+
+// POST /timetables/auto/check { config, draft } – a draft edited by hand, checked without saving (Dung, 21/11/2026).
+export function autoCheckRequest(req) {
+  const b = req.body;
+  if (!isPlainObject(b)) throw bad('body', 'FORMAT');
+  const extra = Object.keys(b).filter((k) => !['config', 'draft'].includes(k));
+  if (extra.length) throw bad(extra[0], 'UNKNOWN');
+  const config = autoConfig(b.config);
+  return { config, draft: draftOf(b.draft, config) };
+}
+
+// The draft of /apply and /check: assignments (unless step B alone) and the weekly pattern of each class (unless
+// step A alone). Shapes only; the rules are checked in timetable.auto.review.js / timetable.auto.js.
+function draftOf(d, config) {
   if (!isPlainObject(d)) throw bad('draft', 'FORMAT');
   let assignments = [];
   if (config.mode !== 'TIMETABLE') {
@@ -145,7 +160,7 @@ export function autoApplyRequest(req) {
       });
     }
   }
-  return { config, stamp: b.stamp, confirmOverwrite: b.confirmOverwrite ?? false, draft: { assignments, timetables } };
+  return { assignments, timetables };
 }
 
 // GET /timetables/auto/options?schoolYearId=

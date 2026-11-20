@@ -1,6 +1,6 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { applyAutoSchedule, getAutoOptions, runAutoSchedule } from '../../api/timetables.js';
+import { applyAutoSchedule, checkAutoSchedule, getAutoOptions, runAutoSchedule } from '../../api/timetables.js';
 import Icon from '../../components/Icon.jsx';
 import { useToast } from '../../context/ToastContext.jsx';
 import { errorText } from '../../messages.js';
@@ -78,6 +78,45 @@ function violationText(v, names, className) {
   }
 }
 
+// The draft that "Áp dụng" sends, from a run's result (edited by hand afterwards).
+const draftOf = (r) => ({
+  assignments: (r.assignments ?? []).map(({ classId, subjectId, teacherId }) => ({ classId: String(classId), subjectId: String(subjectId), teacherId: String(teacherId) })),
+  timetables: Object.fromEntries(Object.entries(r.timetables ?? {}).map(([cid, list]) => [cid, list.map((e) => ({ weekday: e.weekday, period: e.period, subjectId: String(e.subjectId) }))])),
+});
+
+// One problem of a draft (POST /auto/check, or the review of a run): errors block "Áp dụng", warnings do not.
+function problemText(v, names, className) {
+  const sub = names.subjects[v.subjectId] ?? '';
+  const teacher = names.teachers[v.teacherId] ?? '';
+  const cls = v.classId ? `Lớp ${className(v.classId)}` : '';
+  const at = v.weekday ? `${WEEKDAY_LONG[v.weekday - 1]} tiết ${v.period}` : '';
+  switch (v.code) {
+    case 'NO_TEACHER': return `${cls} – ${sub}: chưa có giáo viên.`;
+    case 'TEACHER_UNKNOWN': return `${cls} – ${sub}: giáo viên không còn trong danh sách.`;
+    case 'TEACHER_LOCKED': return `${cls} – ${sub}: ${teacher} đã bị khoá tài khoản.`;
+    case 'NOT_QUALIFIED': return `${cls} – ${sub}: ${teacher} chưa đăng ký dạy môn này.`;
+    case 'OVER_CAP': return `${teacher}: ${v.load} tiết/tuần, vượt mức tối đa ${v.cap} (định mức + số tiết được vượt).`;
+    case 'FIXED_SAME_TEACHER': return `${teacher} phụ trách ${sub} ở cả lớp ${v.classIds.map(className).join(' và ')}, nhưng ô cố định trùng giờ ở mọi lớp.`;
+    case 'CLASS_MISSING': return `${cls}: bản nháp thiếu thời khoá biểu của lớp.`;
+    case 'OUTSIDE_GRID': return `${cls}: ${sub} ở ${at}, ngoài khung tuần.`;
+    case 'CLASS_CLASH': return `${cls}: ${at} có hai môn cùng lúc.`;
+    case 'SUBJECT_NOT_IN_CLASS': return `${cls}: lớp không học ${sub || 'môn này'}.`;
+    case 'SUBJECT_DAY_LIMIT': return `${cls}: ${sub} có ${v.count} tiết trong ${WEEKDAY_LONG[v.weekday - 1]}, tối đa ${v.max} tiết/ngày.`;
+    case 'TEACHER_MARKED_BUSY': return `${cls}: ${teacher} (${sub}) đã được đánh dấu bận ${at}.`;
+    case 'TEACHER_OTHER_CLASS': return `${cls}: ${teacher} (${sub}) đang dạy lớp ${v.other} ${at}.`;
+    case 'TEACHER_CLASH': return `${teacher} dạy cùng lúc lớp ${v.classIds.map(className).join(', ')} ${at}.`;
+    case 'ROOM_FULL': return `${sub}: ${v.classIds.length} lớp học cùng ${at} nhưng chỉ có ${v.rooms} phòng (${v.classIds.map(className).join(', ')}).`;
+    case 'PERIODS_SHORT': return `${cls} – ${sub}: mới xếp ${v.placed}/${v.need} tiết.`;
+    case 'PERIODS_OVER': return `${cls} – ${sub}: xếp ${v.placed} tiết, thừa so với ${v.need} tiết/tuần.`;
+    case 'FIXED_SLOT': return `${cls}: ô cố định ${v.label || ''} ${at} phải là ${sub}.`;
+    case 'S1': return `${teacher}: ${v.load} tiết/tuần, vượt định mức ${v.norm} tiết.`;
+    case 'S9': return `${cls}: GVCN ${teacher} không dạy tiết nào của lớp mình.`;
+    default: return violationText(v, names, className);
+  }
+}
+// Cell of a problem in the class view / teacher view.
+const problemCells = (v) => (v.weekday && v.period ? [`${v.weekday}-${v.period}`] : []);
+
 const periodsOf = (grid) => {
   const morning = Math.max(0, ...grid.map((d) => d.morning));
   const afternoon = Math.max(0, ...grid.map((d) => d.afternoon));
@@ -88,12 +127,15 @@ const inGrid = (grid, w, p) => {
   return Boolean(d) && (p <= 5 ? p <= d.morning : p - 5 <= d.afternoon);
 };
 
-function Grid({ grid, cells, fixed, empty = '' }) {
+// Week grid of a draft. With onCell the cells are buttons (edit by hand): click to select, drag a lesson onto another
+// cell of the same class to swap them. marks: cell -> 'error' | 'warn'.
+function Grid({ grid, cells, fixed, empty = '', onCell, onSwap, selected, swapFrom, marks }) {
   const days = grid.map((d) => d.weekday);
   const periods = periodsOf(grid);
+  const [dragFrom, setDragFrom] = useState(null);
   return (
     <div className="ta-grid-wrap">
-      <table className="ta-grid">
+      <table className={`ta-grid${onCell ? ' is-editable' : ''}`}>
         <thead><tr><th scope="col">Tiết</th>{days.map((w) => <th key={w} scope="col">{WEEKDAY_LONG[w - 1]}</th>)}</tr></thead>
         <tbody>
           {periods.map((p) => (
@@ -101,11 +143,23 @@ function Grid({ grid, cells, fixed, empty = '' }) {
               <th scope="row">{p <= 5 ? `S${p}` : `C${p - 5}`}</th>
               {days.map((w) => {
                 if (!inGrid(grid, w, p)) return <td key={w} className="ta-off" aria-label="Không học" />;
-                const c = cells.get(`${w}-${p}`);
-                const f = fixed?.get(`${w}-${p}`);
+                const k = `${w}-${p}`;
+                const c = cells.get(k);
+                const f = fixed?.get(k);
+                const mark = marks?.get(k);
+                const cls = [c ? (f ? 'ta-fixed' : '') : 'ta-empty', c?.faded ? 'is-faded' : '', mark ? `is-${mark}` : '',
+                  selected === k ? 'is-selected' : '', swapFrom === k ? 'is-swap-from' : ''].filter(Boolean).join(' ');
+                const body = c ? <><strong>{c.title}</strong><span>{f ? `${f} · ` : ''}{c.sub}</span></> : <span className="tt-faint">{empty}</span>;
+                if (!onCell) return <td key={w} className={cls}>{body}</td>;
                 return (
-                  <td key={w} className={c ? (f ? 'ta-fixed' : '') : 'ta-empty'}>
-                    {c ? <><strong>{c.title}</strong><span>{f ? `${f} · ` : ''}{c.sub}</span></> : <span className="tt-faint">{empty}</span>}
+                  <td key={w} className={cls}
+                    draggable={Boolean(c) && !f}
+                    onDragStart={() => setDragFrom(k)}
+                    onDragEnd={() => setDragFrom(null)}
+                    onDragOver={(e) => { if (dragFrom && dragFrom !== k && !f) e.preventDefault(); }}
+                    onDrop={(e) => { e.preventDefault(); if (dragFrom && dragFrom !== k) onSwap(dragFrom, k); setDragFrom(null); }}>
+                    <button type="button" className="ta-cell-btn" onClick={() => onCell(k)}
+                      aria-label={`${WEEKDAY_LONG[w - 1]} tiết ${p}: ${c ? c.title : 'trống'}${mark === 'error' ? ' – có lỗi' : ''}`}>{body}</button>
                   </td>
                 );
               })}
@@ -136,6 +190,17 @@ export default function TimetableAutoPage() {
   const [applyError, setApplyError] = useState(null);
   const [busyDraft, setBusyDraft] = useState({ teacherId: '', weekday: 1, period: 1 });
   const [showWeights, setShowWeights] = useState(false);
+  // Draft edited by hand (Dung, 21/11/2026): the run's draft is copied into `draft`; every change is checked again by
+  // POST /auto/check (the same rules as "Áp dụng") and the problems are shown on the cells and in "Cần chú ý".
+  const [draft, setDraft] = useState(null);
+  const [history, setHistory] = useState([]);
+  const [review, setReview] = useState(null);
+  const [checking, setChecking] = useState(false);
+  const [checkError, setCheckError] = useState('');
+  const [checkStale, setCheckStale] = useState(false);
+  const [selCell, setSelCell] = useState(null);
+  const [swapFrom, setSwapFrom] = useState(null);
+  const checkSeq = useRef(0);
 
   const load = useCallback(async (schoolYearId) => {
     setLoadError('');
@@ -194,6 +259,29 @@ export default function TimetableAutoPage() {
   }, [form]);
   const stale = result && JSON.stringify(config) !== ranWith;
 
+  // Check the edited draft again 0.4 s after the last change (only the newest answer is kept).
+  const resultStamp = result?.stamp;
+  useEffect(() => {
+    if (!draft || !history.length || !ranWith) return undefined;
+    checkSeq.current += 1;
+    const seq = checkSeq.current;
+    setChecking(true);
+    const timer = setTimeout(async () => {
+      try {
+        const r = await checkAutoSchedule({ config: JSON.parse(ranWith), draft });
+        if (seq !== checkSeq.current) return;
+        setReview(r);
+        setCheckError('');
+        setCheckStale(Boolean(resultStamp) && r.stamp !== resultStamp);
+      } catch (err) {
+        if (seq === checkSeq.current) setCheckError(errorText(err));
+      } finally {
+        if (seq === checkSeq.current) setChecking(false);
+      }
+    }, 400);
+    return () => clearTimeout(timer);
+  }, [draft, history.length, ranWith, resultStamp]);
+
   if (loadError) return <div className="tt-page"><div className="notice amber" role="alert"><Icon name="error_outline" /><div><p>{loadError}</p><button type="button" className="btn btn-secondary" onClick={() => load()}>Thử lại</button></div></div></div>;
   if (!opts || !form) return <div className="tt-page" aria-busy="true"><p className="muted">Đang tải…</p></div>;
 
@@ -229,6 +317,14 @@ export default function TimetableAutoPage() {
       const r = await runAutoSchedule(cfg);
       setResult(r);
       setRanWith(JSON.stringify(cfg));
+      setDraft(r.ok ? draftOf(r) : null);
+      setHistory([]);
+      setReview(r.review ?? null);
+      setChecking(false);
+      setCheckError('');
+      setCheckStale(false);
+      setSelCell(null);
+      setSwapFrom(null);
       setPickClass(r.timetables ? Object.keys(r.timetables)[0] ?? '' : '');
       setPickTeacher(r.loads?.[0]?.teacherId ?? '');
       setView(r.ok ? (r.timetables ? 'class' : 'assign') : 'class');
@@ -248,7 +344,7 @@ export default function TimetableAutoPage() {
         config: JSON.parse(ranWith),
         stamp: result.stamp,
         confirmOverwrite: overwriteOk,
-        draft: { assignments: result.assignments.map(({ classId, subjectId, teacherId }) => ({ classId, subjectId, teacherId })), timetables: result.timetables ?? {} },
+        draft,
       });
       setConfirm(false);
       toast(`Đã áp dụng cho ${r.classes} lớp: ${r.assignmentsChanged} phân công thay đổi${r.generated ? `, tạo ${r.generated} tiết học từ ${dmy(r.range.start)} đến ${dmy(r.range.end)}` : ''}.`);
@@ -261,22 +357,138 @@ export default function TimetableAutoPage() {
   }
 
   // ── result views ──
-  const assignOf = new Map((result?.assignments ?? []).map((a) => [`${a.classId}:${a.subjectId}`, a]));
+  const assignList = draft?.assignments ?? result?.assignments ?? [];
+  const assignOf = new Map(assignList.map((a) => [`${a.classId}:${a.subjectId}`, a]));
+  const timetablesNow = draft?.timetables ?? result?.timetables ?? null;
+  const fixedCells = new Set((ranWith ? JSON.parse(ranWith).fixed?.slots ?? [] : []).map((s) => `${s.weekday}-${s.period}`));
   const fixedLabels = new Map((ranWith ? JSON.parse(ranWith).fixed?.slots ?? [] : []).map((s) => [`${s.weekday}-${s.period}`, s.label || 'Cố định']));
   const resultGrid = ranWith ? JSON.parse(ranWith).grid : form.grid;
-  const classCells = (cid) => new Map((result?.timetables?.[cid] ?? []).map((e) => [`${e.weekday}-${e.period}`, { title: names.subjects[e.subjectId], sub: names.teachers[assignOf.get(`${cid}:${e.subjectId}`)?.teacherId] ?? '' }]));
+  const classCells = (cid) => new Map((timetablesNow?.[cid] ?? []).map((e) => [`${e.weekday}-${e.period}`, { title: names.subjects[e.subjectId], sub: names.teachers[assignOf.get(`${cid}:${e.subjectId}`)?.teacherId] ?? '' }]));
   const teacherCells = (tid) => {
     const m = new Map();
-    for (const [cid, list] of Object.entries(result?.timetables ?? {})) {
+    // Lessons of the classes outside this run (faded): the draft has to avoid them.
+    for (const [cell, other] of Object.entries(result?.busy?.[String(tid)] ?? {})) {
+      m.set(cell, other ? { title: `Lớp ${other}`, sub: 'ngoài lần xếp', faded: true } : { title: 'Bận', sub: 'đã đánh dấu', faded: true });
+    }
+    for (const [cid, list] of Object.entries(timetablesNow ?? {})) {
       for (const e of list) if (assignOf.get(`${cid}:${e.subjectId}`)?.teacherId === String(tid)) m.set(`${e.weekday}-${e.period}`, { title: className(cid), sub: names.subjects[e.subjectId] });
     }
     return m;
   };
+  const problems = review ? [...review.errors.map((v) => ({ ...v, level: 'error' })), ...review.warnings.map((v) => ({ ...v, level: 'warn' }))] : [];
+  const marksFor = (pred) => {
+    const m = new Map();
+    for (const v of problems) {
+      if (!pred(v)) continue;
+      for (const k of problemCells(v)) if (m.get(k) !== 'error') m.set(k, v.level);
+    }
+    return m;
+  };
+  const ofClass = (cid) => (v) => v.classId === String(cid) || (v.classIds ?? []).includes(String(cid));
+  const loadsNow = review?.loads ?? result?.loads ?? [];
+  const loadOf = new Map(loadsNow.map((l) => [String(l.teacherId), l]));
+
+  // ── editing ──
+  const edit = (fn) => {
+    setHistory((h) => [...h, draft]);
+    setDraft(fn(JSON.parse(JSON.stringify(draft))));
+  };
+  const undo = () => {
+    if (!history.length) return;
+    setDraft(history[history.length - 1]);
+    setHistory((h) => h.slice(0, -1));
+    if (history.length === 1) { setReview(result.review ?? null); setCheckError(''); setCheckStale(false); setChecking(false); }
+  };
+  const resetDraft = () => {
+    setDraft(draftOf(result));
+    setHistory([]);
+    setReview(result.review ?? null);
+    setChecking(false);
+    setCheckError('');
+    setCheckStale(false);
+    setSelCell(null);
+    setSwapFrom(null);
+  };
+  const cellOf = (k) => k.split('-').map(Number);
+  const swapCells = (cid, a, b) => {
+    if (fixedCells.has(a) || fixedCells.has(b)) return;
+    edit((d) => {
+      const [wa, pa] = cellOf(a);
+      const [wb, pb] = cellOf(b);
+      const list = d.timetables[cid] ?? [];
+      const ea = list.find((e) => e.weekday === wa && e.period === pa);
+      const eb = list.find((e) => e.weekday === wb && e.period === pb);
+      if (ea) { ea.weekday = wb; ea.period = pb; }
+      if (eb) { eb.weekday = wa; eb.period = pa; }
+      return d;
+    });
+  };
+  const setCellSubject = (cid, k, subjectId) => edit((d) => {
+    const [w, p] = cellOf(k);
+    d.timetables[cid] = (d.timetables[cid] ?? []).filter((e) => !(e.weekday === w && e.period === p));
+    if (subjectId) d.timetables[cid].push({ weekday: w, period: p, subjectId });
+    d.timetables[cid].sort((x, y) => x.weekday - y.weekday || x.period - y.period);
+    return d;
+  });
+  const setTeacher = (classId, subjectId, teacherId) => edit((d) => {
+    const a = d.assignments.find((x) => x.classId === classId && x.subjectId === subjectId);
+    if (a) a.teacherId = teacherId;
+    else d.assignments.push({ classId, subjectId, teacherId });
+    return d;
+  });
+  const onClassCell = (k) => {
+    if (swapFrom && swapFrom !== k) {
+      swapCells(pickClass, swapFrom, k);
+      setSwapFrom(null);
+      setSelCell(k);
+      return;
+    }
+    setSwapFrom(null);
+    setSelCell(selCell === k ? null : k);
+  };
+  // Where a teacher is at a cell besides this class: another class of the draft, a class outside the run, marked busy.
+  const teacherElsewhere = (tid, cid, k) => {
+    if (!tid) return null;
+    const out = result?.busy?.[String(tid)]?.[k];
+    if (out !== undefined) return out ? `đang dạy lớp ${out}` : 'đã đánh dấu bận';
+    const [w, p] = cellOf(k);
+    for (const [other, list] of Object.entries(timetablesNow ?? {})) {
+      if (other === String(cid)) continue;
+      if (list.some((e) => e.weekday === w && e.period === p && assignOf.get(`${other}:${e.subjectId}`)?.teacherId === String(tid))) return `đang dạy lớp ${className(other)} trong bản nháp`;
+    }
+    return null;
+  };
+  const jumpTo = (v) => {
+    const cid = v.classId ?? v.classIds?.[0];
+    if (cid && v.weekday && timetablesNow) {
+      setView('class');
+      setPickClass(String(cid));
+      setSwapFrom(null);
+      setSelCell(`${v.weekday}-${v.period}`);
+    } else if (v.teacherId && timetablesNow && !v.classId) {
+      setView('teacher');
+      setPickTeacher(String(v.teacherId));
+    } else {
+      setView('assign');
+    }
+  };
   const overwrite = (result?.existing ?? []).filter((c) => (form.mode !== 'ASSIGN' && c.hasTimetable) || (form.mode !== 'TIMETABLE' && c.assigned > 0
-    && (result.assignments ?? []).some((a) => a.classId === String(c.classId) && a.changed)));
-  const changed = (result?.assignments ?? []).filter((a) => a.changed).length;
-  const overTeachers = (result?.loads ?? []).filter((l) => l.over > 0);
-  const blocking = result && (!result.ok || result.unplaced.length > 0 || result.unassigned.length > 0);
+    && assignList.some((a) => {
+      const o = (result.assignments ?? []).find((x) => x.classId === a.classId && x.subjectId === a.subjectId);
+      return a.classId === String(c.classId) && (!o || o.teacherId !== a.teacherId || o.changed);
+    })));
+  const original = new Map((result?.assignments ?? []).map((a) => [`${a.classId}:${a.subjectId}`, a]));
+  // Assignments that differ from the ones running now (a teacher changed by hand counts as a change).
+  const changed = assignList.filter((a) => {
+    const o = original.get(`${a.classId}:${a.subjectId}`);
+    return !o || (o.teacherId !== a.teacherId ? true : o.changed);
+  }).length;
+  const overTeachers = loadsNow.filter((l) => l.over > 0);
+  const missing = review
+    ? review.errors.filter((v) => v.code === 'PERIODS_SHORT').reduce((n, v) => n + v.need - v.placed, 0) + review.errors.filter((v) => v.code === 'NO_TEACHER').length
+    : (result?.unplaced ?? []).reduce((n, u) => n + u.count, 0) + (result?.unassigned ?? []).length;
+  const blocking = result && (!result.ok || checking || Boolean(checkError) || (review ? !review.ok : result.unplaced.length > 0 || result.unassigned.length > 0));
+  const edited = history.length > 0;
 
   return (
     <div className="tt-page">
@@ -486,33 +698,94 @@ export default function TimetableAutoPage() {
               {result.ok && (
                 <>
                   <div className="ta-stats">
-                    <div className="card card-outline"><span className="label-upper">Lớp</span><strong>{Object.keys(result.timetables ?? {}).length || result.existing.length}</strong><span className="caption muted">{dmy(result.range.start)} – {dmy(result.range.end)}</span></div>
+                    <div className="card card-outline"><span className="label-upper">Lớp</span><strong>{Object.keys(timetablesNow ?? {}).length || result.existing.length}</strong><span className="caption muted">{dmy(result.range.start)} – {dmy(result.range.end)}</span></div>
                     <div className="card card-outline"><span className="label-upper">Phân công đổi</span><strong>{changed}</strong><span className="caption muted">trên {result.assignments.length} cặp lớp – môn</span></div>
-                    <div className="card card-outline"><span className="label-upper">Chưa xếp được</span><strong className={result.unplaced.length + result.unassigned.length ? 'tt-red' : ''}>{result.unplaced.reduce((n, u) => n + u.count, 0) + result.unassigned.length}</strong><span className="caption muted">tiết / cặp</span></div>
-                    <div className="card card-outline"><span className="label-upper">Điểm phạt</span><strong>{result.score}</strong><span className="caption muted">{overTeachers.length} GV vượt định mức</span></div>
+                    <div className="card card-outline"><span className="label-upper">Chưa xếp được</span><strong className={missing ? 'tt-red' : ''}>{missing}</strong><span className="caption muted">tiết / cặp</span></div>
+                    <div className="card card-outline"><span className="label-upper">Điểm phạt</span><strong>{review?.score ?? result.score}</strong><span className="caption muted">{overTeachers.length} GV vượt định mức</span></div>
                   </div>
+                  <div className={`ta-edit-bar${review && !review.ok ? ' has-errors' : ''}`} role="status">
+                    <Icon name={checking ? 'hourglass_top' : review && !review.ok ? 'error_outline' : 'edit_note'} size="sm" />
+                    <p>
+                      {edited ? <><strong>Đã chỉnh tay {history.length} thao tác.</strong> </> : 'Có thể chỉnh bản nháp trước khi áp dụng: bấm vào một ô để đổi môn, kéo một tiết thả vào ô khác để đổi chỗ, đổi giáo viên ở tab "Phân công". '}
+                      {checking ? 'Đang kiểm tra lại…'
+                        : checkError ? <span className="tt-red">{checkError}</span>
+                          : review ? (review.ok ? <span className="ta-ok">Hợp lệ với mọi quy tắc bắt buộc.</span> : <span className="tt-red">{review.errors.length} lỗi phải sửa.</span>) : null}
+                      {review && review.warnings.length > 0 && !checking && ` ${review.warnings.length} điểm chưa đẹp (không bắt buộc).`}
+                    </p>
+                    {edited && <div className="ta-edit-actions">
+                      <button type="button" className="btn btn-secondary btn-sm" onClick={undo}><Icon name="undo" size="sm" /> Hoàn tác</button>
+                      <button type="button" className="btn btn-secondary btn-sm" onClick={resetDraft}>Về bản gốc</button>
+                    </div>}
+                  </div>
+                  {checkStale && <div className="notice amber"><Icon name="info" /><p>Phân công hoặc thời khoá biểu trong hệ thống vừa thay đổi sau lần xếp này. Áp dụng sẽ bị từ chối; hãy xếp lại.</p></div>}
                   <div className="tt-seg ta-tabs" role="tablist">
-                    {[result.timetables && ['class', 'Theo lớp'], result.timetables && ['teacher', 'Theo giáo viên'], ['assign', 'Phân công'], ['load', 'Tải giáo viên'],
-                      ['issues', `Cần chú ý (${result.unplaced.length + result.unassigned.length + result.violations.length})`]].filter(Boolean).map(([k, label]) => (
+                    {[timetablesNow && ['class', 'Theo lớp'], timetablesNow && ['teacher', 'Theo giáo viên'], ['assign', 'Phân công'], ['load', 'Tải giáo viên'],
+                      ['issues', `Cần chú ý (${review ? problems.length : result.unplaced.length + result.unassigned.length + result.violations.length})`]].filter(Boolean).map(([k, label]) => (
                       <button key={k} type="button" role="tab" aria-selected={view === k} className={view === k ? 'is-on' : ''} onClick={() => setView(k)}>{label}</button>
                     ))}
                   </div>
 
-                  {view === 'class' && result.timetables && (
+                  {view === 'class' && timetablesNow && (
                     <div className="ta-panel">
-                      <select className="input ta-pick" value={pickClass} onChange={(e) => setPickClass(e.target.value)} aria-label="Lớp">
-                        {Object.keys(result.timetables).map((id) => <option key={id} value={id}>Lớp {className(id)}</option>)}
+                      <select className="input ta-pick" value={pickClass} onChange={(e) => { setPickClass(e.target.value); setSelCell(null); setSwapFrom(null); }} aria-label="Lớp">
+                        {Object.keys(timetablesNow).map((id) => {
+                          const n = review ? review.errors.filter(ofClass(id)).length : 0;
+                          return <option key={id} value={id}>Lớp {className(id)}{n ? ` – ${n} lỗi` : ''}</option>;
+                        })}
                       </select>
-                      <Grid grid={resultGrid} cells={classCells(pickClass)} fixed={fixedLabels} />
+                      {swapFrom && <p className="caption ta-swap-hint"><Icon name="swap_horiz" size="sm" /> Chọn ô cần đổi chỗ với {WEEKDAY_LONG[cellOf(swapFrom)[0] - 1]} tiết {cellOf(swapFrom)[1]}. <button type="button" className="tt-link" onClick={() => setSwapFrom(null)}>Huỷ</button></p>}
+                      <Grid grid={resultGrid} cells={classCells(pickClass)} fixed={fixedLabels} marks={marksFor(ofClass(pickClass))}
+                        onCell={onClassCell} onSwap={(a, b) => swapCells(pickClass, a, b)} selected={selCell} swapFrom={swapFrom} />
+                      {selCell && (() => {
+                        const [w, p] = cellOf(selCell);
+                        const entry = (timetablesNow[pickClass] ?? []).find((e) => e.weekday === w && e.period === p);
+                        const subjects = result.classSubjects?.[pickClass] ?? [];
+                        const placed = (sid) => (timetablesNow[pickClass] ?? []).filter((e) => e.subjectId === String(sid)).length;
+                        const here = problems.filter((v) => ofClass(pickClass)(v) && problemCells(v).includes(selCell));
+                        const fixedCell = fixedCells.has(selCell);
+                        return (
+                          <div className="card card-outline ta-cell-editor">
+                            <div className="ta-cell-head">
+                              <strong>Lớp {className(pickClass)} · {WEEKDAY_LONG[w - 1]} tiết {p}</strong>
+                              <button type="button" className="btn btn-icon" aria-label="Đóng" onClick={() => setSelCell(null)}><Icon name="close" size="sm" /></button>
+                            </div>
+                            {fixedCell ? <p className="caption muted">Ô cố định ({fixedLabels.get(selCell)}): giữ nguyên ở mọi lớp, không đổi được.</p> : (
+                              <>
+                                <label className="field"><span className="field-label">Môn ở ô này</span>
+                                  <select className="input" value={entry?.subjectId ?? ''} onChange={(e) => setCellSubject(pickClass, selCell, e.target.value)}>
+                                    <option value="">— Để trống —</option>
+                                    {subjects.map((sub) => {
+                                      const tid = assignOf.get(`${pickClass}:${sub.subjectId}`)?.teacherId;
+                                      const busyAt = entry?.subjectId === String(sub.subjectId) ? null : teacherElsewhere(tid, pickClass, selCell);
+                                      return (
+                                        <option key={sub.subjectId} value={sub.subjectId}>
+                                          {names.subjects[sub.subjectId]} – {names.teachers[tid] ?? 'chưa có GV'} · {placed(sub.subjectId)}/{sub.periods} tiết{busyAt ? ` · GV ${busyAt}` : ''}
+                                        </option>
+                                      );
+                                    })}
+                                  </select>
+                                  <span className="field-help">Số tiết là đã xếp / cần trong tuần. Môn mà giáo viên đang bận ở ô này vẫn chọn được nhưng sẽ báo lỗi.</span>
+                                </label>
+                                <div className="ta-cell-actions">
+                                  <button type="button" className="btn btn-secondary btn-sm" onClick={() => setSwapFrom(selCell)} disabled={!entry}><Icon name="swap_horiz" size="sm" /> Đổi chỗ với ô khác</button>
+                                  {entry && <button type="button" className="btn btn-secondary btn-sm" onClick={() => setCellSubject(pickClass, selCell, '')}>Để trống ô này</button>}
+                                </div>
+                              </>
+                            )}
+                            {entry && <p className="caption muted">Giáo viên: {names.teachers[assignOf.get(`${pickClass}:${entry.subjectId}`)?.teacherId] ?? 'chưa có'}.</p>}
+                            {here.length > 0 && <ul className="ta-list">{here.map((v, i) => <li key={i} className={v.level === 'error' ? 'tt-red' : ''}>{problemText(v, names, className)}</li>)}</ul>}
+                          </div>
+                        );
+                      })()}
                     </div>
                   )}
-                  {view === 'teacher' && result.timetables && (
+                  {view === 'teacher' && timetablesNow && (
                     <div className="ta-panel">
                       <select className="input ta-pick" value={pickTeacher} onChange={(e) => setPickTeacher(e.target.value)} aria-label="Giáo viên">
-                        {result.loads.map((l) => <option key={l.teacherId} value={l.teacherId}>{l.name} – {l.load}/{l.norm} tiết</option>)}
+                        {loadsNow.map((l) => <option key={l.teacherId} value={l.teacherId}>{l.name} – {l.load}/{l.norm} tiết</option>)}
                       </select>
-                      <Grid grid={resultGrid} cells={teacherCells(pickTeacher)} />
-                      <p className="caption muted">Chỉ hiện các tiết của những lớp đang xếp; tiết ở lớp khác đã được tránh.</p>
+                      <Grid grid={resultGrid} cells={teacherCells(pickTeacher)} marks={marksFor((v) => String(v.teacherId) === String(pickTeacher))} />
+                      <p className="caption muted">Ô mờ là tiết ở lớp ngoài lần xếp này hoặc giờ đã đánh dấu bận. Sửa ở tab "Theo lớp".</p>
                     </div>
                   )}
                   {view === 'assign' && (
@@ -520,12 +793,31 @@ export default function TimetableAutoPage() {
                       <table className="table ta-assign">
                         <thead><tr><th>Lớp</th><th>Môn</th><th>Giáo viên</th><th /></tr></thead>
                         <tbody>
-                          {[...result.assignments].sort((a, b) => className(a.classId).localeCompare(className(b.classId)) || (names.subjects[a.subjectId] ?? '').localeCompare(names.subjects[b.subjectId] ?? '', 'vi')).map((a) => (
-                            <tr key={`${a.classId}:${a.subjectId}`}>
-                              <td>{className(a.classId)}</td><td>{names.subjects[a.subjectId]}</td><td>{names.teachers[a.teacherId]}</td>
-                              <td>{a.kept ? <span className="ta-tag">Giữ nguyên</span> : a.changed ? <span className="ta-tag is-new">Mới</span> : <span className="ta-tag">Như cũ</span>}</td>
-                            </tr>
-                          ))}
+                          {[...assignList].sort((a, b) => className(a.classId).localeCompare(className(b.classId)) || (names.subjects[a.subjectId] ?? '').localeCompare(names.subjects[b.subjectId] ?? '', 'vi')).map((a) => {
+                            const o = original.get(`${a.classId}:${a.subjectId}`);
+                            const byHand = o && o.teacherId !== a.teacherId;
+                            const err = review?.errors.find((v) => v.classId === a.classId && v.subjectId === a.subjectId && ['NOT_QUALIFIED', 'TEACHER_LOCKED', 'TEACHER_UNKNOWN'].includes(v.code));
+                            const qualified = opts.teachers.filter((t) => (t.subjectIds ?? []).map(String).includes(String(a.subjectId)));
+                            if (!qualified.some((t) => String(t.teacherId) === a.teacherId)) qualified.unshift({ teacherId: a.teacherId, name: names.teachers[a.teacherId] ?? a.teacherId, code: '' });
+                            return (
+                              <tr key={`${a.classId}:${a.subjectId}`} className={err ? 'is-error' : ''}>
+                                <td>{className(a.classId)}</td><td>{names.subjects[a.subjectId]}</td>
+                                <td>
+                                  {draft && form.mode !== 'TIMETABLE' ? (
+                                    <select className="input ta-teacher-pick" value={a.teacherId} aria-label={`Giáo viên ${className(a.classId)} – ${names.subjects[a.subjectId]}`}
+                                      onChange={(e) => setTeacher(a.classId, a.subjectId, e.target.value)}>
+                                      {qualified.map((t) => {
+                                        const l = loadOf.get(String(t.teacherId));
+                                        return <option key={t.teacherId} value={t.teacherId}>{t.name}{t.code ? ` (${t.code})` : ''}{l ? ` – ${l.load}/${l.norm} tiết` : ''}</option>;
+                                      })}
+                                    </select>
+                                  ) : names.teachers[a.teacherId]}
+                                  {err && <span className="caption tt-red ta-row-error">{problemText(err, names, className)}</span>}
+                                </td>
+                                <td>{byHand ? <span className="ta-tag is-hand">Sửa tay</span> : o?.kept ? <span className="ta-tag">Giữ nguyên</span> : o?.changed ? <span className="ta-tag is-new">Mới</span> : <span className="ta-tag">Như cũ</span>}</td>
+                              </tr>
+                            );
+                          })}
                         </tbody>
                       </table>
                     </div>
@@ -535,7 +827,7 @@ export default function TimetableAutoPage() {
                       <table className="table">
                         <thead><tr><th>Giáo viên</th><th>Định mức</th><th>Lớp khác</th><th>Tổng</th><th>Vượt</th></tr></thead>
                         <tbody>
-                          {result.loads.map((l) => (
+                          {loadsNow.map((l) => (
                             <tr key={l.teacherId}>
                               <td>{l.name}{l.homeroom && <span className="ta-tag">GVCN</span>}</td><td>{l.norm}</td><td>{l.base}</td><td><strong>{l.load}</strong></td>
                               <td className={l.over ? 'tt-red' : 'tt-muted'}>{l.over ? `+${l.over}` : '—'}</td>
@@ -546,7 +838,17 @@ export default function TimetableAutoPage() {
                       <p className="caption muted">Tính cả tiết ở các lớp không nằm trong lần xếp này; Chào cờ và Sinh hoạt lớp không tính.</p>
                     </div>
                   )}
-                  {view === 'issues' && (
+                  {view === 'issues' && review && (
+                    <div className="ta-panel">
+                      {problems.length === 0 && <p className="muted">Không có gì cần chú ý.</p>}
+                      {review.errors.length > 0 && <><h3 className="title-sm tt-red">Lỗi phải sửa trước khi áp dụng ({review.errors.length})</h3>
+                        <ul className="ta-list ta-problems">{review.errors.map((v, i) => <li key={i}><span>{problemText(v, names, className)}</span> <button type="button" className="tt-link" onClick={() => jumpTo(v)}>Xem</button></li>)}</ul></>}
+                      {review.warnings.length > 0 && <><h3 className="title-sm">Chưa đẹp – không bắt buộc ({review.warnings.length}, điểm phạt {review.score})</h3>
+                        <ul className="ta-list ta-problems">{review.warnings.slice(0, 80).map((v, i) => <li key={i}><span>{problemText(v, names, className)}</span> <span className="caption muted">+{v.weight}</span> <button type="button" className="tt-link" onClick={() => jumpTo(v)}>Xem</button></li>)}</ul>
+                        {review.warnings.length > 80 && <p className="caption muted">… và {review.warnings.length - 80} mục khác.</p>}</>}
+                    </div>
+                  )}
+                  {view === 'issues' && !review && (
                     <div className="ta-panel">
                       {result.unassigned.length + result.unplaced.length === 0 && result.violations.length === 0 && <p className="muted">Không có gì cần chú ý.</p>}
                       {result.unassigned.length > 0 && <><h3 className="title-sm tt-red">Chưa có giáo viên</h3><ul className="ta-list">{result.unassigned.map((u, i) => <li key={i}>{className(u.classId)} – {names.subjects[u.subjectId]}: {REASONS[u.reason] ?? u.reason}</li>)}</ul></>}
@@ -558,12 +860,12 @@ export default function TimetableAutoPage() {
 
                   <div className="ta-apply-bar">
                     <button type="button" className="btn btn-secondary" onClick={() => run((form.seed % 1000000) + 1)} disabled={running}><Icon name="refresh" size="sm" /> Xếp lại (phương án khác)</button>
-                    <button type="button" className="btn btn-primary" onClick={() => { setOverwriteOk(false); setApplyError(null); setConfirm(true); }} disabled={blocking || stale}
-                      title={blocking ? 'Còn tiết hoặc môn chưa xếp được' : stale ? 'Thiết lập đã đổi' : undefined}>
+                    <button type="button" className="btn btn-primary" onClick={() => { setOverwriteOk(false); setApplyError(null); setConfirm(true); }} disabled={blocking || stale || checkStale}
+                      title={checking ? 'Đang kiểm tra lại bản nháp' : blocking ? 'Bản nháp còn lỗi phải sửa' : stale ? 'Thiết lập đã đổi' : undefined}>
                       <Icon name="check" size="sm" /> Áp dụng
                     </button>
                   </div>
-                  {blocking && <p className="caption tt-red">Còn tiết hoặc môn chưa xếp được nên chưa áp dụng được – xem tab "Cần chú ý", chỉnh thiết lập rồi xếp lại.</p>}
+                  {blocking && !checking && <p className="caption tt-red">Bản nháp còn lỗi phải sửa nên chưa áp dụng được – xem tab "Cần chú ý": sửa tay trên bản nháp, hoặc chỉnh thiết lập rồi xếp lại.</p>}
                 </>
               )}
             </>
@@ -577,8 +879,9 @@ export default function TimetableAutoPage() {
             <header className="tt-dialog-head"><div><span className="label-upper">Xếp tự động</span><h2 id="ta-apply-title" className="tt-dialog-title">Áp dụng bản nháp?</h2></div></header>
             <div className="tt-dialog-body">
               <ul className="ta-list">
+                {edited && <li>Bản nháp đã chỉnh tay {history.length} thao tác; hệ thống kiểm tra lại mọi quy tắc khi lưu.</li>}
                 {form.mode !== 'TIMETABLE' && <li>{changed} phân công thay đổi, áp dụng từ {dmy(result.range.start)} đến {dmy(result.range.assignEnd)} (hết năm học).</li>}
-                {form.mode !== 'ASSIGN' && <li>Thời khoá biểu {Object.keys(result.timetables ?? {}).length} lớp từ {dmy(result.range.start)} đến {dmy(result.range.end)}; tiết đã điểm danh được giữ.</li>}
+                {form.mode !== 'ASSIGN' && <li>Thời khoá biểu {Object.keys(timetablesNow ?? {}).length} lớp từ {dmy(result.range.start)} đến {dmy(result.range.end)}; tiết đã điểm danh được giữ.</li>}
                 {form.mode !== 'ASSIGN' && <li>Các ngày trước {dmy(result.range.start)} (kể cả các ngày đã qua của tuần này) giữ nguyên thời khoá biểu cũ; thời khoá biểu cũ vẫn xem lại được ở "Lịch sử" của từng lớp.</li>}
               </ul>
               {overwrite.length > 0 && (
