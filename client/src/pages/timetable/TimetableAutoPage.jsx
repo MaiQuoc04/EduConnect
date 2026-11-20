@@ -152,7 +152,7 @@ export default function TimetableAutoPage() {
         keepAssignments: false,
         grid: d.grid ?? [],
         periods: {},
-        norm: d.norm, homeroomNorm: d.homeroomNorm, maxOver: d.maxOver, maxPerDay: d.maxPerDay, maxPerSubjectDay: d.maxPerSubjectDay,
+        maxPerSubjectDay: d.maxPerSubjectDay,
         rooms: d.rooms ?? {},
         busy: [],
         heavySubjectIds: d.heavySubjectIds ?? [],
@@ -181,7 +181,6 @@ export default function TimetableAutoPage() {
       keepAssignments: form.mode === 'ALL' || form.mode === 'ASSIGN' ? form.keepAssignments : false,
       grid: form.grid.map((d) => ({ weekday: d.weekday, morning: Number(d.morning) || 0, afternoon: Number(d.afternoon) || 0 })),
       periods: Object.fromEntries(Object.entries(form.periods).filter(([, v]) => v !== '' && v != null).map(([k, v]) => [k, Number(v)])),
-      norm: num(form.norm), homeroomNorm: num(form.homeroomNorm), maxOver: num(form.maxOver), maxPerDay: num(form.maxPerDay),
       maxPerSubjectDay: num(form.maxPerSubjectDay),
       rooms: Object.fromEntries(Object.entries(form.rooms).filter(([, v]) => v !== '' && v != null).map(([k, v]) => [k, Number(v)])),
       busy: form.busy,
@@ -401,11 +400,13 @@ export default function TimetableAutoPage() {
           <p className="caption muted">Tiết: số tiết/tuần theo tổ hợp. HK này: đổi riêng cho học kỳ đang xếp (ví dụ Lịch sử học kỳ I 1 tiết, học kỳ II 2 tiết), để trống là giữ nguyên. Phòng: số phòng dùng chung (Tin học, sân GDTC), để trống là không giới hạn. Nặng: ưu tiên tiết 1–3. Chiều: ưu tiên buổi chiều.</p>
 
           <h2 className="title-sm">{form.mode === 'ASSIGN' ? '3' : '4'}. Giáo viên</h2>
-          <div className="ta-row ta-row-4">
-            <label className="field"><span className="field-label">Định mức</span><input className="input" type="number" min={1} max={40} value={form.norm} onChange={(e) => set('norm', e.target.value)} /></label>
-            <label className="field"><span className="field-label">Định mức GVCN</span><input className="input" type="number" min={0} max={40} value={form.homeroomNorm} onChange={(e) => set('homeroomNorm', e.target.value)} /></label>
-            <label className="field"><span className="field-label">Vượt tối đa</span><input className="input" type="number" min={0} max={20} value={form.maxOver} onChange={(e) => set('maxOver', e.target.value)} /></label>
-            {form.mode !== 'ASSIGN' && <label className="field"><span className="field-label">Tối đa tiết/ngày</span><input className="input" type="number" min={1} max={10} value={form.maxPerDay} onChange={(e) => set('maxPerDay', e.target.value)} /></label>}
+          {/* Norms and the daily limit are School Manager settings now (Dung, 21/11/2026): shown here, edited in /school-settings. */}
+          <div className="ta-load-summary">
+            <p>
+              Định mức <strong>{opts.defaults.norm}</strong> tiết/tuần · GVCN <strong>{opts.defaults.homeroomNorm}</strong> · vượt tối đa <strong>{opts.defaults.maxOver}</strong> tiết
+              {form.mode !== 'ASSIGN' && <> · tối đa <strong>{opts.defaults.maxPerDay}</strong> tiết/ngày</>}
+            </p>
+            <Link className="tt-link" to="/school-settings"><Icon name="settings" size="sm" /> Sửa trong Cài đặt hệ thống</Link>
           </div>
           {form.mode !== 'ASSIGN' && (
             <div className="ta-fieldset">

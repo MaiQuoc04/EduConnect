@@ -29,8 +29,9 @@ const idMap = (v, field, min, max) => {
   return out;
 };
 
-const FIELDS = ['schoolYearId', 'semesterId', 'classIds', 'mode', 'keepAssignments', 'grid', 'periods', 'norm', 'homeroomNorm',
-  'maxOver', 'maxPerDay', 'maxPerSubjectDay', 'rooms', 'busy', 'heavySubjectIds', 'afternoonSubjectIds', 'fixed', 'weights',
+// norm, homeroomNorm, maxOver and maxPerDay are no longer sent: they are the School Manager settings
+// (school-settings module, Dung 21/11/2026) and timetable.auto.js reads them on every run and apply.
+const FIELDS = ['schoolYearId', 'semesterId', 'classIds', 'mode', 'keepAssignments', 'grid', 'periods', 'maxPerSubjectDay', 'rooms', 'busy', 'heavySubjectIds', 'afternoonSubjectIds', 'fixed', 'weights',
   'seed', 'timeLimitSec'];
 export const MODES = Object.freeze(['ALL', 'ASSIGN', 'TIMETABLE']);
 
@@ -58,10 +59,6 @@ export function autoConfig(b) {
   if (!grid.length) throw bad('grid', 'EMPTY');
   if (grid.length > L.DAYS_MAX) throw bad('grid', 'TOO_MANY_DAYS', { max: L.DAYS_MAX });
   if (grid.some((d) => d.weekday === 7)) throw bad('grid', 'SUNDAY');
-
-  const norm = int(b.norm ?? L.NORM, 'norm', 1, 40);
-  const homeroomNorm = int(b.homeroomNorm ?? L.HOMEROOM_NORM, 'homeroomNorm', 0, 40);
-  if (homeroomNorm > norm) throw bad('homeroomNorm', 'ABOVE_NORM');
 
   let busy = [];
   if (b.busy !== undefined && b.busy !== null) {
@@ -103,10 +100,6 @@ export function autoConfig(b) {
     keepAssignments: b.keepAssignments ?? false,
     grid,
     periods: idMap(b.periods, 'periods', 0, 15),
-    norm,
-    homeroomNorm,
-    maxOver: int(b.maxOver ?? L.MAX_OVER, 'maxOver', 0, 20),
-    maxPerDay: int(b.maxPerDay ?? L.MAX_PER_DAY, 'maxPerDay', 1, 10),
     maxPerSubjectDay: int(b.maxPerSubjectDay ?? L.MAX_PER_SUBJECT_DAY, 'maxPerSubjectDay', 1, 5),
     rooms: idMap(b.rooms, 'rooms', 1, 100),
     busy,

@@ -14,12 +14,13 @@ export const NAV_SECTIONS = [
     ],
   },
   {
-    label: 'Quản trị hệ thống', // School Manager sees only the password reset requests here
+    label: 'Quản trị hệ thống', // School Manager sees the password reset requests and its own settings here
     items: [
       // FE-13 System Administration
       { to: '/admin/accounts', label: 'Tài khoản người dùng', icon: 'manage_accounts', roles: ['SYSTEM_ADMIN'] }, // UC-95..98
       { to: '/admin/password-reset-requests', label: 'Yêu cầu cấp lại mật khẩu', icon: 'key', roles: ['SYSTEM_ADMIN', 'SCHOOL_MANAGER'] }, // UC-100 via FE-01 requests
       { to: '/admin/settings', label: 'Cài đặt hệ thống', icon: 'settings', roles: ['SYSTEM_ADMIN'] }, // UC-102
+      { to: '/school-settings', label: 'Cài đặt hệ thống', icon: 'settings', roles: ['SCHOOL_MANAGER'] }, // School Manager settings (Dung, 21/11/2026)
       { to: '/admin/maintenance', label: 'Bảo trì hệ thống', icon: 'engineering', roles: ['SYSTEM_ADMIN'] }, // UC-103
     ],
   },

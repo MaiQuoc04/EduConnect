@@ -12,6 +12,7 @@ import { AppError, badRequest, notFound } from '../../utils/AppError.js';
 import { syncClassTeachers } from '../classes/classGroups.js';
 import * as teacherQueries from '../teacher/teacher.queries.js';
 import { assignTeachers, countedPeriods, MORNING_LAST, solveTimetable } from './timetable.auto.solver.js';
+import { teachingLoad } from '../school-settings/schoolSettings.service.js';
 import { AUTO_LIMITS, ERROR_CODES } from './timetable.constants.js';
 import { internals } from './timetable.service.js';
 
@@ -33,7 +34,7 @@ export function autoOptions({ schoolYearId }) {
     const years = (await internals.schoolYears()).filter((y) => y.endDate >= day);
     const year = years.find((y) => String(y.id) === String(schoolYearId)) ?? years.find((y) => y.startDate <= day) ?? years.at(-1) ?? null;
     if (!year) return { today: day, years: [], schoolYearId: null, semesters: [], classes: [], subjects: [], teachers: [], timeSlots: [], limits: AUTO_LIMITS };
-    const [{ rows: semesters }, { rows: classes }, { rows: subjects }, { rows: teachers }, slots] = await Promise.all([
+    const [{ rows: semesters }, { rows: classes }, { rows: subjects }, { rows: teachers }, slots, teaching] = await Promise.all([
       pool.query(
         `SELECT semester_id AS "semesterId", semester_no AS "no", to_char(start_date, 'YYYY-MM-DD') AS "startDate",
                 to_char(end_date, 'YYYY-MM-DD') AS "endDate", status
@@ -71,6 +72,7 @@ export function autoOptions({ schoolYearId }) {
          GROUP BY t.teacher_id, u.full_name, t.teacher_code ORDER BY u.full_name`,
       ),
       internals.timeSlots(),
+      teachingLoad(),
     ]);
     // Defaults by code / name (the School Manager changes them on the screen).
     const byCode = (codes) => subjects.filter((s) => codes.includes(String(s.code).toUpperCase())).map((s) => String(s.subjectId));
@@ -88,10 +90,7 @@ export function autoOptions({ schoolYearId }) {
       limits: AUTO_LIMITS,
       defaults: {
         grid: [1, 2, 3, 4, 5].map((w) => ({ weekday: w, morning: 5, afternoon: w === 2 || w === 4 ? 2 : 0 })),
-        norm: AUTO_LIMITS.NORM,
-        homeroomNorm: AUTO_LIMITS.HOMEROOM_NORM,
-        maxOver: AUTO_LIMITS.MAX_OVER,
-        maxPerDay: AUTO_LIMITS.MAX_PER_DAY,
+        ...teaching, // norm, homeroomNorm, maxOver, maxPerDay: School Manager settings, read only on this screen
         maxPerSubjectDay: AUTO_LIMITS.MAX_PER_SUBJECT_DAY,
         heavySubjectIds: byCode(['TOAN', 'VAN', 'ANH']),
         afternoonSubjectIds: subjects.filter((s) => /^chuyên đề/i.test(s.name)).map((s) => String(s.subjectId)),
@@ -321,11 +320,15 @@ const solverOptions = (cfg) => ({
 
 // ── run: a draft ───────────────────────────────────────────────────────────
 
-export function runAuto(cfg) {
+export function runAuto(input) {
   return internals.guard(async () => {
+    // Teaching load (norms, periods over the norm, periods a day): the School Manager settings, never the request.
+    const teaching = await teachingLoad();
+    const cfg = { ...input, ...teaching };
     const ctx = await loadContext(cfg);
     const check = preCheck(cfg, ctx);
     const base = {
+      teaching,
       range: ctx.range,
       semester: ctx.semester,
       stamp: ctx.stamp,
@@ -509,9 +512,11 @@ function checkDraft(cfg, ctx, draft) {
   return { assign, entries };
 }
 
-export function applyAuto({ config: cfg, stamp, confirmOverwrite, draft }, user) {
+export function applyAuto({ config, stamp, confirmOverwrite, draft }, user) {
   return internals.guard(() =>
     withTransaction(async (db) => {
+      // Re-checked with the settings in force now (they may have changed since the draft was made).
+      const cfg = { ...config, ...(await teachingLoad(db)) };
       // One run at a time per year: lock its classes (SCR-19 saves lock them too).
       await teacherQueries.lockClassesOfYear(cfg.schoolYearId, db);
       const ctx = await loadContext(cfg, db);

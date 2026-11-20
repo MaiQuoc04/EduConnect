@@ -631,3 +631,7 @@
 .tov-unscheduled p { display: flex; gap: 6px; align-items: center; margin: 0 0 4px; }
 .tov-unscheduled ul { margin: 0; padding-left: 22px; }
 .tov-jump-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px; }
+/* Teaching load of automatic scheduling: read only, edited in the School Manager settings (Dung, 21/11/2026) */
+.ta-load-summary { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px 16px;
+  padding: 10px 12px; border: 1px solid var(--graphite-200); border-radius: var(--radius-control); background: var(--ink-50); }
+.ta-load-summary p { margin: 0; }
