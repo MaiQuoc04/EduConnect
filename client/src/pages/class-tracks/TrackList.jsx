@@ -35,14 +35,18 @@ export default function TrackList({ tracks, selectedId, onSelect, onCreate }) {
           <Icon name="category" size="sm" />
           Danh sách loại lớp
         </h2>
-        <button type="button" className="btn btn-tertiary" onClick={onCreate}>
-          <Icon name="add" size="sm" />
-          Thêm loại lớp
-        </button>
+        {onCreate && (
+          <button type="button" className="btn btn-tertiary" onClick={onCreate}>
+            <Icon name="add" size="sm" />
+            Thêm loại lớp
+          </button>
+        )}
       </div>
 
       {tracks.length === 0 ? (
-        <p className="year-list-empty muted">Chưa có loại lớp nào. Thêm loại lớp đầu tiên để bắt đầu.</p>
+        <p className="year-list-empty muted">
+          {onCreate ? 'Chưa có loại lớp nào. Thêm loại lớp đầu tiên để bắt đầu.' : 'Chưa có loại lớp nào.'}
+        </p>
       ) : (
         <>
           <div className="track-tabs-wrap">

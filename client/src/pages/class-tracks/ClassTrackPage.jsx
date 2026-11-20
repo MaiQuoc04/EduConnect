@@ -138,13 +138,16 @@ export default function ClassTrackPage() {
   const selectedYear = yearParam || (schoolYear ? String(schoolYear.schoolYearId) : '');
 
   let right;
-  if (mode === 'create') {
+  // No new class type once the selected year has grades (Khanh, 20/11/2026) – the form also closes when the
+  // School Manager switches to such a year.
+  const canCreate = !schoolYear?.weightsLocked;
+  if (mode === 'create' && canCreate) {
     right = <TrackForm track={null} onSaved={handleTrackSaved} onCancel={() => setMode('view')} />;
   } else if (!selectedId) {
     right = (
       <div className="notice">
         <Icon name="info" />
-        <p>Chọn “Thêm loại lớp” để tạo loại lớp đầu tiên.</p>
+        <p>{canCreate ? 'Chọn “Thêm loại lớp” để tạo loại lớp đầu tiên.' : 'Chưa có loại lớp nào.'}</p>
       </div>
     );
   } else if (detail.error) {
@@ -213,8 +216,7 @@ export default function ClassTrackPage() {
         <div className="notice amber track-note">
           <Icon name="lock" />
           <p>
-            Năm học {yearLabel(schoolYear.yearName)} đã có điểm nên không thể thêm hoặc bỏ môn. Số tiết mỗi tuần
-            vẫn chỉnh được.
+            Năm học {yearLabel(schoolYear.yearName)} đã có điểm nên không thể thêm loại lớp, sửa hoặc bỏ môn.
           </p>
         </div>
       ) : !schoolYear.configured && copySource ? (
@@ -245,14 +247,14 @@ export default function ClassTrackPage() {
       <div className="year-grid">
         <TrackList
           tracks={tracks}
-          selectedId={mode === 'create' ? null : selectedId}
+          selectedId={mode === 'create' && canCreate ? null : selectedId}
           onSelect={(id) =>
             leave(() => {
               setMode('view');
               select({ trackId: id });
             })
           }
-          onCreate={() => leave(() => setMode('create'))}
+          onCreate={canCreate ? () => leave(() => setMode('create')) : null}
         />
         <div>{right}</div>
       </div>
