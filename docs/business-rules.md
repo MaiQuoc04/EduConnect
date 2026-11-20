@@ -174,11 +174,14 @@ Boundaries that are easy to get wrong:
   copied from the previous year by default; editable, but subjects can no longer be added or removed **once the year
   has grades** (periods per week stay editable). Removing a subject from a type hard-deletes its `track_subjects`
   row (allowed only while the year has no grades and has not ended, §14).
-- A class type belongs to **one grade** (10, 11 or 12) or to **every grade** (`class_tracks.grade_level_id`, NULL =
-  every grade; patch `patch_v0.3_class_track_grade.sql`, 02/11/2026), so subjects and periods can differ per grade.
-  A class only uses a type of its grade or one for every grade. A name is unique per grade (case-insensitive, among
-  types not deleted) and is used either for every grade or per grade, not both. A type's grade cannot change while
-  classes of another grade use it.
+- A class type belongs to **one grade** (10, 11 or 12) (`class_tracks.grade_level_id`; patch
+  `patch_v0.3_class_track_grade.sql`, 02/11/2026), so subjects and periods can differ per grade. Creating a type
+  needs at least one grade (one type per chosen grade). Since 20/11/2026 there is **no "every grade" type** (SCR-70
+  has no "Mọi khối" tab): `patch_v0.3_class_track_split_all_grades.sql` split the old ones into one type per grade
+  (subjects copied, each class moved to the type of its grade); the column stays nullable only for deleted old rows.
+  SCR-70 hides "Thêm loại lớp" while the selected school year has grades (20/11/2026, UI only: a type is not tied
+  to a year). A class only uses a type of its grade. A name is unique per grade (case-insensitive, among types not deleted). A
+  type's grade cannot change while classes of another grade use it.
 - **Every subject weight is 1** (agreed 01/11/2026, in line with Circular 22/2021): `track_subjects.weight` is
   always 1.00 and is not shown.
 - **Classes** (FE-04, agreed 03/11/2026): a class name is the grade followed by 1–8 letters or digits, no spaces or
