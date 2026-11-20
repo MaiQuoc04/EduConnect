@@ -5,9 +5,9 @@ const SECTIONS = [
   { grade: '10', label: 'Khối 10', badge: '10' },
   { grade: '11', label: 'Khối 11', badge: '11' },
   { grade: '12', label: 'Khối 12', badge: '12' },
-  { grade: null, label: 'Mọi khối', badge: 'Tất cả' },
 ];
-const keyOf = (grade) => grade ?? 'all';
+// No "Mọi khối" tab since 20/11/2026: every class type belongs to one grade (the old ones were split per grade).
+const keyOf = (grade) => grade ?? '';
 
 // SCR-70 left column: every class type (UC-26), one grade at a time (tabs), so two types with the same name in
 // different grades ("Khối E" of grade 10 and of grade 11) are never shown side by side. Each card also carries its
@@ -67,7 +67,7 @@ export default function TrackList({ tracks, selectedId, onSelect, onCreate }) {
 
           {items.length === 0 ? (
             <p className="year-list-empty muted">
-              {section.grade ? `${section.label} chưa có loại lớp nào.` : 'Chưa có loại lớp nào dùng chung cho mọi khối.'}
+              {section.label} chưa có loại lớp nào.
             </p>
           ) : (
             <ul role="tabpanel" aria-label={section.label}>
@@ -77,11 +77,11 @@ export default function TrackList({ tracks, selectedId, onSelect, onCreate }) {
                     type="button"
                     className={`year-item track-item${t.trackId === selectedId ? ' selected' : ''}`}
                     aria-current={t.trackId === selectedId ? 'true' : undefined}
-                    aria-label={`${t.trackName}, ${section.grade ? section.label.toLowerCase() : 'mọi khối'}`}
+                    aria-label={`${t.trackName}, ${section.label.toLowerCase()}`}
                     onClick={() => onSelect(t.trackId)}
                   >
-                    <span className={`track-grade${section.grade ? '' : ' is-all'}`} aria-hidden="true">
-                      {section.grade && <span className="track-grade-label">Khối</span>}
+                    <span className="track-grade" aria-hidden="true">
+                      <span className="track-grade-label">Khối</span>
                       {section.badge}
                     </span>
                     <span className="track-item-body">

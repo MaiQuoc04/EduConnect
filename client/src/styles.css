@@ -621,7 +621,6 @@ a.link-row .icon:last-child { color: var(--graphite-400); }
 .track-item-body { display: grid; gap: 6px; min-width: 0; }
 .track-grade { display: grid; place-items: center; align-content: center; width: 44px; height: 44px; border-radius: 10px; background: var(--ink-50); outline: 1px solid var(--ink-100); color: var(--ink-700); font-size: 17px; font-weight: 700; line-height: 1; font-variant-numeric: tabular-nums; }
 .track-grade-label { font-size: 9px; font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase; margin-bottom: 2px; }
-.track-grade.is-all { font-size: 11px; background: var(--graphite-100); outline-color: var(--graphite-200); color: var(--graphite-700); }
 .year-item.selected .track-grade { background: var(--ink-600); outline-color: var(--ink-600); color: var(--white); }
 .track-grades { margin: 0; padding: 0; border: 0; }
 .track-grade-options { display: flex; flex-wrap: wrap; gap: 8px; }

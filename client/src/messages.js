@@ -58,6 +58,7 @@ const ERROR_MESSAGES = {
   MSG_SUBJECT_NAME_TAKEN: 'Đã có môn học cùng tên.',
   MSG_SUBJECT_NAME_LENGTH: 'Tên môn học tối đa 150 ký tự.',
   MSG_TRACK_NAME_TAKEN: 'Khối này đã có loại lớp cùng tên.',
+  MSG_TRACK_GRADE_REQUIRED: 'Vui lòng chọn ít nhất một khối.',
   MSG_TRACK_NAME_SCOPE: 'Tên này đang dùng cho loại lớp “mọi khối” hoặc loại lớp theo khối, không dùng được cho cả hai.',
   MSG_TRACK_NAME_LENGTH: 'Tên loại lớp tối đa 100 ký tự.',
   MSG_TRACK_GRADE_DUPLICATE: 'Một khối bị chọn hai lần.',

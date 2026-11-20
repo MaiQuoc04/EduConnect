@@ -6,15 +6,16 @@ import { trackLabel } from './trackLabel.js';
 const NAME_CODES = ['MSG_TRACK_NAME_TAKEN', 'MSG_TRACK_NAME_LENGTH', 'MSG_TRACK_NAME_SCOPE'];
 
 // SCR-70 create / edit a class type (UC-26). `track` = the type being edited, or null to create one.
-// A class type belongs to one grade or to every grade (class_tracks.grade_level_id); creating it for several grades
-// makes one type per grade ("Khối A" of grade 10 and of grade 11), each with its own subjects.
+// A class type belongs to one grade (class_tracks.grade_level_id); creating it for several grades makes one type per
+// grade ("Khối A" of grade 10 and of grade 11), each with its own subjects. At least one grade is required: there is
+// no "every grade" type any more (20/11/2026).
 export default function TrackForm({ track, onSaved, onCancel }) {
   const editing = Boolean(track);
   const [grades, setGrades] = useState([]);
   const [form, setForm] = useState({ trackName: track?.trackName ?? '', description: track?.description ?? '' });
-  const [picked, setPicked] = useState([]); // create: gradeLevelIds ([] = every grade)
-  const [gradeLevelId, setGradeLevelId] = useState(track?.gradeLevelId ? String(track.gradeLevelId) : ''); // edit: '' = every grade
-  const [error, setError] = useState(null); // { field: 'name' | null, text }
+  const [picked, setPicked] = useState([]); // create: gradeLevelIds (at least one)
+  const [gradeLevelId, setGradeLevelId] = useState(track?.gradeLevelId ? String(track.gradeLevelId) : ''); // edit
+  const [error, setError] = useState(null); // { field: 'name' | 'grade' | null, text }
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
@@ -33,31 +34,32 @@ export default function TrackForm({ track, onSaved, onCancel }) {
       setError({ field: 'name', text: errorText({ code: 'MSG_REQUIRED' }) });
       return;
     }
+    if (editing ? !gradeLevelId : !picked.length) {
+      setError({ field: 'grade', text: errorText({ code: 'MSG_TRACK_GRADE_REQUIRED' }) });
+      return;
+    }
     setSaving(true);
     setError(null);
     try {
       if (editing) {
-        const { data } = await api.put(`/class-tracks/${track.trackId}`, {
-          ...form,
-          gradeLevelId: gradeLevelId ? Number(gradeLevelId) : null,
-        });
+        const { data } = await api.put(`/class-tracks/${track.trackId}`, { ...form, gradeLevelId: Number(gradeLevelId) });
         onSaved([data], true);
       } else {
         const { data } = await api.post('/class-tracks', { ...form, gradeLevelIds: picked });
         onSaved(data.tracks, false);
       }
     } catch (err) {
-      setError({ field: NAME_CODES.includes(err.code) ? 'name' : null, text: errorText(err) });
+      const field = NAME_CODES.includes(err.code) ? 'name' : err.code === 'MSG_TRACK_GRADE_REQUIRED' ? 'grade' : null;
+      setError({ field, text: errorText(err) });
       setSaving(false);
     }
   }
 
   const sortedPicked = grades.filter((g) => picked.includes(g.gradeLevelId));
-  const preview = form.trackName.trim()
-    ? sortedPicked.length
+  const preview =
+    form.trackName.trim() && sortedPicked.length
       ? sortedPicked.map((g) => `${form.trackName.trim()} · khối ${g.gradeLevelName}`).join(', ')
-      : `${form.trackName.trim()} (mọi khối)`
-    : '';
+      : '';
 
   return (
     <form className="card card-outline form-card year-form" onSubmit={handleSubmit} noValidate>
@@ -89,22 +91,26 @@ export default function TrackForm({ track, onSaved, onCancel }) {
       </div>
 
       {editing ? (
-        <div className="field">
+        <div className={`field${error?.field === 'grade' ? ' invalid' : ''}`}>
           <label className="field-label" htmlFor="track-grade">
             Khối
           </label>
           <select id="track-grade" className="input" value={gradeLevelId} onChange={(e) => setGradeLevelId(e.target.value)}>
-            <option value="">Mọi khối</option>
+            {!gradeLevelId && <option value="">Chọn khối</option>}
             {grades.map((g) => (
               <option key={g.gradeLevelId} value={g.gradeLevelId}>
                 Khối {g.gradeLevelName}
               </option>
             ))}
           </select>
-          <span className="field-help">Chỉ đổi được sang khối mà mọi lớp đang dùng loại lớp này đều thuộc về.</span>
+          {error?.field === 'grade' ? (
+            <span className="field-error">{error.text}</span>
+          ) : (
+            <span className="field-help">Chỉ đổi được sang khối mà mọi lớp đang dùng loại lớp này đều thuộc về.</span>
+          )}
         </div>
       ) : (
-        <fieldset className="field track-grades">
+        <fieldset className={`field track-grades${error?.field === 'grade' ? ' invalid' : ''}`}>
           <legend className="field-label">Dùng cho khối</legend>
           <div className="track-grade-options">
             {grades.map((g) => (
@@ -114,10 +120,13 @@ export default function TrackForm({ track, onSaved, onCancel }) {
               </label>
             ))}
           </div>
-          <span className="field-help">
-            Mỗi khối được chọn thành một loại lớp riêng, có môn học và số tiết riêng. Không chọn khối nào thì loại lớp
-            dùng cho mọi khối.
-          </span>
+          {error?.field === 'grade' ? (
+            <span className="field-error">{error.text}</span>
+          ) : (
+            <span className="field-help">
+              Chọn ít nhất một khối. Mỗi khối được chọn thành một loại lớp riêng, có môn học và số tiết riêng.
+            </span>
+          )}
           {preview && <span className="caption muted">Sẽ tạo: {preview}</span>}
         </fieldset>
       )}
