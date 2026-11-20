@@ -2,6 +2,7 @@ import { pool, withTransaction } from '../../config/db.js';
 import { AppError, forbidden, notFound } from '../../utils/AppError.js';
 import * as files from '../../utils/attachments.js';
 import * as feed from '../../utils/feedInteractions.js';
+import * as reports from '../../utils/commentReports.js';
 import { getNumberSetting } from '../../utils/settings.js';
 import { emitToUsers } from '../../sockets/index.js';
 import { activeMemberIds } from '../conversations/conversations.service.js';
@@ -86,6 +87,9 @@ function permissionsOf(post, user, group) {
   const mod = group.isModerator;
   return {
     interact: open && isLive(post),
+    // Report a comment (19/11/2026): whoever may interact, except the moderator, who deletes directly (as the School
+    // Manager on the school feed).
+    report: open && isLive(post) && !mod,
     edit: open && own, // a hidden post too: saving sends it back for approval (§5, 12/11/2026)
     delete: open && own,
     pin: open && mod && isLive(post),
@@ -460,7 +464,13 @@ const commentCountOf = async (postId, db = pool) => (await feed.countComments(PO
 export async function listComments(user, postId, { page, pageSize }) {
   const { post, group, target } = await openPost(pool, user, postId);
   const result = await feed.listComments(target, { page, pageSize, canDelete: mayDeleteComment(user, post, group) });
-  return { ...result, commentCount: await commentCountOf(post.postId) };
+  // 19/11/2026 (as FE-08): each comment's likes (likeCount, likedByMe) and whether the reader reported it; canReport
+  // false on the comments of the group's moderator (their reports would land in their own queue, §5).
+  const liked = await reports.withReportedByMe(await feed.withCommentLikes(result.items, user.userId), user.userId);
+  const moderators = new Set(await moderatorIds(pool, group));
+  const markReportable = (list) =>
+    list.map((n) => ({ ...n, canReport: !moderators.has(n.authorId), replies: markReportable(n.replies) }));
+  return { ...result, items: markReportable(liked), commentCount: await commentCountOf(post.postId) };
 }
 
 // ASSUMPTION: only live posts can be commented on or liked (a pending, rejected or hidden post is not in the feed).
@@ -491,6 +501,9 @@ export async function deleteComment(user, postId, commentId) {
       throw forbidden('FORBIDDEN', 'You cannot delete this comment.');
     }
     await feed.softDeleteComment(opened.target, commentId, user.userId, client);
+    // 19/11/2026: a comment gone has nothing left to decide – its pending reports are closed (RESOLVED, by whoever
+    // deleted it), so the moderator's queue never keeps them (as FE-08).
+    await reports.resolvePendingReports(commentId, user.userId, client);
     return {
       ...opened,
       result: { commentId, isDeleted: true, commentCount: await commentCountOf(opened.post.postId, client) },
@@ -503,6 +516,113 @@ export async function deleteComment(user, postId, commentId) {
     { everyone: isLive(post), authorId: post.authorId },
   );
   return result;
+}
+
+// --- Comment likes and reports (19/11/2026, as FE-08; data layer utils/feedInteractions.js / commentReports.js) ------
+
+// The comment of this post the user acts on: a live post of a writable group (as liking the post), the comment not
+// deleted (else 404 MSG_COMMENT_NOT_FOUND).
+async function openCommentOfPost(client, user, postId, commentId) {
+  const opened = await openPost(client, user, postId, { lock: 'share' });
+  assertWritable(opened.group);
+  assertLive(opened.post);
+  const comment = await feed.findComment(opened.target, commentId, { forShare: true }, client);
+  if (!comment || comment.isDeleted) throw commentNotFound();
+  return { ...opened, comment };
+}
+
+/** Like (true) / unlike (false) a comment, idempotent. No socket event (as post likes and FE-08). */
+export async function setCommentLike(user, postId, commentId, liked) {
+  return withTransaction(async (client) => {
+    const { comment } = await openCommentOfPost(client, user, postId, commentId);
+    const target = { column: feed.FEED_COLUMNS.COMMENT, id: comment.commentId };
+    if (liked) await feed.addLike(target, user.userId, client);
+    else await feed.removeLike(target, user.userId, client);
+    return { commentId: comment.commentId, ...(await feed.likeSummary(target, user.userId, client)) };
+  });
+}
+
+/**
+ * Report a comment (body checked by the controller, reports.parseReportInput). Any member who may interact with the
+ * post, except its group's moderator (403: they delete comments directly). Own comment → 400; reporting again → 200
+ * { created: false }, nothing changes (reports.reportComment).
+ */
+export async function reportComment(user, postId, commentId, input) {
+  return withTransaction(async (client) => {
+    const { comment, group } = await openCommentOfPost(client, user, postId, commentId);
+    if (group.isModerator) {
+      throw forbidden('MSG_MODERATOR_CANNOT_REPORT', 'The moderator deletes comments directly instead of reporting them.');
+    }
+    // Option A (Khanh 19/11/2026, business-rules §5): the moderator's own comment cannot be reported – the report would
+    // be judged by the person it is about. A complaint about them goes to the school directly.
+    if ((await moderatorIds(client, group)).includes(comment.authorId)) {
+      throw forbidden('MSG_CANNOT_REPORT_MODERATOR', "The group moderator's comments cannot be reported here.");
+    }
+    const report = await reports.reportComment(comment.commentId, user.userId, input, client);
+    return { commentId: comment.commentId, reportedByMe: true, created: report.created };
+  });
+}
+
+// The feeds whose comment reports the user handles (19/11/2026): a teacher, the GENERAL groups of the classes they
+// are homeroom teacher of; the School Manager, the school's teacher group. Open school years only (a read-only group
+// cannot be changed). Same moderator rule as isModeratorOf.
+async function moderatedFeedIds(db, user) {
+  if (user.activeRole === 'TEACHER') {
+    const { rows } = await db.query(
+      `SELECT g.group_id AS "groupId"
+       FROM groups g
+       JOIN classes c ON c.class_id = g.class_id AND c.deleted_at IS NULL
+       JOIN school_years sy ON sy.school_year_id = c.school_year_id AND CURRENT_DATE <= sy.end_date
+       JOIN teachers t ON t.teacher_id = c.homeroom_teacher_id
+       WHERE g.group_type = 'GENERAL' AND g.deleted_at IS NULL AND t.user_id = $1`,
+      [user.userId],
+    );
+    return rows.map((r) => r.groupId);
+  }
+  if (user.activeRole === 'SCHOOL_MANAGER') {
+    const { rows } = await db.query(
+      `SELECT group_id AS "groupId" FROM groups WHERE group_type = 'TEACHER_SCHOOL' AND deleted_at IS NULL`,
+    );
+    return rows.map((r) => r.groupId);
+  }
+  return [];
+}
+
+/**
+ * GET /group-comment-reports (19/11/2026): one page of the reported comments of the feeds the user moderates
+ * (reports.listReports with source GROUP_POST and only their group ids), plus pendingCount and moderates (false: the
+ * user moderates no feed, the page says so). Never a school post comment (that queue is FE-08's /comment-reports).
+ */
+export async function listGroupCommentReports(user, { status, page, pageSize }) {
+  const groupIds = await moderatedFeedIds(pool, user);
+  const filter = { source: reports.REPORT_SOURCES.GROUP_POST, groupIds };
+  const result = await reports.listReports({ ...filter, status, page, pageSize });
+  return { ...result, pendingCount: await reports.countPendingReports(filter), moderates: groupIds.length > 0 };
+}
+
+/**
+ * PATCH /group-comment-reports/:commentId { action }: DELETE the comment (soft; its pending reports → RESOLVED) or
+ * DISMISS the reports (→ DISMISSED, the comment stays). A comment of a feed the user does not moderate, of a school
+ * post, or without a report → 404 MSG_REPORT_NOT_FOUND (nothing is revealed). After COMMIT, DELETE only: the author's
+ * notification naming nobody (reports.notifyCommentRemoved) and "post:comment-deleted" so open threads update.
+ */
+export async function resolveGroupCommentReport(user, commentId, action) {
+  const result = await withTransaction(async (client) => {
+    const comment = await reports.findReportedComment(commentId, { forUpdate: true }, client);
+    const groupIds = await moderatedFeedIds(client, user);
+    if (!comment || comment.column !== POST || !groupIds.includes(comment.groupId)) {
+      throw notFound('MSG_REPORT_NOT_FOUND', 'No report was found for this comment.');
+    }
+    return { ...(await reports.resolveReport(commentId, user.userId, action, client)), groupId: comment.groupId };
+  });
+  if (result.commentDeleted) {
+    reports
+      .notifyCommentRemoved(result, user.userId)
+      .catch((err) => console.error(`[posts] comment-removed notification #${commentId} not sent:`, err?.message));
+    signal({ groupId: result.groupId }, 'post:comment-deleted', { postId: result.target.id, commentId });
+  }
+  const { commentDeleted, resolvedCount, status } = result;
+  return { commentId, status, resolvedCount, commentDeleted };
 }
 
 // --- UC-44 Pin / Unpin, UC-45 Hide / Unhide, UC-46 Approve / Reject (moderator) -------------------------------------

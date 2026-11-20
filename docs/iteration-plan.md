@@ -292,6 +292,16 @@ It2: Anh FE-08 + FE-14, Khanh FE-05 + FE-06).
     system lines `MEMBER_ADDED` / `MEMBER_KICKED`, real time (group:changed / group:removed). New flags
     `canAddMembers` / `canRemoveMembers`; adding and removing on the Members tab (SCR-22). No schema change. Tested on the
     local DB (28 steps + the team / chat suites).
+  - **19/11 (Khanh): group feed comment likes and reports, as the school feed** (business-rules §5, permissions;
+    Khanh's decision). Server (FE-05, with Anh's shared `utils/feedInteractions.js` / `utils/commentReports.js`, no
+    schema change): `PUT|DELETE /posts/:postId/comments/:commentId/like`, `POST …/report` (not the moderator: 403
+    `MSG_MODERATOR_CANNOT_REPORT`; the moderator's own comments cannot be reported: 403 `MSG_CANNOT_REPORT_MODERATOR`, node
+    `canReport` false, CommentThread hides the button – opt-in, FE-08 unchanged), comment list with `likeCount` / `likedByMe` / `reportedByMe`, `post.can.report`,
+    deleting from the thread closes pending reports, `GET /group-comment-reports` + `PATCH …/:commentId { action }`
+    (homeroom teacher: their class GENERAL feeds of open years; School Manager: the teacher group; `moderates` false
+    for others), author notified on delete (`notifyCommentRemoved`, opens the post pop-up). Client: CommentThread gets
+    `like` / `report`, new page `groupfeed/GroupCommentReportsPage.jsx` (same screen as FE-08's, menu "Báo cáo bình
+    luận nhóm", teachers and School Manager). Tested on the local DB (33 steps + FE-05 suite + npm test).
   - **17/11 (Anh; merged into `develop` 18/11): comment reports** (FE-08 first, shared
     core for FE-05). Agreed before building: comments are still only deleted, never hidden (§5); the author of a
     deleted comment gets a notification written straight into `notifications` + `notification_recipients` (§9, FE-09

@@ -62,14 +62,32 @@ export const groupPostLike = {
   unlike: async (postId) => (await api.delete(`${postPath(postId)}/like`)).data,
 };
 
-// UC-41 / UC-42 calls in the shape the shared CommentThread expects.
-export function groupPostCommentApi(postId) {
+// UC-41 / UC-42 calls in the shape the shared CommentThread expects. 19/11/2026 (as FE-08): like and report a comment,
+// given only when the reader may use them (post.can.interact / post.can.report), so CommentThread shows the buttons.
+export function groupPostCommentApi(postId, { canLike = false, canReport = false } = {}) {
+  const commentPath = (commentId) => `${postPath(postId)}/comments/${encodeURIComponent(commentId)}`;
   return {
     list: async (params, { signal } = {}) => (await api.get(`${postPath(postId)}/comments`, { params, signal })).data,
     create: async (body) => (await api.post(`${postPath(postId)}/comments`, body)).data,
-    remove: async (commentId) =>
-      (await api.delete(`${postPath(postId)}/comments/${encodeURIComponent(commentId)}`)).data,
+    remove: async (commentId) => (await api.delete(commentPath(commentId))).data,
+    // PUT / DELETE …/like -> { commentId, likeCount, likedByMe }
+    ...(canLike && {
+      like: async (commentId, liked) =>
+        (liked ? await api.put(`${commentPath(commentId)}/like`) : await api.delete(`${commentPath(commentId)}/like`)).data,
+    }),
+    // POST …/report { reason, note? } -> { commentId, reportedByMe: true, created }
+    ...(canReport && { report: async (commentId, body) => (await api.post(`${commentPath(commentId)}/report`, body)).data }),
   };
+}
+
+// Reported comments of the feeds the user moderates (19/11/2026): GET /group-comment-reports?status=&page=&pageSize=
+// -> { items, page, pageSize, total, pendingCount, moderates }; PATCH /group-comment-reports/:commentId { action }.
+export async function listGroupCommentReports(params, { signal } = {}) {
+  return (await api.get('/group-comment-reports', { params, signal })).data;
+}
+
+export async function resolveGroupCommentReport(commentId, action) {
+  return (await api.patch(`/group-comment-reports/${encodeURIComponent(commentId)}`, { action })).data;
 }
 
 // UC-44 / UC-45 / UC-46 (moderator) -> the post as it is now
