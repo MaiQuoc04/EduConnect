@@ -1,10 +1,10 @@
-# Screen list (83)
+# Screen list (84)
 
 Source: Report 3 section 5.1 (draft v1.3). Screen numbers here are Report 3's; the numbering in `Screen_List_Report3_v1.2` (ordered by FE) differs. Besides desktop, 8 screens also need a mobile layout (decided 18/10): Login Page, Group Feed, Group Post Detail, Chat Room, School Feed, Timetable View, Academic Results, Child Attendance. No dashboard screen.
 
 SCR-74..SCR-83 (added 18/11/2026 by the lead): pages already running in the code that had no screen number. Existing
 numbers are never changed (code comments refer to them). Screens marked "(planned)" belong to FE-09 / FE-12, still being
-built in Iteration 3.
+built in Iteration 3. SCR-84 (added 20/11/2026): the group comment report queue merged on 19/11/2026 (FE-05).
 
 | # | Screen | Feature | Description |
 |---|---|---|---|
@@ -91,3 +91,4 @@ built in Iteration 3.
 | 81 | Period Times | FE-10 | Allows School Manager to set the start of each session and the length of a period (UC-122). |
 | 82 | School Calendar | FE-10 | Lists upcoming and past school-wide dates; School Manager adds, edits and deletes them (UC-126, UC-127). |
 | 83 | Comment Reports | FE-08 | Allows School Manager to review reported comments of school announcements and delete the comment or dismiss the reports (UC-120). |
+| 84 | Group Comment Reports | FE-05 | Allows the homeroom teacher (class groups) and the School Manager (teacher group) to review reported group feed comments and delete the comment or dismiss the reports; tabs waiting, deleted, dismissed (UC-131). |

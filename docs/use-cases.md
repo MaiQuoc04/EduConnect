@@ -1,7 +1,8 @@
-# Use cases (128) – numbering after the 20/10/2026 database review
+# Use cases (131) – numbering after the 20/10/2026 database review
 
 UC-117..UC-128 (added 18/11/2026 by the lead): features already built in the code that had no use case yet; each is
-listed under its feature below.
+listed under its feature below. UC-129..UC-131 (added 20/11/2026 by the lead): the group feed comment likes and
+reports merged on 19/11/2026 (FE-05, Khanh; business rules §5).
 
 Source: Report 3 section 4.2 (draft v1.3). Actor "User" = any signed-in account. "Homeroom Teacher" is not a role: it is a Teacher who is `classes.homeroom_teacher_id` of that class.
 
@@ -83,6 +84,9 @@ Source: Report 3 section 4.2 (draft v1.3). Actor "User" = any signed-in account.
 | UC-45 | Hide Post / Delete Comment | Homeroom Teacher (class), School Manager (teacher group) | Moderation | Hide an inappropriate post, or delete any comment in the group. |
 | UC-46 | Approve / Reject Post | Homeroom Teacher (class), School Manager (teacher group) | Moderation | Approve or reject pending posts. |
 | UC-118 | Turn Post Approval On / Off | Homeroom Teacher (class), School Manager (teacher group) | Moderation | Turn post approval on or off for the group feed from the group detail screen; approval is on by default (added 18/11/2026). |
+| UC-129 | Like Group Post Comment | Teacher, Student, Parent, School Manager (teacher group) | Posting & Interaction | Like or unlike a comment on a live post of the group feed (one like per person, no notification). |
+| UC-130 | Report Group Post Comment | Teacher, Student, Parent, School Manager (teacher group) | Posting & Interaction | Report another member's comment with a reason (note required for "other"); not the group moderator, not the moderator's own comments, once per person; the reporter stays anonymous. |
+| UC-131 | Handle Group Comment Reports | Homeroom Teacher (class), School Manager (teacher group) | Moderation | Review the reported comments of one's groups ("Báo cáo bình luận nhóm") and delete the comment (its author is notified) or dismiss the reports. |
 
 ## FE-06 Messaging
 

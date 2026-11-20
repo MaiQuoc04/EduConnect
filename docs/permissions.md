@@ -36,9 +36,9 @@ Source: Report 3 section 4.4 (draft v1.3). Full = all records; Restricted (n) = 
 | Group feed post | Pin / hide / unhide / approve / reject | No | Restricted (6) | Restricted (5) | No | No | No |
 | Group feed | Turn post approval on / off | No | Restricted (6) | Restricted (5) | No | No | No |
 | Group feed comment | Delete | No | Restricted (6) | Restricted (16) | Restricted (16) | Restricted (16) | Restricted (16) |
-| Group feed comment | Like (19/11/2026) | No | Restricted (6) | Restricted (4) | Restricted (4) | Restricted (4) | Restricted (4) |
-| Group feed comment | Report (19/11/2026; not the group moderator) | No | Restricted (6) | Restricted (4) | Restricted (4) | Restricted (4) | Restricted (4) |
-| Group feed comment | Handle reports – delete / dismiss (19/11/2026) | No | Restricted (6) | Restricted (5) | No | No | No |
+| Group feed comment | Like (UC-129, 19/11/2026) | No | Restricted (6) | Restricted (4) | Restricted (4) | Restricted (4) | Restricted (4) |
+| Group feed comment | Report (UC-130, 19/11/2026; not the group moderator) | No | Restricted (6) | Restricted (4) | Restricted (4) | Restricted (4) | Restricted (4) |
+| Group feed comment | Handle reports – delete / dismiss (UC-131, 19/11/2026) | No | Restricted (6) | Restricted (5) | No | No | No |
 | Group / team chat | Send / read | No | Restricted (6) | Restricted (4) | Restricted (4) | Restricted (4) | Restricted (4) |
 | Private message | Send / read | No | Restricted (6) | Restricted (4) | Restricted (4) | Restricted (4) | Restricted (4) |
 | Chat message | Reply / react | No | Restricted (6) | Restricted (4) | Restricted (4) | Restricted (4) | Restricted (4) |

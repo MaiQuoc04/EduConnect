@@ -92,7 +92,10 @@ reactions, attachments) is merged into one place after both are on `develop`.
   automatic scheduling, timetable history, teacher schedule lookup, manage / view school calendar, export grade book),
   pages without a screen number got **SCR-74..SCR-83** (`screens.md`; SCR-4 and SCR-51..56 marked planned until FE-09 /
   FE-12 are built) and `permissions.md` got the matching rows (notes 21–22). Existing UC / SCR numbers unchanged.
-  Final reports R1–R7 due 26/11/2026; drafts in `docs/final/drafts/`.
+  Final reports R1–R7 due 26/11/2026; the drafts live on Drive (Project Reports), not in the repo.
+- **20/11/2026 (lead):** the group feed comment likes and reports (FE-05, merged 19/11) got **UC-129..UC-131** and
+  **SCR-84** Group Comment Reports; `permissions.md` rows reference them. Context diagram v2 drawn from the code
+  (on Drive, folder Context Diagram).
 
 Last updated: 18/11/2026 – three branches merged into `develop`, one merge each: FE-10 Schedule (Dung,
 `feature/fe-10-class-calendar`: UC-70..UC-75 timetables, UC-76..UC-80 class calendar, school calendar, period times,
