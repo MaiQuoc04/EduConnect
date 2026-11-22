@@ -66,7 +66,7 @@ import CreateAccountPage from './pages/admin/CreateAccountPage.jsx';
 import ImportAccountsPage from './pages/admin/ImportAccountsPage.jsx';
 import AccountDetailPage from './pages/admin/AccountDetailPage.jsx';
 import AccountListPage from './pages/admin/AccountListPage.jsx';
-import EditIdentifiersPage from './pages/admin/EditIdentifiersPage.jsx';
+import EditAccountPage from './pages/admin/EditAccountPage.jsx';
 import MaintenancePage from './pages/admin/MaintenancePage.jsx';
 import SystemSettingsPage from './pages/admin/SystemSettingsPage.jsx';
 import PasswordResetRequestsPage from './pages/admin/PasswordResetRequestsPage.jsx';
@@ -460,7 +460,7 @@ export default function App() {
           ['admin/accounts/new', <CreateAccountPage />], // UC-95
           ['admin/accounts/import', <ImportAccountsPage />], // UC-96
           ['admin/accounts/:id', <AccountDetailPage />], // UC-100, UC-101
-          ['admin/accounts/:id/edit', <EditIdentifiersPage />], // UC-99
+          ['admin/accounts/:id/edit', <EditAccountPage />], // UC-99 username + the fields of the import file
           ['admin/settings', <SystemSettingsPage />], // UC-102
           ['admin/maintenance', <MaintenancePage />], // UC-103
         ].map(([path, page]) => (

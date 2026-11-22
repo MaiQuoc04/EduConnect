@@ -76,8 +76,9 @@ export async function getAccount(id) {
   return data;
 }
 
-export async function updateIdentifiers(id, values) {
-  const { data } = await api.put(`/admin/accounts/${id}/identifiers`, values); // UC-99
+// UC-99: username and the fields of the import file (full name, email, phone, address, role profile).
+export async function updateAccount(id, values) {
+  const { data } = await api.put(`/admin/accounts/${id}`, values);
   return data;
 }
 

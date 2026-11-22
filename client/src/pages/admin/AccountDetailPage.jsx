@@ -7,6 +7,7 @@ import { errorText, GENDER_LABELS, ROLE_LABELS } from '../../messages.js';
 import { formatDate } from '../../utils/format.js';
 import AccountSecurityActions from './AccountSecurityActions.jsx';
 import { formatDateTime } from './format.js';
+import { backOf } from './profileKinds.js';
 import './admin.css';
 
 // SCR-60 Account Detail (FE-13): identifiers, roles, status, and the actions of UC-99, UC-100 and UC-101.
@@ -48,11 +49,12 @@ export default function AccountDetailPage() {
 
   const a = state.account;
   const changed = (updated) => setState((s) => ({ ...s, account: { ...s.account, ...updated } }));
+  const back = backOf(a.roles);
 
   return (
     <>
       <nav className="breadcrumb" aria-label="Breadcrumb">
-        <span>EduConnect</span>/<Link to="/admin/accounts">Tài khoản</Link>/<span className="current">{a.fullName}</span>
+        <span>EduConnect</span>/<Link to={back.to}>{back.label}</Link>/<span className="current">{a.fullName}</span>
       </nav>
 
       <section className="card card-outline admin-wide account-head">
@@ -108,6 +110,12 @@ export default function AccountDetailPage() {
           <h2 className="card-title title-sm">
             <Icon name="badge" />
             Hồ sơ theo vai trò
+            {(a.student || a.teacher || a.parent) && (
+              <Link to={`/admin/accounts/${a.id}/edit`} className="btn btn-tertiary aside">
+                <Icon name="edit" size="sm" />
+                Sửa
+              </Link>
+            )}
           </h2>
           {!a.student && !a.teacher && !a.parent && <p className="muted">Vai trò này không có hồ sơ riêng.</p>}
           <dl className="dl">
@@ -136,7 +144,7 @@ export default function AccountDetailPage() {
           </dl>
           {(a.student || a.teacher || a.parent) && (
             <p className="caption muted" style={{ marginTop: 16 }}>
-              Hồ sơ do quản lý nhà trường cập nhật.
+              Lớp học, liên kết phụ huynh, môn dạy và phân công do quản lý nhà trường cập nhật.
             </p>
           )}
         </section>
