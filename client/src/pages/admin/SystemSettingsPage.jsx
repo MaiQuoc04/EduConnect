@@ -121,7 +121,6 @@ export default function SystemSettingsPage() {
                             <label htmlFor={s.key} className="setting-label">
                               {meta.label}
                             </label>
-                            <span className="caption muted mono">{s.key}</span>
                             {s.updatedAt && (
                               <span className="caption muted">
                                 Sửa lần cuối {formatDateTime(s.updatedAt)}
