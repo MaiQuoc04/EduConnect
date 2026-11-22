@@ -191,11 +191,11 @@ Source: Report 3 section 4.2 (draft v1.3). Actor "User" = any signed-in account.
 
 | ID | Use case | Actor | Sub-feature | Description |
 |---|---|---|---|---|
-| UC-95 | Create Account | System Admin | Account Provisioning | Create an account for any role except System Admin; username generated automatically by role; random temporary password shown once. |
-| UC-96 | Import Accounts | System Admin | Account Provisioning | Import accounts from a file with checks and a preview. |
+| UC-95 | Create Account | System Admin | Account Provisioning | Create an account for any role except System Admin; username generated automatically by role; random temporary password shown once. Since 22/11/2026 started from the profile page of the role (Students, Teachers, Parents, School Managers), whose role is ticked and fixed. |
+| UC-96 | Import Accounts | System Admin | Account Provisioning | Import accounts from a file with checks and a preview. Since 22/11/2026 started from the profile page of the role, file type fixed to that role. |
 | UC-97 | View Account List | System Admin | Account Provisioning | List all accounts, filtered by role and status. |
 | UC-98 | Export Account List | System Admin | Account Provisioning | Export the account list (no passwords; initial passwords are only shown once, on screen or in the import result file). |
-| UC-99 | Update Login Identifiers | System Admin | Account Control | Change an account's email, phone number or username. |
+| UC-99 | Update Login Identifiers | System Admin | Account Control | Change an account's username and the fields of the import file (22/11/2026): full name, email, phone, address, student code / date of birth / gender, teacher code / department, parent occupation. Not classes, parent links, subjects or assignments (School Manager). |
 | UC-100 | Reset Password | System Admin, School Manager | Account Control | Reset a password to a random temporary one (School Manager: student, parent and teacher accounts only). Also reads the one-time password of a password reset request of an account without email. |
 | UC-101 | Lock / Unlock Account | System Admin, School Manager | Account Control | Lock or unlock an account, or clear a temporary sign-in lock (same scope as UC-100). |
 | UC-102 | Configure System Settings | System Admin | System Configuration & Maintenance | Change system settings. |

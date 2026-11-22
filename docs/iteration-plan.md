@@ -28,6 +28,14 @@ reactions, attachments) is merged into one place after both are on `develop`.
 
 ## Current status (read first; update after every merge, schema patch or new decision)
 
+- **FE-13 System Admin profile pages (22/11/2026, Linh, `feature/fe-13-system-administration`, not merged yet;
+  supervisor's request):** menu "Hồ sơ học sinh", "Hồ sơ giáo viên", "Hồ sơ phụ huynh", "Quản lý nhà trường"
+  (`/admin/students|teachers|parents|school-managers`): the UC-97 list with the role fixed, "Thêm" (UC-95, role fixed,
+  other combinable roles can be added) and "Nhập từ file" (UC-96, type fixed). "Tài khoản người dùng" keeps the list
+  of every account without create / import. UC-99 widened: `PUT /admin/accounts/:id` (was `/identifiers`) changes the
+  username and the fields of the import file only. No schema change; FE-02 / FE-03 / FE-14 code untouched. SRS
+  (UC-95, 96, 99, SCR-59, 61, 62, 76) to update.
+
 - **FE-04 / FE-06 follow-ups merged into `develop` (21/11/2026, Quoc, `feature/fe-05-group-feed`, merge `7eb509b`;
   client `npm run build` and server `npm test` (20/20) pass on `develop`):** six commits of Khanh, 20–21/11.
   - **FE-04 class types per grade only** (UC-26, SCR-70, business rules §4): no more "every grade" type, tab and

@@ -101,6 +101,10 @@ Notes:
     announcements are general news, so no read status for the School Manager).
 19. Own messages only, within the time limit (`chat.delete_for_everyone_minutes`), in chats the user may send in (notes 4 and 6).
 20. Import teacher accounts only (UC-116, FE-03, agreed 07/11/2026): same file and checks as UC-96, type fixed to Teacher.
+21. System Admin profile pages (FE-13, supervisor's request 22/11/2026): System Admin sees, creates (UC-95), imports
+    (UC-96) student, teacher, parent and School Manager accounts and edits only the fields of the import file (UC-99).
+    School Manager accounts are created by System Admin only. School business data (classes, parent links, subjects,
+    assignments) stays School Manager only.
 21. Whole-school dates and the dates of the grades of their own (or their children's) classes being studied.
 22. Comments of other people on announcements they can see; one report per comment (UC-119, added 18/11/2026).
 23. Own 1-1 chats and teams only, in their own list; the class groups and the teacher group cannot be hidden. Nobody else sees a change.
