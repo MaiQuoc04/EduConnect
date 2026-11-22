@@ -18,6 +18,9 @@ const RULES = {
   // FE-06: how long after sending a message its sender can still delete it for everyone (business rules §13).
   'chat.delete_for_everyone_minutes': { type: 'int', min: 1, max: 1440 },
   'attendance.edit_deadline_time': { type: 'time' },
+  // Total periods per week of one class = sum of its class type's track_subjects.periods_per_week (22/11/2026). ASSUMPTION: 1-48 (6 days x 8 periods); the minimum may not be above the maximum.
+  'timetable.class_periods_min': { type: 'int', min: 1, max: 48 },
+  'timetable.class_periods_max': { type: 'int', min: 1, max: 48 },
 };
 
 export async function listSettings() {
@@ -68,6 +71,17 @@ export async function updateSettings({ values, actorId, ip }) {
   const after = (key) => changes.find((c) => c.key === key)?.newValue ?? old.get(key);
   if (!fields['login.lock_minutes_max'] && Number(after('login.lock_minutes_max')) < Number(after('login.lock_minutes_step'))) {
     fields['login.lock_minutes_max'] = 'LESS_THAN_STEP';
+  }
+  if (
+    !fields['timetable.class_periods_min'] &&
+    !fields['timetable.class_periods_max'] &&
+    old.has('timetable.class_periods_max') &&
+    Number(after('timetable.class_periods_max')) < Number(after('timetable.class_periods_min'))
+  ) {
+    // The error goes on the value that was changed (the maximum when both were).
+    const maxChanged = changes.some((c) => c.key === 'timetable.class_periods_max');
+    if (maxChanged) fields['timetable.class_periods_max'] = 'LESS_THAN_MIN';
+    else fields['timetable.class_periods_min'] = 'MORE_THAN_MAX';
   }
   if (Object.keys(fields).length) throw badRequest('MSG_SETTINGS_INVALID', 'Some values are invalid.', { fields });
   if (!changes.length) throw badRequest('MSG_NOTHING_CHANGED', 'Nothing was changed.');

@@ -22,8 +22,10 @@ const META = {
   'upload.max_video_mb': { group: 'Tải tệp lên', label: 'Dung lượng tối đa của video', unit: 'MB' },
   'attendance.edit_deadline_time': { group: 'Điểm danh', label: 'Giờ cuối giáo viên bộ môn được sửa điểm danh trong ngày', unit: '' },
   'chat.delete_for_everyone_minutes': { group: 'Tin nhắn', label: 'Thời gian được thu hồi tin nhắn với mọi người', unit: 'phút' },
+  'timetable.class_periods_min': { group: 'Thời khoá biểu', label: 'Tổng số tiết tối thiểu của một lớp trong tuần', unit: 'tiết' },
+  'timetable.class_periods_max': { group: 'Thời khoá biểu', label: 'Tổng số tiết tối đa của một lớp trong tuần', unit: 'tiết' },
 };
-const GROUPS = ['Đăng nhập', 'Tải tệp lên', 'Tin nhắn', 'Điểm danh', 'Khác'];
+const GROUPS = ['Đăng nhập', 'Tải tệp lên', 'Tin nhắn', 'Điểm danh', 'Thời khoá biểu', 'Khác'];
 
 function errorFor(code, rule) {
   if (code === 'REQUIRED') return 'Vui lòng nhập giá trị.';
@@ -32,6 +34,8 @@ function errorFor(code, rule) {
   }
   if (code === 'INVALID' && rule?.type === 'time') return 'Nhập giờ theo dạng HH:MM, ví dụ 23:59.';
   if (code === 'LESS_THAN_STEP') return 'Không được ngắn hơn thời gian khoá tăng thêm mỗi lần.';
+  if (code === 'LESS_THAN_MIN') return 'Không được nhỏ hơn tổng số tiết tối thiểu.';
+  if (code === 'MORE_THAN_MAX') return 'Không được lớn hơn tổng số tiết tối đa.';
   return 'Giá trị không hợp lệ.';
 }
 
