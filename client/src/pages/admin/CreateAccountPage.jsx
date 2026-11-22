@@ -5,10 +5,12 @@ import Icon from '../../components/Icon.jsx';
 import { useToast } from '../../context/ToastContext.jsx';
 import { errorText, GENDER_LABELS, ROLE_LABELS } from '../../messages.js';
 import { fieldText } from './accountFields.js';
+import { listPath, PROFILE_KINDS } from './profileKinds.js';
 import './admin.css';
 
 // SCR-61 Create Account (UC-95, FE-13). System Admin creates one account; the server generates the username and a
-// temporary password that is shown here once.
+// temporary password that is shown here once. Opened from a profile page (`kind`, 22/11/2026): that page's role is
+// ticked and cannot be removed; other roles that can be combined with it may be added (not for students).
 
 // System Admin accounts are not created from this screen (decided 28/10/2026); see accounts.service createAccount.
 const ROLE_ORDER = ['STUDENT', 'PARENT', 'TEACHER', 'SCHOOL_MANAGER'];
@@ -71,7 +73,7 @@ function CopyBox({ value, label, secret }) {
 }
 
 // Result of UC-95 step 11: the only time the temporary password is visible.
-function CreatedAccount({ result, onAnother }) {
+function CreatedAccount({ result, onAnother, back }) {
   const { account, temporaryPassword } = result;
   return (
     <section className="card card-outline admin-form">
@@ -103,7 +105,10 @@ function CreatedAccount({ result, onAnother }) {
 
       <div className="section-sep" />
       <div className="card-footer">
-        <Link to="/admin/accounts" className="btn btn-secondary">
+        <Link to={`/admin/accounts/${account.id}`} className="btn btn-tertiary">
+          Xem hồ sơ
+        </Link>
+        <Link to={back.to} className="btn btn-secondary">
           Xong
         </Link>
         <button type="button" className="btn btn-primary" onClick={onAnother}>
@@ -115,8 +120,16 @@ function CreatedAccount({ result, onAnother }) {
   );
 }
 
-export default function CreateAccountPage() {
-  const [form, setForm] = useState(EMPTY);
+export default function CreateAccountPage({ kind }) {
+  const profile = PROFILE_KINDS[kind];
+  const lockedRole = profile.role;
+  const back = { to: listPath(kind), label: profile.title };
+  // The page's role first; students stand alone, so the student page offers nothing else.
+  const roleChoices = EXCLUSIVE.includes(lockedRole)
+    ? [lockedRole]
+    : [lockedRole, ...ROLE_ORDER.filter((r) => r !== lockedRole && !EXCLUSIVE.includes(r))];
+  const empty = { ...EMPTY, roles: [lockedRole] };
+  const [form, setForm] = useState(empty);
   const [errors, setErrors] = useState({});
   const [formError, setFormError] = useState('');
   const [saving, setSaving] = useState(false);
@@ -143,6 +156,7 @@ export default function CreateAccountPage() {
 
   // System Admin and Student stand alone: picking one of them clears the others, and the reverse.
   function toggleRole(role) {
+    if (role === lockedRole) return;
     setForm((f) => {
       if (f.roles.includes(role)) return { ...f, roles: f.roles.filter((r) => r !== role) };
       if (EXCLUSIVE.includes(role)) return { ...f, roles: [role] };
@@ -195,7 +209,7 @@ export default function CreateAccountPage() {
   }
 
   function startAgain() {
-    setForm(EMPTY);
+    setForm(empty);
     setErrors({});
     setFormError('');
     setResult(null);
@@ -206,17 +220,18 @@ export default function CreateAccountPage() {
   return (
     <>
       <nav className="breadcrumb" aria-label="Breadcrumb">
-        <span>EduConnect</span>/<Link to="/admin/accounts">Tài khoản</Link>/<span className="current">Tạo tài khoản</span>
+        <span>EduConnect</span>/<Link to={back.to}>{back.label}</Link>/
+        <span className="current">Thêm {profile.label.toLowerCase()}</span>
       </nav>
       <div className="page-header">
         <div>
-          <h1 className="headline-lg">Tạo tài khoản</h1>
+          <h1 className="headline-lg">Thêm tài khoản {profile.label.toLowerCase()}</h1>
           <p>Tên đăng nhập và mật khẩu tạm thời được hệ thống tạo tự động.</p>
         </div>
       </div>
 
       {result ? (
-        <CreatedAccount result={result} onAnother={startAgain} />
+        <CreatedAccount result={result} onAnother={startAgain} back={back} />
       ) : (
         <form className="card card-outline admin-form" onSubmit={handleSubmit} noValidate>
           <h2 className="card-title title-sm">
@@ -244,13 +259,22 @@ export default function CreateAccountPage() {
                 id="roles"
                 label="Vai trò"
                 required
-                help="Học sinh không kết hợp với vai trò khác."
+                help={
+                  roleChoices.length > 1
+                    ? `Vai trò ${profile.label.toLowerCase()} luôn được chọn. Có thể thêm vai trò khác nếu người này kiêm nhiệm.`
+                    : 'Học sinh không kết hợp với vai trò khác.'
+                }
                 error={err('roles')}
               >
                 <div className="role-picker" id="roles" role="group" aria-label="Vai trò">
-                  {ROLE_ORDER.map((role) => (
+                  {roleChoices.map((role) => (
                     <label key={role} className={`role-option${has(role) ? ' checked' : ''}`}>
-                      <input type="checkbox" checked={has(role)} onChange={() => toggleRole(role)} />
+                      <input
+                        type="checkbox"
+                        checked={has(role)}
+                        disabled={role === lockedRole}
+                        onChange={() => toggleRole(role)}
+                      />
                       {ROLE_LABELS[role]}
                     </label>
                   ))}
@@ -419,7 +443,7 @@ export default function CreateAccountPage() {
 
           <div className="section-sep" />
           <div className="card-footer">
-            <Link to="/admin/accounts" className="btn btn-secondary">
+            <Link to={back.to} className="btn btn-secondary">
               Huỷ
             </Link>
             <button type="submit" className="btn btn-primary" disabled={saving}>

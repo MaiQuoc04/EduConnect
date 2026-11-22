@@ -6,11 +6,14 @@ import Icon from '../../components/Icon.jsx';
 import { useToast } from '../../context/ToastContext.jsx';
 import { errorText, ROLE_LABELS } from '../../messages.js';
 import { formatDate } from '../../utils/format.js';
+import { listPath, PROFILE_KINDS } from './profileKinds.js';
 import './admin.css';
 
 // SCR-59 Account List (UC-97 View Account List, UC-98 Export Account List). The System Admin home page.
 // Filters live in the URL (?search=&role=&status=&classId=&page=) so Back returns to the same list. A class shows its
 // students, their parents and its homeroom teacher (current school year).
+// With `kind` (profileKinds.js) it is one of the profile pages: the role is fixed, and the page creates (UC-95) and
+// imports (UC-96) accounts of that role. Without it (all accounts) it only lists, exports and opens accounts.
 
 const ROLE_OPTIONS = ['STUDENT', 'PARENT', 'TEACHER', 'SCHOOL_MANAGER', 'SYSTEM_ADMIN'];
 
@@ -23,13 +26,14 @@ function useDebounced(value, ms) {
   return debounced;
 }
 
-export default function AccountListPage() {
+export default function AccountListPage({ kind }) {
+  const profile = kind ? PROFILE_KINDS[kind] : null;
   const [params, setParams] = useSearchParams();
   const navigate = useNavigate();
   const toast = useToast();
   const [search, setSearch] = useState(params.get('search') ?? '');
   const debounced = useDebounced(search.trim(), 350);
-  const role = params.get('role') ?? '';
+  const role = profile ? profile.role : (params.get('role') ?? '');
   const status = params.get('status') ?? '';
   const classId = params.get('classId') ?? '';
   const [classes, setClasses] = useState([]);
@@ -90,28 +94,33 @@ export default function AccountListPage() {
 
   const { data } = state;
   const pages = data ? Math.max(1, Math.ceil(data.total / data.pageSize)) : 1;
-  const filtered = Boolean(params.get('search') || role || status || classId);
+  const filtered = Boolean(params.get('search') || (!profile && role) || status || classId);
+  const showClassFilter = !profile || profile.classFilter;
+  const unit = profile ? `tài khoản ${profile.label.toLowerCase()}` : 'tài khoản';
 
   return (
     <>
       <nav className="breadcrumb" aria-label="Breadcrumb">
-        <span>EduConnect</span>/<span>Quản trị hệ thống</span>/<span className="current">Tài khoản</span>
+        <span>EduConnect</span>/<span>Quản trị hệ thống</span>/
+        <span className="current">{profile ? profile.title : 'Tài khoản'}</span>
       </nav>
       <div className="page-header">
         <div>
-          <h1 className="headline-lg">Tài khoản người dùng</h1>
-          <p>Tạo, tìm kiếm và quản lý trạng thái đăng nhập của mọi tài khoản trong trường.</p>
+          <h1 className="headline-lg">{profile ? profile.title : 'Tài khoản người dùng'}</h1>
+          <p>{profile ? profile.intro : 'Tìm kiếm và quản lý trạng thái đăng nhập của mọi tài khoản trong trường.'}</p>
         </div>
-        <div className="actions-row header-actions">
-          <Link to="/admin/accounts/import" className="btn btn-secondary">
-            <Icon name="upload_file" size="sm" />
-            Nhập từ file
-          </Link>
-          <Link to="/admin/accounts/new" className="btn btn-primary">
-            <Icon name="person_add" size="sm" />
-            Tạo tài khoản
-          </Link>
-        </div>
+        {profile && (
+          <div className="actions-row header-actions">
+            <Link to={`${listPath(kind)}/import`} className="btn btn-secondary">
+              <Icon name="upload_file" size="sm" />
+              Nhập từ file
+            </Link>
+            <Link to={`${listPath(kind)}/new`} className="btn btn-primary">
+              <Icon name="person_add" size="sm" />
+              Thêm {profile.label.toLowerCase()}
+            </Link>
+          </div>
+        )}
       </div>
 
       <section className="card card-outline admin-wide list-card">
@@ -128,23 +137,27 @@ export default function AccountListPage() {
               aria-label="Tìm kiếm tài khoản"
             />
           </div>
-          <select className="input" value={role} onChange={(e) => update({ role: e.target.value })} aria-label="Lọc theo vai trò">
-            <option value="">Tất cả vai trò</option>
-            {ROLE_OPTIONS.map((r) => (
-              <option key={r} value={r}>
-                {ROLE_LABELS[r]}
-              </option>
-            ))}
-          </select>
-          <select className="input" value={classId} onChange={(e) => update({ classId: e.target.value })} aria-label="Lọc theo lớp">
-            <option value="">Tất cả lớp</option>
-            {classId && !classes.some((c) => String(c.id) === classId) && <option value={classId}>Lớp đã chọn</option>}
-            {classes.map((c) => (
-              <option key={c.id} value={c.id}>
-                {c.name}
-              </option>
-            ))}
-          </select>
+          {!profile && (
+            <select className="input" value={role} onChange={(e) => update({ role: e.target.value })} aria-label="Lọc theo vai trò">
+              <option value="">Tất cả vai trò</option>
+              {ROLE_OPTIONS.map((r) => (
+                <option key={r} value={r}>
+                  {ROLE_LABELS[r]}
+                </option>
+              ))}
+            </select>
+          )}
+          {showClassFilter && (
+            <select className="input" value={classId} onChange={(e) => update({ classId: e.target.value })} aria-label="Lọc theo lớp">
+              <option value="">Tất cả lớp</option>
+              {classId && !classes.some((c) => String(c.id) === classId) && <option value={classId}>Lớp đã chọn</option>}
+              {classes.map((c) => (
+                <option key={c.id} value={c.id}>
+                  {c.name}
+                </option>
+              ))}
+            </select>
+          )}
           <select className="input" value={status} onChange={(e) => update({ status: e.target.value })} aria-label="Lọc theo trạng thái">
             <option value="">Mọi trạng thái</option>
             <option value="ACTIVE">Hoạt động</option>
@@ -157,7 +170,7 @@ export default function AccountListPage() {
         </div>
 
         <div className="list-meta caption muted">
-          {data && `${data.total} tài khoản${filtered ? ' phù hợp' : ''}`}
+          {data && `${data.total} ${unit}${filtered ? ' phù hợp' : ''}`}
           {filtered && (
             <button
               type="button"
