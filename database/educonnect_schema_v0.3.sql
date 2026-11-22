@@ -940,4 +940,7 @@ INSERT INTO system_settings (setting_key, setting_value, description) VALUES
   ('otp.expiry_minutes',            '5',     'Password reset OTP lifetime (minutes)'),
   ('password_reset.request_cooldown_minutes', '15', 'Minimum time between two automatic resets of one account from a reset request (minutes)'),
   ('attendance.edit_deadline_time', '23:59', 'Subject teacher can edit attendance until this time on the same day'),
-  ('chat.delete_for_everyone_minutes', '15', 'Time allowed to delete a chat message for everyone (minutes)');
+  ('chat.delete_for_everyone_minutes', '15', 'Time allowed to delete a chat message for everyone (minutes)'),
+  -- patch_v0.3_class_periods_settings.sql (22/11/2026)
+  ('timetable.class_periods_min',   '25',    'Smallest total of periods per week of one class'),
+  ('timetable.class_periods_max',   '35',    'Largest total of periods per week of one class');
