@@ -5,19 +5,18 @@ import { logActivity } from '../../utils/activityLog.js';
 import { hashPassword } from '../../utils/password.js';
 import { open as openSecret } from '../../utils/secretBox.js';
 import { generateTemporaryPassword } from '../../utils/tempPassword.js';
-import { normalizePhone, PHONE_RE } from '../../utils/phone.js';
 import { containsPattern, VI_TRANSLATE } from '../../utils/search.js';
 import { isValidUsername } from '../../utils/username.js';
-import { ROLE_CODES } from './accounts.service.js';
+import { findDuplicates, readAccountInput, ROLE_CODES } from './accounts.service.js';
+import { applyDepartment, listDepartments, needsDepartments } from './departments.js';
 import { workbookBuffer, XLSX_MIME } from '../../utils/excel.js';
 
 // FE-13 System Administration (owner: Linh) – account list and control:
-// UC-97 View Account List, UC-98 Export Account List, UC-99 Update Login Identifiers,
+// UC-97 View Account List, UC-98 Export Account List, UC-99 Update Account (login identifiers + imported fields),
 // UC-100 Reset Password, UC-101 Lock / Unlock Account.
 
 const PAGE_SIZE = 20;
 const EXPORT_LIMIT = 10000;
-const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const STATUSES = ['ACTIVE', 'LOCKED'];
 const SCHOOL_ROLES = ['TEACHER', 'STUDENT', 'PARENT']; // what School Manager may reset / lock (permissions note 1)
 
@@ -233,49 +232,82 @@ export async function getAccount(idParam) {
   };
 }
 
-// ---------------------------------------------------------------- UC-99 Update Login Identifiers
+// ---------------------------------------------------------------- UC-99 Update Account (SCR-62)
+// System Admin edits the username and the fields an import file carries (UC-96 templates): full name, email, phone,
+// address, and per role the student code / date of birth / gender, the teacher code / department, the parent's
+// occupation. Nothing else: class, parent links, subjects and assignments stay with the School Manager (decided
+// 22/11/2026 with the supervisor). Same checks as UC-95 (readAccountInput) plus the username rule.
 
-export async function updateIdentifiers({ idParam, body = {} }) {
+const throwFieldErrors = (fields) => {
+  throw badRequest('MSG_ACCOUNT_INVALID', 'Some fields are missing or invalid.', { fields });
+};
+const same = (a, b) => (a ?? null) === (b ?? null);
+const isoDate = (value) => (value ? String(value).slice(0, 10) : null);
+
+export async function updateAccount({ idParam, body = {} }) {
   const id = readId(idParam);
-  const account = await loadAccount(pool, id);
+  const before = await getAccount(id);
 
+  // Roles never change here: readAccountInput reads only the profile parts of the account's own roles.
+  const { input, errors } = readAccountInput({ ...body, roles: before.roles });
+  delete errors.roles;
   const username = typeof body.username === 'string' ? body.username.trim().toLowerCase() : '';
-  const email = typeof body.email === 'string' && body.email.trim() ? body.email.trim().toLowerCase() : null;
-  const phone = typeof body.phone === 'string' && body.phone.trim() ? normalizePhone(body.phone) : null;
+  if (!username) errors.username = 'REQUIRED';
+  else if (!isValidUsername(username) || username.includes('@')) errors.username = 'INVALID';
+  // A department name kept as it is (maybe no longer in FE-03's list) is not checked again.
+  const keepsDepartment =
+    input.teacher && input.teacher.departmentId == null && same(input.teacher.department, before.teacher?.department);
+  if (keepsDepartment) delete input.teacher.departmentId;
+  else if (needsDepartments(input)) applyDepartment(input, errors, await listDepartments());
+  if (Object.keys(errors).length) throwFieldErrors(errors);
 
-  const fields = {};
-  if (!username) fields.username = 'REQUIRED';
-  else if (!isValidUsername(username) || username.includes('@')) fields.username = 'INVALID';
-  if (email && (!EMAIL_RE.test(email) || email.length > 150)) fields.email = 'INVALID';
-  if (phone && !PHONE_RE.test(phone)) fields.phone = 'INVALID';
-  if (!phone && account.roles.includes('PARENT')) fields.phone = 'REQUIRED_FOR_PARENT';
-  if (Object.keys(fields).length) throw badRequest('MSG_ACCOUNT_INVALID', 'Some fields are missing or invalid.', { fields });
+  const { student: s, teacher: t, parent: p } = input;
+  const unchanged =
+    username === before.username &&
+    same(input.fullName, before.fullName) &&
+    same(input.email, before.email?.toLowerCase()) &&
+    same(input.phone, before.phone) &&
+    same(input.address, before.address) &&
+    (!s || (same(s.studentCode, before.student?.code) && same(s.dob, isoDate(before.student?.dob)) && same(s.gender, before.student?.gender))) &&
+    (!t || (same(t.teacherCode, before.teacher?.code) && same(t.department, before.teacher?.department))) &&
+    (!p || same(p.occupation, before.parent?.occupation));
+  if (unchanged) throw badRequest('MSG_NOTHING_CHANGED', 'Nothing was changed.');
 
-  if (username === account.username && email === (account.email?.toLowerCase() ?? null) && phone === account.phone) {
-    throw badRequest('MSG_NOTHING_CHANGED', 'Nothing was changed.');
-  }
-
-  const { rows } = await pool.query(
-    `SELECT
-       EXISTS (SELECT 1 FROM users WHERE username = $1 AND user_id <> $4) AS username,
-       EXISTS (SELECT 1 FROM users WHERE $2::text IS NOT NULL AND LOWER(email) = $2 AND user_id <> $4) AS email,
-       EXISTS (SELECT 1 FROM users WHERE $3::text IS NOT NULL AND phone = $3 AND user_id <> $4) AS phone`,
-    [username, email, phone, id],
-  );
-  for (const [field, used] of Object.entries(rows[0])) if (used) fields[field] = 'DUPLICATE';
-  if (Object.keys(fields).length) throw badRequest('MSG_ACCOUNT_INVALID', 'Some fields are missing or invalid.', { fields });
+  const duplicates = await findDuplicates(pool, input, id);
+  const { rows } = await pool.query('SELECT EXISTS (SELECT 1 FROM users WHERE username = $1 AND user_id <> $2) AS used', [
+    username,
+    id,
+  ]);
+  if (rows[0].used) duplicates.username = 'DUPLICATE';
+  if (Object.keys(duplicates).length) throwFieldErrors(duplicates);
 
   try {
-    await pool.query('UPDATE users SET username = $1, email = $2, phone = $3 WHERE user_id = $4', [
-      username,
-      email,
-      phone,
-      id,
-    ]);
+    await withTransaction(async (db) => {
+      await db.query('UPDATE users SET username = $1, full_name = $2, email = $3, phone = $4, address = $5 WHERE user_id = $6', [
+        username,
+        input.fullName,
+        input.email,
+        input.phone,
+        input.address,
+        id,
+      ]);
+      if (s) {
+        await db.query('UPDATE students SET student_code = $1, dob = $2, gender = $3 WHERE user_id = $4', [
+          s.studentCode,
+          s.dob,
+          s.gender,
+          id,
+        ]);
+      }
+      if (t) await db.query('UPDATE teachers SET teacher_code = $1, department = $2 WHERE user_id = $3', [t.teacherCode, t.department, id]);
+      if (p) await db.query('UPDATE parents SET occupation = $1 WHERE user_id = $2', [p.occupation, id]);
+    });
   } catch (err) {
     if (err.code === '23505') {
-      const field = /username/.test(err.constraint) ? 'username' : /email/.test(err.constraint) ? 'email' : 'phone';
-      throw badRequest('MSG_ACCOUNT_INVALID', 'Some fields are missing or invalid.', { fields: { [field]: 'DUPLICATE' } });
+      // Taken by another account in the meantime.
+      const taken = await findDuplicates(pool, input, id);
+      if (/username/.test(err.constraint ?? '')) taken.username = 'DUPLICATE';
+      if (Object.keys(taken).length) throwFieldErrors(taken);
     }
     throw err;
   }

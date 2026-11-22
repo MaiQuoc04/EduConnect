@@ -94,7 +94,7 @@ function throwFieldErrors(fields) {
 }
 
 // Email, phone, student code and teacher code must not belong to another account (BR-01).
-async function findDuplicates(db, { email, phone, student, teacher }, exceptUserId = null) {
+export async function findDuplicates(db, { email, phone, student, teacher }, exceptUserId = null) {
   const fields = {};
   const { rows } = await db.query(
     `SELECT

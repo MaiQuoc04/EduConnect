@@ -70,8 +70,8 @@ export async function getAccount(req, res) {
   res.json(await control.getAccount(req.params.id));
 }
 
-export async function updateIdentifiers(req, res) {
-  res.json(await control.updateIdentifiers({ idParam: req.params.id, body: req.body })); // UC-99
+export async function updateAccount(req, res) {
+  res.json(await control.updateAccount({ idParam: req.params.id, body: req.body })); // UC-99
 }
 
 export async function getSecurityState(req, res) {

@@ -19,7 +19,7 @@ router.get('/accounts/import/template', ...systemAdmin, ctrl.importTemplate); //
 router.post('/accounts/import/preview', ...systemAdmin, uploadSingle('file'), ctrl.previewImport); // UC-96 (multipart: type, file)
 router.post('/accounts/import', ...systemAdmin, uploadSingle('file'), ctrl.importAccounts); // UC-96
 router.get('/accounts/:id', ...systemAdmin, ctrl.getAccount); // SCR-60 Account Detail
-router.put('/accounts/:id/identifiers', ...systemAdmin, ctrl.updateIdentifiers); // UC-99
+router.put('/accounts/:id', ...systemAdmin, ctrl.updateAccount); // UC-99 username + the fields of the import file
 router.get('/accounts/:id/security', ...accountControl, ctrl.getSecurityState); // status for UC-100 / UC-101 buttons
 router.post('/accounts/:id/reset-password', ...accountControl, ctrl.resetPassword); // UC-100
 router.post('/accounts/:id/lock', ...accountControl, ctrl.lockAccount); // UC-101
