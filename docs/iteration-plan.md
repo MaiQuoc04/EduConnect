@@ -28,8 +28,8 @@ reactions, attachments) is merged into one place after both are on `develop`.
 
 ## Current status (read first; update after every merge, schema patch or new decision)
 
-- **FE-12 prefill (23/11/2026, Quoc; on the existing branch `feature/fe-12-attendance`, brought up to `develop`
-  first; not merged yet):** a period
+- **FE-12 prefill merged into `develop` (23/11/2026, Quoc, `feature/fe-12-attendance`, merge `23e4d9f`; build and
+  `npm test` pass on `develop`):** a period
   not taken yet opens prefilled from the nearest earlier taken period of the same day and session (statuses and
   notes copied as they are); the period is taken only when its teacher saves it (business rules §12 point 3). Server:
   `getSheet` returns `prefill` (`attendance.service.js`, `MORNING_LAST_PERIOD` in `attendance.constants.js`); client:
