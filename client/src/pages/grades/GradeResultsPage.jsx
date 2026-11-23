@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { Link, useParams, useSearchParams } from 'react-router-dom';
 import { getClassResults, listGradeClasses, listMyStudents } from '../../api/grades.js';
 import Icon from '../../components/Icon.jsx';
@@ -6,14 +6,14 @@ import { useAuth } from '../../context/AuthContext.jsx';
 import { errorText } from '../../messages.js';
 import '../admin/admin.css';
 import { fmtScore } from './gradeFormat.js';
-import StudentReportCard from './StudentReportCard.jsx';
+import StudentReportCard, { LevelTag } from './StudentReportCard.jsx';
 import useGradeOptions from './useGradeOptions.js';
 import './grades.css';
 
-// SCR-47 Academic Results (UC-88) and SCR-48 Class Ranking (UC-89). One page per mode:
-//   mode="results": student / parent = own report card; teacher / SM = a class's averages (click a student for theirs)
-//   mode="ranking": student / parent = own rank; teacher / SM = the whole class ranking
-// Students and parents never see other students' averages or ranks.
+// SCR-47 Academic Results (UC-88, UC-89): student / parent = own report card; teacher / SM = a class's subject averages
+// and each student's academic level (click a student for theirs). Students and parents never see other students.
+// No overall average and no ranking since 23/11/2026 (Circular 22: levels Tốt / Khá / Đạt / Chưa đạt, Article 9;
+// students are not compared, Article 4.4). SCR-48 Class Ranking was removed.
 
 function useParamsUpdate() {
   const [params, setParams] = useSearchParams();
@@ -43,10 +43,10 @@ function YearSelect({ years, value, onChange }) {
   );
 }
 
-export default function GradeResultsPage({ mode = 'results' }) {
+export default function GradeResultsPage() {
   const { activeRole } = useAuth();
   const own = activeRole === 'STUDENT' || activeRole === 'PARENT';
-  const title = mode === 'ranking' ? 'Xếp hạng lớp' : 'Kết quả học tập';
+  const title = 'Kết quả học tập';
   return (
     <div className="grade-wide">
       <nav className="breadcrumb" aria-label="Breadcrumb">
@@ -57,22 +57,18 @@ export default function GradeResultsPage({ mode = 'results' }) {
           <h1 className="headline-lg">{title}</h1>
           <p>
             {own
-              ? mode === 'ranking'
-                ? 'Thứ hạng trong lớp theo điểm trung bình chung. Chỉ bạn thấy thứ hạng của mình.'
-                : 'Điểm từng môn, điểm trung bình học kỳ và cả năm.'
-              : mode === 'ranking'
-                ? 'Xếp hạng theo điểm trung bình chung; bằng điểm thì cùng hạng.'
-                : 'Điểm trung bình các môn của học sinh trong lớp. Chọn một học sinh để xem chi tiết.'}
+              ? 'Điểm từng môn, điểm trung bình học kỳ và cả năm, mức đánh giá kết quả học tập.'
+              : 'Điểm trung bình các môn và mức đánh giá kết quả học tập của học sinh trong lớp. Chọn một học sinh để xem chi tiết.'}
           </p>
         </div>
       </div>
-      {own ? <OwnView mode={mode} /> : <ClassView mode={mode} />}
+      {own ? <OwnView /> : <ClassView />}
     </div>
   );
 }
 
 // Student / parent: the report card of self or a linked child.
-function OwnView({ mode }) {
+function OwnView() {
   const options = useGradeOptions();
   const [params, update] = useParamsUpdate();
   const [students, setStudents] = useState({ items: null, error: '' });
@@ -117,18 +113,13 @@ function OwnView({ mode }) {
           <p>Tài khoản chưa được liên kết với học sinh nào.</p>
         </div>
       )}
-      {studentId && yearId && (mode === 'ranking' ? <OwnRanking studentId={studentId} yearId={yearId} /> : <StudentReportCard studentId={studentId} schoolYearId={yearId} />)}
+      {studentId && yearId && <StudentReportCard studentId={studentId} schoolYearId={yearId} />}
     </>
   );
 }
 
-// UC-89 for a student / parent: own rank per period only (no subject table, no other students).
-function OwnRanking({ studentId, yearId }) {
-  return <StudentReportCard studentId={studentId} schoolYearId={yearId} rankOnly />;
-}
-
-// Teacher / School Manager: a class, a period, then averages or the ranking.
-function ClassView({ mode }) {
+// Teacher / School Manager: a class, a period, then the subject averages and the level of each student.
+function ClassView() {
   const options = useGradeOptions();
   const [params, update] = useParamsUpdate();
   const yearId = params.get('schoolYearId') ?? '';
@@ -165,11 +156,7 @@ function ClassView({ mode }) {
 
   const year = options.data?.years.find((y) => String(y.schoolYearId) === yearId);
   const d = state.data;
-  const rows = useMemo(() => {
-    if (!d) return [];
-    if (mode !== 'ranking') return d.students;
-    return [...d.students.filter((s) => s.rank !== null).sort((a, b) => a.rank - b.rank), ...d.students.filter((s) => s.rank === null)];
-  }, [d, mode]);
+  const rows = d?.students ?? [];
   const studentLink = (s) => `/grades/students/${s.studentId}?schoolYearId=${yearId}`;
 
   return (
@@ -211,7 +198,7 @@ function ClassView({ mode }) {
           {d.provisional && (
             <div className="notice amber" style={{ marginBottom: 12 }}>
               <Icon name="info" />
-              <p>Một số sổ điểm của kỳ này chưa chốt, điểm trung bình và thứ hạng đang là tạm tính.</p>
+              <p>Một số sổ điểm của kỳ này chưa chốt, điểm trung bình và mức đánh giá đang là tạm tính.</p>
             </div>
           )}
           <section className="card card-outline" style={{ padding: 0 }}>
@@ -219,21 +206,14 @@ function ClassView({ mode }) {
               <table className={`table report-table${state.loading ? ' is-loading' : ''}`}>
                 <thead>
                   <tr>
-                    {mode === 'ranking' && <th style={{ textAlign: 'center' }}>Hạng</th>}
                     <th style={{ textAlign: 'left' }}>Học sinh</th>
-                    {mode !== 'ranking' && d.subjects.map((s) => <th key={s.subjectId}>{s.subjectName}</th>)}
-                    <th>ĐTB chung</th>
-                    {mode !== 'ranking' && <th>Hạng</th>}
+                    {d.subjects.map((s) => <th key={s.subjectId}>{s.subjectName}</th>)}
+                    <th>Kết quả học tập</th>
                   </tr>
                 </thead>
                 <tbody>
                   {rows.map((s) => (
                     <tr key={s.studentId} className={s.status !== 'STUDYING' ? 'muted' : undefined}>
-                      {mode === 'ranking' && (
-                        <td>
-                          {s.rank ? <span className={`rank-badge${s.rank <= 3 ? ' top' : ''}`}>{s.rank}</span> : <span className="muted">–</span>}
-                        </td>
-                      )}
                       <td style={{ textAlign: 'left' }}>
                         <Link to={studentLink(s)}>{s.fullName}</Link>
                         <div className="caption muted mono">
@@ -241,17 +221,15 @@ function ClassView({ mode }) {
                           {s.status !== 'STUDYING' && ' · đã rời lớp'}
                         </div>
                       </td>
-                      {mode !== 'ranking' &&
-                        d.subjects.map((sub) => <td key={sub.subjectId}>{fmtScore(s.averages[sub.subjectId]) || <span className="muted">–</span>}</td>)}
+                      {d.subjects.map((sub) => <td key={sub.subjectId}>{fmtScore(s.averages[sub.subjectId]) || <span className="muted">–</span>}</td>)}
                       <td>
-                        <strong>{fmtScore(s.overall) || <span className="muted">–</span>}</strong>
+                        <LevelTag level={s.level} />
                       </td>
-                      {mode !== 'ranking' && <td>{s.rank ?? <span className="muted">–</span>}</td>}
                     </tr>
                   ))}
                   {!rows.length && (
                     <tr>
-                      <td colSpan={4 + d.subjects.length} className="muted" style={{ textAlign: 'center', height: 72 }}>
+                      <td colSpan={2 + d.subjects.length} className="muted" style={{ textAlign: 'center', height: 72 }}>
                         Lớp chưa có học sinh.
                       </td>
                     </tr>

@@ -32,6 +32,14 @@ export const BOOK_STATUS = {
   UNLOCKED: { label: 'Đã mở khoá', tone: 'amber' },
 };
 
+// Academic result level of a period (Circular 22, Article 9; server grades.calc.js academicLevel), 23/11/2026.
+export const LEVELS = {
+  GOOD: { label: 'Tốt', tone: 'green' },
+  FAIR: { label: 'Khá', tone: 'ink' },
+  PASS: { label: 'Đạt', tone: 'amber' },
+  FAIL: { label: 'Chưa đạt', tone: 'red' },
+};
+
 // Full name of one score slot: "Thường xuyên 1".."Thường xuyên 4" when the component has several scores, else its name.
 export const slotLabel = (component, attemptNo) =>
   component.scoreCount > 1 ? `${component.name} ${attemptNo}` : component.name;
