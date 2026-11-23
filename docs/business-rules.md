@@ -10,7 +10,7 @@ The app serves **one high school** (grades 10–12). Users never self-register.
 | Role code | Who | Scope |
 |---|---|---|
 | `SYSTEM_ADMIN` | IT admin | Accounts and system only: create / import / export accounts, change login identifiers, reset passwords and lock / unlock **any** account, system settings, maintenance. **Cannot see any content** (feeds, chats, grades, school posts), is in no group, cannot create teams. |
-| `SCHOOL_MANAGER` | Principal / office staff (several, equal rights) | All school business. Views and updates student / parent / teacher profiles (cannot create or delete them, except importing teacher accounts, UC-116, §4). Resets passwords and locks / unlocks student, parent and teacher accounts. Manages the **school-wide teacher group** (pin / hide / approve) and the school feed. **Does not see class feeds or class chats.** Private messages only with people in the teacher group. Views grades and rankings of the whole school (read only), unlocks grades, views grade history, corrects attendance after the day, sees school-wide attendance statistics. |
+| `SCHOOL_MANAGER` | Principal / office staff (several, equal rights) | All school business. Views and updates student / parent / teacher profiles (cannot create or delete them, except importing teacher accounts, UC-116, §4). Resets passwords and locks / unlocks student, parent and teacher accounts. Manages the **school-wide teacher group** (pin / hide / approve) and the school feed. **Does not see class feeds or class chats.** Private messages only with people in the teacher group. Views grades and academic levels of the whole school (read only), unlocks grades, views grade history, corrects attendance after the day, sees school-wide attendance statistics. |
 | `TEACHER` | Teachers | Teaches assigned classes / subjects. A teacher becomes **Homeroom Teacher** of a class when `classes.homeroom_teacher_id` points to them – this is **not a separate role**. |
 | `STUDENT` | Students | Own data, own classes and groups. |
 | `PARENT` | Parents / guardians | Their children's data; picks a child first on child-specific screens. |
@@ -710,17 +710,24 @@ Boundaries that are easy to get wrong:
     each an independent copy that replaces the target's components. If any target already has grades the whole copy
     is refused and nothing changes (14/11/2026).
 - Each individual score is its own `grades` row (`attempt_no`); averages are **not stored**, they are computed:
-  subject semester average = weighted average of the scores present; subject year average = (S1 + 2 × S2) / 3;
-  student semester / year average = average of subjects (every `track_subjects.weight` is 1, so a plain average).
+  subject semester average = weighted average of the scores present; subject year average = (S1 + 2 × S2) / 3.
   Subjects counted = those with a grade structure for the class's grade that year (only the class type's subjects
   when set); a subject without a structure is not counted.
+- **No overall average and no ranking (23/11/2026, Linh, supervisor's request; Circular 22/2021/TT-BGDĐT):** the
+  Circular has no average of all subjects and says students are not compared with each other (Article 4.4), as in the
+  e-contact-book products (vnEdu, SMAS, eNetViet). Instead each student gets an **academic level** per semester and for
+  the year (Article 9), from the rounded subject averages of the period: **Tốt** = every subject ≥ 6.5 and at least 6
+  subjects ≥ 8.0; **Khá** = every subject ≥ 5.0 and at least 6 subjects ≥ 6.5; **Đạt** = at least 6 subjects ≥ 5.0
+  and none below 3.5; **Chưa đạt** = otherwise; no level while a subject has no average yet. ASSUMPTION: every
+  subject with a grade structure is a scored subject (subjects assessed by comments – Đạt / Chưa đạt – are not in the
+  schema yet); with fewer than 6 subjects "at least 6" means all of them. Conduct (rèn luyện) and the titles Học sinh
+  Giỏi / Xuất sắc are not handled yet. UC-89 / SCR-48 Class Ranking removed (`/grades/ranking` goes to the results).
 - **Rounding (Circular 22/2021, 14/11/2026):** every average is rounded to 1 decimal, half up (7.94 → 7.9,
   7.95 → 8.0). Each step uses the **rounded** result of the step before: subject semester average → subject year
-  average → student average. Ranking compares the rounded averages, so students with the same shown average share
-  a rank.
+  average; the academic level is decided on these rounded subject averages.
 - Teachers enter / import grades only for their assigned class + subject, with an assignment that is current or
   still to come (`end_date` ≥ today); a teacher whose assignment has ended can only view. Only **studying** students
-  are edited, required for finalizing and ranked; transferred / dropped students keep their old grades, read only.
+  are edited, required for finalizing and given a level; transferred / dropped students keep their old grades, read only.
   A student moved by UC-10 within the year keeps the scores from the other class; when both classes have the same
   score slot, the score of the current class wins.
 - **Import (UC-84):** an empty score cell keeps the current score (clearing a score is done on the entry screen,
@@ -738,11 +745,11 @@ Boundaries that are easy to get wrong:
 - Every grade entry and change is logged in `grade_histories` (first entry has `old_score` NULL). Grade rows are never
   deleted; clearing a score = `score` NULL.
 - Viewing: students / parents only their own / child's; teachers see all grades of classes they teach; SM sees the
-  whole school (read only). Students / parents see only their own rank.
+  whole school (read only). Students / parents see only their own results.
 - **Students and parents see only finalized grade books (14/11/2026).** A book never finalized is "not published":
-  its scores are left out of every average and rank. A book unlocked by SM for a correction keeps showing the scores
+  its scores are left out of every average and level. A book unlocked by SM for a correction keeps showing the scores
   **as finalized** (rebuilt from `grade_histories`) until the teacher finalizes it again. For teachers and SM an
-  average or rank is provisional while a subject's book of the period is not finalized.
+  average or level is provisional while a subject's book of the period is not finalized.
 
 ## 12. Attendance (FE-12)
 - Per period, 4 statuses: `PRESENT`, `LATE`, `ABSENT_EXCUSED`, `ABSENT_UNEXCUSED`. No leave-request feature.

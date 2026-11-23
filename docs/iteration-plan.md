@@ -28,6 +28,13 @@ reactions, attachments) is merged into one place after both are on `develop`.
 
 ## Current status (read first; update after every merge, schema patch or new decision)
 
+- **FE-11 no overall average and no ranking (23/11/2026, Linh, `feature/fe-11-grade-management`, supervisor's request;
+  business rules §11):** Circular 22 has no average of all subjects and does not compare students, so
+  `overallAverage` / `rankStudents` are gone; each student gets an academic level Tốt / Khá / Đạt / Chưa đạt per
+  semester and year (`academicLevel`, Article 9, unit tested). SCR-47 shows a "Kết quả học tập" column / boxes instead
+  of "ĐTB chung" and "Hạng"; SCR-48 Class Ranking and its menu item removed (`/grades/ranking` redirects). No schema
+  change. **Open:** subjects assessed by comments (Đạt / Chưa đạt), conduct and the titles Học sinh Giỏi / Xuất sắc
+  need schema changes – to agree with the lead. SRS: UC-88, UC-89, SCR-47, SCR-48 to update.
 - **FE-04 / FE-06 follow-ups merged into `develop` (21/11/2026, Quoc, `feature/fe-05-group-feed`, merge `7eb509b`;
   client `npm run build` and server `npm test` (20/20) pass on `develop`):** six commits of Khanh, 20–21/11.
   - **FE-04 class types per grade only** (UC-26, SCR-70, business rules §4): no more "every grade" type, tab and
