@@ -21,6 +21,10 @@ export const MODES = { TEACHER: 'TEACHER', HOMEROOM: 'HOMEROOM', MANAGER: 'MANAG
 export const SETTING_DEADLINE = 'attendance.edit_deadline_time';
 export const DEFAULT_DEADLINE = '23:59';
 
+// The school day: periods 1–5 are the morning session, 6–10 the afternoon (same split as FE-10's timetable screens).
+// The prefill of a sheet never crosses from one session to the other (lead, 23/11/2026).
+export const MORNING_LAST_PERIOD = 5;
+
 export const NOTE_MAX = 500;
 export const REASON_MAX = 255;
 

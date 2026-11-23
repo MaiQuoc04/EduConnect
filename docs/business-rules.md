@@ -766,8 +766,16 @@ Boundaries that are easy to get wrong:
   1. A period can be taken from its start time (`time_slots.start_time`) until the edit deadline of that day.
   2. The sheet of a period = students of the class on that date: `enrolled_at` on or before the date and not left
      (`left_at` NULL or after the date). Records of students who left later stay.
-  3. The sheet opens with everyone PRESENT; the teacher changes the exceptions and saves the **whole class at once**
-     (no partial save). Each student has an optional note (`attendances.note`).
+  3. The sheet of the **first period taken in a session** opens with everyone PRESENT; the teacher changes the
+     exceptions and saves the **whole class at once** (no partial save). Each student has an optional note
+     (`attendances.note`).
+     **Prefill (lead, 23/11/2026):** a period not taken yet opens with the statuses **and notes** of the nearest
+     earlier period of the same class, same day and **same session** (morning = periods 1–5, afternoon = 6–10; the
+     afternoon never copies the morning) that is already taken – copied as they are (a late student stays late). It is
+     only a draft: the period stays "not taken" (and in the SM's list of periods not taken) until its own teacher
+     checks it and saves it (one save confirms it). A student not on the source period's list starts PRESENT.
+     Notifications are unchanged: each saved period with a status other than PRESENT notifies, also when the status
+     was prefilled (a student absent all morning → one notification per period).
   4. A period not taken by the deadline: the subject teacher and the homeroom teacher can no longer enter it; only SM
      enters it, with a reason.
   5. Reason (`attendance_histories.reason`): optional for the subject teacher on the day; **required** for the
