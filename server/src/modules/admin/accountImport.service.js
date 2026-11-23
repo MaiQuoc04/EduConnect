@@ -7,6 +7,7 @@ import { planUsernames } from '../../utils/username.js';
 import { prepareCredentials, readAccountInput } from './accounts.service.js';
 import { applyDepartment, listDepartments } from './departments.js';
 import { joinSchoolGroup, needsSchoolGroup } from './schoolGroup.js';
+import { assertSchoolScope } from './scope.js';
 
 // UC-96 Import Accounts (FE-13, owner: Linh): System Admin uploads one .xlsx / .csv file per account type, checks a
 // preview, then creates every valid row in one transaction. The temporary passwords are returned once.
@@ -15,10 +16,11 @@ import { joinSchoolGroup, needsSchoolGroup } from './schoolGroup.js';
 // ASSUMPTION: at most 500 rows per file (hashing each temporary password takes ~0.1 s).
 
 export const IMPORT_TYPES = ['STUDENT', 'TEACHER', 'PARENT', 'SCHOOL_MANAGER'];
+// COL and TEMPLATES are also the columns of the export per account type (UC-98, accountControl.service.js).
 const MAX_ROWS = 500;
 
 // Columns of each template, in order. `key` = field name used by readAccountInput (UC-95 rules).
-const COL = {
+export const COL = {
   fullName: { key: 'fullName', header: 'Họ và tên', width: 28 },
   studentCode: { key: 'studentCode', header: 'Mã học sinh (HS + 4 số)', width: 22, text: true },
   dob: { key: 'dob', header: 'Ngày sinh (dd/mm/yyyy)', width: 22, text: true },
@@ -30,7 +32,7 @@ const COL = {
   occupation: { key: 'occupation', header: 'Nghề nghiệp', width: 20 },
   address: { key: 'address', header: 'Địa chỉ', width: 40 },
 };
-const TEMPLATES = {
+export const TEMPLATES = {
   STUDENT: { name: 'hoc-sinh', label: 'Học sinh', columns: ['fullName', 'studentCode', 'dob', 'gender', 'email', 'phone', 'address'], required: ['fullName', 'studentCode'] },
   TEACHER: { name: 'giao-vien', label: 'Giáo viên', columns: ['fullName', 'teacherCode', 'department', 'email', 'phone', 'address'], required: ['fullName', 'teacherCode'] },
   PARENT: { name: 'phu-huynh', label: 'Phụ huynh', columns: ['fullName', 'phone', 'email', 'occupation', 'address'], required: ['fullName', 'phone'] },
@@ -39,15 +41,18 @@ const TEMPLATES = {
 const CODE_FIELD = { STUDENT: 'studentCode', TEACHER: 'teacherCode' };
 const GENDER_WORDS = { nam: 'MALE', male: 'MALE', nu: 'FEMALE', female: 'FEMALE', khac: 'OTHER', other: 'OTHER' };
 
-function readType(type) {
+// `actor` (23/11/2026): a School Manager imports student, teacher and parent files only (scope.js). FE-03's UC-116
+// calls without it, with the type fixed to Teacher.
+function readType(type, actor = null) {
   if (!IMPORT_TYPES.includes(type)) throw badRequest('MSG_IMPORT_TYPE', 'Please choose the account type of the file.');
+  assertSchoolScope(actor, [type]);
   return TEMPLATES[type];
 }
 
 // ---------------------------------------------------------------- template (UC-96 step 2)
 
-export async function buildTemplate(type) {
-  const template = readType(type);
+export async function buildTemplate(type, actor = null) {
+  const template = readType(type, actor);
   const wb = new ExcelJS.Workbook();
   const ws = wb.addWorksheet('Tai khoan');
   ws.columns = template.columns.map((c) => ({
@@ -158,8 +163,8 @@ async function readRows(file, template) {
 
 // ---------------------------------------------------------------- checking the rows (UC-96 steps 4–7)
 
-async function analyse(file, type) {
-  const template = readType(type);
+async function analyse(file, type, actor = null) {
+  const template = readType(type, actor);
   const rows = await readRows(file, template);
 
   const checked = rows.map(({ row, values }) => {
@@ -254,9 +259,9 @@ const rowView = (r) => ({
 });
 
 // UC-96 steps 3–7: check the file and show what would be created. Nothing is saved.
-export async function previewImport({ file, type }) {
+export async function previewImport({ file, type, actor = null }) {
   if (!file) throw badRequest('MSG_REQUIRED', 'Please choose a file.');
-  const { checked, valid } = await analyse(file, type);
+  const { checked, valid } = await analyse(file, type, actor);
   return {
     type,
     fileName: file.originalname,
@@ -289,9 +294,9 @@ async function buildCredentialsFile(type, created) {
   return workbookBuffer(wb);
 }
 
-export async function importAccounts({ file, type, actorId, ip }) {
+export async function importAccounts({ file, type, actor = null, actorId, ip }) {
   if (!file) throw badRequest('MSG_REQUIRED', 'Please choose a file.');
-  const { template, checked, valid } = await analyse(file, type); // checked again: the data may have changed
+  const { template, checked, valid } = await analyse(file, type, actor); // checked again: the data may have changed
   if (!valid.length) throw badRequest('MSG_IMPORT_NO_VALID_ROWS', 'The file has no valid rows to import.');
 
   // Hash the temporary passwords before opening the transaction (the slow part).
