@@ -475,6 +475,9 @@ It2: Anh FE-08 + FE-14, Khanh FE-05 + FE-06).
   is `sendClassEventReminders()` (`calendar.reminders.js`): **FE-09 (Quoc) – please call it from the UC-69 job**.
   FE-07 (built on the FE-05 class feed) merged 18/11.
 - **Follow-ups owed:**
+  - **Linh – R3 / R4 after the FE-11 change (lead's review 23/11/2026):** 16 items (UC-89 / SCR-48 still listed,
+    SCR-47 fields, UC-85 postconditions, GBR-31, new GBR-43, R4 package table and IV.4, one code comment) in
+    `docs/report-fixes-fe11-linh.md`. Edit the Drive copies in "Nháp"; tick the items when done.
   - FE-08 school feed sync (18/11, Anh): pop-up **OK'd by the lead and merged**. Still owed on top of it (Quoc or
     Anh): two tabs Bài đăng / Tin tức without "Tất cả" and "Bài đăng" instead of "Thông báo" for ANNOUNCEMENT (§8);
     to settle with Anh: "Hiển thị thêm" = whole post or 1,000 characters + "Đọc toàn bài".
