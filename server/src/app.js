@@ -9,7 +9,8 @@ import { uploadRoot } from './utils/storage.js';
 
 export const app = express();
 
-app.set('trust proxy', true);
+// Exactly one hop (nginx); 'true' trusts the whole X-Forwarded-For chain, letting clients forge req.ip in activity_logs (business-rules §13).
+app.set('trust proxy', 1);
 app.use(helmet());
 app.use(cors({ origin: env.clientOrigin }));
 app.use(express.json({ limit: '1mb' }));
