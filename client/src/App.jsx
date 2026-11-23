@@ -68,6 +68,7 @@ import { PROFILE_KINDS } from './pages/admin/profileKinds.js';
 import AccountDetailPage from './pages/admin/AccountDetailPage.jsx';
 import AccountListPage from './pages/admin/AccountListPage.jsx';
 import EditAccountPage from './pages/admin/EditAccountPage.jsx';
+import EditContactPage from './pages/admin/EditContactPage.jsx';
 import MaintenancePage from './pages/admin/MaintenancePage.jsx';
 import SystemSettingsPage from './pages/admin/SystemSettingsPage.jsx';
 import PasswordResetRequestsPage from './pages/admin/PasswordResetRequestsPage.jsx';
@@ -476,6 +477,18 @@ export default function App() {
           ['admin/maintenance', <MaintenancePage />], // UC-103
         ].map(([path, page]) => (
           <Route key={path} path={path} element={<ProtectedRoute roles={['SYSTEM_ADMIN']}>{page}</ProtectedRoute>} />
+        ))}
+        {/* FE-13 for School Manager (23/11/2026): create (UC-95) and import (UC-96) student, teacher and parent
+            accounts from their own lists (teachers import with FE-03's UC-116 page), edit email / phone (UC-99). */}
+        {[
+          ['students/new', <CreateAccountPage key="students" kind="students" />],
+          ['students/import', <ProfileImportPage key="students" kind="students" />],
+          ['teachers/new', <CreateAccountPage key="teachers" kind="teachers" />],
+          ['parents/new', <CreateAccountPage key="parents" kind="parents" />],
+          ['parents/import', <ProfileImportPage key="parents" kind="parents" />],
+          ['accounts/:id/contact', <EditContactPage />],
+        ].map(([path, page]) => (
+          <Route key={path} path={path} element={<ProtectedRoute roles={['SCHOOL_MANAGER']}>{page}</ProtectedRoute>} />
         ))}
         <Route
           path="admin/password-reset-requests"

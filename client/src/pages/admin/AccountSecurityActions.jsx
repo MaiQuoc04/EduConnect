@@ -22,8 +22,9 @@ import './admin.css';
 // It loads the account status itself (GET /admin/accounts/:id/security). `account` (with status, tempLocked,
 // lockedUntil, fullName) can be passed to skip that request; `onChanged(account)` runs after each change.
 // The server decides who may act on whom (School Manager: student, parent and teacher accounts only).
+// School Manager also gets "Sửa email, số điện thoại" (EditContactPage, UC-99 option a, 23/11/2026).
 export default function AccountSecurityActions({ userId, account: given, onChanged, compact = false }) {
-  const { user } = useAuth();
+  const { user, activeRole } = useAuth();
   const toast = useToast();
   const [account, setAccount] = useState(given ?? null);
   const [loadError, setLoadError] = useState('');
@@ -128,6 +129,12 @@ export default function AccountSecurityActions({ userId, account: given, onChang
           </div>
         )}
         <div className="actions-row">
+          {activeRole === 'SCHOOL_MANAGER' && (
+            <Link to={`/accounts/${id}/contact`} className="btn btn-secondary">
+              <Icon name="contact_mail" size="sm" />
+              Sửa email, số điện thoại
+            </Link>
+          )}
           <button type="button" className="btn btn-secondary" onClick={() => setDialog('reset')}>
             <Icon name="key" size="sm" />
             Đặt lại mật khẩu
