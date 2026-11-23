@@ -1,6 +1,6 @@
 import { pool } from '../../config/db.js';
 import { badRequest, notFound } from '../../utils/AppError.js';
-import { overallAverage, rankStudents, roundScore, semesterAverage, toNumber, yearAverage } from './grades.calc.js';
+import { academicLevel, roundScore, semesterAverage, toNumber, yearAverage } from './grades.calc.js';
 import {
   assertCanViewClass,
   assertCanViewStudent,
@@ -12,9 +12,10 @@ import {
   teacherIdOf,
 } from './grades.scope.js';
 
-// FE-11 (owner: Linh) – Results & Ranking: UC-88 View Grades (SCR-47) and UC-89 View Class Ranking (SCR-48).
+// FE-11 (owner: Linh) – Results: UC-88 View Grades (SCR-47); UC-89 (SCR-48) no longer ranks students (23/11/2026,
+// Circular 22): the results show the academic level of each student instead.
 // Scope (permissions.md notes 7, 12): student = own, parent = linked children, teacher = classes they teach (homeroom:
-// whole class), School Manager = whole school, read only. Students and parents see only their OWN rank.
+// whole class), School Manager = whole school, read only. Students and parents see only their OWN results.
 // Averages are computed here (grades.calc.js) and never stored.
 
 // --- Pickers -------------------------------------------------------------------------------------------------------
@@ -73,14 +74,15 @@ export async function myStudents(user) {
 
 /**
  * Everything needed to show one class's results for its school year: subjects, every studying (and former) student's
- * averages per subject and semester, year averages, overall averages and ranks.
+ * averages per subject and semester, year averages and the academic level per period (Circular 22, Article 9).
+ * No overall average and no ranking since 23/11/2026 (Circular 22 has none and does not compare students).
  * Subjects = those with a grade structure for the class's grade in that year; when the class type has subjects set
  * for the year (FE-04), only those. A subject without a structure (e.g. one assessed pass / fail) is not counted.
  * ASSUMPTION (FE-11 owner, 10/11/2026): scores a student got in another class of the same year (moved by UC-10
  * Transfer) count too; when both classes have the same score slot, the score of this class wins.
  */
 // finalizedOnly (students and parents, FE-11 owner 14/11/2026): only finalized grade books count. A book still being
-// entered (never finalized) is "not published": its scores are left out of every average and ranking. A book that
+// entered (never finalized) is "not published": its scores are left out of every average and level. A book that
 // the School Manager unlocked for a correction (grade review) keeps showing the scores AS FINALIZED until the teacher
 // finalizes it again – see finalizedScores().
 export async function computeClass(db, cls, { finalizedOnly = false } = {}) {
@@ -194,25 +196,20 @@ export async function computeClass(db, cls, { finalizedOnly = false } = {}) {
       // Year average from the rounded semester averages, then rounded itself (Circular 22).
       return { subjectId: sub.subjectId, bySemester, year: roundScore(yearAverage(s1?.average ?? null, s2?.average ?? null)) };
     });
-    const overall = {};
+    // Academic level per period over the subjects with a grade structure in that period (the year: in a semester).
+    const level = {};
     for (const se of semesters) {
-      overall[se.semesterId] = roundScore(
-        overallAverage(perSubject.map((p) => p.bySemester.find((b) => b.semesterId === se.semesterId)?.average ?? null)),
+      level[se.semesterId] = academicLevel(
+        perSubject
+          .filter((p) => componentsOf(p.subjectId, se.semesterId).length)
+          .map((p) => p.bySemester.find((b) => b.semesterId === se.semesterId)?.average ?? null),
       );
     }
-    overall.YEAR = roundScore(overallAverage(perSubject.map((p) => p.year)));
-    return { ...e, perSubject, overall };
-  });
-
-  // Ranks per period, only among studying students (ASSUMPTION FE-11 owner 10/11/2026).
-  const ranks = {};
-  for (const period of [...semesters.map((s) => s.semesterId), 'YEAR']) {
-    const studying = students.filter((s) => s.status === 'STUDYING');
-    ranks[period] = new Map(
-      rankStudents(studying.map((s) => ({ id: s.studentId, average: s.overall[period] }))).map((r) => [String(r.id), r.rank]),
+    level.YEAR = academicLevel(
+      perSubject.filter((p) => semesters.some((se) => componentsOf(p.subjectId, se.semesterId).length)).map((p) => p.year),
     );
-    ranks[period].ranked = [...ranks[period].values()].filter((r) => r !== null).length;
-  }
+    return { ...e, perSubject, level };
+  });
 
   // Provisional while a subject's grade book of the period is not finalized.
   const provisional = {};
@@ -227,7 +224,7 @@ export async function computeClass(db, cls, { finalizedOnly = false } = {}) {
   }
   provisional.YEAR = semesters.some((se) => provisional[se.semesterId]) || semesters.length < 2;
 
-  return { semesters, subjects, students, ranks, provisional };
+  return { semesters, subjects, students, provisional };
 }
 
 // Scores of books under review (reviewLock(g) = the UNLOCKED lock) as they were when finalized, rebuilt from
@@ -263,21 +260,19 @@ function readPeriod(value, semesters) {
 
 // --- UC-88 / UC-89 for a class (teacher, School Manager) ------------------------------------------------------------
 
-// Class results for one period: per student the subject averages (semester, or year = (S1 + 2 × S2) / 3), the
-// overall average and the rank. Sorting by rank gives UC-89; by name gives UC-88.
+// Class results for one period: per student the subject averages (semester, or year = (S1 + 2 × S2) / 3) and the
+// academic level (UC-88; UC-89 shows the levels of the class since 23/11/2026, no ranking).
 export async function classResults(classIdParam, query, user) {
   const cls = await loadClass(pool, classIdParam);
   await assertCanViewClass(pool, user, cls);
   const data = await computeClass(pool, cls);
   const period = readPeriod(query.period, data.semesters);
-  const rankMap = data.ranks[period];
   return {
     class: cls,
     period,
     semesters: data.semesters,
     subjects: data.subjects,
     provisional: data.provisional[period],
-    ranked: rankMap.ranked,
     students: data.students.map((s) => ({
       studentId: s.studentId,
       studentCode: s.studentCode,
@@ -289,8 +284,7 @@ export async function classResults(classIdParam, query, user) {
           roundScore(period === 'YEAR' ? p.year : p.bySemester.find((b) => b.semesterId === period)?.average ?? null),
         ]),
       ),
-      overall: roundScore(s.overall[period]),
-      rank: s.status === 'STUDYING' ? rankMap.get(String(s.studentId)) ?? null : null,
+      level: s.level[period],
     })),
   };
 }
@@ -309,7 +303,7 @@ async function classOfStudent(db, studentId, schoolYearId) {
 }
 
 // Report card of one student for a school year: every subject's scores per semester, semester and year averages,
-// overall averages and the student's OWN rank in the class (never the others' ranks).
+// and the academic level of each semester and of the year (never anything about other students).
 export async function studentResults(studentIdParam, query, user) {
   const studentId = parseId(studentIdParam, 'MSG_STUDENT_NOT_FOUND', 'Student not found.');
   const yearId = parseId(query.schoolYearId, 'NOT_FOUND', 'School year not found.');
@@ -329,22 +323,16 @@ export async function studentResults(studentIdParam, query, user) {
   const finalizedOnly = user.activeRole === 'STUDENT' || user.activeRole === 'PARENT';
   const data = await computeClass(pool, cls, { finalizedOnly });
   const me = data.students.find((s) => String(s.studentId) === String(studentId));
-  const studying = me?.status === 'STUDYING';
-  const rankOf = (period) => ({
-    rank: studying ? data.ranks[period].get(String(studentId)) ?? null : null,
-    ranked: data.ranks[period].ranked,
-    provisional: data.provisional[period],
-  });
+  const levelOf = (period) => ({ level: me?.level[period] ?? null, provisional: data.provisional[period] });
   return {
     student: who[0],
     class: { classId: cls.classId, className: cls.className, gradeLevelName: cls.gradeLevelName, yearName: cls.yearName },
     enrollmentStatus: me?.status ?? null,
     semesters: data.semesters.map((se) => ({
       ...se,
-      overall: roundScore(me?.overall[se.semesterId] ?? null),
-      ...rankOf(se.semesterId),
+      ...levelOf(se.semesterId),
     })),
-    year: { overall: roundScore(me?.overall.YEAR ?? null), ...rankOf('YEAR') },
+    year: levelOf('YEAR'),
     subjects: data.subjects.map((sub) => {
       const p = me?.perSubject.find((x) => String(x.subjectId) === String(sub.subjectId));
       return {

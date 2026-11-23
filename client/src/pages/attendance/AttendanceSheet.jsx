@@ -26,10 +26,19 @@ const BLOCKED_TEXT = {
   MSG_ATTENDANCE_VIEW_ONLY: 'Bạn chỉ xem được điểm danh của tiết này.',
 };
 
+// A sheet never taken starts from the server's prefill (lead 23/11/2026, §12 point 3): the statuses and notes of the
+// nearest earlier taken period of the same day and session, copied as they are; without one (first period of the
+// session), everyone present. Only a draft – the period is taken when this teacher saves it.
 function draftOf(sheet) {
   const fill = !sheet.lesson.taken && (sheet.mode === 'TEACHER' || sheet.mode === 'MANAGER');
+  const from = fill ? sheet.prefill?.records ?? {} : {};
   return Object.fromEntries(
-    sheet.students.map((s) => [s.enrollmentId, { status: s.status ?? (fill && s.onRoll ? 'PRESENT' : null), note: s.note ?? '' }]),
+    sheet.students.map((s) => {
+      if (s.status) return [s.enrollmentId, { status: s.status, note: s.note ?? '' }];
+      const p = from[s.enrollmentId];
+      if (p) return [s.enrollmentId, { status: p.status, note: p.note ?? '' }];
+      return [s.enrollmentId, { status: fill && s.onRoll ? 'PRESENT' : null, note: '' }];
+    }),
   );
 }
 
@@ -186,6 +195,17 @@ export default function AttendanceSheet({ lessonId, onSaved, onDirty }) {
         <span className={`stamp${lesson.taken ? '' : ' stamp-soft'}`}>{lesson.taken ? 'Đã điểm danh' : 'Chưa điểm danh'}</span>
       </header>
 
+      {editable && sheet.prefill && (
+        <div className="notice amber">
+          <Icon name="content_copy" />
+          <div>
+            <p className="notice-title">
+              Đã điền sẵn theo tiết {sheet.prefill.period} – {sheet.prefill.subjectName} ({sheet.prefill.teacherName})
+            </p>
+            <p>Trạng thái và ghi chú được chép nguyên từ tiết đó. Kiểm tra lại từng em rồi bấm Lưu để xác nhận; tiết này chưa được tính là đã điểm danh cho đến khi lưu.</p>
+          </div>
+        </div>
+      )}
       {editable ? (
         <div className="notice ink">
           <Icon name="info" />

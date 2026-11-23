@@ -28,6 +28,23 @@ reactions, attachments) is merged into one place after both are on `develop`.
 
 ## Current status (read first; update after every merge, schema patch or new decision)
 
+- **FE-12 prefill merged into `develop` (23/11/2026, Quoc, `feature/fe-12-attendance`, merge `23e4d9f`; build and
+  `npm test` pass on `develop`):** a period
+  not taken yet opens prefilled from the nearest earlier taken period of the same day and session (statuses and
+  notes copied as they are); the period is taken only when its teacher saves it (business rules §12 point 3). Server:
+  `getSheet` returns `prefill` (`attendance.service.js`, `MORNING_LAST_PERIOD` in `attendance.constants.js`); client:
+  `AttendanceSheet.jsx` drafts from it and shows "Đã điền sẵn theo tiết …". No schema change, notifications
+  unchanged. Tested on the local DB: 15 API steps (no prefill for the first period of a session, nearest earlier
+  taken period wins, late / notes copied as is, still "not taken" and in the SM's list until saved, afternoon never
+  copies the morning, notifications as before). Client build passes.
+
+- **FE-11 no overall average and no ranking (23/11/2026, Linh, `feature/fe-11-grade-management`, merged into
+  `develop` 23/11; supervisor's request; business rules §11):** Circular 22 has no average of all subjects and does not compare students, so
+  `overallAverage` / `rankStudents` are gone; each student gets an academic level Tốt / Khá / Đạt / Chưa đạt per
+  semester and year (`academicLevel`, Article 9, unit tested). SCR-47 shows a "Kết quả học tập" column / boxes instead
+  of "ĐTB chung" and "Hạng"; SCR-48 Class Ranking and its menu item removed (`/grades/ranking` redirects). No schema
+  change. **Open:** subjects assessed by comments (Đạt / Chưa đạt), conduct and the titles Học sinh Giỏi / Xuất sắc
+  need schema changes – to agree with the lead. SRS: UC-88, UC-89, SCR-47, SCR-48 to update.
 - **FE-10 School Manager settings (21/11/2026, Dung, `feature/fe-10-school-settings`, not merged yet):** new page
   "Cài đặt hệ thống" for the School Manager (`/school-settings`, menu "Quản trị hệ thống"; `GET` / `PUT
   /api/v1/school-settings`, module `server/src/modules/school-settings`). First group, moved from part "4. Giáo viên"
@@ -45,7 +62,6 @@ reactions, attachments) is merged into one place after both are on `develop`.
   GAP (warnings with their weights), each with its cell, shown on the grids and in "Cần chú ý"; undo and "Về bản
   gốc". `/auto/run` also returns this review, the subjects of each class and when each teacher is busy (other classes
   / marked). **No schema change.** `/auto/apply` unchanged (still re-checks everything).
-
 - **FE-04 / FE-06 follow-ups merged into `develop` (21/11/2026, Quoc, `feature/fe-05-group-feed`, merge `7eb509b`;
   client `npm run build` and server `npm test` (20/20) pass on `develop`):** six commits of Khanh, 20–21/11.
   - **FE-04 class types per grade only** (UC-26, SCR-70, business rules §4): no more "every grade" type, tab and
