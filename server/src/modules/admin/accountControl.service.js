@@ -10,6 +10,8 @@ import { isValidUsername } from '../../utils/username.js';
 import { findDuplicates, readAccountInput, ROLE_CODES } from './accounts.service.js';
 import { applyDepartment, listDepartments, needsDepartments } from './departments.js';
 import { workbookBuffer, XLSX_MIME } from '../../utils/excel.js';
+import { COL, TEMPLATES } from './accountImport.service.js';
+import { isSchoolManager, onlySchoolRoles, SCHOOL_ROLES } from './scope.js';
 
 // FE-13 System Administration (owner: Linh) – account list and control:
 // UC-97 View Account List, UC-98 Export Account List, UC-99 Update Account (login identifiers + imported fields),
@@ -18,7 +20,6 @@ import { workbookBuffer, XLSX_MIME } from '../../utils/excel.js';
 const PAGE_SIZE = 20;
 const EXPORT_LIMIT = 10000;
 const STATUSES = ['ACTIVE', 'LOCKED'];
-const SCHOOL_ROLES = ['TEACHER', 'STUDENT', 'PARENT']; // what School Manager may reset / lock (permissions note 1)
 
 // Accent-insensitive search: shared utils/search.js (business-rules §16).
 
@@ -58,7 +59,7 @@ const LIST_SQL = `
          u.created_at AS "createdAt",
          COALESCE(ARRAY(SELECT r.role_code FROM user_roles ur JOIN roles r ON r.role_id = ur.role_id
                         WHERE ur.user_id = u.user_id ORDER BY r.role_id), '{}') AS roles,
-         COALESCE(s.student_code, t.teacher_code) AS code,
+         COALESCE(s.student_code, t.teacher_code) AS code, s.student_code AS "studentCode", t.teacher_code AS "teacherCode",
          u.address, s.dob, s.gender, t.department, p.occupation,
          (SELECT string_agg(DISTINCT c.class_name, ', ' ORDER BY c.class_name)
           FROM classes c
@@ -69,6 +70,15 @@ const LIST_SQL = `
                               AND (e.student_id = s.student_id
                                    OR e.student_id IN (SELECT sp.student_id FROM student_parents sp
                                                        WHERE sp.parent_id = p.parent_id))))) AS "classNames",
+         -- A parent's children with their class of the current school year (export of parent accounts).
+         (SELECT string_agg(cu.full_name || COALESCE(' – ' || (
+                   SELECT c.class_name FROM class_enrollments e JOIN classes c ON c.class_id = e.class_id
+                   WHERE e.student_id = sp.student_id AND e.status = 'STUDYING' AND c.deleted_at IS NULL
+                     AND c.school_year_id = ${CURRENT_YEAR_SQL}
+                   LIMIT 1), ''), '; ' ORDER BY cu.full_name)
+          FROM student_parents sp JOIN students cs ON cs.student_id = sp.student_id
+          JOIN users cu ON cu.user_id = cs.user_id
+          WHERE sp.parent_id = p.parent_id) AS children,
          COUNT(*) OVER() AS total
   FROM users u
   LEFT JOIN students s ON s.user_id = u.user_id
@@ -130,30 +140,60 @@ const ROLE_TEXT = {
 const GENDER_TEXT = { MALE: 'Nam', FEMALE: 'Nữ', OTHER: 'Khác' };
 const dmy = (value) => (value ? String(value).slice(0, 10).split('-').reverse().join('/') : '');
 
-// UC-98 Export Account List: every matching account (not only one page) with all its profile fields, in the same
-// words as the UC-96 templates. No passwords – they are only hashes.
-export async function exportAccounts(query) {
-  const rows = await queryAccounts(readFilters(query), EXPORT_LIMIT, 0);
+// UC-98 Export Account List: every matching account (not only one page). No passwords – they are only hashes.
+// With a role (the account pages, 23/11/2026) the file has only that type's columns: first the columns of its import
+// template, same headers and order (so the file can be filled in and imported again), then the class (students),
+// the children (parents), username, status, temporary password and creation date. Without a role: every column.
+// A School Manager exports student, teacher or parent accounts only (scope.js).
+const ROLE_FILE = { STUDENT: 'hoc-sinh', TEACHER: 'giao-vien', PARENT: 'phu-huynh', SCHOOL_MANAGER: 'quan-ly', SYSTEM_ADMIN: 'quan-tri' };
+const ACCOUNT_COLUMNS = [
+  { header: 'Tên đăng nhập', key: 'username', width: 18 },
+  { header: 'Trạng thái', key: 'status', width: 14 },
+  { header: 'Phải đổi mật khẩu', key: 'mustChange', width: 18 },
+  { header: 'Ngày tạo', key: 'createdAt', width: 12 },
+];
+const EXTRA_COLUMNS = {
+  STUDENT: [{ header: 'Lớp', key: 'classNames', width: 12 }],
+  PARENT: [{ header: 'Con (lớp)', key: 'children', width: 40 }],
+};
+const ALL_COLUMNS = [
+  { header: 'Tên đăng nhập', key: 'username', width: 18 },
+  { header: 'Họ và tên', key: 'fullName', width: 28 },
+  { header: 'Vai trò', key: 'roles', width: 26 },
+  { header: 'Mã HS/GV', key: 'code', width: 14 },
+  { header: 'Lớp', key: 'classNames', width: 14 },
+  { header: 'Ngày sinh', key: 'dob', width: 12 },
+  { header: 'Giới tính', key: 'gender', width: 10 },
+  { header: 'Tổ chuyên môn', key: 'department', width: 20 },
+  { header: 'Nghề nghiệp', key: 'occupation', width: 20 },
+  { header: 'Email', key: 'email', width: 30 },
+  { header: 'Số điện thoại', key: 'phone', width: 16, style: { numFmt: '@' } },
+  { header: 'Địa chỉ', key: 'address', width: 40 },
+  { header: 'Trạng thái', key: 'status', width: 14 },
+  { header: 'Phải đổi mật khẩu', key: 'mustChange', width: 18 },
+  { header: 'Ngày tạo', key: 'createdAt', width: 12 },
+];
+
+function columnsFor(role) {
+  if (!role) return ALL_COLUMNS;
+  // System Admin accounts have no template: same columns as School Manager accounts.
+  const template = TEMPLATES[role] ?? TEMPLATES.SCHOOL_MANAGER;
+  const own = template.columns.map((c) => ({
+    header: COL[c].header,
+    key: c,
+    width: COL[c].width,
+    ...(COL[c].text ? { style: { numFmt: '@' } } : {}),
+  }));
+  return [...own, ...(EXTRA_COLUMNS[role] ?? []), ...ACCOUNT_COLUMNS];
+}
+
+export async function exportAccounts(query, actor = null) {
+  const filters = readFilters(query);
+  if (isSchoolManager(actor) && !SCHOOL_ROLES.includes(filters.role)) throw forbidden();
+  const rows = await queryAccounts(filters, EXPORT_LIMIT, 0);
   const wb = new ExcelJS.Workbook();
   const ws = wb.addWorksheet('Tai khoan');
-  ws.columns = [
-    { header: 'STT', key: 'no', width: 6 },
-    { header: 'Tên đăng nhập', key: 'username', width: 18 },
-    { header: 'Họ và tên', key: 'fullName', width: 28 },
-    { header: 'Vai trò', key: 'roles', width: 26 },
-    { header: 'Mã HS/GV', key: 'code', width: 14 },
-    { header: 'Lớp', key: 'classNames', width: 14 },
-    { header: 'Ngày sinh', key: 'dob', width: 12 },
-    { header: 'Giới tính', key: 'gender', width: 10 },
-    { header: 'Tổ chuyên môn', key: 'department', width: 20 },
-    { header: 'Nghề nghiệp', key: 'occupation', width: 20 },
-    { header: 'Email', key: 'email', width: 30 },
-    { header: 'Số điện thoại', key: 'phone', width: 16, style: { numFmt: '@' } },
-    { header: 'Địa chỉ', key: 'address', width: 40 },
-    { header: 'Trạng thái', key: 'status', width: 14 },
-    { header: 'Phải đổi mật khẩu', key: 'mustChange', width: 18 },
-    { header: 'Ngày tạo', key: 'createdAt', width: 12 },
-  ];
+  ws.columns = [{ header: 'STT', key: 'no', width: 6 }, ...columnsFor(filters.role)];
   ws.getRow(1).font = { bold: true };
   ws.views = [{ state: 'frozen', ySplit: 1 }];
   rows.forEach((r, i) =>
@@ -163,7 +203,10 @@ export async function exportAccounts(query) {
       fullName: r.fullName,
       roles: r.roles.map((c) => ROLE_TEXT[c] ?? c).join(', '),
       code: r.code ?? '',
+      studentCode: r.studentCode ?? '',
+      teacherCode: r.teacherCode ?? '',
       classNames: r.classNames ?? '',
+      children: r.children ?? '',
       dob: dmy(r.dob),
       gender: GENDER_TEXT[r.gender] ?? '',
       department: r.department ?? '',
@@ -178,7 +221,7 @@ export async function exportAccounts(query) {
   );
   const date = new Date().toLocaleDateString('sv-SE', { timeZone: 'Asia/Ho_Chi_Minh' }).replaceAll('-', '');
   return {
-    fileName: `educonnect-accounts-${date}.xlsx`,
+    fileName: filters.role ? `tai-khoan-${ROLE_FILE[filters.role]}-${date}.xlsx` : `educonnect-accounts-${date}.xlsx`,
     contentType: XLSX_MIME,
     buffer: await workbookBuffer(wb),
   };
@@ -211,9 +254,11 @@ async function loadAccount(db, id) {
   return rows[0];
 }
 
-export async function getAccount(idParam) {
+// School Manager (23/11/2026): student, teacher and parent accounts only, for the email / phone edit.
+export async function getAccount(idParam, actor = null) {
   const id = readId(idParam);
   const account = await loadAccount(pool, id);
+  assertScope(actor, account);
   const [student, teacher, parent, lastLogin] = await Promise.all([
     pool.query('SELECT student_code AS code, dob, gender FROM students WHERE user_id = $1', [id]),
     pool.query('SELECT teacher_code AS code, department FROM teachers WHERE user_id = $1', [id]),
@@ -237,6 +282,8 @@ export async function getAccount(idParam) {
 // address, and per role the student code / date of birth / gender, the teacher code / department, the parent's
 // occupation. Nothing else: class, parent links, subjects and assignments stay with the School Manager (decided
 // 22/11/2026 with the supervisor). Same checks as UC-95 (readAccountInput) plus the username rule.
+// School Manager (23/11/2026, supervisor's request, option a): email and phone of student, teacher and parent
+// accounts only; every other field keeps its value (the rest of the profile is edited on FE-02 / FE-03 / FE-14).
 
 const throwFieldErrors = (fields) => {
   throw badRequest('MSG_ACCOUNT_INVALID', 'Some fields are missing or invalid.', { fields });
@@ -244,9 +291,24 @@ const throwFieldErrors = (fields) => {
 const same = (a, b) => (a ?? null) === (b ?? null);
 const isoDate = (value) => (value ? String(value).slice(0, 10) : null);
 
-export async function updateAccount({ idParam, body = {} }) {
+// The current values in the shape of the request body (used for the fields a School Manager may not change).
+function bodyOf(a) {
+  return {
+    username: a.username,
+    fullName: a.fullName,
+    email: a.email,
+    phone: a.phone,
+    address: a.address,
+    student: a.student && { studentCode: a.student.code, dob: isoDate(a.student.dob), gender: a.student.gender },
+    teacher: a.teacher && { teacherCode: a.teacher.code, departmentId: null, department: a.teacher.department },
+    parent: a.parent && { occupation: a.parent.occupation },
+  };
+}
+
+export async function updateAccount({ idParam, body: sent = {}, actor = null }) {
   const id = readId(idParam);
-  const before = await getAccount(id);
+  const before = await getAccount(id, actor);
+  const body = isSchoolManager(actor) ? { ...bodyOf(before), email: sent.email, phone: sent.phone } : sent;
 
   // Roles never change here: readAccountInput reads only the profile parts of the account's own roles.
   const { input, errors } = readAccountInput({ ...body, roles: before.roles });
@@ -317,13 +379,10 @@ export async function updateAccount({ idParam, body = {} }) {
 // ---------------------------------------------------------------- UC-100 / UC-101 (System Admin and School Manager)
 
 // School Manager acts only on accounts without the System Admin or School Manager role (permissions note 1).
+// `actor` null = an internal call (no check).
 function assertScope(actor, account) {
-  if (actor.activeRole === 'SYSTEM_ADMIN') return;
-  const inScope =
-    actor.activeRole === 'SCHOOL_MANAGER' &&
-    account.roles.length > 0 &&
-    account.roles.every((r) => SCHOOL_ROLES.includes(r));
-  if (!inScope) throw forbidden();
+  if (!actor || actor.activeRole === 'SYSTEM_ADMIN') return;
+  if (!(isSchoolManager(actor) && onlySchoolRoles(account.roles))) throw forbidden();
 }
 
 const stateError = (message) => new AppError(409, 'MSG_ACCOUNT_STATE', message);
