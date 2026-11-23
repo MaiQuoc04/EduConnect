@@ -66,7 +66,7 @@ built in Iteration 3. SCR-84 (added 20/11/2026): the group comment report queue 
 | 56 | Class Attendance | FE-12 | Allows Teacher to view and manage attendance records for an authorized class. (planned) |
 | 57 | Teaching Schedule | FE-10 | Displays the teaching schedule assigned to the Teacher. |
 | 58 | Teaching Schedule Detail | FE-10 | Displays detailed information about a selected teaching schedule entry. |
-| 59 | Account List | FE-13 | Displays user accounts managed at the system administration level. Since 22/11/2026 also the four System Admin profile pages (Hồ sơ học sinh / giáo viên / phụ huynh, Quản lý nhà trường: same list with the role fixed, plus "Thêm" (SCR-61) and "Nhập từ file" (SCR-76)); the all-accounts list no longer creates or imports. |
+| 59 | Account List | FE-13 | Displays user accounts managed at the system administration level. Since 23/11/2026 one page per account type under the menu group "Quản lý tài khoản" (Học sinh, Giáo viên, Phụ huynh, Quản lý nhà trường, Quản trị hệ thống): the list with the role fixed, plus "Thêm" (SCR-61) and "Nhập từ file" (SCR-76) except for System Admin accounts. The list of every account ("Tài khoản người dùng") was removed. |
 | 60 | Account Detail | FE-13 | Displays detailed information and administrative status of a selected user account. |
 | 61 | Create Account | FE-13 | Allows System Admin to create a new user account and assign the appropriate role. |
 | 62 | Update Account | FE-13 | Allows System Admin to update the username and the fields of the import file of an existing user account (UC-99, 22/11/2026). |

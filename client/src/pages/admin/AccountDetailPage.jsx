@@ -42,7 +42,7 @@ export default function AccountDetailPage() {
     return (
       <div className="stack">
         <p className="form-error">{state.error}</p>
-        <Link to="/admin/accounts">Quay lại danh sách tài khoản</Link>
+        <Link to="/admin/students">Quay lại danh sách tài khoản</Link>
       </div>
     );
   }

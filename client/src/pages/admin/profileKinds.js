@@ -1,53 +1,70 @@
-// FE-13 (owner: Linh): the System Admin's profile pages, one per account type (supervisor's request, 22/11/2026).
+// FE-13 (owner: Linh): the System Admin's account pages, one per account type (supervisor's request, 22/11/2026;
+// menu group "Quản lý tài khoản" since 23/11/2026, which replaced the list of every account).
 // Each page lists the accounts of one role (UC-97 with the role fixed) and creates them one by one (UC-95) or from a
 // file (UC-96) of that type. The School Manager page is the only place School Manager accounts are created.
 // System Admin sees, creates and imports these accounts, and edits only the fields of the import file (UC-99);
 // classes, parent links, subjects and assignments stay with the School Manager.
+// System Admin accounts (23/11/2026) are listed, edited, locked and reset like the others, but never created here:
+// they come from `npm run seed:admin` (business rules §3), so that page has `canCreate: false`.
 
 export const PROFILE_KINDS = {
   students: {
     role: 'STUDENT',
     label: 'Học sinh',
-    title: 'Hồ sơ học sinh',
+    title: 'Tài khoản học sinh',
     icon: 'school',
     intro: 'Tạo, nhập từ file và sửa thông tin cơ bản của tài khoản học sinh. Lớp học do quản lý nhà trường xếp.',
     classFilter: true,
+    canCreate: true,
   },
   teachers: {
     role: 'TEACHER',
     label: 'Giáo viên',
-    title: 'Hồ sơ giáo viên',
+    title: 'Tài khoản giáo viên',
     icon: 'co_present',
     intro: 'Tạo, nhập từ file và sửa thông tin cơ bản của tài khoản giáo viên. Môn dạy và phân công do quản lý nhà trường cập nhật.',
     classFilter: true,
+    canCreate: true,
   },
   parents: {
     role: 'PARENT',
     label: 'Phụ huynh',
-    title: 'Hồ sơ phụ huynh',
+    title: 'Tài khoản phụ huynh',
     icon: 'family_restroom',
     intro: 'Tạo, nhập từ file và sửa thông tin cơ bản của tài khoản phụ huynh. Liên kết với học sinh do quản lý nhà trường thực hiện.',
     classFilter: true,
+    canCreate: true,
   },
   'school-managers': {
     role: 'SCHOOL_MANAGER',
     label: 'Quản lý nhà trường',
-    title: 'Quản lý nhà trường',
+    title: 'Tài khoản quản lý nhà trường',
     icon: 'domain',
     intro: 'Tạo, nhập từ file và sửa thông tin của tài khoản quản lý nhà trường. Chỉ quản trị hệ thống tạo được loại tài khoản này.',
     classFilter: false,
+    canCreate: true,
+  },
+  'system-admins': {
+    role: 'SYSTEM_ADMIN',
+    label: 'Quản trị hệ thống',
+    title: 'Tài khoản quản trị hệ thống',
+    icon: 'admin_panel_settings',
+    intro:
+      'Xem, sửa, khoá và đặt lại mật khẩu cho tài khoản quản trị hệ thống. Tài khoản quản trị không được tạo trên giao diện; bạn không thể tự khoá tài khoản của mình.',
+    classFilter: false,
+    canCreate: false,
   },
 };
 
 export const listPath = (kind) => `/admin/${kind}`;
 
-// The profile page an account belongs to, for breadcrumbs: its first role in this order, else the all-accounts list.
-const ORDER = ['students', 'teachers', 'parents', 'school-managers'];
+// The page an account belongs to, for breadcrumbs: its first role in this order.
+const ORDER = ['students', 'teachers', 'parents', 'school-managers', 'system-admins'];
 export function kindOfRoles(roles = []) {
   return ORDER.find((k) => roles.includes(PROFILE_KINDS[k].role)) ?? null;
 }
 
 export function backOf(roles) {
-  const kind = kindOfRoles(roles);
-  return kind ? { to: listPath(kind), label: PROFILE_KINDS[kind].title } : { to: '/admin/accounts', label: 'Tài khoản' };
+  const kind = kindOfRoles(roles) ?? 'students';
+  return { to: listPath(kind), label: PROFILE_KINDS[kind].title };
 }

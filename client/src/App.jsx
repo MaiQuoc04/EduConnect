@@ -457,12 +457,18 @@ export default function App() {
         />
         {/* FE-13 System Administration (System Admin only) */}
         {[
-          ['admin/accounts', <AccountListPage key="all" />], // UC-97, UC-98 (every account; no create / import here)
+          // The list of every account was dropped (23/11/2026): old links go to the student accounts.
+          ['admin/accounts', <Navigate to="/admin/students" replace />],
           // Profile pages, one per account type (22/11/2026): list (UC-97), create (UC-95), import (UC-96).
           ...Object.keys(PROFILE_KINDS).flatMap((kind) => [
             [`admin/${kind}`, <AccountListPage key={kind} kind={kind} />],
-            [`admin/${kind}/new`, <CreateAccountPage key={kind} kind={kind} />],
-            [`admin/${kind}/import`, <ProfileImportPage key={kind} kind={kind} />],
+            // System Admin accounts are never created from the UI (business rules §3): no create / import pages.
+            ...(PROFILE_KINDS[kind].canCreate
+              ? [
+                  [`admin/${kind}/new`, <CreateAccountPage key={kind} kind={kind} />],
+                  [`admin/${kind}/import`, <ProfileImportPage key={kind} kind={kind} />],
+                ]
+              : []),
           ]),
           ['admin/accounts/:id', <AccountDetailPage />], // UC-100, UC-101
           ['admin/accounts/:id/edit', <EditAccountPage />], // UC-99 username + the fields of the import file

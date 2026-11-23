@@ -101,7 +101,7 @@ export default function AccountListPage({ kind }) {
   return (
     <>
       <nav className="breadcrumb" aria-label="Breadcrumb">
-        <span>EduConnect</span>/<span>Quản trị hệ thống</span>/
+        <span>EduConnect</span>/<span>{profile ? 'Quản lý tài khoản' : 'Quản trị hệ thống'}</span>/
         <span className="current">{profile ? profile.title : 'Tài khoản'}</span>
       </nav>
       <div className="page-header">
@@ -109,7 +109,7 @@ export default function AccountListPage({ kind }) {
           <h1 className="headline-lg">{profile ? profile.title : 'Tài khoản người dùng'}</h1>
           <p>{profile ? profile.intro : 'Tìm kiếm và quản lý trạng thái đăng nhập của mọi tài khoản trong trường.'}</p>
         </div>
-        {profile && (
+        {profile?.canCreate && (
           <div className="actions-row header-actions">
             <Link to={`${listPath(kind)}/import`} className="btn btn-secondary">
               <Icon name="upload_file" size="sm" />
