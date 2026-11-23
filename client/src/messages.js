@@ -8,6 +8,7 @@ const SCHOOL_SETTING_LABELS = {
   homeroomNorm: 'Định mức giáo viên chủ nhiệm',
   maxOver: 'Số tiết vượt định mức tối đa',
   maxPerDay: 'Số tiết tối đa một ngày',
+  editDeadlineTime: 'Giờ cuối giáo viên bộ môn được sửa điểm danh',
 };
 
 const ERROR_MESSAGES = {
@@ -267,6 +268,7 @@ const ERROR_MESSAGES = {
   MSG_SCHOOL_SETTINGS_INVALID: ({ field, reason, min, max } = {}) =>
     reason === 'ABOVE_NORM' ? 'Định mức GVCN không được lớn hơn định mức của giáo viên.'
       : reason === 'RANGE' ? `${SCHOOL_SETTING_LABELS[field] ?? 'Giá trị'} phải là số nguyên từ ${min} đến ${max}.`
+        : reason === 'TIME' ? `${SCHOOL_SETTING_LABELS[field] ?? 'Giờ'} phải là giờ hợp lệ (HH:MM) từ ${min} đến ${max}.`
         : `Vui lòng nhập ${(SCHOOL_SETTING_LABELS[field] ?? 'đủ các giá trị').toLowerCase()}.`,
   MSG_SCHOOL_SETTINGS_CHANGED: 'Cài đặt vừa được người khác thay đổi sau khi bạn mở trang. Hãy tải lại để xem giá trị mới.',
   MSG_SCHOOL_SETTINGS_NOT_READY: 'Chưa lưu được cài đặt: cơ sở dữ liệu cần chạy patch_v0.3_school_settings.sql.',

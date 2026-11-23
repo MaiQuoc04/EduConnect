@@ -47,6 +47,9 @@
 --   scheduling: teaching.norm, teaching.homeroom_norm, teaching.max_over, teaching.max_periods_per_day). Separate from
 --   system_settings, which only the System Admin edits. Existing database: run patch_v0.3_school_settings.sql (approved
 --   by the lead, run on the shared DB 21/11/2026).
+-- 24/11/2026: attendance.edit_deadline_time moved from system_settings to school_settings (the School Manager edits it,
+--   no longer the System Admin). Existing database: run patch_v0.3_school_settings_attendance.sql (PROPOSED – waiting
+--   for the lead's OK).
 -- How to run: Supabase > SQL Editor > paste the whole file > Run (on an empty database).
 -- Conventions:
 --   * Soft delete everywhere (deleted_at / deleted_by). Hard delete only for: post_likes (unlike),
@@ -955,7 +958,6 @@ INSERT INTO system_settings (setting_key, setting_value, description) VALUES
   ('upload.max_video_mb',           '50',    'Max size for videos (MB)'),
   ('otp.expiry_minutes',            '5',     'Password reset OTP lifetime (minutes)'),
   ('password_reset.request_cooldown_minutes', '15', 'Minimum time between two automatic resets of one account from a reset request (minutes)'),
-  ('attendance.edit_deadline_time', '23:59', 'Subject teacher can edit attendance until this time on the same day'),
   ('chat.delete_for_everyone_minutes', '15', 'Time allowed to delete a chat message for everyone (minutes)');
 
 -- School Manager settings (21/11/2026). Defaults = Thông tư 05/2025: 17 periods a week for a THPT teacher, 4 less for a
@@ -964,4 +966,6 @@ INSERT INTO school_settings (setting_key, setting_value, description) VALUES
   ('teaching.norm',                '17', 'Weekly teaching norm of a teacher (periods)'),
   ('teaching.homeroom_norm',       '13', 'Weekly teaching norm of a homeroom teacher (periods)'),
   ('teaching.max_over',            '4',  'Most periods a week a teacher may teach over the norm'),
-  ('teaching.max_periods_per_day', '4',  'Most periods a teacher should teach in one day (automatic scheduling)');
+  ('teaching.max_periods_per_day', '4',  'Most periods a teacher should teach in one day (automatic scheduling)'),
+  -- moved from system_settings 24/11/2026 (patch_v0.3_school_settings_attendance.sql): the School Manager edits it
+  ('attendance.edit_deadline_time', '23:59', 'Subject teacher can edit attendance until this time on the same day (HH:MM)');

@@ -54,6 +54,15 @@ reactions, attachments) is merged into one place after both are on `develop`.
   17 / 13 / 4 / 4) – approved by the lead, run on the shared DB 21/11 by Dung; 56 tables.** Schema file updated, so
   `scripts/dev-local-db.js` gets the table and its rows. Separate from `system_settings` (System Admin only, UC-102).
   **Owed:** UC / SCR id for the page (lead), use-cases.md / screens.md / permissions.md rows, SRS screen description.
+- **Attendance deadline moved to the School Manager settings (24/11/2026, Dung, `feature/fe-10-school-settings`,
+  not merged yet; PROPOSED):** "Giờ cuối giáo viên bộ môn được sửa điểm danh trong ngày" (`attendance.edit_deadline_time`,
+  §12) is now edited by the School Manager in "Cài đặt hệ thống" (group "Điểm danh", time 12:00–23:59, default 23:59)
+  instead of the System Admin. FE-12 `deadlineTime()` (`attendance.scope.js`, Quoc's module – one function changed)
+  reads `school_settings` first, then the old `system_settings` row, then 23:59, so nothing changes before the patch.
+  **DB: `patch_v0.3_school_settings_attendance.sql` (copies the value into `school_settings`, deletes the
+  `system_settings` row so the SA screen stops showing it) – NOT run, waiting for the lead.** Schema file updated.
+  Open: the earliest time 12:00 is an assumption; the SA page label for the key (Linh, `SystemSettingsPage.jsx`) can be
+  removed after the patch.
 - **FE-10 automatic scheduling: draft edited by hand before "Áp dụng" (21/11/2026, Dung, same branch, not merged
   yet):** on SCR-80 the School Manager can move a lesson (click or drag onto another cell of the class = swap), put
   another subject in a cell or leave it empty, and change the teacher of a class and subject (qualified teachers

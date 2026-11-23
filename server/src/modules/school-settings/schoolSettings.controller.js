@@ -7,9 +7,10 @@ export async function get(req, res) {
   res.json(await service.getSettings());
 }
 
-// PUT /api/v1/school-settings { teaching: { norm, homeroomNorm, maxOver, maxPerDay }, stamp }
+// PUT /api/v1/school-settings { teaching?: { norm, homeroomNorm, maxOver, maxPerDay }, attendance?: { editDeadlineTime },
+// stamp }
 export async function update(req, res) {
-  const teaching = service.checkTeaching(req.body);
+  const values = service.checkBody(req.body);
   const stamp = typeof req.body?.stamp === 'string' ? req.body.stamp : '';
-  res.json(await service.updateSettings({ teaching, stamp }, req.user, req.ip));
+  res.json(await service.updateSettings({ values, stamp }, req.user, req.ip));
 }

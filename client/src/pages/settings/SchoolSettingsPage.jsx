@@ -7,32 +7,56 @@ import { errorText } from '../../messages.js';
 import '../timetable/timetable.css';
 import './schoolSettings.css';
 
-// "Cài đặt hệ thống" of the School Manager (Dung, 21/11/2026). First group: the teaching load used by automatic
-// scheduling, moved here from part "4. Giáo viên" of the automatic scheduling screen. The System Admin has its own
-// settings page (/admin/settings, UC-102); these values are the school's, not the system's.
+// "Cài đặt hệ thống" of the School Manager (Dung, 21/11/2026). Groups:
+//   Giáo viên – the teaching load used by automatic scheduling (moved from part "4. Giáo viên" of SCR-80);
+//   Điểm danh – the time until which a subject teacher can edit the attendance of the day (moved from the System Admin
+//               settings 24/11/2026; business rules §12).
+// The System Admin has its own settings page (/admin/settings, UC-102); these values are the school's.
 // ASSUMPTION: no UC / SCR id yet (to be given by the team lead). Table: patch_v0.3_school_settings.sql (run 21/11/2026).
 
-const FIELDS = [
-  { key: 'norm', label: 'Định mức giáo viên', unit: 'tiết/tuần', help: 'Số tiết một giáo viên dạy trong tuần (Thông tư 05/2025: 17 tiết với giáo viên THPT).' },
-  { key: 'homeroomNorm', label: 'Định mức giáo viên chủ nhiệm', unit: 'tiết/tuần', help: 'Giáo viên chủ nhiệm được giảm tiết; không lớn hơn định mức giáo viên.' },
-  { key: 'maxOver', label: 'Vượt định mức tối đa', unit: 'tiết/tuần', help: 'Xếp tự động không phân công quá định mức cộng số tiết này.' },
-  { key: 'maxPerDay', label: 'Số tiết tối đa một ngày', unit: 'tiết/ngày', help: 'Xếp tự động hạn chế xếp cho một giáo viên quá số tiết này trong một ngày.' },
+const SECTIONS = [
+  {
+    group: 'teaching',
+    title: 'Giáo viên',
+    intro: 'Định mức giảng dạy dùng khi xếp tự động phân công và thời khoá biểu.',
+    note: <>Danh sách giáo viên bận vẫn chọn riêng cho từng lần xếp ở trang <Link to="/timetables/auto">Xếp tự động</Link>. Thời khoá biểu đã lưu không thay đổi khi sửa các giá trị này.</>,
+    fields: [
+      { key: 'norm', label: 'Định mức giáo viên', unit: 'tiết/tuần', help: 'Số tiết một giáo viên dạy trong tuần (Thông tư 05/2025: 17 tiết với giáo viên THPT).' },
+      { key: 'homeroomNorm', label: 'Định mức giáo viên chủ nhiệm', unit: 'tiết/tuần', help: 'Giáo viên chủ nhiệm được giảm tiết; không lớn hơn định mức giáo viên.' },
+      { key: 'maxOver', label: 'Vượt định mức tối đa', unit: 'tiết/tuần', help: 'Xếp tự động không phân công quá định mức cộng số tiết này.' },
+      { key: 'maxPerDay', label: 'Số tiết tối đa một ngày', unit: 'tiết/ngày', help: 'Xếp tự động hạn chế xếp cho một giáo viên quá số tiết này trong một ngày.' },
+    ],
+  },
+  {
+    group: 'attendance',
+    title: 'Điểm danh',
+    intro: 'Thời hạn giáo viên bộ môn được sửa điểm danh các tiết mình dạy.',
+    note: 'Sau giờ này, giáo viên chủ nhiệm chỉ còn đổi được vắng có phép ↔ không phép, và Quản lý nhà trường sửa được khi cần (quy định điểm danh §12). Áp dụng ngay cho các tiết của hôm nay.',
+    fields: [
+      { key: 'editDeadlineTime', type: 'time', label: 'Giờ cuối giáo viên bộ môn được sửa điểm danh trong ngày', unit: 'cùng ngày', help: 'Giáo viên bộ môn sửa được điểm danh của tiết mình dạy đến giờ này trong chính ngày học.' },
+    ],
+  },
 ];
+const FIELDS = SECTIONS.flatMap((s) => s.fields.map((f) => ({ ...f, group: s.group, id: `${s.group}.${f.key}` })));
 
-const toText = (t) => Object.fromEntries(FIELDS.map((f) => [f.key, String(t[f.key])]));
+const toText = (d) => Object.fromEntries(FIELDS.map((f) => [f.id, String(d[f.group][f.key])]));
 
 function check(form, limits) {
   const problems = {};
-  const n = {};
+  const values = Object.fromEntries(SECTIONS.map((s) => [s.group, {}]));
   for (const f of FIELDS) {
-    const v = form[f.key].trim();
-    const l = limits[f.key];
-    if (!v) problems[f.key] = 'Vui lòng nhập giá trị.';
-    else if (!/^\d{1,3}$/.test(v) || Number(v) < l.min || Number(v) > l.max) problems[f.key] = `Nhập số nguyên từ ${l.min} đến ${l.max}.`;
-    else n[f.key] = Number(v);
+    const v = form[f.id].trim();
+    const l = limits[f.group][f.key];
+    if (!v) problems[f.id] = 'Vui lòng nhập giá trị.';
+    else if (f.type === 'time') {
+      if (!/^([01]\d|2[0-3]):[0-5]\d$/.test(v) || v < l.min || v > l.max) problems[f.id] = `Chọn giờ từ ${l.min} đến ${l.max}.`;
+      else values[f.group][f.key] = v;
+    } else if (!/^\d{1,3}$/.test(v) || Number(v) < l.min || Number(v) > l.max) problems[f.id] = `Nhập số nguyên từ ${l.min} đến ${l.max}.`;
+    else values[f.group][f.key] = Number(v);
   }
-  if (!problems.norm && !problems.homeroomNorm && n.homeroomNorm > n.norm) problems.homeroomNorm = 'Không được lớn hơn định mức giáo viên.';
-  return { problems, values: n };
+  const t = values.teaching;
+  if (!problems['teaching.norm'] && !problems['teaching.homeroomNorm'] && t.homeroomNorm > t.norm) problems['teaching.homeroomNorm'] = 'Không được lớn hơn định mức giáo viên.';
+  return { problems, values };
 }
 
 function formatTime(ts) {
@@ -56,14 +80,14 @@ export default function SchoolSettingsPage() {
     try {
       const d = await getSchoolSettings();
       setData(d);
-      setForm(toText(d.teaching));
+      setForm(toText(d));
     } catch (err) {
       setLoadError(errorText(err));
     }
   }, []);
   useEffect(() => { load(); }, [load]);
 
-  const dirty = Boolean(data && form && FIELDS.some((f) => form[f.key].trim() !== String(data.teaching[f.key])));
+  const dirty = Boolean(data && form && FIELDS.some((f) => form[f.id].trim() !== String(data[f.group][f.key])));
   useEffect(() => {
     if (!dirty) return undefined;
     const warn = (e) => { e.preventDefault(); e.returnValue = ''; };
@@ -85,10 +109,10 @@ export default function SchoolSettingsPage() {
     setSaving(true);
     setSaveError(null);
     try {
-      const d = await saveSchoolSettings({ teaching: values, stamp: data.stamp });
+      const d = await saveSchoolSettings({ ...values, stamp: data.stamp });
       setData(d);
-      setForm(toText(d.teaching));
-      toast('Đã lưu cài đặt giáo viên.');
+      setForm(toText(d));
+      toast('Đã lưu cài đặt hệ thống.');
     } catch (err) {
       setSaveError(err);
     } finally {
@@ -104,8 +128,14 @@ export default function SchoolSettingsPage() {
       <div className="tt-head">
         <div>
           <h1 className="headline-xl">Cài đặt hệ thống</h1>
-          <p>Các thông số chung của nhà trường. Thay đổi áp dụng cho những lần xếp thời khoá biểu tự động sau khi lưu.</p>
+          <p>Các thông số chung của nhà trường.</p>
         </div>
+        {data.updatedAt && (
+          <div className="ss-updated">
+            <span className="label-upper">Cập nhật gần nhất</span>
+            <span>{formatTime(data.updatedAt)}{data.updatedByName ? ` · ${data.updatedByName}` : ''}</span>
+          </div>
+        )}
       </div>
 
       {!data.ready && (
@@ -114,41 +144,37 @@ export default function SchoolSettingsPage() {
         </div>
       )}
 
-      <form className="card card-outline ss-card" onSubmit={save} noValidate>
-        <header className="ss-card-head">
-          <div>
-            <h2 className="title-sm">Giáo viên</h2>
-            <p className="caption muted">Định mức giảng dạy dùng khi xếp tự động phân công và thời khoá biểu.</p>
-          </div>
-          {data.updatedAt && (
-            <div className="ss-updated">
-              <span className="label-upper">Cập nhật gần nhất</span>
-              <span>{formatTime(data.updatedAt)}{data.updatedByName ? ` · ${data.updatedByName}` : ''}</span>
+      <form className="ss-form" onSubmit={save} noValidate>
+        {SECTIONS.map((s) => (
+          <section key={s.group} className="card card-outline ss-card" aria-labelledby={`ss-${s.group}`}>
+            <header className="ss-card-head">
+              <div>
+                <h2 className="title-sm" id={`ss-${s.group}`}>{s.title}</h2>
+                <p className="caption muted">{s.intro}</p>
+              </div>
+            </header>
+            <div className="ss-grid">
+              {s.fields.map((f) => {
+                const id = `${s.group}.${f.key}`;
+                const l = data.limits[s.group][f.key];
+                return (
+                  <label key={id} className="field">
+                    <span className="field-label">{f.label}</span>
+                    <div className="ss-input">
+                      {f.type === 'time'
+                        ? <input className="input" type="time" min={l.min} max={l.max} value={form[id]} aria-invalid={Boolean(problems[id])} onChange={(e) => setForm({ ...form, [id]: e.target.value })} />
+                        : <input className="input" type="number" inputMode="numeric" min={l.min} max={l.max} value={form[id]} aria-invalid={Boolean(problems[id])} onChange={(e) => setForm({ ...form, [id]: e.target.value })} />}
+                      <span className="ss-unit">{f.unit}</span>
+                    </div>
+                    <span className="field-help">{f.help} Từ {l.min} đến {l.max}; mặc định {l.default}.</span>
+                    {problems[id] && <span className="field-error">{problems[id]}</span>}
+                  </label>
+                );
+              })}
             </div>
-          )}
-        </header>
-
-        <div className="ss-grid">
-          {FIELDS.map((f) => {
-            const l = data.limits[f.key];
-            return (
-              <label key={f.key} className="field">
-                <span className="field-label">{f.label}</span>
-                <div className="ss-input">
-                  <input className="input" type="number" inputMode="numeric" min={l.min} max={l.max} value={form[f.key]}
-                    aria-invalid={Boolean(problems[f.key])} onChange={(e) => setForm({ ...form, [f.key]: e.target.value })} />
-                  <span className="ss-unit">{f.unit}</span>
-                </div>
-                <span className="field-help">{f.help} Từ {l.min} đến {l.max}; mặc định {l.default}.</span>
-                {problems[f.key] && <span className="field-error">{problems[f.key]}</span>}
-              </label>
-            );
-          })}
-        </div>
-
-        <div className="notice ink"><Icon name="info" />
-          <p>Danh sách giáo viên bận vẫn chọn riêng cho từng lần xếp ở trang <Link to="/timetables/auto">Xếp tự động</Link>. Thời khoá biểu đã lưu không thay đổi khi sửa các giá trị này.</p>
-        </div>
+            <div className="notice ink"><Icon name="info" /><p>{s.note}</p></div>
+          </section>
+        ))}
 
         {saveError && (
           <div className="notice amber" role="alert"><Icon name="error_outline" />
@@ -159,9 +185,9 @@ export default function SchoolSettingsPage() {
           </div>
         )}
 
-        <div className="ss-actions">
+        <div className="ss-actions card card-outline">
           <span className="caption muted">{dirty ? 'Có thay đổi chưa lưu' : 'Chưa có thay đổi'}</span>
-          <button type="button" className="btn btn-secondary" disabled={!dirty || saving} onClick={() => { setForm(toText(data.teaching)); setSaveError(null); }}>Đặt lại</button>
+          <button type="button" className="btn btn-secondary" disabled={!dirty || saving} onClick={() => { setForm(toText(data)); setSaveError(null); }}>Đặt lại</button>
           <button type="submit" className="btn btn-primary" disabled={!dirty || !valid || saving || !data.ready}>
             <Icon name="save" size="sm" /> {saving ? 'Đang lưu…' : 'Lưu cài đặt'}
           </button>
