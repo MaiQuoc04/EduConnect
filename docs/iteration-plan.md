@@ -28,6 +28,8 @@ reactions, attachments) is merged into one place after both are on `develop`.
 
 ## Current status (read first; update after every merge, schema patch or new decision)
 
+- **FE-13 settings `timetable.class_periods_min` / `_max` dropped (23/11/2026, Linh):** added 22/11 and removed the next
+  day. **DB: `patch_v0.3_class_periods_settings_remove.sql` (deletes the 2 rows) – run on the shared DB 23/11 by Linh.**
 - **FE-13 System Admin profile pages (22/11/2026, Linh, `feature/fe-13-system-administration`, not merged yet;
   supervisor's request):** menu "Hồ sơ học sinh", "Hồ sơ giáo viên", "Hồ sơ phụ huynh", "Quản lý nhà trường"
   (`/admin/students|teachers|parents|school-managers`): the UC-97 list with the role fixed, "Thêm" (UC-95, role fixed,
@@ -35,10 +37,6 @@ reactions, attachments) is merged into one place after both are on `develop`.
   of every account without create / import. UC-99 widened: `PUT /admin/accounts/:id` (was `/identifiers`) changes the
   username and the fields of the import file only. No schema change; FE-02 / FE-03 / FE-14 code untouched. SRS
   (UC-95, 96, 99, SCR-59, 61, 62, 76) to update.
-- **FE-13 settings `timetable.class_periods_min` / `_max` (22/11/2026, Linh, agreed with the lead):** smallest / largest total periods
-  per week of one class on UC-102 "Cài đặt hệ thống" (group "Thời khoá biểu"), 1–48, min ≤ max, defaults 25 / 35
-  (ASSUMPTION). **DB: `patch_v0.3_class_periods_settings.sql` (2 rows) – run on the shared DB 22/11 by Linh**
-  (check: both keys there, 25 / 35); schema file updated. Not enforced anywhere yet: FE-04 UC-26 (Khanh) / FE-10 auto scheduling (Dung) would read them.
 
 - **FE-04 / FE-06 follow-ups merged into `develop` (21/11/2026, Quoc, `feature/fe-05-group-feed`, merge `7eb509b`;
   client `npm run build` and server `npm test` (20/20) pass on `develop`):** six commits of Khanh, 20–21/11.
