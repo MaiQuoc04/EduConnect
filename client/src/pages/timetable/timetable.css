@@ -686,3 +686,4 @@
 .ta-swap-option:hover { border-color: var(--ink-600); background: var(--ink-50); }
 .ta-swap-option span { color: var(--graphite-600); font-size: 12px; }
 .ta-swap-bad summary { cursor: pointer; font-size: 13px; color: var(--graphite-600); }
+.ta-swap-option .ta-soft-note { color: var(--amber); }

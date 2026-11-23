@@ -495,6 +495,44 @@ export default function TimetableAutoPage() {
     }
     return null;
   };
+  // Teachers who can take a class and subject (every lesson of it in the draft): all teachers of the school registered
+  // for the subject. `why` says why one cannot be chosen: teaching elsewhere at one of these lessons, or over the
+  // weekly maximum (norm + periods over it). The current teacher comes first.
+  const teacherChoices = (classId, subjectId) => {
+    const sid = String(subjectId);
+    const cur = assignOf.get(`${classId}:${sid}`)?.teacherId;
+    const ranCfg = ranWith ? JSON.parse(ranWith) : {};
+    const fixedSid = ranCfg.fixed?.slots?.length ? String(ranCfg.fixed.subjectId) : null;
+    const teaching = result?.teaching ?? opts.defaults;
+    const periodsOf2 = (cid, s2) => {
+      const n = (result?.classSubjects?.[cid] ?? []).find((x) => String(x.subjectId) === String(s2))?.periods ?? 0;
+      return String(s2) === fixedSid ? Math.max(0, n - ranCfg.fixed.slots.length) : n; // Chào cờ / Sinh hoạt lớp not counted
+    };
+    // Weekly load of a teacher with this draft: classes outside the run + every class and subject of the draft.
+    const loadNow = (tid) => (result?.teacherBase?.[tid]?.base ?? 0)
+      + assignList.filter((a) => a.teacherId === tid).reduce((n, a) => n + periodsOf2(a.classId, a.subjectId), 0);
+    const add = periodsOf2(classId, sid);
+    const cells = (timetablesNow?.[classId] ?? []).filter((e) => e.subjectId === sid).map((e) => `${e.weekday}-${e.period}`);
+    const list = opts.teachers.filter((t) => (t.subjectIds ?? []).map(String).includes(sid)).map((t) => {
+      const tid = String(t.teacherId);
+      const norm = result?.teacherBase?.[tid]?.homeroom ? teaching.homeroomNorm : teaching.norm;
+      const cap = norm + Number(teaching.maxOver ?? 0);
+      const now = loadNow(tid);
+      const base = { tid, name: t.name, code: t.code, now, norm, cap };
+      if (tid === cur) return { ...base, current: true, after: now, why: '' };
+      const after = now + add;
+      const clashAt = cells.filter((k) => teacherElsewhere(tid, classId, k));
+      const fixedOther = sid === fixedSid ? assignList.find((a) => a.subjectId === sid && a.teacherId === tid && a.classId !== String(classId)) : null;
+      let why = '';
+      if (clashAt.length) why = `bận ${clashAt.map((k) => { const [w, p] = cellOf(k); return `${WEEKDAY_LONG[w - 1]} tiết ${p}`; }).join(', ')} (${teacherElsewhere(tid, classId, clashAt[0])})`;
+      else if (fixedOther) why = `đã phụ trách ${names.subjects[sid]} lớp ${className(fixedOther.classId)}, mà ô cố định trùng giờ ở mọi lớp`;
+      else if (after > cap) why = `nhận thêm ${add} tiết thì thành ${after}/tuần, quá mức tối đa ${cap} (định mức ${norm} + ${teaching.maxOver})`;
+      return { ...base, current: false, after, why };
+    });
+    if (cur && !list.some((x) => x.current)) list.unshift({ tid: cur, name: names.teachers[cur] ?? cur, code: '', now: loadNow(cur), after: loadNow(cur), norm: teaching.norm, cap: teaching.norm + teaching.maxOver, current: true, why: '' });
+    return list.sort((a, b) => Number(b.current) - Number(a.current) || Number(Boolean(a.why)) - Number(Boolean(b.why)) || a.after - b.after || a.name.localeCompare(b.name, 'vi'));
+  };
+
   const jumpTo = (v) => {
     const cid = v.classId ?? v.classIds?.[0];
     if (cid && v.weekday && timetablesNow) {
@@ -904,6 +942,34 @@ export default function TimetableAutoPage() {
                                     {entry && <span className="field-help">Thay môn thì {names.subjects[entry.subjectId]} sẽ thiếu 1 tiết ({placed(entry.subjectId)}/{need(entry.subjectId)} → {placed(entry.subjectId) - 1}/{need(entry.subjectId)}); cần xếp bù {names.subjects[entry.subjectId]} vào một ô trống khác.</span>}
                                   </label>
                                 </div>
+                                {entry && form.mode !== 'TIMETABLE' && (() => {
+                                  const choices = teacherChoices(pickClass, entry.subjectId);
+                                  const ok = choices.filter((t) => !t.current && !t.why);
+                                  const bad = choices.filter((t) => !t.current && t.why);
+                                  const lessons = placed(entry.subjectId);
+                                  return (
+                                    <div className="ta-cell-section">
+                                      <span className="field-label">3. Hoặc đổi giáo viên {names.subjects[entry.subjectId]} của lớp
+                                        <span className="caption muted"> (đổi cho cả {lessons} tiết {names.subjects[entry.subjectId]} của lớp {className(pickClass)} – mỗi lớp – môn chỉ một giáo viên)</span></span>
+                                      {ok.length === 0 ? <p className="caption muted">Không còn giáo viên {names.subjects[entry.subjectId]} nào rảnh ở mọi tiết này.</p> : (
+                                        <div className="ta-swap-list">
+                                          {ok.map((t) => (
+                                            <button key={t.tid} type="button" className="ta-swap-option" onClick={() => setTeacher(pickClass, entry.subjectId, t.tid)}>
+                                              <strong>{t.name}</strong>
+                                              <span>{t.now} → {t.after} tiết/tuần (định mức {t.norm})</span>
+                                              {t.after > t.norm && <span className="ta-soft-note">Vượt định mức {t.after - t.norm} tiết – được phép, cộng điểm phạt</span>}
+                                            </button>
+                                          ))}
+                                        </div>
+                                      )}
+                                      {bad.length > 0 && (
+                                        <details className="ta-swap-bad"><summary>{bad.length} giáo viên không chọn được – xem lý do</summary>
+                                          <ul className="ta-list">{bad.map((t) => <li key={t.tid}>{t.name}: {t.why}.</li>)}</ul>
+                                        </details>
+                                      )}
+                                    </div>
+                                  );
+                                })()}
                                 {entry && (
                                   <div className="ta-cell-actions">
                                     <button type="button" className="btn btn-secondary btn-sm" onClick={() => setCellSubject(pickClass, selCell, '')}>Để trống ô này</button>
@@ -935,8 +1001,7 @@ export default function TimetableAutoPage() {
                             const o = original.get(`${a.classId}:${a.subjectId}`);
                             const byHand = o && o.teacherId !== a.teacherId;
                             const err = review?.errors.find((v) => v.classId === a.classId && v.subjectId === a.subjectId && ['NOT_QUALIFIED', 'TEACHER_LOCKED', 'TEACHER_UNKNOWN'].includes(v.code));
-                            const qualified = opts.teachers.filter((t) => (t.subjectIds ?? []).map(String).includes(String(a.subjectId)));
-                            if (!qualified.some((t) => String(t.teacherId) === a.teacherId)) qualified.unshift({ teacherId: a.teacherId, name: names.teachers[a.teacherId] ?? a.teacherId, code: '' });
+                            const choices = teacherChoices(a.classId, a.subjectId);
                             return (
                               <tr key={`${a.classId}:${a.subjectId}`} className={err ? 'is-error' : ''}>
                                 <td>{className(a.classId)}</td><td>{names.subjects[a.subjectId]}</td>
@@ -944,18 +1009,11 @@ export default function TimetableAutoPage() {
                                   {draft && form.mode !== 'TIMETABLE' ? (
                                     <select className="input ta-teacher-pick" value={a.teacherId} aria-label={`Giáo viên ${className(a.classId)} – ${names.subjects[a.subjectId]}`}
                                       onChange={(e) => setTeacher(a.classId, a.subjectId, e.target.value)}>
-                                      {qualified.map((t) => {
-                                        const tid = String(t.teacherId);
-                                        const l = loadOf.get(tid);
-                                        if (tid === a.teacherId) return <option key={tid} value={tid}>{t.name} – đang phân công{l ? ` · ${l.load}/${l.norm} tiết` : ''}</option>;
-                                        // Refused: the teacher teaches elsewhere at one of this pair's lessons, or would go over norm + periods over it.
-                                        const cells = (timetablesNow?.[a.classId] ?? []).filter((e) => e.subjectId === a.subjectId).map((e) => `${e.weekday}-${e.period}`);
-                                        const clash = cells.filter((k) => teacherElsewhere(tid, a.classId, k)).length;
-                                        const periods = (result.classSubjects?.[a.classId] ?? []).find((x) => String(x.subjectId) === a.subjectId)?.periods ?? cells.length;
-                                        const cap = l ? l.norm + Number(opts.defaults.maxOver ?? 0) : null;
-                                        const why = clash ? `trùng giờ ${clash} tiết của lớp này` : l && l.load + periods > cap ? `sẽ thành ${l.load + periods} tiết, quá mức tối đa ${cap}` : '';
-                                        return <option key={tid} value={tid} disabled={Boolean(why)}>{t.name}{t.code ? ` (${t.code})` : ''}{why ? ` – không chọn được: ${why}` : l ? ` – đang ${l.load}/${l.norm} tiết` : ' – chưa dạy lớp nào trong lần xếp'}</option>;
-                                      })}
+                                      {choices.map((t) => (
+                                        <option key={t.tid} value={t.tid} disabled={Boolean(t.why)}>
+                                          {t.name}{t.code ? ` (${t.code})` : ''}{t.current ? ` – đang phân công · ${t.now}/${t.norm} tiết` : t.why ? ` – không chọn được: ${t.why}` : ` – rảnh · ${t.now} → ${t.after}/${t.norm} tiết${t.after > t.norm ? ' (vượt định mức)' : ''}`}
+                                        </option>
+                                      ))}
                                     </select>
                                   ) : names.teachers[a.teacherId]}
                                   {err && <span className="caption tt-red ta-row-error">{problemText(err, names, className)}</span>}

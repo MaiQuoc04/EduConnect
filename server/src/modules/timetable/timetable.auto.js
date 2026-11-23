@@ -433,6 +433,9 @@ function editInfo(ctx) {
     classSubjects: Object.fromEntries(ctx.classes.map((c) => [c.classId, c.subjects])),
     homerooms: Object.fromEntries(ctx.classes.map((c) => [c.classId, c.homeroomTeacherId ?? null])),
     busy: Object.fromEntries([...ctx.busyWhy].map(([t, m]) => [t, Object.fromEntries(m)])),
+    // Periods each teacher already teaches in classes outside the run, and whether they are a homeroom teacher, so the
+    // screen can check the weekly maximum of any teacher before offering them.
+    teacherBase: Object.fromEntries(ctx.teachers.map((t) => [t.teacherId, { base: t.baseLoad, homeroom: Boolean(t.homeroom) }])),
   };
 }
 
