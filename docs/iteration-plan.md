@@ -28,6 +28,22 @@ reactions, attachments) is merged into one place after both are on `develop`.
 
 ## Current status (read first; update after every merge, schema patch or new decision)
 
+- **Deploy config merged into `develop` (23/11/2026, Quoc, `chore/deploy-config` by Anh, merge `544f60e`; client
+  `npm run build` and server `npm test` (21/21) pass on `develop`):** target Vercel (client) + VPS with nginx and pm2
+  (server) + Supabase (DB and Storage); guide in `DEPLOY.md` (Vietnamese). Client reads `VITE_API_URL` /
+  `VITE_SOCKET_URL` at build time (`api/client.js`, `SocketContext.jsx`; empty or unset = same origin through the
+  Vite proxy, so development is unchanged), `client/.env.example`, `client/vercel.json` (SPA rewrite to
+  `index.html`). Server: `trust proxy` `true` → `1` (one nginx hop, so clients cannot forge `req.ip` in
+  `activity_logs`, §13). No schema change.
+  - **Owed in `DEPLOY.md` (Anh):** §3.1 / §3.3 / §4 still say "PHẢI SỬA CODE" and quote the old code, though this
+    branch already made those changes; it says Node listens only on `127.0.0.1`, but `server.listen(env.port)` listens
+    on every interface (safe while `ufw` keeps port 5000 closed; fix the sentence or bind to `127.0.0.1` in
+    production). At deploy time, check the shared DB for old `/uploads/...` URLs, which break once files are served
+    from Supabase only.
+  - Still not merged (23/11): `feature/fe-08-school-feed` (`baaa3a5`, 19/11), `feature/fe-10-school-settings`
+    (`d474b16`, 23/11), `feature/fe-13-system-administration` (`f32bfbe`, 23/11), `fix/fe-07-registration-list`
+    (`d0db83b`, 21/11).
+
 - **FE-12 prefill merged into `develop` (23/11/2026, Quoc, `feature/fe-12-attendance`, merge `23e4d9f`; build and
   `npm test` pass on `develop`):** a period
   not taken yet opens prefilled from the nearest earlier taken period of the same day and session (statuses and
