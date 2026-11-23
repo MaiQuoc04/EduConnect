@@ -28,6 +28,9 @@ reactions, attachments) is merged into one place after both are on `develop`.
 
 ## Current status (read first; update after every merge, schema patch or new decision)
 
+- **FE-13 "Cài đặt hệ thống" without the attendance deadline (23/11/2026, Linh):** `attendance.edit_deadline_time`
+  is hidden from UC-102 (not listed, not editable by System Admin). No DB change: the row stays and FE-12 still reads
+  it. **Follow-up owed (Dung):** edit it on the School Manager's settings page (`/school-settings`).
 - **FE-13 settings `timetable.class_periods_min` / `_max` dropped (23/11/2026, Linh):** added 22/11 and removed the next
   day. **DB: `patch_v0.3_class_periods_settings_remove.sql` (deletes the 2 rows) – run on the shared DB 23/11 by Linh.**
 - **FE-13 System Admin profile pages (22/11/2026, Linh, `feature/fe-13-system-administration`, not merged yet;

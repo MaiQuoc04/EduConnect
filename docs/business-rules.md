@@ -810,6 +810,9 @@ Boundaries that are easy to get wrong:
   (01/11/2026): wrong passwords before a lock 3–10; lock step 1–60 min; lock max 1–1440 min; images / files 1–50 MB;
   videos 1–50 MB (lowered from 200 by the lead 11/11/2026: the Supabase Free plan takes files up to 50 MB); OTP lifetime 1–30 min; reset request cooldown 1–1440 min (default 15); attendance deadline a time
   `HH:MM`; `chat.delete_for_everyone_minutes` 1–1440 min (default 15, §6; agreed by the lead 07/11/2026).
+  23/11/2026 (Linh): the attendance edit deadline (`attendance.edit_deadline_time`) is no longer on the System Admin
+  settings page; the row stays in `system_settings` and FE-12 keeps reading it. Dung moves its editing to the School
+  Manager's settings page.
 - `activity_logs` (never deleted) records only important actions: sign-in success / failure, account create /
   import / lock / unlock, password reset, role change, setting change, grade unlock. **The log is only kept in the
   database – there is no screen to view it** (UC "View Activity Log" and its screen removed 01/11/2026 on the
