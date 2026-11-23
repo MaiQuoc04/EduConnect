@@ -7,6 +7,7 @@ import { errorText, GENDER_LABELS, RELATIONSHIP_LABELS } from '../../messages.js
 import { formatDate } from '../../utils/format.js';
 import { clearHandedOverParentDetail, peekHandedOverParentDetail } from './parentHandoff.js';
 import './ParentDetailPage.css';
+import SchoolAccountCard from '../admin/SchoolAccountCard.jsx';
 
 // Same labels and texts as Student Detail (SCR-08), so both detail screens read alike.
 const ENROLLMENT_LABELS = { STUDYING: 'Đang học', TRANSFERRED: 'Đã chuyển lớp', DROPPED: 'Đã nghỉ học' };
@@ -511,12 +512,14 @@ export default function ParentDetailPage() {
           </dl>
           <p className="caption muted parent-detail-sa-note">
             <Icon name="lock" size="sm" />
-            Tên đăng nhập, số điện thoại và email chỉ Quản trị hệ thống thay đổi được.
+            Tên đăng nhập chỉ Quản trị hệ thống thay đổi được. Email và số điện thoại sửa ở thẻ Tài khoản đăng nhập.
           </p>
         </section>
 
         <div className="parent-detail-side">
           <ChildrenCard items={children} />
+          {/* FE-13: email / phone, password reset, lock (School Manager, 23/11/2026) */}
+          <SchoolAccountCard userId={parent.userId} username={parent.username} />
         </div>
       </div>
     </div>
