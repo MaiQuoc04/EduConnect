@@ -37,7 +37,7 @@ router.get('/control', SM, ctrl.listBooks); // ?semesterId&classId&subjectId&sta
 router.post('/books/:classId/:subjectId/unlock', SM, ctrl.unlock); // UC-86
 router.get('/history', SM, ctrl.history); // UC-87 ?semesterId&classId&subjectId&search&page
 
-// SCR-47 Academic Results, SCR-48 Class Ranking
+// SCR-47 Academic Results (averages and academic level; no ranking since 23/11/2026)
 router.get('/classes', STAFF, ctrl.classes); // ?schoolYearId
 router.get('/classes/:classId/results', STAFF, ctrl.classResults); // UC-88 / UC-89 ?period=<semesterId>|YEAR
 router.get('/students', requireRole('STUDENT', 'PARENT'), ctrl.myStudents);
