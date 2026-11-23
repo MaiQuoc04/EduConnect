@@ -11,7 +11,8 @@ import './admin.css';
 
 // SCR-61 Create Account (UC-95, FE-13). System Admin creates one account; the server generates the username and a
 // temporary password that is shown here once. Opened from a profile page (`kind`, 22/11/2026): that page's role is
-// ticked and cannot be removed; other roles that can be combined with it may be added (not for students).
+// ticked and cannot be removed; other roles that can be combined with it may be added. The student page shows no
+// role picker at all (24/11/2026): a student has only the Student role.
 // School Manager (23/11/2026) opens it from their student / teacher / parent lists: no School Manager role offered
 // (the server refuses it too), back to their own list.
 
@@ -265,16 +266,14 @@ export default function CreateAccountPage({ kind }) {
               </Field>
             </div>
 
+            {/* A student account has only the Student role, so the page shows no role picker (24/11/2026). */}
+            {roleChoices.length > 1 && (
             <div className="span-2">
               <Field
                 id="roles"
                 label="Vai trò"
                 required
-                help={
-                  roleChoices.length > 1
-                    ? `Vai trò ${profile.label.toLowerCase()} luôn được chọn. Có thể thêm vai trò khác nếu người này kiêm nhiệm.`
-                    : 'Học sinh không kết hợp với vai trò khác.'
-                }
+                help={`Vai trò ${profile.label.toLowerCase()} luôn được chọn. Có thể thêm vai trò khác nếu người này kiêm nhiệm.`}
                 error={err('roles')}
               >
                 <div className="role-picker" id="roles" role="group" aria-label="Vai trò">
@@ -292,6 +291,7 @@ export default function CreateAccountPage({ kind }) {
                 </div>
               </Field>
             </div>
+            )}
 
             <Field id="email" label="Email" hint="Dùng để lấy lại mật khẩu" error={err('email')}>
               <input
