@@ -28,6 +28,7 @@ const BY_FIELD = {
     REQUIRED: 'Vui lòng chọn ít nhất một vai trò.',
     EXCLUSIVE: 'Học sinh không thể kết hợp với vai trò khác.',
     SYSTEM_ADMIN_NOT_ALLOWED: 'Không thể tạo tài khoản Quản trị hệ thống tại màn hình này.',
+    SCHOOL_ROLES_ONLY: 'Bạn chỉ tạo được tài khoản học sinh, giáo viên và phụ huynh.',
   },
   email: { INVALID: 'Email không hợp lệ.', DUPLICATE: 'Email này đã được dùng cho tài khoản khác.' },
   phone: {

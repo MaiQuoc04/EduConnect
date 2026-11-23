@@ -2,15 +2,18 @@ import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { createAccount, listDepartmentOptions } from '../../api/admin.js';
 import Icon from '../../components/Icon.jsx';
+import { useAuth } from '../../context/AuthContext.jsx';
 import { useToast } from '../../context/ToastContext.jsx';
 import { errorText, GENDER_LABELS, ROLE_LABELS } from '../../messages.js';
 import { fieldText } from './accountFields.js';
-import { listPath, PROFILE_KINDS } from './profileKinds.js';
+import { listOf, PROFILE_KINDS } from './profileKinds.js';
 import './admin.css';
 
 // SCR-61 Create Account (UC-95, FE-13). System Admin creates one account; the server generates the username and a
 // temporary password that is shown here once. Opened from a profile page (`kind`, 22/11/2026): that page's role is
 // ticked and cannot be removed; other roles that can be combined with it may be added (not for students).
+// School Manager (23/11/2026) opens it from their student / teacher / parent lists: no School Manager role offered
+// (the server refuses it too), back to their own list.
 
 // System Admin accounts are not created from this screen (decided 28/10/2026); see accounts.service createAccount.
 const ROLE_ORDER = ['STUDENT', 'PARENT', 'TEACHER', 'SCHOOL_MANAGER'];
@@ -73,7 +76,7 @@ function CopyBox({ value, label, secret }) {
 }
 
 // Result of UC-95 step 11: the only time the temporary password is visible.
-function CreatedAccount({ result, onAnother, back }) {
+function CreatedAccount({ result, onAnother, back, showDetail }) {
   const { account, temporaryPassword } = result;
   return (
     <section className="card card-outline admin-form">
@@ -105,9 +108,11 @@ function CreatedAccount({ result, onAnother, back }) {
 
       <div className="section-sep" />
       <div className="card-footer">
-        <Link to={`/admin/accounts/${account.id}`} className="btn btn-tertiary">
-          Xem hồ sơ
-        </Link>
+        {showDetail && (
+          <Link to={`/admin/accounts/${account.id}`} className="btn btn-tertiary">
+            Xem hồ sơ
+          </Link>
+        )}
         <Link to={back.to} className="btn btn-secondary">
           Xong
         </Link>
@@ -121,13 +126,19 @@ function CreatedAccount({ result, onAnother, back }) {
 }
 
 export default function CreateAccountPage({ kind }) {
+  const { activeRole } = useAuth();
+  const isManager = activeRole === 'SCHOOL_MANAGER';
   const profile = PROFILE_KINDS[kind];
   const lockedRole = profile.role;
-  const back = { to: listPath(kind), label: profile.title };
-  // The page's role first; students stand alone, so the student page offers nothing else.
+  const back = listOf(kind, activeRole);
+  // The page's role first; students stand alone, so the student page offers nothing else. A School Manager never
+  // gets the School Manager role.
   const roleChoices = EXCLUSIVE.includes(lockedRole)
     ? [lockedRole]
-    : [lockedRole, ...ROLE_ORDER.filter((r) => r !== lockedRole && !EXCLUSIVE.includes(r))];
+    : [
+        lockedRole,
+        ...ROLE_ORDER.filter((r) => r !== lockedRole && !EXCLUSIVE.includes(r) && !(isManager && r === 'SCHOOL_MANAGER')),
+      ];
   const empty = { ...EMPTY, roles: [lockedRole] };
   const [form, setForm] = useState(empty);
   const [errors, setErrors] = useState({});
@@ -231,7 +242,7 @@ export default function CreateAccountPage({ kind }) {
       </div>
 
       {result ? (
-        <CreatedAccount result={result} onAnother={startAgain} back={back} />
+        <CreatedAccount result={result} onAnother={startAgain} back={back} showDetail={!isManager} />
       ) : (
         <form className="card card-outline admin-form" onSubmit={handleSubmit} noValidate>
           <h2 className="card-title title-sm">
