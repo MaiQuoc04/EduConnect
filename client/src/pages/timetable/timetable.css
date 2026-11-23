@@ -664,3 +664,25 @@
 .ta-tag.is-hand { background: var(--amber-bg); color: var(--graphite-900); }
 .ta-problems li { display: flex; flex-wrap: wrap; gap: 4px 8px; align-items: baseline; }
 .ta-edit-bar .btn-sm, .ta-cell-editor .btn-sm { padding: 4px 10px; font-size: 13px; min-height: 0; }
+/* Clearer explanations (21/11 follow-up, 23/11/2026) */
+.ta-weights { gap: 10px; }
+.ta-weights-intro { margin: 0; line-height: 18px; }
+.ta-weight { align-items: flex-start; }
+.ta-weight-text { display: grid; gap: 2px; flex: 1 1 auto; min-width: 0; }
+.ta-weight .ta-num { width: 72px; flex: 0 0 72px; }
+.ta-weights-reset { justify-self: start; }
+.ta-fix-box { display: grid; gap: 6px; padding: 10px 12px; border-radius: var(--radius-control); background: var(--red-bg); font-size: 14px; }
+.ta-fix-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
+.ta-fix-list li { display: grid; gap: 2px; padding: 6px 8px 6px 10px; border-left: 3px solid var(--amber); background: var(--white); border-radius: 4px; font-size: 13px; }
+.ta-fix-list li.is-error { border-left-color: var(--red-pen); }
+.ta-fix-list li strong { font-weight: 600; }
+.ta-fix-list li span { color: var(--graphite-700); }
+.ta-fix-list li .tt-link { justify-self: start; font-size: 13px; }
+.ta-cell-head > div { display: grid; gap: 2px; }
+.ta-cell-section { display: grid; gap: 6px; padding-top: 8px; border-top: 1px solid var(--graphite-100); }
+.ta-swap-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); gap: 6px; }
+.ta-swap-option { display: grid; gap: 2px; text-align: left; padding: 6px 8px; border: 1px solid var(--graphite-200); border-radius: 6px;
+  background: var(--white); font: inherit; font-size: 13px; cursor: pointer; }
+.ta-swap-option:hover { border-color: var(--ink-600); background: var(--ink-50); }
+.ta-swap-option span { color: var(--graphite-600); font-size: 12px; }
+.ta-swap-bad summary { cursor: pointer; font-size: 13px; color: var(--graphite-600); }

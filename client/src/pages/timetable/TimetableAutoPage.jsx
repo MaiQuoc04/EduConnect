@@ -28,6 +28,19 @@ const WEIGHT_LABELS = {
   S9: 'GVCN không dạy lớp mình',
   GAP: 'Ô trống giữa buổi của lớp',
 };
+// One line under each weight: when the penalty is counted.
+const WEIGHT_HELP = {
+  S1: 'Mỗi tiết/tuần giáo viên dạy quá định mức.',
+  S2: 'Mỗi tiết rảnh kẹp giữa hai tiết dạy của giáo viên trong một buổi.',
+  S3: 'Hai tiết cùng môn trong một ngày của lớp mà có tiết khác chen giữa.',
+  S4: 'Mỗi tiết giáo viên dạy vượt số tiết tối đa một ngày.',
+  S5: 'Môn có từ 2 tiết/tuần trở lên nhưng dồn hết vào một ngày.',
+  S6: 'Mỗi tiết Toán, Văn, Anh (môn nặng) xếp ở tiết 4–5 hoặc buổi chiều.',
+  S7: 'Mỗi tiết môn ưu tiên buổi chiều (thể dục…) bị xếp buổi sáng.',
+  S8: 'Chênh lệch số tiết giữa các giáo viên cùng dạy một môn.',
+  S9: 'GVCN không được phân công dạy môn nào ở lớp mình chủ nhiệm.',
+  GAP: 'Mỗi ô trống của lớp nằm trước một tiết học trong cùng buổi.',
+};
 const DEFAULT_WEIGHTS = { S1: 10, S2: 8, S3: 6, S4: 5, S5: 4, S6: 3, S7: 3, S8: 2, S9: 2, GAP: 20 };
 const REASONS = {
   NO_TEACHER: 'chưa có giáo viên',
@@ -114,6 +127,30 @@ function problemText(v, names, className) {
     default: return violationText(v, names, className);
   }
 }
+// What to do about a problem, in one sentence (shown under the problem).
+function fixHint(v, names) {
+  const sub = names.subjects[v.subjectId] ?? 'môn này';
+  switch (v.code) {
+    case 'PERIODS_SHORT': return `Cách sửa: chọn một ô trống của lớp rồi xếp ${sub} vào (thiếu ${v.need - v.placed} tiết).`;
+    case 'PERIODS_OVER': return `Cách sửa: bấm vào một tiết ${sub} của lớp và chọn "Để trống ô này" hoặc thay bằng môn còn thiếu (thừa ${v.placed - v.need} tiết).`;
+    case 'TEACHER_OTHER_CLASS':
+    case 'TEACHER_CLASH':
+    case 'TEACHER_MARKED_BUSY': return 'Cách sửa: bấm vào ô này, chọn "Đổi chỗ" sang một tiết mà giáo viên rảnh, hoặc đổi giáo viên ở tab "Phân công".';
+    case 'CLASS_CLASH': return 'Cách sửa: bấm vào ô và chọn lại một môn.';
+    case 'SUBJECT_DAY_LIMIT': return `Cách sửa: đổi chỗ một tiết ${sub} sang ngày khác.`;
+    case 'FIXED_SLOT': return 'Cách sửa: bấm "Hoàn tác" hoặc "Về bản gốc" để trả ô cố định về chỗ cũ.';
+    case 'ROOM_FULL': return `Cách sửa: đổi chỗ tiết ${sub} của một lớp sang tiết khác.`;
+    case 'OUTSIDE_GRID': return 'Cách sửa: đổi chỗ tiết này vào một ô trong khung tuần.';
+    case 'NOT_QUALIFIED':
+    case 'TEACHER_LOCKED':
+    case 'TEACHER_UNKNOWN':
+    case 'NO_TEACHER': return 'Cách sửa: chọn giáo viên khác ở tab "Phân công".';
+    case 'OVER_CAP': return 'Cách sửa: chuyển bớt một lớp của giáo viên này cho người khác ở tab "Phân công".';
+    case 'FIXED_SAME_TEACHER': return 'Cách sửa: chọn giáo viên khác cho một trong hai lớp ở tab "Phân công".';
+    default: return '';
+  }
+}
+
 // Cell of a problem in the class view / teacher view.
 const problemCells = (v) => (v.weekday && v.period ? [`${v.weekday}-${v.period}`] : []);
 
@@ -660,12 +697,24 @@ export default function TimetableAutoPage() {
           </button>
           {showWeights && (
             <div className="ta-weights">
+              <p className="caption muted ta-weights-intro">
+                Quy tắc bắt buộc (không trùng giáo viên, đủ số tiết…) luôn được giữ. Các số dưới đây là <strong>mức phạt cho mỗi lần</strong> bản
+                nháp làm chưa đẹp một điều; <strong>điểm phạt</strong> của bản nháp là tổng các mức phạt. Số càng lớn, hệ thống càng cố tránh điều đó;
+                đặt 0 để bỏ qua. Ví dụ: mặc định một ô trống giữa buổi (20) bị tránh hơn một tiết môn nặng ở tiết 4–5 (3).
+              </p>
               {Object.keys(DEFAULT_WEIGHTS).filter((k) => form.mode !== 'ASSIGN' || ['S1', 'S8', 'S9'].includes(k)).map((k) => (
-                <label key={k} className="ta-weight"><span>{WEIGHT_LABELS[k]}</span>
-                  <input className="input ta-num" type="number" min={0} max={100} value={form.weights[k]} onChange={(e) => set('weights', { ...form.weights, [k]: e.target.value })} /></label>
+                <label key={k} className="ta-weight">
+                  <span className="ta-weight-text"><span>{WEIGHT_LABELS[k]}</span><span className="caption muted">{WEIGHT_HELP[k]}</span></span>
+                  <input className="input ta-num" type="number" min={0} max={100} value={form.weights[k]} onChange={(e) => set('weights', { ...form.weights, [k]: e.target.value })} />
+                </label>
               ))}
-              {form.mode !== 'ASSIGN' && <label className="ta-weight"><span>Thời gian tìm (giây)</span>
-                <input className="input ta-num" type="number" min={1} max={30} value={form.timeLimitSec} onChange={(e) => set('timeLimitSec', e.target.value)} /></label>}
+              {form.mode !== 'ASSIGN' && (
+                <label className="ta-weight">
+                  <span className="ta-weight-text"><span>Thời gian tìm (giây)</span><span className="caption muted">Tìm lâu hơn thường ra bản nháp ít điểm phạt hơn; 1–30 giây.</span></span>
+                  <input className="input ta-num" type="number" min={1} max={30} value={form.timeLimitSec} onChange={(e) => set('timeLimitSec', e.target.value)} />
+                </label>
+              )}
+              <button type="button" className="tt-link ta-weights-reset" onClick={() => set('weights', { ...DEFAULT_WEIGHTS })}>Đặt lại mức phạt mặc định</button>
             </div>
           )}
 
@@ -710,13 +759,28 @@ export default function TimetableAutoPage() {
                       {checking ? 'Đang kiểm tra lại…'
                         : checkError ? <span className="tt-red">{checkError}</span>
                           : review ? (review.ok ? <span className="ta-ok">Hợp lệ với mọi quy tắc bắt buộc.</span> : <span className="tt-red">{review.errors.length} lỗi phải sửa.</span>) : null}
-                      {review && review.warnings.length > 0 && !checking && ` ${review.warnings.length} điểm chưa đẹp (không bắt buộc).`}
+                      {review && review.warnings.length > 0 && !checking && <> {review.warnings.length} điểm chưa đẹp (không bắt buộc, chỉ cộng điểm phạt – xem tab "Cần chú ý").</>}
                     </p>
                     {edited && <div className="ta-edit-actions">
                       <button type="button" className="btn btn-secondary btn-sm" onClick={undo}><Icon name="undo" size="sm" /> Hoàn tác</button>
                       <button type="button" className="btn btn-secondary btn-sm" onClick={resetDraft}>Về bản gốc</button>
                     </div>}
                   </div>
+                  {review && !review.ok && !checking && (
+                    <div className="ta-fix-box" role="alert">
+                      <strong>Phải sửa {review.errors.length} lỗi dưới đây trước khi áp dụng:</strong>
+                      <ul className="ta-fix-list">
+                        {review.errors.slice(0, 6).map((v, i) => (
+                          <li key={i} className="is-error">
+                            <strong>{problemText(v, names, className)}</strong>
+                            {fixHint(v, names) && <span>{fixHint(v, names)}</span>}
+                            <button type="button" className="tt-link" onClick={() => jumpTo(v)}>Đến chỗ lỗi</button>
+                          </li>
+                        ))}
+                      </ul>
+                      {review.errors.length > 6 && <p className="caption">… và {review.errors.length - 6} lỗi khác ở tab "Cần chú ý".</p>}
+                    </div>
+                  )}
                   {checkStale && <div className="notice amber"><Icon name="info" /><p>Phân công hoặc thời khoá biểu trong hệ thống vừa thay đổi sau lần xếp này. Áp dụng sẽ bị từ chối; hãy xếp lại.</p></div>}
                   <div className="tt-seg ta-tabs" role="tablist">
                     {[timetablesNow && ['class', 'Theo lớp'], timetablesNow && ['teacher', 'Theo giáo viên'], ['assign', 'Phân công'], ['load', 'Tải giáo viên'],
@@ -738,42 +802,116 @@ export default function TimetableAutoPage() {
                         onCell={onClassCell} onSwap={(a, b) => swapCells(pickClass, a, b)} selected={selCell} swapFrom={swapFrom} />
                       {selCell && (() => {
                         const [w, p] = cellOf(selCell);
-                        const entry = (timetablesNow[pickClass] ?? []).find((e) => e.weekday === w && e.period === p);
+                        const list = timetablesNow[pickClass] ?? [];
+                        const entry = list.find((e) => e.weekday === w && e.period === p);
                         const subjects = result.classSubjects?.[pickClass] ?? [];
-                        const placed = (sid) => (timetablesNow[pickClass] ?? []).filter((e) => e.subjectId === String(sid)).length;
+                        const need = (sid) => subjects.find((x) => String(x.subjectId) === String(sid))?.periods ?? 0;
+                        const placed = (sid) => list.filter((e) => e.subjectId === String(sid)).length;
+                        const teacherOf = (sid) => assignOf.get(`${pickClass}:${sid}`)?.teacherId;
+                        const onDay = (sid, day, except = []) => list.filter((e) => e.subjectId === String(sid) && e.weekday === day && !except.includes(`${e.weekday}-${e.period}`)).length;
+                        const maxDay = Number(JSON.parse(ranWith).maxPerSubjectDay) || 2;
                         const here = problems.filter((v) => ofClass(pickClass)(v) && problemCells(v).includes(selCell));
                         const fixedCell = fixedCells.has(selCell);
+                        const cur = entry ? `${names.subjects[entry.subjectId]} (${names.teachers[teacherOf(entry.subjectId)] ?? 'chưa có GV'})` : 'ô trống';
+                        // Swap candidates: every other cell of the class; a swap keeps the number of periods of each subject.
+                        const swaps = [];
+                        if (entry && !fixedCell) {
+                          for (const d of resultGrid) {
+                            for (const p2 of periodsOf(resultGrid)) {
+                              const k2 = `${d.weekday}-${p2}`;
+                              if (k2 === selCell || !inGrid(resultGrid, d.weekday, p2) || fixedCells.has(k2)) continue;
+                              const e2 = list.find((e) => e.weekday === d.weekday && e.period === p2);
+                              if (e2 && e2.subjectId === entry.subjectId) continue;
+                              const why = [];
+                              const t1 = teacherOf(entry.subjectId);
+                              const b1 = teacherElsewhere(t1, pickClass, k2);
+                              if (b1) why.push(`${names.teachers[t1]} ${b1} lúc ${WEEKDAY_LONG[d.weekday - 1]} tiết ${p2}`);
+                              if (e2) {
+                                const t2 = teacherOf(e2.subjectId);
+                                const b2 = teacherElsewhere(t2, pickClass, selCell);
+                                if (b2) why.push(`${names.teachers[t2]} ${b2} lúc ${WEEKDAY_LONG[w - 1]} tiết ${p}`);
+                              }
+                              if (d.weekday !== w && onDay(entry.subjectId, d.weekday) + 1 > maxDay) why.push(`${names.subjects[entry.subjectId]} đã có ${maxDay} tiết trong ${WEEKDAY_LONG[d.weekday - 1]}`);
+                              if (e2 && d.weekday !== w && onDay(e2.subjectId, w) + 1 > maxDay) why.push(`${names.subjects[e2.subjectId]} đã có ${maxDay} tiết trong ${WEEKDAY_LONG[w - 1]}`);
+                              swaps.push({ k2, e2, why });
+                            }
+                          }
+                        }
+                        const okSwaps = swaps.filter((x) => !x.why.length);
+                        const badSwaps = swaps.filter((x) => x.why.length);
+                        // Subjects that can replace this cell: not the current one; refused when the subject already has
+                        // all its periods, its teacher is elsewhere at this time, or the day limit is reached.
+                        const options = subjects.filter((x) => String(x.subjectId) !== entry?.subjectId).map((x) => {
+                          const sid = String(x.subjectId);
+                          const tid = teacherOf(sid);
+                          let why = '';
+                          if (placed(sid) >= x.periods) why = `đã đủ ${placed(sid)}/${x.periods} tiết`;
+                          else if (!tid) why = 'chưa có giáo viên';
+                          else if (teacherElsewhere(tid, pickClass, selCell)) why = `${names.teachers[tid]} ${teacherElsewhere(tid, pickClass, selCell)} lúc này`;
+                          else if (onDay(sid, w) + 1 > maxDay) why = `đã có ${maxDay} tiết trong ${WEEKDAY_LONG[w - 1]}`;
+                          return { sid, tid, missing: x.periods - placed(sid), why };
+                        });
                         return (
                           <div className="card card-outline ta-cell-editor">
                             <div className="ta-cell-head">
-                              <strong>Lớp {className(pickClass)} · {WEEKDAY_LONG[w - 1]} tiết {p}</strong>
+                              <div><strong>Lớp {className(pickClass)} · {WEEKDAY_LONG[w - 1]} tiết {p}</strong><span className="caption muted">Đang xếp: {cur}</span></div>
                               <button type="button" className="btn btn-icon" aria-label="Đóng" onClick={() => setSelCell(null)}><Icon name="close" size="sm" /></button>
                             </div>
+                            {here.length > 0 && (
+                              <ul className="ta-fix-list">
+                                {here.map((v, i) => <li key={i} className={v.level === 'error' ? 'is-error' : 'is-warn'}><strong>{problemText(v, names, className)}</strong>{fixHint(v, names) && <span>{fixHint(v, names)}</span>}</li>)}
+                              </ul>
+                            )}
                             {fixedCell ? <p className="caption muted">Ô cố định ({fixedLabels.get(selCell)}): giữ nguyên ở mọi lớp, không đổi được.</p> : (
                               <>
-                                <label className="field"><span className="field-label">Môn ở ô này</span>
-                                  <select className="input" value={entry?.subjectId ?? ''} onChange={(e) => setCellSubject(pickClass, selCell, e.target.value)}>
-                                    <option value="">— Để trống —</option>
-                                    {subjects.map((sub) => {
-                                      const tid = assignOf.get(`${pickClass}:${sub.subjectId}`)?.teacherId;
-                                      const busyAt = entry?.subjectId === String(sub.subjectId) ? null : teacherElsewhere(tid, pickClass, selCell);
-                                      return (
-                                        <option key={sub.subjectId} value={sub.subjectId}>
-                                          {names.subjects[sub.subjectId]} – {names.teachers[tid] ?? 'chưa có GV'} · {placed(sub.subjectId)}/{sub.periods} tiết{busyAt ? ` · GV ${busyAt}` : ''}
-                                        </option>
-                                      );
-                                    })}
-                                  </select>
-                                  <span className="field-help">Số tiết là đã xếp / cần trong tuần. Môn mà giáo viên đang bận ở ô này vẫn chọn được nhưng sẽ báo lỗi.</span>
-                                </label>
-                                <div className="ta-cell-actions">
-                                  <button type="button" className="btn btn-secondary btn-sm" onClick={() => setSwapFrom(selCell)} disabled={!entry}><Icon name="swap_horiz" size="sm" /> Đổi chỗ với ô khác</button>
-                                  {entry && <button type="button" className="btn btn-secondary btn-sm" onClick={() => setCellSubject(pickClass, selCell, '')}>Để trống ô này</button>}
+                                {entry && (
+                                  <div className="ta-cell-section">
+                                    <span className="field-label">1. Đổi chỗ với tiết khác của lớp <span className="caption muted">(giữ nguyên số tiết mỗi môn – nên dùng)</span></span>
+                                    {okSwaps.length === 0 ? <p className="caption muted">Không có ô nào đổi được mà không gây trùng giờ giáo viên.</p> : (
+                                      <div className="ta-swap-list">
+                                        {okSwaps.map(({ k2, e2 }) => {
+                                          const [w2, p2] = cellOf(k2);
+                                          return (
+                                            <button key={k2} type="button" className="ta-swap-option" onClick={() => { swapCells(pickClass, selCell, k2); setSelCell(k2); }}>
+                                              <strong>{WEEKDAY_LONG[w2 - 1]} tiết {p2}</strong>
+                                              <span>{e2 ? `${names.subjects[e2.subjectId]} · ${names.teachers[teacherOf(e2.subjectId)] ?? ''}` : 'Ô trống'}</span>
+                                            </button>
+                                          );
+                                        })}
+                                      </div>
+                                    )}
+                                    {badSwaps.length > 0 && (
+                                      <details className="ta-swap-bad"><summary>{badSwaps.length} ô không đổi được – xem lý do</summary>
+                                        <ul className="ta-list">{badSwaps.map(({ k2, e2, why }) => {
+                                          const [w2, p2] = cellOf(k2);
+                                          return <li key={k2}>{WEEKDAY_LONG[w2 - 1]} tiết {p2} ({e2 ? names.subjects[e2.subjectId] : 'trống'}): {why.join('; ')}.</li>;
+                                        })}</ul>
+                                      </details>
+                                    )}
+                                  </div>
+                                )}
+                                <div className="ta-cell-section">
+                                  <label className="field"><span className="field-label">{entry ? '2. Hoặc thay bằng môn khác' : 'Xếp môn vào ô trống này'}</span>
+                                    <select className="input" value="" onChange={(e) => { if (e.target.value) setCellSubject(pickClass, selCell, e.target.value); }}>
+                                      <option value="">— Chọn môn —</option>
+                                      <optgroup label="Xếp được">
+                                        {options.filter((o) => !o.why).map((o) => <option key={o.sid} value={o.sid}>{names.subjects[o.sid]} – {names.teachers[o.tid]} · còn thiếu {o.missing} tiết</option>)}
+                                      </optgroup>
+                                      <optgroup label="Không xếp được">
+                                        {options.filter((o) => o.why).map((o) => <option key={o.sid} value={o.sid} disabled>{names.subjects[o.sid]} – {o.why}</option>)}
+                                      </optgroup>
+                                    </select>
+                                    {entry && <span className="field-help">Thay môn thì {names.subjects[entry.subjectId]} sẽ thiếu 1 tiết ({placed(entry.subjectId)}/{need(entry.subjectId)} → {placed(entry.subjectId) - 1}/{need(entry.subjectId)}); cần xếp bù {names.subjects[entry.subjectId]} vào một ô trống khác.</span>}
+                                  </label>
                                 </div>
+                                {entry && (
+                                  <div className="ta-cell-actions">
+                                    <button type="button" className="btn btn-secondary btn-sm" onClick={() => setCellSubject(pickClass, selCell, '')}>Để trống ô này</button>
+                                    <span className="caption muted">{names.subjects[entry.subjectId]} sẽ thiếu 1 tiết cho đến khi xếp bù.</span>
+                                  </div>
+                                )}
                               </>
                             )}
-                            {entry && <p className="caption muted">Giáo viên: {names.teachers[assignOf.get(`${pickClass}:${entry.subjectId}`)?.teacherId] ?? 'chưa có'}.</p>}
-                            {here.length > 0 && <ul className="ta-list">{here.map((v, i) => <li key={i} className={v.level === 'error' ? 'tt-red' : ''}>{problemText(v, names, className)}</li>)}</ul>}
                           </div>
                         );
                       })()}
@@ -807,8 +945,16 @@ export default function TimetableAutoPage() {
                                     <select className="input ta-teacher-pick" value={a.teacherId} aria-label={`Giáo viên ${className(a.classId)} – ${names.subjects[a.subjectId]}`}
                                       onChange={(e) => setTeacher(a.classId, a.subjectId, e.target.value)}>
                                       {qualified.map((t) => {
-                                        const l = loadOf.get(String(t.teacherId));
-                                        return <option key={t.teacherId} value={t.teacherId}>{t.name}{t.code ? ` (${t.code})` : ''}{l ? ` – ${l.load}/${l.norm} tiết` : ''}</option>;
+                                        const tid = String(t.teacherId);
+                                        const l = loadOf.get(tid);
+                                        if (tid === a.teacherId) return <option key={tid} value={tid}>{t.name} – đang phân công{l ? ` · ${l.load}/${l.norm} tiết` : ''}</option>;
+                                        // Refused: the teacher teaches elsewhere at one of this pair's lessons, or would go over norm + periods over it.
+                                        const cells = (timetablesNow?.[a.classId] ?? []).filter((e) => e.subjectId === a.subjectId).map((e) => `${e.weekday}-${e.period}`);
+                                        const clash = cells.filter((k) => teacherElsewhere(tid, a.classId, k)).length;
+                                        const periods = (result.classSubjects?.[a.classId] ?? []).find((x) => String(x.subjectId) === a.subjectId)?.periods ?? cells.length;
+                                        const cap = l ? l.norm + Number(opts.defaults.maxOver ?? 0) : null;
+                                        const why = clash ? `trùng giờ ${clash} tiết của lớp này` : l && l.load + periods > cap ? `sẽ thành ${l.load + periods} tiết, quá mức tối đa ${cap}` : '';
+                                        return <option key={tid} value={tid} disabled={Boolean(why)}>{t.name}{t.code ? ` (${t.code})` : ''}{why ? ` – không chọn được: ${why}` : l ? ` – đang ${l.load}/${l.norm} tiết` : ' – chưa dạy lớp nào trong lần xếp'}</option>;
                                       })}
                                     </select>
                                   ) : names.teachers[a.teacherId]}
@@ -842,7 +988,7 @@ export default function TimetableAutoPage() {
                     <div className="ta-panel">
                       {problems.length === 0 && <p className="muted">Không có gì cần chú ý.</p>}
                       {review.errors.length > 0 && <><h3 className="title-sm tt-red">Lỗi phải sửa trước khi áp dụng ({review.errors.length})</h3>
-                        <ul className="ta-list ta-problems">{review.errors.map((v, i) => <li key={i}><span>{problemText(v, names, className)}</span> <button type="button" className="tt-link" onClick={() => jumpTo(v)}>Xem</button></li>)}</ul></>}
+                        <ul className="ta-fix-list">{review.errors.map((v, i) => <li key={i} className="is-error"><strong>{problemText(v, names, className)}</strong>{fixHint(v, names) && <span>{fixHint(v, names)}</span>}<button type="button" className="tt-link" onClick={() => jumpTo(v)}>Đến chỗ lỗi</button></li>)}</ul></>}
                       {review.warnings.length > 0 && <><h3 className="title-sm">Chưa đẹp – không bắt buộc ({review.warnings.length}, điểm phạt {review.score})</h3>
                         <ul className="ta-list ta-problems">{review.warnings.slice(0, 80).map((v, i) => <li key={i}><span>{problemText(v, names, className)}</span> <span className="caption muted">+{v.weight}</span> <button type="button" className="tt-link" onClick={() => jumpTo(v)}>Xem</button></li>)}</ul>
                         {review.warnings.length > 80 && <p className="caption muted">… và {review.warnings.length - 80} mục khác.</p>}</>}
@@ -865,7 +1011,7 @@ export default function TimetableAutoPage() {
                       <Icon name="check" size="sm" /> Áp dụng
                     </button>
                   </div>
-                  {blocking && !checking && <p className="caption tt-red">Bản nháp còn lỗi phải sửa nên chưa áp dụng được – xem tab "Cần chú ý": sửa tay trên bản nháp, hoặc chỉnh thiết lập rồi xếp lại.</p>}
+                  {blocking && !checking && <p className="caption tt-red">Nút "Áp dụng" đang khoá vì bản nháp còn {review ? review.errors.length : missing} lỗi bắt buộc (danh sách ở khung đỏ phía trên). Sửa hết lỗi thì nút tự mở.</p>}
                 </>
               )}
             </>
