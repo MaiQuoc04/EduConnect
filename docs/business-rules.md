@@ -801,7 +801,8 @@ Boundaries that are easy to get wrong:
   - The homeroom teacher may switch excused ↔ unexcused as soon as a period is taken (also on the same day), not only
     after the subject teacher's deadline.
   - SM cannot enter a period that has not started yet (same as everyone).
-  - "Present rate" = (present + late) / records; late is also counted apart.
+  - "Present rate" = (present + late) / records; late is also counted apart. **Confirmed by the lead 23/11/2026**: a
+    late student did attend the period (Circular 22 counts only absences), the late count stays visible on its own.
   - The reason of a homeroom / SM change is quoted in the notification to the student and parents; the teacher's note
     is quoted in the first notification.
   - Saving only a note (same status) writes no history row and sends nothing.
