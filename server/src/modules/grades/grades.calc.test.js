@@ -3,10 +3,9 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 import {
+  academicLevel,
   missingSlots,
-  overallAverage,
   parseScore,
-  rankStudents,
   roundScore,
   semesterAverage,
   yearAverage,
@@ -65,11 +64,30 @@ describe('yearAverage', () => {
   });
 });
 
-describe('overallAverage', () => {
-  it('is the plain average of the subjects that have an average', () => {
-    assert.equal(overallAverage([8, 6, null, 7]), 7);
-    assert.equal(overallAverage([null, null]), null);
-    assert.equal(overallAverage([]), null);
+describe('academicLevel (Circular 22, Article 9)', () => {
+  const eight = (first, rest) => [...first, ...Array(8 - first.length).fill(rest)];
+  it('GOOD: every subject >= 6.5 and at least 6 subjects >= 8.0', () => {
+    assert.equal(academicLevel(eight([8, 8, 8, 8, 8, 8], 6.5)), 'GOOD');
+    assert.equal(academicLevel(eight([8, 8, 8, 8, 8, 7.9], 9)), 'GOOD'); // 7 subjects >= 8.0
+    assert.equal(academicLevel(eight([8, 8, 8, 8, 8], 7.9)), 'FAIR'); // only 5 subjects >= 8.0
+    assert.equal(academicLevel(eight([10, 10, 10, 10, 10, 10, 10], 6.4)), 'FAIR'); // one subject below 6.5
+  });
+  it('FAIR: every subject >= 5.0 and at least 6 subjects >= 6.5', () => {
+    assert.equal(academicLevel(eight([6.5, 6.5, 6.5, 6.5, 6.5, 6.5], 5)), 'FAIR');
+    assert.equal(academicLevel(eight([9, 9, 9, 9, 9, 9, 9], 4.9)), 'PASS'); // one subject below 5.0
+  });
+  it('PASS: at least 6 subjects >= 5.0 and none below 3.5', () => {
+    assert.equal(academicLevel(eight([5, 5, 5, 5, 5, 5], 3.5)), 'PASS');
+    assert.equal(academicLevel(eight([9, 9, 9, 9, 9, 9, 9], 3.4)), 'FAIL'); // a subject below 3.5
+    assert.equal(academicLevel(eight([5, 5, 5, 5, 5], 4.9)), 'FAIL'); // only 5 subjects >= 5.0
+  });
+  it('is null while a subject has no average, or without subjects', () => {
+    assert.equal(academicLevel([9, null, 9]), null);
+    assert.equal(academicLevel([]), null);
+  });
+  it('with fewer than 6 subjects, "at least 6" means all of them (ASSUMPTION)', () => {
+    assert.equal(academicLevel([8, 8.5, '9.0']), 'GOOD');
+    assert.equal(academicLevel([8, 7.9]), 'FAIR');
   });
 });
 
@@ -80,29 +98,6 @@ describe('roundScore', () => {
     assert.equal(roundScore(8.05), 8.1);
     assert.equal(roundScore(7.825, 2), 7.83);
     assert.equal(roundScore(null), null);
-  });
-});
-
-describe('rankStudents', () => {
-  it('ranks highest first and lets equal averages share a rank (1, 2, 2, 4)', () => {
-    const result = rankStudents([
-      { id: 'a', average: 7 },
-      { id: 'b', average: 9 },
-      { id: 'c', average: 8 },
-      { id: 'd', average: 8 },
-    ]);
-    assert.deepEqual(result.map((r) => [r.id, r.rank]), [['b', 1], ['c', 2], ['d', 2], ['a', 4]]);
-  });
-
-  it('ties averages that differ only by binary noise', () => {
-    const a = (0.1 + 0.2) * 10;
-    const result = rankStudents([{ id: 'x', average: a }, { id: 'y', average: 3 }]);
-    assert.deepEqual(result.map((r) => r.rank), [1, 1]);
-  });
-
-  it('does not rank students without an average and lists them last', () => {
-    const result = rankStudents([{ id: 'n', average: null }, { id: 'm', average: 5 }]);
-    assert.deepEqual(result.map((r) => [r.id, r.rank]), [['m', 1], ['n', null]]);
   });
 });
 
@@ -147,13 +142,11 @@ it('Circular 22 rounding: 1 decimal, second decimal 5-9 rounds up', () => {
   assert.equal(roundScore(8.05), 8.1);
 });
 
-it('Circular 22: the student average uses the rounded subject averages', () => {
-  // Maths 7.666… → 7.7 and Physics 7.166… → 7.2: shown average (7.7 + 7.2) / 2 = 7.45 → 7.5 (not 7.4 from 7.416…).
-  const maths = roundScore(23 / 3);
-  const physics = roundScore(21.5 / 3);
-  assert.equal(maths, 7.7);
-  assert.equal(physics, 7.2);
-  assert.equal(roundScore(overallAverage([maths, physics])), 7.5);
+it('Circular 22: the level uses the rounded subject averages', () => {
+  // Physics 7.966… rounds to 8.0, so it counts as a subject >= 8.0 (6 of them): GOOD, not FAIR.
+  const physics = roundScore(23.9 / 3);
+  assert.equal(physics, 8);
+  assert.equal(academicLevel([physics, 8, 8, 8, 8, 8, 7, 7]), 'GOOD');
   // Year: (HK1 6.5 + 2 × HK2 7.3) / 3 = 7.033… → 7.0
   assert.equal(roundScore(yearAverage(6.5, 7.3)), 7);
 });

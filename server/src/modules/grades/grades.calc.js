@@ -14,8 +14,8 @@ export function toNumber(value) {
 
 // Circular 22/2021/TT-BGDĐT: every average is rounded to 1 decimal, half up (second decimal 0–4 down, 5–9 up:
 // 7,94 → 7,9; 7,95 → 8,0; 6,48 → 6,5). Each step uses the ROUNDED results of the step before (FE-11 owner,
-// 14/11/2026): subject semester average → subject year average = (HK1 + 2 × HK2) / 3 → student average of the
-// subjects. Ranking compares these rounded averages, so students with the same shown average share a rank.
+// 14/11/2026): subject semester average → subject year average = (HK1 + 2 × HK2) / 3. The academic level
+// (academicLevel) is decided on these rounded subject averages.
 export const AVERAGE_DECIMALS = 1;
 
 export function roundScore(value, decimals = AVERAGE_DECIMALS) {
@@ -52,35 +52,33 @@ export function yearAverage(semester1, semester2) {
   return s1 === null || s2 === null ? null : (s1 + 2 * s2) / 3;
 }
 
-/**
- * Student overall average = plain average of the subject averages present (every class-type subject weight is 1).
- * Used for the year (business-rules §11) and, ASSUMPTION (FE-11 owner, 10/11/2026), for one semester too.
- */
-export function overallAverage(subjectAverages) {
-  const values = subjectAverages.map(toNumber).filter((v) => v !== null);
-  return values.length ? values.reduce((a, b) => a + b, 0) / values.length : null;
-}
-
-// Compares averages without binary noise (two students with the same scores must tie).
-const sameScore = (a, b) => Math.abs(a - b) < 1e-9;
+// Academic result levels of Circular 22/2021/TT-BGDĐT, Article 9 (FE-11 owner, 23/11/2026, supervisor's request):
+// there is no overall average of the subjects any more and students are not compared with each other (Article 4.4),
+// so no ranking either. A student's period result is one of these levels, from the rounded averages of the subjects:
+export const LEVELS = ['GOOD', 'FAIR', 'PASS', 'FAIL']; // Tốt, Khá, Đạt, Chưa đạt
 
 /**
- * Class ranking, highest average first. Equal averages share a rank and the next rank is skipped (1, 2, 2, 4).
- * Students without an average are not ranked (rank null) and are listed last.
- * @param {{id:any, average:number|null}[]} students
- * @returns {{id:any, average:number|null, rank:number|null}[]} sorted; `ranked` = how many have a rank
+ * Level of one student for one period (a semester, or the year with the subject year averages).
+ *   GOOD (Tốt):      every subject ≥ 6.5 and at least 6 subjects ≥ 8.0
+ *   FAIR (Khá):      every subject ≥ 5.0 and at least 6 subjects ≥ 6.5
+ *   PASS (Đạt):      at least 6 subjects ≥ 5.0 and no subject below 3.5
+ *   FAIL (Chưa đạt): otherwise
+ * ASSUMPTION (FE-11 owner, 23/11/2026): every subject of the class type is a scored subject – the schema does not mark
+ * the subjects assessed by comments (Đạt / Chưa đạt) yet; when they are, they add "every comment subject Đạt" (Tốt,
+ * Khá) and "at most one Chưa đạt" (Đạt). ASSUMPTION: with fewer than 6 subjects, "at least 6" means "all of them".
+ * @param {(number|string|null)[]} subjectAverages rounded averages of every subject the student studies in the period
+ * @returns {'GOOD'|'FAIR'|'PASS'|'FAIL'|null} null while a subject has no average yet (or there is no subject)
  */
-export function rankStudents(students) {
-  const withAverage = students.filter((s) => s.average !== null && s.average !== undefined);
-  const without = students.filter((s) => s.average === null || s.average === undefined);
-  const sorted = [...withAverage].sort((a, b) => b.average - a.average);
-  let previous = null;
-  const ranked = sorted.map((s, i) => {
-    const rank = previous && sameScore(previous.average, s.average) ? previous.rank : i + 1;
-    previous = { average: s.average, rank };
-    return { ...s, rank };
-  });
-  return [...ranked, ...without.map((s) => ({ ...s, rank: null }))];
+export function academicLevel(subjectAverages) {
+  const values = subjectAverages.map(toNumber);
+  if (!values.length || values.some((v) => v === null)) return null;
+  const need = Math.min(6, values.length);
+  const atLeast = (min) => values.filter((v) => v >= min).length;
+  const all = (min) => values.every((v) => v >= min);
+  if (all(6.5) && atLeast(8) >= need) return 'GOOD';
+  if (all(5) && atLeast(6.5) >= need) return 'FAIR';
+  if (atLeast(5) >= need && all(3.5)) return 'PASS';
+  return 'FAIL';
 }
 
 /**

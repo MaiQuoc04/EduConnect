@@ -2,22 +2,25 @@ import { useEffect, useState } from 'react';
 import { getStudentResults } from '../../api/grades.js';
 import Icon from '../../components/Icon.jsx';
 import { errorText } from '../../messages.js';
-import { fmtScore } from './gradeFormat.js';
+import { fmtScore, LEVELS } from './gradeFormat.js';
 
-// UC-88 for one student (SCR-47): every subject's scores and semester / year averages, overall averages and the
-// student's own rank (UC-89 for a student / parent: own rank only). Used by students, parents, teachers and SM.
+// UC-88 for one student (SCR-47): every subject's scores and semester / year averages, and the academic level of each
+// semester and of the year (Circular 22, Article 9). No overall average and no rank since 23/11/2026. Used by
+// students, parents, teachers and SM.
 
-export function RankText({ rank, ranked, provisional }) {
-  if (!rank) return <span className="muted">Chưa xếp hạng</span>;
+// Tốt / Khá / Đạt / Chưa đạt; "–" while a subject has no average yet.
+export function LevelTag({ level, provisional }) {
+  const info = LEVELS[level];
+  if (!info) return <span className="muted" title="Chưa đủ điểm trung bình các môn">–</span>;
   return (
     <span>
-      Hạng <strong>{rank}</strong>/{ranked}
+      <span className={`gtag ${info.tone}`}>{info.label}</span>
       {provisional && <span className="caption muted"> (tạm tính)</span>}
     </span>
   );
 }
 
-export default function StudentReportCard({ studentId, schoolYearId, showRank = true, rankOnly = false }) {
+export default function StudentReportCard({ studentId, schoolYearId }) {
   const [state, setState] = useState({ loading: true, data: null, error: '' });
   const [detail, setDetail] = useState(''); // semesterId whose scores are shown, '' = none
 
@@ -65,24 +68,23 @@ export default function StudentReportCard({ studentId, schoolYearId, showRank = 
       <div className="results-stats">
         {d.semesters.map((s) => (
           <div key={s.semesterId} className="results-stat">
-            <span className="caption muted">ĐTB học kỳ {s.semesterNo}</span>
-            <strong>{s.overall === null ? '–' : fmtScore(s.overall)}</strong>
-            {showRank && <span className="caption"><RankText {...s} /></span>}
+            <span className="caption muted">Kết quả học tập học kỳ {s.semesterNo}</span>
+            <strong>
+              <LevelTag level={s.level} provisional={s.provisional} />
+            </strong>
           </div>
         ))}
         <div className="results-stat ink">
-          <span className="caption muted">ĐTB cả năm</span>
-          <strong>{d.year.overall === null ? '–' : fmtScore(d.year.overall)}</strong>
-          {showRank && <span className="caption"><RankText {...d.year} /></span>}
+          <span className="caption muted">Kết quả học tập cả năm</span>
+          <strong>
+            <LevelTag level={d.year.level} provisional={d.year.provisional} />
+          </strong>
         </div>
       </div>
-      {rankOnly ? (
-        <p className="caption muted">
-          Xếp hạng theo điểm trung bình chung trong lớp; bằng điểm thì cùng hạng. Hạng chỉ có khi đã có điểm.
-        </p>
-      ) : (
-        <ReportTables d={d} detail={detail} setDetail={setDetail} detailSemester={detailSemester} />
-      )}
+      <p className="caption muted" style={{ marginTop: -8, marginBottom: 16 }}>
+        Theo Thông tư 22/2021/TT-BGDĐT: Tốt, Khá, Đạt hoặc Chưa đạt, dựa trên điểm trung bình từng môn.
+      </p>
+      <ReportTables d={d} detail={detail} setDetail={setDetail} detailSemester={detailSemester} />
     </>
   );
 }
