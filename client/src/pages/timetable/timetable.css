@@ -687,3 +687,16 @@
 .ta-swap-option span { color: var(--graphite-600); font-size: 12px; }
 .ta-swap-bad summary { cursor: pointer; font-size: 13px; color: var(--graphite-600); }
 .ta-swap-option .ta-soft-note { color: var(--amber); }
+/* Teacher cards of "Đổi giáo viên" (24/11/2026) */
+.ta-swap-list:has(.ta-teacher-card) { grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); }
+.ta-teacher-card { gap: 4px; padding: 10px 12px; }
+.ta-teacher-card.is-current { background: var(--graphite-50); border-style: dashed; }
+.ta-tc-name { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; font-size: 14px; }
+.ta-tc-row { display: flex; justify-content: space-between; gap: 8px; color: var(--graphite-700) !important; font-size: 13px !important; }
+.ta-tc-row b { color: var(--graphite-900); font-weight: 600; }
+.ta-tc-classes { font-size: 12px; color: var(--graphite-500); line-height: 16px; }
+.ta-tc-status { font-size: 12px !important; font-weight: 500; padding: 2px 6px; border-radius: 4px; justify-self: start; }
+.ta-tc-status.is-under { background: var(--ink-50); color: var(--ink-700) !important; }
+.ta-tc-status.is-full { background: var(--graphite-50); color: var(--graphite-700) !important; }
+.ta-tc-status.is-over { background: var(--amber-bg); color: var(--amber) !important; }
+.ta-tc-pick { color: var(--ink-600) !important; font-weight: 600; font-size: 13px !important; margin-top: 2px; }

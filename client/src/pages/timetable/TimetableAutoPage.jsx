@@ -518,7 +518,12 @@ export default function TimetableAutoPage() {
       const norm = result?.teacherBase?.[tid]?.homeroom ? teaching.homeroomNorm : teaching.norm;
       const cap = norm + Number(teaching.maxOver ?? 0);
       const now = loadNow(tid);
-      const base = { tid, name: t.name, code: t.code, now, norm, cap };
+      // What the teacher teaches now: the classes of this draft (by subject) + periods in classes outside the run.
+      const teaches = assignList.filter((a) => a.teacherId === tid && periodsOf2(a.classId, a.subjectId) > 0)
+        .map((a) => ({ label: `${names.subjects[a.subjectId]} ${className(a.classId)}`, periods: periodsOf2(a.classId, a.subjectId) }));
+      const outside = result?.teacherBase?.[tid]?.base ?? 0;
+      const homeroom = Boolean(result?.teacherBase?.[tid]?.homeroom);
+      const base = { tid, name: t.name, code: t.code, now, norm, cap, teaches, outside, homeroom, add };
       if (tid === cur) return { ...base, current: true, after: now, why: '' };
       const after = now + add;
       const clashAt = cells.filter((k) => teacherElsewhere(tid, classId, k));
@@ -529,8 +534,29 @@ export default function TimetableAutoPage() {
       else if (after > cap) why = `nhận thêm ${add} tiết thì thành ${after}/tuần, quá mức tối đa ${cap} (định mức ${norm} + ${teaching.maxOver})`;
       return { ...base, current: false, after, why };
     });
-    if (cur && !list.some((x) => x.current)) list.unshift({ tid: cur, name: names.teachers[cur] ?? cur, code: '', now: loadNow(cur), after: loadNow(cur), norm: teaching.norm, cap: teaching.norm + teaching.maxOver, current: true, why: '' });
+    if (cur && !list.some((x) => x.current)) list.unshift({ tid: cur, name: names.teachers[cur] ?? cur, code: '', now: loadNow(cur), after: loadNow(cur), norm: teaching.norm, cap: teaching.norm + teaching.maxOver, teaches: [], outside: 0, homeroom: false, add, current: true, why: '' });
     return list.sort((a, b) => Number(b.current) - Number(a.current) || Number(Boolean(a.why)) - Number(Boolean(b.why)) || a.after - b.after || a.name.localeCompare(b.name, 'vi'));
+  };
+
+  // One teacher in "Đổi giáo viên": load now (with the classes), norm, load after taking this class and subject.
+  const teacherCard = (t, subjectLabel) => {
+    const diff = t.after - t.norm;
+    const status = diff > 0 ? { cls: 'is-over', text: `Vượt định mức ${diff} tiết – vẫn được phép (tối đa ${t.cap}), chỉ cộng điểm phạt` }
+      : diff === 0 ? { cls: 'is-full', text: 'Vừa đủ định mức' } : { cls: 'is-under', text: `Còn thiếu ${-diff} tiết so với định mức` };
+    return (
+      <>
+        <strong className="ta-tc-name">{t.name}{t.homeroom && <span className="ta-tag">GVCN</span>}{t.current && <span className="ta-tag is-hand">Đang phân công</span>}</strong>
+        <span className="ta-tc-row"><span>Đang dạy</span><b>{t.now} tiết/tuần</b></span>
+        <span className="ta-tc-classes">
+          {t.teaches.length ? t.teaches.slice(0, 5).map((x) => `${x.label} (${x.periods})`).join(', ') : 'Chưa dạy lớp nào trong lần xếp này'}
+          {t.teaches.length > 5 ? `, … ${t.teaches.length - 5} lớp khác` : ''}
+          {t.outside ? ` + ${t.outside} tiết ở lớp ngoài lần xếp` : ''}
+        </span>
+        <span className="ta-tc-row"><span>Định mức{t.homeroom ? ' (GVCN)' : ''}</span><b>{t.norm} tiết/tuần</b></span>
+        {!t.current && <span className="ta-tc-row"><span>Nếu nhận {subjectLabel} (+{t.add})</span><b>{t.after} tiết/tuần</b></span>}
+        <span className={`ta-tc-status ${status.cls}`}>{t.current ? (diff > 0 ? `Đang vượt định mức ${diff} tiết` : diff === 0 ? 'Đang vừa đủ định mức' : `Đang thiếu ${-diff} tiết so với định mức`) : status.text}</span>
+      </>
+    );
   };
 
   const jumpTo = (v) => {
@@ -951,13 +977,17 @@ export default function TimetableAutoPage() {
                                     <div className="ta-cell-section">
                                       <span className="field-label">3. Hoặc đổi giáo viên {names.subjects[entry.subjectId]} của lớp
                                         <span className="caption muted"> (đổi cho cả {lessons} tiết {names.subjects[entry.subjectId]} của lớp {className(pickClass)} – mỗi lớp – môn chỉ một giáo viên)</span></span>
+                                      <p className="caption muted">Số tiết tính cả tuần, ở mọi lớp giáo viên đang dạy (không tính Chào cờ / Sinh hoạt lớp). Thẻ đầu là giáo viên hiện tại để so sánh.</p>
                                       {ok.length === 0 ? <p className="caption muted">Không còn giáo viên {names.subjects[entry.subjectId]} nào rảnh ở mọi tiết này.</p> : (
                                         <div className="ta-swap-list">
+                                          {choices.filter((t) => t.current).map((t) => (
+                                            <div key={t.tid} className="ta-swap-option ta-teacher-card is-current">{teacherCard(t, `${names.subjects[entry.subjectId]} ${className(pickClass)}`)}</div>
+                                          ))}
                                           {ok.map((t) => (
-                                            <button key={t.tid} type="button" className="ta-swap-option" onClick={() => setTeacher(pickClass, entry.subjectId, t.tid)}>
-                                              <strong>{t.name}</strong>
-                                              <span>{t.now} → {t.after} tiết/tuần (định mức {t.norm})</span>
-                                              {t.after > t.norm && <span className="ta-soft-note">Vượt định mức {t.after - t.norm} tiết – được phép, cộng điểm phạt</span>}
+                                            <button key={t.tid} type="button" className="ta-swap-option ta-teacher-card" onClick={() => setTeacher(pickClass, entry.subjectId, t.tid)}
+                                              aria-label={`Đổi sang ${t.name}`}>
+                                              {teacherCard(t, `${names.subjects[entry.subjectId]} ${className(pickClass)}`)}
+                                              <span className="ta-tc-pick">Chọn giáo viên này</span>
                                             </button>
                                           ))}
                                         </div>
