@@ -28,6 +28,16 @@ reactions, attachments) is merged into one place after both are on `develop`.
 
 ## Current status (read first; update after every merge, schema patch or new decision)
 
+- **FE-12 prefill (23/11/2026, Quoc; on the existing branch `feature/fe-12-attendance`, brought up to `develop`
+  first; not merged yet):** a period
+  not taken yet opens prefilled from the nearest earlier taken period of the same day and session (statuses and
+  notes copied as they are); the period is taken only when its teacher saves it (business rules §12 point 3). Server:
+  `getSheet` returns `prefill` (`attendance.service.js`, `MORNING_LAST_PERIOD` in `attendance.constants.js`); client:
+  `AttendanceSheet.jsx` drafts from it and shows "Đã điền sẵn theo tiết …". No schema change, notifications
+  unchanged. Tested on the local DB: 15 API steps (no prefill for the first period of a session, nearest earlier
+  taken period wins, late / notes copied as is, still "not taken" and in the SM's list until saved, afternoon never
+  copies the morning, notifications as before). Client build passes.
+
 - **FE-04 / FE-06 follow-ups merged into `develop` (21/11/2026, Quoc, `feature/fe-05-group-feed`, merge `7eb509b`;
   client `npm run build` and server `npm test` (20/20) pass on `develop`):** six commits of Khanh, 20–21/11.
   - **FE-04 class types per grade only** (UC-26, SCR-70, business rules §4): no more "every grade" type, tab and
