@@ -28,6 +28,14 @@ reactions, attachments) is merged into one place after both are on `develop`.
 
 ## Current status (read first; update after every merge, schema patch or new decision)
 
+- **FE-13 accounts for the School Manager (23/11/2026, Linh, supervisor's request; business rules §3, permissions 1, 20, 24):**
+  School Manager creates, imports and exports student, teacher and parent accounts with FE-13's API and pages
+  (`/admin/accounts` routes opened to SM with the scope checked in `admin/scope.js`): buttons on the student and parent
+  lists (FE-02 / FE-14: "Xuất tài khoản", "Nhập từ file", "Thêm"), "Thêm giáo viên" on the teacher list (FE-03 keeps
+  UC-115 / UC-116); card "Tài khoản đăng nhập" (email / phone edit, reset, lock) on the student and parent detail pages,
+  email / phone edit added to the teacher card (shared `AccountSecurityActions`). Export per account type (columns of
+  its import template + class / children + account columns). Changes in other members' files are one import and one
+  line each, plus the hints that said email / phone are System Admin only. No schema change. **Tell Anh and Dung.**
 - **FE-13 menu "Quản lý tài khoản" (23/11/2026, Linh):** the four account pages (Học sinh, Giáo viên, Phụ huynh, Quản lý
   nhà trường) form their own menu group; "Tài khoản người dùng" (list of every account) removed, `/admin/accounts`
   redirects to `/admin/students`, the System Admin home. Fifth page "Quản trị hệ thống" (`/admin/system-admins`): System

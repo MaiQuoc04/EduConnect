@@ -4,8 +4,8 @@ Source: Report 3 section 4.4 (draft v1.3). Full = all records; Restricted (n) = 
 
 | Entity | Action | System Admin | School Manager | Homeroom Teacher | Teacher | Student | Parent |
 |---|---|---|---|---|---|---|---|
-| User account | Create / import / export | Full | Restricted (20) | No | No | No | No |
-| User account | Change login identifiers | Full | No | No | No | No | No |
+| User account | Create / import / export | Full | Restricted (1, 20) | No | No | No | No |
+| User account | Change login identifiers | Full | Restricted (24) | No | No | No | No |
 | User account | Reset password, lock / unlock | Full | Restricted (1) | No | No | No | No |
 | Password reset request | Send (Forgot Password screen, not signed in) | Full | Full | Full | Full | Full | Full |
 | Password reset request | View (incl. the one-time password of accounts without email) | Full | Restricted (1) | No | No | No | No |
@@ -100,11 +100,15 @@ Notes:
 18. Notifications about items they created: class events and extracurricular activities (lead, 18/11/2026: school
     announcements are general news, so no read status for the School Manager).
 19. Own messages only, within the time limit (`chat.delete_for_everyone_minutes`), in chats the user may send in (notes 4 and 6).
-20. Import teacher accounts only (UC-116, FE-03, agreed 07/11/2026): same file and checks as UC-96, type fixed to Teacher.
-21. System Admin profile pages (FE-13, supervisor's request 22/11/2026): System Admin sees, creates (UC-95), imports
-    (UC-96) student, teacher, parent and School Manager accounts and edits only the fields of the import file (UC-99).
-    School Manager accounts are created by System Admin only. School business data (classes, parent links, subjects,
-    assignments) stays School Manager only.
+20. Since 23/11/2026 (supervisor's request): create (UC-95), import (UC-96) and export (UC-98) student, teacher and
+    parent accounts from their own lists, with FE-13's pages and checks (teachers: import UC-116, export UC-115). Until
+    then teacher import only (UC-116, agreed 07/11/2026). School Manager is the one who manages these accounts day to
+    day; System Admin helps and is the only one who manages School Manager and System Admin accounts.
 21. Whole-school dates and the dates of the grades of their own (or their children's) classes being studied.
 22. Comments of other people on announcements they can see; one report per comment (UC-119, added 18/11/2026).
 23. Own 1-1 chats and teams only, in their own list; the class groups and the teacher group cannot be hidden. Nobody else sees a change.
+24. Email and phone number of student, teacher and parent accounts (UC-99, 23/11/2026, supervisor's request); the
+    username stays System Admin only. System Admin account pages (FE-13, 22–23/11/2026): System Admin sees, creates,
+    imports and exports every type except System Admin accounts (listed, edited, locked, reset, never created:
+    `npm run seed:admin`) and edits only the fields of the import file (UC-99). School business data (classes, parent
+    links, subjects, assignments) stays School Manager only.

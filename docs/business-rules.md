@@ -53,6 +53,11 @@ Boundaries that are easy to get wrong:
   (FE-07)** – never mix them.
 
 ## 3. Accounts and sign-in (FE-01, FE-13)
+- **Who manages accounts (23/11/2026, supervisor's request):** the School Manager manages student, teacher and parent
+  accounts day to day – create one by one or from a file, export, edit email and phone, reset password, lock / unlock –
+  from their student, teacher and parent lists, with FE-13's pages and checks. System Admin can do the same on its own
+  account pages, helps when needed and is the only one who manages School Manager and System Admin accounts (System
+  Admin accounts are never created from the UI: `npm run seed:admin`). Usernames are changed by System Admin only.
 - Flow: the school collects data outside the system → SA imports / creates accounts → SM manages profiles.
   Importing accounts (SA) is separate from importing classes (SM); a class import needs the accounts to exist.
 - **System Admin accounts are never created from the screens or the import** (01/11/2026): SA is a sensitive role;
