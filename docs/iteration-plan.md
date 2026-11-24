@@ -144,7 +144,7 @@ reactions, attachments) is merged into one place after both are on `develop`.
   of "ĐTB chung" and "Hạng"; SCR-48 Class Ranking and its menu item removed (`/grades/ranking` redirects). No schema
   change. **Open:** subjects assessed by comments (Đạt / Chưa đạt), conduct and the titles Học sinh Giỏi / Xuất sắc
   need schema changes – to agree with the lead. SRS: UC-88, UC-89, SCR-47, SCR-48 to update.
-- **FE-03 / FE-07 / FE-10 clean-up (24/11/2026, Dung, `fix/fe-10-calendar-one-class`, not merged yet):** class calendar
+- **FE-03 / FE-07 / FE-10 clean-up (24/11/2026, Dung, `fix/fe-10-calendar-one-class`, PR #18, merged into `develop` 25/11, merge `1928cdb`):** class calendar
   (UC-76): a student sees their own class, no "Tất cả lớp" picker (teachers and parents keep it); always-shown
   reminder notes removed from Dung's pages (calendar, timetable views / editor, period times, school settings,
   extracurricular form and registration list, teacher list, teaching assignment); duplicates removed: the teacher
