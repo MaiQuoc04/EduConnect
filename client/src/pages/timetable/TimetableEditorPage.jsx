@@ -242,10 +242,11 @@ export default function TimetableEditorPage() {
         )}
       </div>
 
-      <div className="tt-callout">
-        <span><Icon name="info" size="sm" /><strong>Lưu ý:</strong> Thay đổi hiện ngay trên TKB lớp và lịch dạy của giáo viên liên quan. Trước {dmy(start)} giữ nguyên, tiết đã điểm danh không đổi.</span>
-        {!creating && <Link to={`/timetable?classId=${cls.classId}`} className="tt-link">Xem theo tuần</Link>}
-      </div>
+      {!creating && (
+        <div className="tt-callout">
+          <Link to={`/timetable?classId=${cls.classId}`} className="tt-link">Xem theo tuần</Link>
+        </div>
+      )}
       {data.ended && <div className="notice amber"><Icon name="lock" /><p>Năm học đã kết thúc nên chỉ xem được thời khoá biểu.</p></div>}
 
       <div className="tt-edit-layout">
@@ -351,7 +352,6 @@ export default function TimetableEditorPage() {
             </div>
             <div className="tt-sheet-foot caption">
               <span><Icon name="touch_app" size="sm" />Bấm vào ô để chọn môn và phòng · Esc để đóng</span>
-              <span className="tt-ink"><Icon name="info" size="sm" />Giáo viên mỗi tiết lấy theo phân công giảng dạy của ngày học</span>
             </div>
           </div>
 
@@ -416,34 +416,9 @@ export default function TimetableEditorPage() {
           </div>
 
           {data.versions.length > 0 && (
-            <div className="card tt-versions">
-              <div className="tt-quota-head">
-                <span className="label-upper">Nhật ký phiên bản</span>
-                <Link to={`/timetables/classes/${cls.classId}/history`} className="tt-link caption">Xem toàn bộ lịch sử</Link>
-              </div>
-              <ol>
-                {[...data.versions].reverse().map((v) => {
-                  const on = data.shown?.timetableId === v.timetableId;
-                  const running = v.startDate <= data.today && v.endDate >= data.today;
-                  const past = v.endDate < data.today;
-                  return (
-                    <li key={v.timetableId} className={past && !on ? 'is-past' : undefined}>
-                      <span className={`tt-v-icon${on ? ' is-on' : ''}`}><Icon name={on ? 'edit' : running ? 'verified' : 'history'} size="sm" /></span>
-                      <button type="button" className="tt-v-body" disabled={on}
-                        onClick={() => (!dirty || window.confirm('Bỏ các thay đổi chưa lưu?')) && load(v.startDate)}>
-                        <span className="tt-v-title">
-                          <strong>{dm(v.startDate)} – {dmy(v.endDate)}</strong>
-                          {on && <span className="tt-ink caption">Đang mở</span>}
-                        </span>
-                        {running && <span className="stamp">Đang áp dụng</span>}
-                        <span className="caption tt-muted">{v.periodsPerWeek} tiết/tuần</span>
-                        <span className="caption tt-faint">{v.createdAt ? `${dmy(v.createdAt.slice(0, 10))} ${v.createdAt.slice(11)}` : ''}{v.createdBy ? ` · ${v.createdBy}` : ''}</span>
-                      </button>
-                    </li>
-                  );
-                })}
-              </ol>
-            </div>
+            <Link to={`/timetables/classes/${cls.classId}/history`} className="btn btn-secondary">
+              <Icon name="history" size="sm" /> Lịch sử thời khoá biểu
+            </Link>
           )}
         </aside>
       </div>
