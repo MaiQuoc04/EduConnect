@@ -7,7 +7,7 @@ Source: Report 3 section 4.4 (draft v1.3). Full = all records; Restricted (n) = 
 | User account | Create / import / export | Full | Restricted (1, 20) | No | No | No | No |
 | User account | Change login identifiers | Full | Restricted (24) | No | No | No | No |
 | User account | Reset password, lock / unlock | Full | Restricted (1) | No | No | No | No |
-| User account | Add a role (Thêm vai trò, 24/11/2026) | Full | Restricted (25) | No | No | No | No |
+| User account | Add a role (Thêm vai trò, UC-99, 24/11/2026) | Full | Restricted (25) | No | No | No | No |
 | Password reset request | Send (Forgot Password screen, not signed in) | Full | Full | Full | Full | Full | Full |
 | Password reset request | View (incl. the one-time password of accounts without email) | Full | Restricted (1) | No | No | No | No |
 | Own account | Sign in, change password, change avatar, update address | Full | Full | Full | Full | Full | Full |
