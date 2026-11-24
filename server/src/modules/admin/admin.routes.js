@@ -3,24 +3,27 @@ import { requireAuth, requireRole } from '../../middlewares/auth.js';
 import { uploadSingle } from '../../middlewares/upload.js';
 import * as ctrl from './admin.controller.js';
 
-// FE-13 System Administration (owner: Linh). System Admin only, except reset password and lock / unlock
-// (UC-100, UC-101), which School Manager may use on student, parent and teacher accounts (checked in the service).
+// FE-13 System Administration (owner: Linh). System Admin only, except the account routes marked accountControl:
+// School Manager may use them on student, teacher and parent accounts (checked in the services, scope.js): create
+// (UC-95), import (UC-96), export (UC-98), detail and email / phone edit (UC-99) since 23/11/2026, reset and lock
+// (UC-100, UC-101) since 01/11/2026.
 const router = Router();
 const systemAdmin = [requireAuth, requireRole('SYSTEM_ADMIN')];
 const accountControl = [requireAuth, requireRole('SYSTEM_ADMIN', 'SCHOOL_MANAGER')];
 
 // Accounts
 router.get('/accounts', ...systemAdmin, ctrl.listAccounts); // UC-97 ?search&role&status&classId&page
-router.post('/accounts', ...systemAdmin, ctrl.createAccount); // UC-95
-router.get('/accounts/export', ...systemAdmin, ctrl.exportAccounts); // UC-98 ?search&role&status&classId
+router.post('/accounts', ...accountControl, ctrl.createAccount); // UC-95
+router.get('/accounts/export', ...accountControl, ctrl.exportAccounts); // UC-98 ?search&role&status&classId
 router.get('/accounts/classes', ...systemAdmin, ctrl.listClassOptions); // UC-97 class filter options
-router.get('/accounts/department-options', ...systemAdmin, ctrl.departmentOptions); // UC-95 department picker (FE-03 list)
-router.get('/accounts/import/template', ...systemAdmin, ctrl.importTemplate); // UC-96 ?type=STUDENT|TEACHER|PARENT|SCHOOL_MANAGER
-router.post('/accounts/import/preview', ...systemAdmin, uploadSingle('file'), ctrl.previewImport); // UC-96 (multipart: type, file)
-router.post('/accounts/import', ...systemAdmin, uploadSingle('file'), ctrl.importAccounts); // UC-96
-router.get('/accounts/:id', ...systemAdmin, ctrl.getAccount); // SCR-60 Account Detail
-router.put('/accounts/:id/identifiers', ...systemAdmin, ctrl.updateIdentifiers); // UC-99
+router.get('/accounts/department-options', ...accountControl, ctrl.departmentOptions); // UC-95 department picker (FE-03 list)
+router.get('/accounts/import/template', ...accountControl, ctrl.importTemplate); // UC-96 ?type=STUDENT|TEACHER|PARENT|SCHOOL_MANAGER
+router.post('/accounts/import/preview', ...accountControl, uploadSingle('file'), ctrl.previewImport); // UC-96 (multipart: type, file)
+router.post('/accounts/import', ...accountControl, uploadSingle('file'), ctrl.importAccounts); // UC-96
+router.get('/accounts/:id', ...accountControl, ctrl.getAccount); // SCR-60 Account Detail
+router.put('/accounts/:id', ...accountControl, ctrl.updateAccount); // UC-99 username + the fields of the import file
 router.get('/accounts/:id/security', ...accountControl, ctrl.getSecurityState); // status for UC-100 / UC-101 buttons
+router.post('/accounts/:id/roles', ...accountControl, ctrl.addRole); // add a combinable role (24/11/2026) { role, teacher?, parent?, phone? }
 router.post('/accounts/:id/reset-password', ...accountControl, ctrl.resetPassword); // UC-100
 router.post('/accounts/:id/lock', ...accountControl, ctrl.lockAccount); // UC-101
 router.post('/accounts/:id/unlock', ...accountControl, ctrl.unlockAccount); // UC-101

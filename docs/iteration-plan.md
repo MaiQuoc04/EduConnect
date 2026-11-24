@@ -28,6 +28,50 @@ reactions, attachments) is merged into one place after both are on `develop`.
 
 ## Current status (read first; update after every merge, schema patch or new decision)
 
+- **FE-13 merged into `develop` (24/11/2026, Quoc, `feature/fe-13-system-administration`, Linh's work of 22–24/11
+  below):** School Manager manages student / teacher / parent accounts, "Thêm vai trò", menu "Quản lý tài khoản",
+  System Admin profile pages, settings changes. No schema change; `patch_v0.3_class_periods_settings_remove.sql`
+  already run (read-only check 24/11: both `timetable.class_periods_*` rows gone). Scope checked on the server
+  (`admin/scope.js`, `assertScope`): School Manager is refused on accounts with the SM / SA role, edits only email and
+  phone, exports per type, never adds the SM role. Touches FE-02 / FE-03 / FE-14 pages (one import and a few lines
+  each) – tell Anh and Dung. **Gap until `feature/fe-10-school-settings` (Dung, `af1b774`) is merged:** nobody can
+  edit `attendance.edit_deadline_time` (FE-12 still reads it).
+
+- **FE-13 roles: one role at creation, "Thêm vai trò" afterwards (24/11/2026, Linh, option 2; business rules §1,
+  permissions 25):** SCR-61 has no role picker – an account is created with the role of its page, like an import row
+  (`POST /admin/accounts` answers `ONE_ROLE` for two roles). New `POST /admin/accounts/:id/roles` adds a combinable role
+  with its profile (teacher code + department; parent occupation + phone when missing), joins the school teacher group
+  for Teacher / School Manager and logs `ROLE_CHANGE`; roles are never removed (no schema change). Button "Thêm vai trò"
+  on SCR-60 (System Admin: Teacher, Parent, School Manager) and in the account card of the teacher / parent detail pages
+  (School Manager: Teacher, Parent; not on accounts with the School Manager role, where the card now says why). Fixes
+  the gap "a teacher created or imported earlier could never become a parent". Tested on the local DB (20 checks).
+  No new use case: "Thêm vai trò" is part of UC-99 Update Account Information. SRS: UC list (UC-95, UC-99), UC-95 step 2, SCR-60, SCR-61, permission matrix, GBR-01.
+- **FE-13 accounts for the School Manager (23/11/2026, Linh, supervisor's request; business rules §3, permissions 1, 20, 24):**
+  School Manager creates, imports and exports student, teacher and parent accounts with FE-13's API and pages
+  (`/admin/accounts` routes opened to SM with the scope checked in `admin/scope.js`): buttons on the student and parent
+  lists (FE-02 / FE-14: "Xuất tài khoản", "Nhập từ file", "Thêm"), "Thêm giáo viên" on the teacher list (FE-03 keeps
+  UC-115 / UC-116); card "Tài khoản đăng nhập" (email / phone edit, reset, lock) on the student and parent detail pages,
+  email / phone edit added to the teacher card (shared `AccountSecurityActions`). Export per account type (columns of
+  its import template + class / children + account columns). Changes in other members' files are one import and one
+  line each, plus the hints that said email / phone are System Admin only. No schema change. **Tell Anh and Dung.**
+- **FE-13 menu "Quản lý tài khoản" (23/11/2026, Linh):** the four account pages (Học sinh, Giáo viên, Phụ huynh, Quản lý
+  nhà trường) form their own menu group; "Tài khoản người dùng" (list of every account) removed, `/admin/accounts`
+  redirects to `/admin/students`, the System Admin home. Fifth page "Quản trị hệ thống" (`/admin/system-admins`): System
+  Admin accounts listed, edited, locked / unlocked and reset like the others (as in Google Workspace, Moodle), never
+  created there (`npm run seed:admin`, business rules §3); locking one's own account stays refused.
+- **FE-13 "Cài đặt hệ thống" without the attendance deadline (23/11/2026, Linh):** `attendance.edit_deadline_time`
+  is hidden from UC-102 (not listed, not editable by System Admin). No DB change: the row stays and FE-12 still reads
+  it. **Follow-up owed (Dung):** edit it on the School Manager's settings page (`/school-settings`).
+- **FE-13 settings `timetable.class_periods_min` / `_max` dropped (23/11/2026, Linh):** added 22/11 and removed the next
+  day. **DB: `patch_v0.3_class_periods_settings_remove.sql` (deletes the 2 rows) – run on the shared DB 23/11 by Linh.**
+- **FE-13 System Admin profile pages (22/11/2026, Linh, `feature/fe-13-system-administration`, merged into `develop` 24/11;
+  supervisor's request):** menu "Hồ sơ học sinh", "Hồ sơ giáo viên", "Hồ sơ phụ huynh", "Quản lý nhà trường"
+  (`/admin/students|teachers|parents|school-managers`): the UC-97 list with the role fixed, "Thêm" (UC-95, role fixed,
+  other combinable roles can be added) and "Nhập từ file" (UC-96, type fixed). "Tài khoản người dùng" keeps the list
+  of every account without create / import. UC-99 widened: `PUT /admin/accounts/:id` (was `/identifiers`) changes the
+  username and the fields of the import file only. No schema change; FE-02 / FE-03 / FE-14 code untouched. SRS
+  (UC-95, 96, 99, SCR-59, 61, 62, 76) to update.
+
 - **Deploy config merged into `develop` (23/11/2026, Quoc, `chore/deploy-config` by Anh, merge `544f60e`; client
   `npm run build` and server `npm test` (21/21) pass on `develop`):** target Vercel (client) + VPS with nginx and pm2
   (server) + Supabase (DB and Storage); guide in `DEPLOY.md` (Vietnamese). Client reads `VITE_API_URL` /

@@ -18,7 +18,8 @@ const TYPES = [
 ];
 const ACCEPT = '.xlsx,.csv';
 
-// Who uses this page. System Admin (UC-96) picks the account type; FE-03's UC-116 (School Manager, Import Teachers)
+// Who uses this page. System Admin (UC-96) opens it from a profile page with the type fixed (ProfileImportPage.jsx,
+// 22/11/2026; ADMIN_IMPORT with the type picker is the default and no longer has a route); FE-03's UC-116 (School Manager, Import Teachers)
 // reuses the page with the type fixed to Teacher and its own API (pages/teachers/TeacherImportPage.jsx).
 export const ADMIN_IMPORT = {
   types: TYPES,

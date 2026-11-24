@@ -498,7 +498,7 @@ export default function TeacherEditPage() {
               </div>
               <div className="notice amber te-notice">
                 <Icon name="lock" />
-                <div>Chỉ Quản trị hệ thống mới sửa được tên đăng nhập, email và số điện thoại của tài khoản.</div>
+                <div>Tên đăng nhập chỉ Quản trị hệ thống sửa được. Email và số điện thoại sửa ở thẻ Tài khoản đăng nhập của trang chi tiết.</div>
               </div>
               <div className="te-grid te-grid--3">
                 <LockedField label="Tên đăng nhập" value={teacher.username} />

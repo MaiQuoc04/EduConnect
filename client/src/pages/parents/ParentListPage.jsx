@@ -5,6 +5,7 @@ import Avatar from '../../components/Avatar.jsx';
 import Icon from '../../components/Icon.jsx';
 import { errorText } from '../../messages.js';
 import './ParentListPage.css';
+import SchoolAccountButtons from '../admin/SchoolAccountButtons.jsx';
 
 // Same paging, search delay and labels as the Student List (SCR-07), so both record lists behave alike.
 const PAGE_SIZES = [20, 50, 100]; // the API allows at most 100
@@ -171,6 +172,10 @@ export default function ParentListPage() {
         <div>
           <h1 className="headline-lg">Phụ huynh</h1>
           <p>Quản lý hồ sơ phụ huynh và các con đang liên kết.</p>
+        </div>
+        {/* FE-13 (23/11/2026): export, import and create parent accounts (UC-98, UC-96, UC-95) */}
+        <div className="actions-row">
+          <SchoolAccountButtons kind="parents" />
         </div>
       </div>
 

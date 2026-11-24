@@ -2,17 +2,19 @@ import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { createAccount, listDepartmentOptions } from '../../api/admin.js';
 import Icon from '../../components/Icon.jsx';
+import { useAuth } from '../../context/AuthContext.jsx';
 import { useToast } from '../../context/ToastContext.jsx';
 import { errorText, GENDER_LABELS, ROLE_LABELS } from '../../messages.js';
 import { fieldText } from './accountFields.js';
+import { listOf, PROFILE_KINDS } from './profileKinds.js';
 import './admin.css';
 
 // SCR-61 Create Account (UC-95, FE-13). System Admin creates one account; the server generates the username and a
-// temporary password that is shown here once.
-
+// temporary password that is shown here once. Opened from a profile page (`kind`, 22/11/2026). The account gets the
+// one role of that page and the form shows no role picker (24/11/2026, option 2, same as an import row): a combinable
+// role is added afterwards on the account detail (AddRoleDialog).
+// School Manager (23/11/2026) opens it from their student / teacher / parent lists, back to their own list.
 // System Admin accounts are not created from this screen (decided 28/10/2026); see accounts.service createAccount.
-const ROLE_ORDER = ['STUDENT', 'PARENT', 'TEACHER', 'SCHOOL_MANAGER'];
-const EXCLUSIVE = ['STUDENT']; // cannot be combined with another role
 
 const EMPTY = {
   fullName: '',
@@ -71,7 +73,7 @@ function CopyBox({ value, label, secret }) {
 }
 
 // Result of UC-95 step 11: the only time the temporary password is visible.
-function CreatedAccount({ result, onAnother }) {
+function CreatedAccount({ result, onAnother, back, showDetail }) {
   const { account, temporaryPassword } = result;
   return (
     <section className="card card-outline admin-form">
@@ -103,7 +105,12 @@ function CreatedAccount({ result, onAnother }) {
 
       <div className="section-sep" />
       <div className="card-footer">
-        <Link to="/admin/accounts" className="btn btn-secondary">
+        {showDetail && (
+          <Link to={`/admin/accounts/${account.id}`} className="btn btn-tertiary">
+            Xem hồ sơ
+          </Link>
+        )}
+        <Link to={back.to} className="btn btn-secondary">
           Xong
         </Link>
         <button type="button" className="btn btn-primary" onClick={onAnother}>
@@ -115,8 +122,14 @@ function CreatedAccount({ result, onAnother }) {
   );
 }
 
-export default function CreateAccountPage() {
-  const [form, setForm] = useState(EMPTY);
+export default function CreateAccountPage({ kind }) {
+  const { activeRole } = useAuth();
+  const isManager = activeRole === 'SCHOOL_MANAGER';
+  const profile = PROFILE_KINDS[kind];
+  const lockedRole = profile.role;
+  const back = listOf(kind, activeRole);
+  const empty = { ...EMPTY, roles: [lockedRole] }; // always the page's role only
+  const [form, setForm] = useState(empty);
   const [errors, setErrors] = useState({});
   const [formError, setFormError] = useState('');
   const [saving, setSaving] = useState(false);
@@ -141,21 +154,10 @@ export default function CreateAccountPage() {
   };
   const setCode = (key) => (e) => set(key)({ target: { value: normCode(e.target.value) } });
 
-  // System Admin and Student stand alone: picking one of them clears the others, and the reverse.
-  function toggleRole(role) {
-    setForm((f) => {
-      if (f.roles.includes(role)) return { ...f, roles: f.roles.filter((r) => r !== role) };
-      if (EXCLUSIVE.includes(role)) return { ...f, roles: [role] };
-      return { ...f, roles: [...f.roles.filter((r) => !EXCLUSIVE.includes(r)), role] };
-    });
-    setErrors((errs) => ({ ...errs, roles: undefined, phone: undefined }));
-  }
-
   // Quick checks before calling the server; the server repeats every check.
   function localErrors() {
     const e = {};
     if (!form.fullName.trim()) e.fullName = 'REQUIRED';
-    if (!form.roles.length) e.roles = 'REQUIRED';
     if (has('PARENT') && !form.phone.trim()) e.phone = 'REQUIRED_FOR_PARENT';
     for (const [role, key] of [['STUDENT', 'studentCode'], ['TEACHER', 'teacherCode']]) {
       if (!has(role)) continue;
@@ -195,7 +197,7 @@ export default function CreateAccountPage() {
   }
 
   function startAgain() {
-    setForm(EMPTY);
+    setForm(empty);
     setErrors({});
     setFormError('');
     setResult(null);
@@ -206,17 +208,24 @@ export default function CreateAccountPage() {
   return (
     <>
       <nav className="breadcrumb" aria-label="Breadcrumb">
-        <span>EduConnect</span>/<Link to="/admin/accounts">Tài khoản</Link>/<span className="current">Tạo tài khoản</span>
+        <span>EduConnect</span>/<Link to={back.to}>{back.label}</Link>/
+        <span className="current">Thêm {profile.label.toLowerCase()}</span>
       </nav>
       <div className="page-header">
         <div>
-          <h1 className="headline-lg">Tạo tài khoản</h1>
+          <h1 className="headline-lg">Thêm tài khoản {profile.label.toLowerCase()}</h1>
           <p>Tên đăng nhập và mật khẩu tạm thời được hệ thống tạo tự động.</p>
+          {lockedRole !== 'STUDENT' && (
+            <p className="caption muted">
+              Người kiêm nhiệm (ví dụ giáo viên đồng thời là phụ huynh): tạo tài khoản ở đây rồi dùng “Thêm vai trò” ở trang
+              chi tiết của tài khoản.
+            </p>
+          )}
         </div>
       </div>
 
       {result ? (
-        <CreatedAccount result={result} onAnother={startAgain} />
+        <CreatedAccount result={result} onAnother={startAgain} back={back} showDetail={!isManager} />
       ) : (
         <form className="card card-outline admin-form" onSubmit={handleSubmit} noValidate>
           <h2 className="card-title title-sm">
@@ -236,25 +245,6 @@ export default function CreateAccountPage() {
                   autoComplete="off"
                   autoFocus
                 />
-              </Field>
-            </div>
-
-            <div className="span-2">
-              <Field
-                id="roles"
-                label="Vai trò"
-                required
-                help="Học sinh không kết hợp với vai trò khác."
-                error={err('roles')}
-              >
-                <div className="role-picker" id="roles" role="group" aria-label="Vai trò">
-                  {ROLE_ORDER.map((role) => (
-                    <label key={role} className={`role-option${has(role) ? ' checked' : ''}`}>
-                      <input type="checkbox" checked={has(role)} onChange={() => toggleRole(role)} />
-                      {ROLE_LABELS[role]}
-                    </label>
-                  ))}
-                </div>
               </Field>
             </div>
 
@@ -419,7 +409,7 @@ export default function CreateAccountPage() {
 
           <div className="section-sep" />
           <div className="card-footer">
-            <Link to="/admin/accounts" className="btn btn-secondary">
+            <Link to={back.to} className="btn btn-secondary">
               Huỷ
             </Link>
             <button type="submit" className="btn btn-primary" disabled={saving}>

@@ -14,10 +14,22 @@ export const NAV_SECTIONS = [
     ],
   },
   {
+    // FE-13 (23/11/2026): one page per account type replaces "Tài khoản người dùng" (the list of every account).
+    // See, create (UC-95), import (UC-96) and edit the fields of the import file (UC-99). System Admin only.
+    label: 'Quản lý tài khoản',
+    items: [
+      { to: '/admin/students', label: 'Học sinh', icon: 'school', roles: ['SYSTEM_ADMIN'] },
+      { to: '/admin/teachers', label: 'Giáo viên', icon: 'co_present', roles: ['SYSTEM_ADMIN'] },
+      { to: '/admin/parents', label: 'Phụ huynh', icon: 'family_restroom', roles: ['SYSTEM_ADMIN'] },
+      { to: '/admin/school-managers', label: 'Quản lý nhà trường', icon: 'domain', roles: ['SYSTEM_ADMIN'] }, // only System Admin creates these
+      // System Admin accounts: list, edit, lock, reset; never created here (npm run seed:admin, business rules §3).
+      { to: '/admin/system-admins', label: 'Quản trị hệ thống', icon: 'admin_panel_settings', roles: ['SYSTEM_ADMIN'] },
+    ],
+  },
+  {
     label: 'Quản trị hệ thống', // School Manager sees only the password reset requests here
     items: [
       // FE-13 System Administration
-      { to: '/admin/accounts', label: 'Tài khoản người dùng', icon: 'manage_accounts', roles: ['SYSTEM_ADMIN'] }, // UC-95..98
       { to: '/admin/password-reset-requests', label: 'Yêu cầu cấp lại mật khẩu', icon: 'key', roles: ['SYSTEM_ADMIN', 'SCHOOL_MANAGER'] }, // UC-100 via FE-01 requests
       { to: '/admin/settings', label: 'Cài đặt hệ thống', icon: 'settings', roles: ['SYSTEM_ADMIN'] }, // UC-102
       { to: '/admin/maintenance', label: 'Bảo trì hệ thống', icon: 'engineering', roles: ['SYSTEM_ADMIN'] }, // UC-103
@@ -99,7 +111,7 @@ export function navFor(activeRole) {
 
 // Where each role lands after sign-in (the product has no dashboard). Update when the role's main screen exists.
 export const HOME_BY_ROLE = {
-  SYSTEM_ADMIN: '/admin/accounts',
+  SYSTEM_ADMIN: '/admin/students', // FE-13: first account page (23/11/2026)
   // FE-08: SCR-02 School Feed is the home screen of every role except System Admin.
   SCHOOL_MANAGER: '/school-feed',
   TEACHER: '/school-feed',

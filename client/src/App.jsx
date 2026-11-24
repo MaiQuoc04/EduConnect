@@ -63,10 +63,12 @@ import TeacherImportPage from './pages/teachers/TeacherImportPage.jsx';
 import TeacherListPage from './pages/teachers/TeacherListPage.jsx';
 import TeachingAssignmentPage from './pages/teachers/TeachingAssignmentPage.jsx';
 import CreateAccountPage from './pages/admin/CreateAccountPage.jsx';
-import ImportAccountsPage from './pages/admin/ImportAccountsPage.jsx';
+import ProfileImportPage from './pages/admin/ProfileImportPage.jsx';
+import { PROFILE_KINDS } from './pages/admin/profileKinds.js';
 import AccountDetailPage from './pages/admin/AccountDetailPage.jsx';
 import AccountListPage from './pages/admin/AccountListPage.jsx';
-import EditIdentifiersPage from './pages/admin/EditIdentifiersPage.jsx';
+import EditAccountPage from './pages/admin/EditAccountPage.jsx';
+import EditContactPage from './pages/admin/EditContactPage.jsx';
 import MaintenancePage from './pages/admin/MaintenancePage.jsx';
 import SystemSettingsPage from './pages/admin/SystemSettingsPage.jsx';
 import PasswordResetRequestsPage from './pages/admin/PasswordResetRequestsPage.jsx';
@@ -456,15 +458,37 @@ export default function App() {
         />
         {/* FE-13 System Administration (System Admin only) */}
         {[
-          ['admin/accounts', <AccountListPage />], // UC-97, UC-98
-          ['admin/accounts/new', <CreateAccountPage />], // UC-95
-          ['admin/accounts/import', <ImportAccountsPage />], // UC-96
+          // The list of every account was dropped (23/11/2026): old links go to the student accounts.
+          ['admin/accounts', <Navigate to="/admin/students" replace />],
+          // Profile pages, one per account type (22/11/2026): list (UC-97), create (UC-95), import (UC-96).
+          ...Object.keys(PROFILE_KINDS).flatMap((kind) => [
+            [`admin/${kind}`, <AccountListPage key={kind} kind={kind} />],
+            // System Admin accounts are never created from the UI (business rules §3): no create / import pages.
+            ...(PROFILE_KINDS[kind].canCreate
+              ? [
+                  [`admin/${kind}/new`, <CreateAccountPage key={kind} kind={kind} />],
+                  [`admin/${kind}/import`, <ProfileImportPage key={kind} kind={kind} />],
+                ]
+              : []),
+          ]),
           ['admin/accounts/:id', <AccountDetailPage />], // UC-100, UC-101
-          ['admin/accounts/:id/edit', <EditIdentifiersPage />], // UC-99
+          ['admin/accounts/:id/edit', <EditAccountPage />], // UC-99 username + the fields of the import file
           ['admin/settings', <SystemSettingsPage />], // UC-102
           ['admin/maintenance', <MaintenancePage />], // UC-103
         ].map(([path, page]) => (
           <Route key={path} path={path} element={<ProtectedRoute roles={['SYSTEM_ADMIN']}>{page}</ProtectedRoute>} />
+        ))}
+        {/* FE-13 for School Manager (23/11/2026): create (UC-95) and import (UC-96) student, teacher and parent
+            accounts from their own lists (teachers import with FE-03's UC-116 page), edit email / phone (UC-99). */}
+        {[
+          ['students/new', <CreateAccountPage key="students" kind="students" />],
+          ['students/import', <ProfileImportPage key="students" kind="students" />],
+          ['teachers/new', <CreateAccountPage key="teachers" kind="teachers" />],
+          ['parents/new', <CreateAccountPage key="parents" kind="parents" />],
+          ['parents/import', <ProfileImportPage key="parents" kind="parents" />],
+          ['accounts/:id/contact', <EditContactPage />],
+        ].map(([path, page]) => (
+          <Route key={path} path={path} element={<ProtectedRoute roles={['SCHOOL_MANAGER']}>{page}</ProtectedRoute>} />
         ))}
         <Route
           path="admin/password-reset-requests"
