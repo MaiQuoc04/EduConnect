@@ -191,7 +191,7 @@ Source: Report 3 section 4.2 (draft v1.3). Actor "User" = any signed-in account.
 
 | ID | Use case | Actor | Sub-feature | Description |
 |---|---|---|---|---|
-| UC-95 | Create Account | System Admin, School Manager | Account Provisioning | Create an account for any role except System Admin (School Manager: student, teacher, parent only, 23/11/2026); username generated automatically by role; random temporary password shown once. Since 22/11/2026 started from the profile page of the role (Students, Teachers, Parents, School Managers), whose role is ticked and fixed. |
+| UC-95 | Create Account | System Admin, School Manager | Account Provisioning | Create an account for any role except System Admin (School Manager: student, teacher, parent only, 23/11/2026); username generated automatically by role; random temporary password shown once. Since 22/11/2026 started from the profile page of the role (Students, Teachers, Parents, School Managers), whose role is ticked and fixed. Since 24/11/2026 the account gets only that one role (no role picker, like an import row); a combinable role is added afterwards with "Thêm vai trò" (see the row after UC-103, id pending). |
 | UC-96 | Import Accounts | System Admin, School Manager | Account Provisioning | Import accounts from a file with checks and a preview. Since 22/11/2026 started from the profile page of the role, file type fixed to that role. |
 | UC-97 | View Account List | System Admin | Account Provisioning | List all accounts, filtered by role and status. |
 | UC-98 | Export Account List | System Admin, School Manager | Account Provisioning | Export the account list (no passwords; initial passwords are only shown once, on screen or in the import result file). Since 23/11/2026 one file per account type with the columns of its import template; School Manager: student and parent accounts (teachers: UC-115). |
@@ -200,6 +200,7 @@ Source: Report 3 section 4.2 (draft v1.3). Actor "User" = any signed-in account.
 | UC-101 | Lock / Unlock Account | System Admin, School Manager | Account Control | Lock or unlock an account, or clear a temporary sign-in lock (same scope as UC-100). |
 | UC-102 | Configure System Settings | System Admin | System Configuration & Maintenance | Change system settings. |
 | UC-103 | Post Maintenance Announcement | System Admin | System Configuration & Maintenance | Schedule maintenance: notify all accounts and show a banner beforehand; during maintenance users cannot sign in and see a maintenance message. |
+| UC-? (id pending, 24/11/2026) | Add Role to Account | System Admin, School Manager | Account Control | Add a combinable role to an existing account from its detail page: System Admin adds Teacher, Parent or School Manager (SCR-60); School Manager adds Teacher or Parent to a teacher / parent account (teacher / parent detail page). Enters the new role's profile (teacher code + department; occupation, and a phone when the account has none). Student and System Admin accounts take no other role; roles are never removed (business rules §1). |
 
 ## FE-14 Parent Management
 

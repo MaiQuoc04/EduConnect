@@ -14,7 +14,8 @@ export default function SchoolAccountCard({ userId, username, onChanged }) {
         Tài khoản đăng nhập
       </h2>
       <p className="caption muted" style={{ marginBottom: 12 }}>
-        Sửa email, số điện thoại, đặt lại mật khẩu, khoá hoặc mở khoá tài khoản{username ? ` @${username}` : ''}.
+        Sửa email, số điện thoại, thêm vai trò kiêm nhiệm, đặt lại mật khẩu, khoá hoặc mở khoá tài khoản
+        {username ? ` @${username}` : ''}.
       </p>
       <AccountSecurityActions userId={userId} onChanged={onChanged} compact />
     </section>

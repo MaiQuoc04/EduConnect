@@ -26,6 +26,8 @@
   user-select: none;
 }
 .role-option input { width: 16px; height: 16px; margin: 0; accent-color: var(--ink-600); }
+/* Thêm vai trò dialog (24/11/2026): at most 3 choices, each label on one line */
+.role-picker.role-picker-dialog { grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); }
 .role-option:hover { background: var(--graphite-50); }
 .role-option.checked { border-color: var(--ink-600); background: var(--ink-50); color: var(--ink-800); font-weight: 500; }
 .role-option:focus-within { outline: 2px solid var(--ink-400); outline-offset: 1px; }

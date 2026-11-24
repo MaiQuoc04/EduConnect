@@ -6,11 +6,13 @@ import Icon from '../../components/Icon.jsx';
 import { errorText, GENDER_LABELS, ROLE_LABELS } from '../../messages.js';
 import { formatDate } from '../../utils/format.js';
 import AccountSecurityActions from './AccountSecurityActions.jsx';
+import AddRoleButton from './AddRoleDialog.jsx';
 import { formatDateTime } from './format.js';
 import { backOf } from './profileKinds.js';
 import './admin.css';
 
-// SCR-60 Account Detail (FE-13): identifiers, roles, status, and the actions of UC-99, UC-100 and UC-101.
+// SCR-60 Account Detail (FE-13): identifiers, roles (+ Thêm vai trò, 24/11/2026), status, and the actions of UC-99,
+// UC-100 and UC-101.
 // System Admin sees account data only – never school content (business-rules §1).
 
 function Item({ label, children, wide }) {
@@ -68,6 +70,8 @@ export default function AccountDetailPage() {
                 {ROLE_LABELS[r] ?? r}
               </span>
             ))}
+            {/* 24/11/2026 option 2: combinable roles are added here, not on the create form. */}
+            <AddRoleButton account={a} onAdded={(updated) => setState((s) => ({ ...s, account: updated }))} className="btn btn-tertiary" />
           </div>
         </div>
         <div className="status-cell head-status">

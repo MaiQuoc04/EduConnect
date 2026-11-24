@@ -158,6 +158,9 @@ export async function insertAccount(db, input, credentials = null) {
 // School Manager (23/11/2026): student, teacher and parent accounts only (scope.js).
 export async function createAccount({ body, actor = null, actorId, ip }) {
   const { input, errors } = readAccountInput(body);
+  // 24/11/2026 (option 2): an account is created with the one role of its page, like an import row; a combinable
+  // role is added afterwards from the account detail (accountControl.addRole).
+  if (!errors.roles && input.roles.length > 1) errors.roles = 'ONE_ROLE';
   if (!errors.roles && isSchoolManager(actor) && !onlySchoolRoles(input.roles)) errors.roles = 'SCHOOL_ROLES_ONLY';
   // Business rules §3 (agreed 01/11/2026): System Admin accounts are not created from
   // the UI; the few IT admins are created with `npm run seed:admin`. UC-96 import never offered this role.

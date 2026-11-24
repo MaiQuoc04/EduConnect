@@ -19,6 +19,15 @@ The app serves **one high school** (grades 10–12). Users never self-register.
   **active role** (`req.user.activeRole`), never the union of roles.
 - `SYSTEM_ADMIN` and `STUDENT` are **exclusive**: an account with one of them has no other role. Other roles combine
   freely (e.g. Teacher + Parent, School Manager + Teacher). Check this in code when assigning roles.
+- **How a second role is given (24/11/2026, Linh, option 2):** an account is created (UC-95) or imported (UC-96) with
+  **one** role – the role of the page or file; `POST /admin/accounts` refuses two roles (`ONE_ROLE`). A combinable
+  role is **added afterwards** with "Thêm vai trò" (`POST /admin/accounts/:id/roles`, UC id pending): System Admin on
+  Account Detail (SCR-60) adds Teacher, Parent or School Manager; School Manager on the teacher / parent detail page
+  adds Teacher or Parent to a teacher / parent account (not to an account that has the School Manager role). The new
+  role's profile is created in the same transaction with the UC-95 rules: Teacher = teacher code (required, unique) +
+  department; Parent = occupation, and a phone number when the account has none (required for a parent, unique);
+  Teacher / School Manager join the school teacher group (§4). Logged as `ROLE_CHANGE`. Roles are **never removed**
+  (`user_roles` has no soft delete). The user sees the new role in the role switcher after the next sign-in.
 - "School Manager does not teach" means the SM role has no teaching rights; teaching rights come from the Teacher role.
 
 ## 2. Features (14) and owners

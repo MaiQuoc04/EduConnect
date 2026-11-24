@@ -28,6 +28,15 @@ reactions, attachments) is merged into one place after both are on `develop`.
 
 ## Current status (read first; update after every merge, schema patch or new decision)
 
+- **FE-13 roles: one role at creation, "Thêm vai trò" afterwards (24/11/2026, Linh, option 2; business rules §1,
+  permissions 25):** SCR-61 has no role picker – an account is created with the role of its page, like an import row
+  (`POST /admin/accounts` answers `ONE_ROLE` for two roles). New `POST /admin/accounts/:id/roles` adds a combinable role
+  with its profile (teacher code + department; parent occupation + phone when missing), joins the school teacher group
+  for Teacher / School Manager and logs `ROLE_CHANGE`; roles are never removed (no schema change). Button "Thêm vai trò"
+  on SCR-60 (System Admin: Teacher, Parent, School Manager) and in the account card of the teacher / parent detail pages
+  (School Manager: Teacher, Parent; not on accounts with the School Manager role, where the card now says why). Fixes
+  the gap "a teacher created or imported earlier could never become a parent". Tested on the local DB (20 checks).
+  **Open:** UC id for "Add Role to Account" (to be given by the lead); SRS: UC-95 step 2, SCR-60, SCR-61, the new UC.
 - **FE-13 accounts for the School Manager (23/11/2026, Linh, supervisor's request; business rules §3, permissions 1, 20, 24):**
   School Manager creates, imports and exports student, teacher and parent accounts with FE-13's API and pages
   (`/admin/accounts` routes opened to SM with the scope checked in `admin/scope.js`): buttons on the student and parent

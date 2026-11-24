@@ -11,6 +11,7 @@ import { findDuplicates, readAccountInput, ROLE_CODES } from './accounts.service
 import { applyDepartment, listDepartments, needsDepartments } from './departments.js';
 import { workbookBuffer, XLSX_MIME } from '../../utils/excel.js';
 import { COL, TEMPLATES } from './accountImport.service.js';
+import { joinSchoolGroup, needsSchoolGroup } from './schoolGroup.js';
 import { isSchoolManager, onlySchoolRoles, SCHOOL_ROLES } from './scope.js';
 
 // FE-13 System Administration (owner: Linh) – account list and control:
@@ -517,8 +518,94 @@ export async function clearTemporaryLock({ idParam, actor, ip }) {
 export async function getSecurityState({ idParam, actor }) {
   const account = await loadAccount(pool, readId(idParam));
   assertScope(actor, account);
-  const { id, username, fullName, status, tempLocked, lockedUntil, mustChangePassword, roles, pendingResetRequest } = account;
-  return { id, username, fullName, status, tempLocked, lockedUntil, mustChangePassword, roles, pendingResetRequest };
+  const { id, username, fullName, phone, status, tempLocked, lockedUntil, mustChangePassword, roles, pendingResetRequest } =
+    account;
+  return { id, username, fullName, phone, status, tempLocked, lockedUntil, mustChangePassword, roles, pendingResetRequest };
+}
+
+// ---------------------------------------------------------------- add a role (24/11/2026, option 2)
+// An account is created or imported with the one role of its page; a combinable role is added afterwards from the
+// account detail (System Admin) or the teacher / parent detail page (School Manager). Roles are only added, never
+// removed (user_roles has no soft delete). Business rules §1: Student and System Admin stand alone; other roles combine.
+// System Admin adds Teacher, Parent or School Manager; School Manager adds Teacher or Parent to a teacher / parent
+// account (scope.js). The role profile is created in the same transaction: a teacher code (+ department), a parent
+// occupation and a phone number (required for a parent, typed here when the account has none).
+
+export const ADDABLE_ROLES = ['TEACHER', 'PARENT', 'SCHOOL_MANAGER'];
+
+// Roles the actor may add to an account with `roles` (empty: none). Shared with the client rule in profileKinds.js.
+export function addableRoles(roles, actor) {
+  if (roles.some((r) => r === 'STUDENT' || r === 'SYSTEM_ADMIN')) return [];
+  const allowed = isSchoolManager(actor) ? ['TEACHER', 'PARENT'] : ADDABLE_ROLES;
+  return allowed.filter((r) => !roles.includes(r));
+}
+
+export async function addRole({ idParam, body = {}, actor, ip }) {
+  const id = readId(idParam);
+  const account = await loadAccount(pool, id);
+  assertScope(actor, account);
+  const role = body.role;
+  if (!ADDABLE_ROLES.includes(role)) throw badRequest('MSG_ACCOUNT_INVALID', 'Some fields are missing or invalid.', { fields: { role: 'INVALID' } });
+  if (isSchoolManager(actor) && role === 'SCHOOL_MANAGER') throw forbidden();
+  const fail = (fields) => {
+    throw badRequest('MSG_ACCOUNT_INVALID', 'Some fields are missing or invalid.', { fields });
+  };
+  if (account.roles.includes(role)) fail({ role: 'ALREADY_ASSIGNED' });
+  if (!addableRoles(account.roles, actor).includes(role)) fail({ role: 'EXCLUSIVE' });
+
+  // Same field rules as UC-95 for the new role's profile; the phone is the account's unless it has none.
+  const newPhone = !account.phone && role === 'PARENT';
+  const { input, errors } = readAccountInput({
+    fullName: account.fullName,
+    roles: [role],
+    phone: newPhone ? body.phone : account.phone,
+    teacher: body.teacher,
+    parent: body.parent,
+  });
+  if (!newPhone) delete errors.phone;
+  if (needsDepartments(input)) applyDepartment(input, errors, await listDepartments());
+  if (Object.keys(errors).length) fail(errors);
+  const duplicates = await findDuplicates(pool, { email: null, phone: newPhone ? input.phone : null, teacher: input.teacher }, id);
+  if (Object.keys(duplicates).length) fail(duplicates);
+
+  try {
+    await withTransaction(async (client) => {
+      // FOR UPDATE: two admins adding a role to the same account at once are applied one after the other.
+      const { rows } = await client.query(
+        `SELECT EXISTS (SELECT 1 FROM user_roles ur JOIN roles r ON r.role_id = ur.role_id
+                        WHERE ur.user_id = u.user_id AND r.role_code = $2) AS has
+         FROM users u WHERE u.user_id = $1 FOR UPDATE`,
+        [id, role],
+      );
+      if (rows[0].has) fail({ role: 'ALREADY_ASSIGNED' });
+      await client.query('INSERT INTO user_roles (user_id, role_id) SELECT $1, role_id FROM roles WHERE role_code = $2', [id, role]);
+      if (input.teacher) {
+        await client.query('INSERT INTO teachers (user_id, teacher_code, department) VALUES ($1, $2, $3)', [
+          id, input.teacher.teacherCode, input.teacher.department,
+        ]);
+      }
+      if (input.parent) await client.query('INSERT INTO parents (user_id, occupation) VALUES ($1, $2)', [id, input.parent.occupation]);
+      if (newPhone) await client.query('UPDATE users SET phone = $2, updated_at = NOW() WHERE user_id = $1', [id, input.phone]);
+      // Teachers and School Managers are in the school teacher group (business-rules §4), as at creation.
+      if (needsSchoolGroup([role])) await joinSchoolGroup(client, [id]);
+    });
+  } catch (err) {
+    if (err.code === '23505') {
+      const taken = await findDuplicates(pool, { email: null, phone: newPhone ? input.phone : null, teacher: input.teacher }, id);
+      if (Object.keys(taken).length) fail(taken);
+    }
+    throw err;
+  }
+
+  await logActivity({
+    userId: actor.userId,
+    action: 'ROLE_CHANGE',
+    targetType: 'USER',
+    targetId: id,
+    detail: { added: role, roles: [...account.roles, role] },
+    ip,
+  });
+  return getAccount(String(id), actor);
 }
 
 // ---------------------------------------------------------------- password reset requests (business-rules §3, 27/10)

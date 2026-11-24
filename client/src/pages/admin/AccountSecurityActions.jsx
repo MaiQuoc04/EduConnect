@@ -11,6 +11,7 @@ import Icon from '../../components/Icon.jsx';
 import { useAuth } from '../../context/AuthContext.jsx';
 import { useToast } from '../../context/ToastContext.jsx';
 import { errorText } from '../../messages.js';
+import AddRoleButton from './AddRoleDialog.jsx';
 import Dialog from './Dialog.jsx';
 import { formatDateTime } from './format.js';
 import './admin.css';
@@ -28,6 +29,7 @@ export default function AccountSecurityActions({ userId, account: given, onChang
   const toast = useToast();
   const [account, setAccount] = useState(given ?? null);
   const [loadError, setLoadError] = useState('');
+  const [outOfScope, setOutOfScope] = useState(false);
   const [dialog, setDialog] = useState(null); // reset | lock | unlock | clear | password
   const [reason, setReason] = useState('');
   const [busy, setBusy] = useState(false);
@@ -43,6 +45,7 @@ export default function AccountSecurityActions({ userId, account: given, onChang
     try {
       setAccount(await getSecurityState(id));
     } catch (err) {
+      setOutOfScope(err.code === 'FORBIDDEN');
       setLoadError(err.code === 'FORBIDDEN' ? '' : errorText(err));
       setAccount(null);
     }
@@ -53,6 +56,15 @@ export default function AccountSecurityActions({ userId, account: given, onChang
   }, [given, id, load]);
 
   if (loadError) return <p className="caption" style={{ color: 'var(--red-pen)' }}>{loadError}</p>;
+  // A School Manager on the detail of someone who is also School Manager / System Admin (e.g. School Manager +
+  // Parent, 24/11/2026): the server refuses, so say why instead of an empty card.
+  if (outOfScope) {
+    return (
+      <p className="caption muted">
+        Tài khoản này có vai trò quản lý nhà trường hoặc quản trị hệ thống nên do quản trị hệ thống quản lý.
+      </p>
+    );
+  }
   if (!account) return null;
 
   const self = account.id === user?.id;
@@ -134,6 +146,17 @@ export default function AccountSecurityActions({ userId, account: given, onChang
               <Icon name="contact_mail" size="sm" />
               Sửa email, số điện thoại
             </Link>
+          )}
+          {/* School Manager adds Giáo viên / Phụ huynh here (24/11/2026); System Admin uses the button on SCR-60. */}
+          {activeRole === 'SCHOOL_MANAGER' && (
+            <AddRoleButton
+              account={account}
+              onAdded={(updated) => {
+                const next = { ...account, roles: updated.roles, phone: updated.phone };
+                setAccount(next);
+                onChanged?.(next);
+              }}
+            />
           )}
           <button type="button" className="btn btn-secondary" onClick={() => setDialog('reset')}>
             <Icon name="key" size="sm" />

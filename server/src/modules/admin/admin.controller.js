@@ -77,6 +77,10 @@ export async function updateAccount(req, res) {
   res.json(await control.updateAccount({ idParam: req.params.id, body: req.body, actor: actorOf(req) })); // UC-99
 }
 
+export async function addRole(req, res) {
+  res.json(await control.addRole({ idParam: req.params.id, body: req.body, actor: actorOf(req), ip: req.ip })); // 24/11
+}
+
 export async function getSecurityState(req, res) {
   res.json(await control.getSecurityState({ idParam: req.params.id, actor: actorOf(req) }));
 }

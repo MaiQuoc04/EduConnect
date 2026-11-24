@@ -29,6 +29,13 @@ const BY_FIELD = {
     EXCLUSIVE: 'Học sinh không thể kết hợp với vai trò khác.',
     SYSTEM_ADMIN_NOT_ALLOWED: 'Không thể tạo tài khoản Quản trị hệ thống tại màn hình này.',
     SCHOOL_ROLES_ONLY: 'Bạn chỉ tạo được tài khoản học sinh, giáo viên và phụ huynh.',
+    ONE_ROLE: 'Mỗi tài khoản được tạo với một vai trò; vai trò kiêm nhiệm thêm ở trang chi tiết tài khoản.',
+  },
+  // Thêm vai trò (24/11/2026)
+  role: {
+    INVALID: 'Vui lòng chọn vai trò cần thêm.',
+    ALREADY_ASSIGNED: 'Tài khoản đã có vai trò này.',
+    EXCLUSIVE: 'Không thể thêm vai trò này cho tài khoản (học sinh và quản trị hệ thống không kiêm vai trò khác).',
   },
   email: { INVALID: 'Email không hợp lệ.', DUPLICATE: 'Email này đã được dùng cho tài khoản khác.' },
   phone: {

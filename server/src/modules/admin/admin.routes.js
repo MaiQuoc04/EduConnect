@@ -23,6 +23,7 @@ router.post('/accounts/import', ...accountControl, uploadSingle('file'), ctrl.im
 router.get('/accounts/:id', ...accountControl, ctrl.getAccount); // SCR-60 Account Detail
 router.put('/accounts/:id', ...accountControl, ctrl.updateAccount); // UC-99 username + the fields of the import file
 router.get('/accounts/:id/security', ...accountControl, ctrl.getSecurityState); // status for UC-100 / UC-101 buttons
+router.post('/accounts/:id/roles', ...accountControl, ctrl.addRole); // add a combinable role (24/11/2026) { role, teacher?, parent?, phone? }
 router.post('/accounts/:id/reset-password', ...accountControl, ctrl.resetPassword); // UC-100
 router.post('/accounts/:id/lock', ...accountControl, ctrl.lockAccount); // UC-101
 router.post('/accounts/:id/unlock', ...accountControl, ctrl.unlockAccount); // UC-101

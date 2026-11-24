@@ -10,15 +10,11 @@ import { listOf, PROFILE_KINDS } from './profileKinds.js';
 import './admin.css';
 
 // SCR-61 Create Account (UC-95, FE-13). System Admin creates one account; the server generates the username and a
-// temporary password that is shown here once. Opened from a profile page (`kind`, 22/11/2026): that page's role is
-// ticked and cannot be removed; other roles that can be combined with it may be added. The student page shows no
-// role picker at all (24/11/2026): a student has only the Student role.
-// School Manager (23/11/2026) opens it from their student / teacher / parent lists: no School Manager role offered
-// (the server refuses it too), back to their own list.
-
+// temporary password that is shown here once. Opened from a profile page (`kind`, 22/11/2026). The account gets the
+// one role of that page and the form shows no role picker (24/11/2026, option 2, same as an import row): a combinable
+// role is added afterwards on the account detail (AddRoleDialog).
+// School Manager (23/11/2026) opens it from their student / teacher / parent lists, back to their own list.
 // System Admin accounts are not created from this screen (decided 28/10/2026); see accounts.service createAccount.
-const ROLE_ORDER = ['STUDENT', 'PARENT', 'TEACHER', 'SCHOOL_MANAGER'];
-const EXCLUSIVE = ['STUDENT']; // cannot be combined with another role
 
 const EMPTY = {
   fullName: '',
@@ -132,15 +128,7 @@ export default function CreateAccountPage({ kind }) {
   const profile = PROFILE_KINDS[kind];
   const lockedRole = profile.role;
   const back = listOf(kind, activeRole);
-  // The page's role first; students stand alone, so the student page offers nothing else. A School Manager never
-  // gets the School Manager role.
-  const roleChoices = EXCLUSIVE.includes(lockedRole)
-    ? [lockedRole]
-    : [
-        lockedRole,
-        ...ROLE_ORDER.filter((r) => r !== lockedRole && !EXCLUSIVE.includes(r) && !(isManager && r === 'SCHOOL_MANAGER')),
-      ];
-  const empty = { ...EMPTY, roles: [lockedRole] };
+  const empty = { ...EMPTY, roles: [lockedRole] }; // always the page's role only
   const [form, setForm] = useState(empty);
   const [errors, setErrors] = useState({});
   const [formError, setFormError] = useState('');
@@ -166,22 +154,10 @@ export default function CreateAccountPage({ kind }) {
   };
   const setCode = (key) => (e) => set(key)({ target: { value: normCode(e.target.value) } });
 
-  // System Admin and Student stand alone: picking one of them clears the others, and the reverse.
-  function toggleRole(role) {
-    if (role === lockedRole) return;
-    setForm((f) => {
-      if (f.roles.includes(role)) return { ...f, roles: f.roles.filter((r) => r !== role) };
-      if (EXCLUSIVE.includes(role)) return { ...f, roles: [role] };
-      return { ...f, roles: [...f.roles.filter((r) => !EXCLUSIVE.includes(r)), role] };
-    });
-    setErrors((errs) => ({ ...errs, roles: undefined, phone: undefined }));
-  }
-
   // Quick checks before calling the server; the server repeats every check.
   function localErrors() {
     const e = {};
     if (!form.fullName.trim()) e.fullName = 'REQUIRED';
-    if (!form.roles.length) e.roles = 'REQUIRED';
     if (has('PARENT') && !form.phone.trim()) e.phone = 'REQUIRED_FOR_PARENT';
     for (const [role, key] of [['STUDENT', 'studentCode'], ['TEACHER', 'teacherCode']]) {
       if (!has(role)) continue;
@@ -239,6 +215,12 @@ export default function CreateAccountPage({ kind }) {
         <div>
           <h1 className="headline-lg">Thêm tài khoản {profile.label.toLowerCase()}</h1>
           <p>Tên đăng nhập và mật khẩu tạm thời được hệ thống tạo tự động.</p>
+          {lockedRole !== 'STUDENT' && (
+            <p className="caption muted">
+              Người kiêm nhiệm (ví dụ giáo viên đồng thời là phụ huynh): tạo tài khoản ở đây rồi dùng “Thêm vai trò” ở trang
+              chi tiết của tài khoản.
+            </p>
+          )}
         </div>
       </div>
 
@@ -265,33 +247,6 @@ export default function CreateAccountPage({ kind }) {
                 />
               </Field>
             </div>
-
-            {/* A student account has only the Student role, so the page shows no role picker (24/11/2026). */}
-            {roleChoices.length > 1 && (
-            <div className="span-2">
-              <Field
-                id="roles"
-                label="Vai trò"
-                required
-                help={`Vai trò ${profile.label.toLowerCase()} luôn được chọn. Có thể thêm vai trò khác nếu người này kiêm nhiệm.`}
-                error={err('roles')}
-              >
-                <div className="role-picker" id="roles" role="group" aria-label="Vai trò">
-                  {roleChoices.map((role) => (
-                    <label key={role} className={`role-option${has(role) ? ' checked' : ''}`}>
-                      <input
-                        type="checkbox"
-                        checked={has(role)}
-                        disabled={role === lockedRole}
-                        onChange={() => toggleRole(role)}
-                      />
-                      {ROLE_LABELS[role]}
-                    </label>
-                  ))}
-                </div>
-              </Field>
-            </div>
-            )}
 
             <Field id="email" label="Email" hint="Dùng để lấy lại mật khẩu" error={err('email')}>
               <input

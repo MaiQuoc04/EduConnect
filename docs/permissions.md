@@ -7,6 +7,7 @@ Source: Report 3 section 4.4 (draft v1.3). Full = all records; Restricted (n) = 
 | User account | Create / import / export | Full | Restricted (1, 20) | No | No | No | No |
 | User account | Change login identifiers | Full | Restricted (24) | No | No | No | No |
 | User account | Reset password, lock / unlock | Full | Restricted (1) | No | No | No | No |
+| User account | Add a role (Thêm vai trò, 24/11/2026) | Full | Restricted (25) | No | No | No | No |
 | Password reset request | Send (Forgot Password screen, not signed in) | Full | Full | Full | Full | Full | Full |
 | Password reset request | View (incl. the one-time password of accounts without email) | Full | Restricted (1) | No | No | No | No |
 | Own account | Sign in, change password, change avatar, update address | Full | Full | Full | Full | Full | Full |
@@ -112,3 +113,6 @@ Notes:
     imports and exports every type except System Admin accounts (listed, edited, locked, reset, never created:
     `npm run seed:admin`) and edits only the fields of the import file (UC-99). School business data (classes, parent
     links, subjects, assignments) stays School Manager only.
+25. Teacher or Parent only, added to a teacher or parent account that does not have the School Manager role
+    (24/11/2026, business rules §1). System Admin also adds School Manager. Student and System Admin accounts take no
+    other role; roles are never removed.

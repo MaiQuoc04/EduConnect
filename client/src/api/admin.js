@@ -82,6 +82,13 @@ export async function updateAccount(id, values) {
   return data;
 }
 
+// Add a combinable role (24/11/2026): { role, teacher?: { teacherCode, departmentId }, parent?: { occupation }, phone? }.
+// Returns the account as getAccount.
+export async function addRole(id, body) {
+  const { data } = await api.post(`/admin/accounts/${id}/roles`, body);
+  return data;
+}
+
 // UC-100 / UC-101 – also used by School Manager on the student, teacher and parent detail screens.
 export async function getSecurityState(id) {
   const { data } = await api.get(`/admin/accounts/${id}/security`);
