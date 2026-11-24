@@ -16,6 +16,8 @@ const LOAD_ERROR = 'Không tải được thông tin học sinh. Vui lòng thử
 const SAVE_ERROR = 'Không lưu được thông tin học sinh. Vui lòng thử lại.';
 const EMPTY_VALUE = 'Chưa cập nhật';
 const SA_ONLY = 'Chỉ Quản trị hệ thống thay đổi được.';
+// FE-13 (23/11/2026): School Manager edits email and phone from "Tài khoản đăng nhập" on the detail page.
+const CONTACT_HELP = 'Sửa ở thẻ Tài khoản đăng nhập của trang chi tiết.';
 // Shown when the server rejects a value with a code messages.js does not have yet (MSG_INVALID_PARAM is waiting for
 // approval). The age range is the server's to decide, so it is not repeated here.
 const SERVER_FIELD_ERRORS = {
@@ -701,8 +703,8 @@ export default function UpdateStudentPage() {
               help="Mã do nhà trường cấp, dùng để đối chiếu khi nhập danh sách lớp."
             />
             <ReadOnlyField label="Tên đăng nhập" value={student.username} mono help={SA_ONLY} />
-            <ReadOnlyField label="Email" value={student.email} help={SA_ONLY} />
-            <ReadOnlyField label="Số điện thoại" value={student.phone} mono help={SA_ONLY} />
+            <ReadOnlyField label="Email" value={student.email} help={CONTACT_HELP} />
+            <ReadOnlyField label="Số điện thoại" value={student.phone} mono help={CONTACT_HELP} />
           </div>
         </section>
 

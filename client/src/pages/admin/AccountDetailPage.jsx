@@ -6,10 +6,13 @@ import Icon from '../../components/Icon.jsx';
 import { errorText, GENDER_LABELS, ROLE_LABELS } from '../../messages.js';
 import { formatDate } from '../../utils/format.js';
 import AccountSecurityActions from './AccountSecurityActions.jsx';
+import AddRoleButton from './AddRoleDialog.jsx';
 import { formatDateTime } from './format.js';
+import { backOf } from './profileKinds.js';
 import './admin.css';
 
-// SCR-60 Account Detail (FE-13): identifiers, roles, status, and the actions of UC-99, UC-100 and UC-101.
+// SCR-60 Account Detail (FE-13): identifiers, roles (+ Thêm vai trò, 24/11/2026), status, and the actions of UC-99,
+// UC-100 and UC-101.
 // System Admin sees account data only – never school content (business-rules §1).
 
 function Item({ label, children, wide }) {
@@ -41,18 +44,19 @@ export default function AccountDetailPage() {
     return (
       <div className="stack">
         <p className="form-error">{state.error}</p>
-        <Link to="/admin/accounts">Quay lại danh sách tài khoản</Link>
+        <Link to="/admin/students">Quay lại danh sách tài khoản</Link>
       </div>
     );
   }
 
   const a = state.account;
   const changed = (updated) => setState((s) => ({ ...s, account: { ...s.account, ...updated } }));
+  const back = backOf(a.roles);
 
   return (
     <>
       <nav className="breadcrumb" aria-label="Breadcrumb">
-        <span>EduConnect</span>/<Link to="/admin/accounts">Tài khoản</Link>/<span className="current">{a.fullName}</span>
+        <span>EduConnect</span>/<Link to={back.to}>{back.label}</Link>/<span className="current">{a.fullName}</span>
       </nav>
 
       <section className="card card-outline admin-wide account-head">
@@ -66,6 +70,8 @@ export default function AccountDetailPage() {
                 {ROLE_LABELS[r] ?? r}
               </span>
             ))}
+            {/* 24/11/2026 option 2: combinable roles are added here, not on the create form. */}
+            <AddRoleButton account={a} onAdded={(updated) => setState((s) => ({ ...s, account: updated }))} className="btn btn-tertiary" />
           </div>
         </div>
         <div className="status-cell head-status">
@@ -108,6 +114,12 @@ export default function AccountDetailPage() {
           <h2 className="card-title title-sm">
             <Icon name="badge" />
             Hồ sơ theo vai trò
+            {(a.student || a.teacher || a.parent) && (
+              <Link to={`/admin/accounts/${a.id}/edit`} className="btn btn-tertiary aside">
+                <Icon name="edit" size="sm" />
+                Sửa
+              </Link>
+            )}
           </h2>
           {!a.student && !a.teacher && !a.parent && <p className="muted">Vai trò này không có hồ sơ riêng.</p>}
           <dl className="dl">
@@ -136,7 +148,7 @@ export default function AccountDetailPage() {
           </dl>
           {(a.student || a.teacher || a.parent) && (
             <p className="caption muted" style={{ marginTop: 16 }}>
-              Hồ sơ do quản lý nhà trường cập nhật.
+              Lớp học, liên kết phụ huynh, môn dạy và phân công do quản lý nhà trường cập nhật.
             </p>
           )}
         </section>

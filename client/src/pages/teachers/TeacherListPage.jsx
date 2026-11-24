@@ -7,6 +7,7 @@ import { errorText } from '../../messages.js';
 import { formatPhone, LIMITS } from '../../utils/teacherValidation.js';
 import { useTeachers } from './useTeachers.js';
 import './TeacherListPage.css';
+import SchoolAccountButtons from '../admin/SchoolAccountButtons.jsx';
 
 // Avatar initials from full name (lấy chữ đầu của từ đầu và từ cuối)
 function initials(name = '') {
@@ -293,6 +294,8 @@ export default function TeacherListPage() {
           <Link to="/teachers/import" className="btn btn-secondary tc-export-btn">
             <Icon name="upload_file" size="sm" /> Nhập từ Excel
           </Link>
+          {/* FE-13 (23/11/2026): create one teacher account (UC-95); import and export stay UC-116 / UC-115 */}
+          <SchoolAccountButtons kind="teachers" importFile={false} exportFile={false} />
           <button type="button" className="btn btn-primary tc-export-btn" onClick={handleExport} disabled={exporting || loading || total === 0}
             title={total === 0 ? 'Không có giáo viên nào để xuất' : 'Xuất các giáo viên đang khớp bộ lọc (mọi trang)'}>
             <Icon name="download" size="sm" /> {exporting ? 'Đang xuất…' : 'Xuất danh sách (.xlsx)'}

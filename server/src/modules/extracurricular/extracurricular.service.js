@@ -571,12 +571,14 @@ const RELATION = { FATHER: 'Bố', MOTHER: 'Mẹ', GUARDIAN: 'Người giám h�
 
 // Every student studying in the class, plus students no longer in it who registered; status NONE = never registered.
 async function registrationRows(db, a, { search, status }) {
-  const params = [a.eventId, a.classId, VI_TRANSLATE.from, VI_TRANSLATE.to];
+  // The accent tables are only sent when a search uses them: PostgreSQL refuses a parameter the query never uses
+  // ("could not determine data type of parameter $3"), which broke the list without a search.
+  const params = [a.eventId, a.classId];
   const fold = (col) => `lower(translate(${col}, $3, $4))`;
   const pattern = containsPattern(search, ACTIVITY_LIMITS.SEARCH_MAX);
   let where = 'TRUE';
   if (pattern) {
-    params.push(pattern);
+    params.push(VI_TRANSLATE.from, VI_TRANSLATE.to, pattern);
     where = `(${fold('su.full_name')} LIKE $${params.length} OR lower(s.student_code) LIKE $${params.length}
               OR ${fold("COALESCE(rb.full_name, '')")} LIKE $${params.length})`;
   }

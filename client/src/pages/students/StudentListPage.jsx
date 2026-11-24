@@ -6,6 +6,7 @@ import Icon from '../../components/Icon.jsx';
 import { errorText } from '../../messages.js';
 import { formatDate } from '../../utils/format.js';
 import './StudentListPage.css';
+import SchoolAccountButtons from '../admin/SchoolAccountButtons.jsx';
 
 const PAGE_SIZES = [20, 50, 100]; // the API allows at most 100
 const SEARCH_DELAY_MS = 350;
@@ -195,6 +196,8 @@ export default function StudentListPage() {
           <p>Quản lý hồ sơ học sinh toàn trường.</p>
         </div>
         <div className="actions-row">
+          {/* FE-13 (23/11/2026): export, import and create student accounts (UC-98, UC-96, UC-95) */}
+          <SchoolAccountButtons kind="students" />
           {/* UC-14 Import Parent–Student Links: a page of its own, like FE-13's Import Accounts (UC-96). */}
           <Link to="/students/parent-links/import" className="btn btn-secondary">
             <Icon name="upload_file" size="sm" />

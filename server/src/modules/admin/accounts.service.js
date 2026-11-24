@@ -7,6 +7,7 @@ import { generateTemporaryPassword } from '../../utils/tempPassword.js';
 import { nextFreeUsername } from '../../utils/username.js';
 import { applyDepartment, listDepartments, needsDepartments } from './departments.js';
 import { joinSchoolGroup, needsSchoolGroup } from './schoolGroup.js';
+import { isSchoolManager, onlySchoolRoles } from './scope.js';
 
 // FE-13 System Administration – accounts (owner: Linh).
 
@@ -94,7 +95,7 @@ function throwFieldErrors(fields) {
 }
 
 // Email, phone, student code and teacher code must not belong to another account (BR-01).
-async function findDuplicates(db, { email, phone, student, teacher }, exceptUserId = null) {
+export async function findDuplicates(db, { email, phone, student, teacher }, exceptUserId = null) {
   const fields = {};
   const { rows } = await db.query(
     `SELECT
@@ -154,8 +155,13 @@ export async function insertAccount(db, input, credentials = null) {
 }
 
 // UC-95 Create Account: one account for any role; the temporary password is returned once and never stored as text.
-export async function createAccount({ body, actorId, ip }) {
+// School Manager (23/11/2026): student, teacher and parent accounts only (scope.js).
+export async function createAccount({ body, actor = null, actorId, ip }) {
   const { input, errors } = readAccountInput(body);
+  // 24/11/2026 (option 2): an account is created with the one role of its page, like an import row; a combinable
+  // role is added afterwards from the account detail (accountControl.addRole).
+  if (!errors.roles && input.roles.length > 1) errors.roles = 'ONE_ROLE';
+  if (!errors.roles && isSchoolManager(actor) && !onlySchoolRoles(input.roles)) errors.roles = 'SCHOOL_ROLES_ONLY';
   // Business rules §3 (agreed 01/11/2026): System Admin accounts are not created from
   // the UI; the few IT admins are created with `npm run seed:admin`. UC-96 import never offered this role.
   if ((!errors.roles || errors.roles === 'EXCLUSIVE') && input.roles.includes('SYSTEM_ADMIN')) {

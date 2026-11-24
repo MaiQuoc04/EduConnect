@@ -5,21 +5,22 @@ import { logActivity } from '../../utils/activityLog.js';
 import { hashPassword } from '../../utils/password.js';
 import { open as openSecret } from '../../utils/secretBox.js';
 import { generateTemporaryPassword } from '../../utils/tempPassword.js';
-import { normalizePhone, PHONE_RE } from '../../utils/phone.js';
 import { containsPattern, VI_TRANSLATE } from '../../utils/search.js';
 import { isValidUsername } from '../../utils/username.js';
-import { ROLE_CODES } from './accounts.service.js';
+import { findDuplicates, readAccountInput, ROLE_CODES } from './accounts.service.js';
+import { applyDepartment, listDepartments, needsDepartments } from './departments.js';
 import { workbookBuffer, XLSX_MIME } from '../../utils/excel.js';
+import { COL, TEMPLATES } from './accountImport.service.js';
+import { joinSchoolGroup, needsSchoolGroup } from './schoolGroup.js';
+import { isSchoolManager, onlySchoolRoles, SCHOOL_ROLES } from './scope.js';
 
 // FE-13 System Administration (owner: Linh) – account list and control:
-// UC-97 View Account List, UC-98 Export Account List, UC-99 Update Login Identifiers,
+// UC-97 View Account List, UC-98 Export Account List, UC-99 Update Account (login identifiers + imported fields),
 // UC-100 Reset Password, UC-101 Lock / Unlock Account.
 
 const PAGE_SIZE = 20;
 const EXPORT_LIMIT = 10000;
-const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const STATUSES = ['ACTIVE', 'LOCKED'];
-const SCHOOL_ROLES = ['TEACHER', 'STUDENT', 'PARENT']; // what School Manager may reset / lock (permissions note 1)
 
 // Accent-insensitive search: shared utils/search.js (business-rules §16).
 
@@ -59,7 +60,7 @@ const LIST_SQL = `
          u.created_at AS "createdAt",
          COALESCE(ARRAY(SELECT r.role_code FROM user_roles ur JOIN roles r ON r.role_id = ur.role_id
                         WHERE ur.user_id = u.user_id ORDER BY r.role_id), '{}') AS roles,
-         COALESCE(s.student_code, t.teacher_code) AS code,
+         COALESCE(s.student_code, t.teacher_code) AS code, s.student_code AS "studentCode", t.teacher_code AS "teacherCode",
          u.address, s.dob, s.gender, t.department, p.occupation,
          (SELECT string_agg(DISTINCT c.class_name, ', ' ORDER BY c.class_name)
           FROM classes c
@@ -70,6 +71,15 @@ const LIST_SQL = `
                               AND (e.student_id = s.student_id
                                    OR e.student_id IN (SELECT sp.student_id FROM student_parents sp
                                                        WHERE sp.parent_id = p.parent_id))))) AS "classNames",
+         -- A parent's children with their class of the current school year (export of parent accounts).
+         (SELECT string_agg(cu.full_name || COALESCE(' – ' || (
+                   SELECT c.class_name FROM class_enrollments e JOIN classes c ON c.class_id = e.class_id
+                   WHERE e.student_id = sp.student_id AND e.status = 'STUDYING' AND c.deleted_at IS NULL
+                     AND c.school_year_id = ${CURRENT_YEAR_SQL}
+                   LIMIT 1), ''), '; ' ORDER BY cu.full_name)
+          FROM student_parents sp JOIN students cs ON cs.student_id = sp.student_id
+          JOIN users cu ON cu.user_id = cs.user_id
+          WHERE sp.parent_id = p.parent_id) AS children,
          COUNT(*) OVER() AS total
   FROM users u
   LEFT JOIN students s ON s.user_id = u.user_id
@@ -131,30 +141,60 @@ const ROLE_TEXT = {
 const GENDER_TEXT = { MALE: 'Nam', FEMALE: 'Nữ', OTHER: 'Khác' };
 const dmy = (value) => (value ? String(value).slice(0, 10).split('-').reverse().join('/') : '');
 
-// UC-98 Export Account List: every matching account (not only one page) with all its profile fields, in the same
-// words as the UC-96 templates. No passwords – they are only hashes.
-export async function exportAccounts(query) {
-  const rows = await queryAccounts(readFilters(query), EXPORT_LIMIT, 0);
+// UC-98 Export Account List: every matching account (not only one page). No passwords – they are only hashes.
+// With a role (the account pages, 23/11/2026) the file has only that type's columns: first the columns of its import
+// template, same headers and order (so the file can be filled in and imported again), then the class (students),
+// the children (parents), username, status, temporary password and creation date. Without a role: every column.
+// A School Manager exports student, teacher or parent accounts only (scope.js).
+const ROLE_FILE = { STUDENT: 'hoc-sinh', TEACHER: 'giao-vien', PARENT: 'phu-huynh', SCHOOL_MANAGER: 'quan-ly', SYSTEM_ADMIN: 'quan-tri' };
+const ACCOUNT_COLUMNS = [
+  { header: 'Tên đăng nhập', key: 'username', width: 18 },
+  { header: 'Trạng thái', key: 'status', width: 14 },
+  { header: 'Phải đổi mật khẩu', key: 'mustChange', width: 18 },
+  { header: 'Ngày tạo', key: 'createdAt', width: 12 },
+];
+const EXTRA_COLUMNS = {
+  STUDENT: [{ header: 'Lớp', key: 'classNames', width: 12 }],
+  PARENT: [{ header: 'Con (lớp)', key: 'children', width: 40 }],
+};
+const ALL_COLUMNS = [
+  { header: 'Tên đăng nhập', key: 'username', width: 18 },
+  { header: 'Họ và tên', key: 'fullName', width: 28 },
+  { header: 'Vai trò', key: 'roles', width: 26 },
+  { header: 'Mã HS/GV', key: 'code', width: 14 },
+  { header: 'Lớp', key: 'classNames', width: 14 },
+  { header: 'Ngày sinh', key: 'dob', width: 12 },
+  { header: 'Giới tính', key: 'gender', width: 10 },
+  { header: 'Tổ chuyên môn', key: 'department', width: 20 },
+  { header: 'Nghề nghiệp', key: 'occupation', width: 20 },
+  { header: 'Email', key: 'email', width: 30 },
+  { header: 'Số điện thoại', key: 'phone', width: 16, style: { numFmt: '@' } },
+  { header: 'Địa chỉ', key: 'address', width: 40 },
+  { header: 'Trạng thái', key: 'status', width: 14 },
+  { header: 'Phải đổi mật khẩu', key: 'mustChange', width: 18 },
+  { header: 'Ngày tạo', key: 'createdAt', width: 12 },
+];
+
+function columnsFor(role) {
+  if (!role) return ALL_COLUMNS;
+  // System Admin accounts have no template: same columns as School Manager accounts.
+  const template = TEMPLATES[role] ?? TEMPLATES.SCHOOL_MANAGER;
+  const own = template.columns.map((c) => ({
+    header: COL[c].header,
+    key: c,
+    width: COL[c].width,
+    ...(COL[c].text ? { style: { numFmt: '@' } } : {}),
+  }));
+  return [...own, ...(EXTRA_COLUMNS[role] ?? []), ...ACCOUNT_COLUMNS];
+}
+
+export async function exportAccounts(query, actor = null) {
+  const filters = readFilters(query);
+  if (isSchoolManager(actor) && !SCHOOL_ROLES.includes(filters.role)) throw forbidden();
+  const rows = await queryAccounts(filters, EXPORT_LIMIT, 0);
   const wb = new ExcelJS.Workbook();
   const ws = wb.addWorksheet('Tai khoan');
-  ws.columns = [
-    { header: 'STT', key: 'no', width: 6 },
-    { header: 'Tên đăng nhập', key: 'username', width: 18 },
-    { header: 'Họ và tên', key: 'fullName', width: 28 },
-    { header: 'Vai trò', key: 'roles', width: 26 },
-    { header: 'Mã HS/GV', key: 'code', width: 14 },
-    { header: 'Lớp', key: 'classNames', width: 14 },
-    { header: 'Ngày sinh', key: 'dob', width: 12 },
-    { header: 'Giới tính', key: 'gender', width: 10 },
-    { header: 'Tổ chuyên môn', key: 'department', width: 20 },
-    { header: 'Nghề nghiệp', key: 'occupation', width: 20 },
-    { header: 'Email', key: 'email', width: 30 },
-    { header: 'Số điện thoại', key: 'phone', width: 16, style: { numFmt: '@' } },
-    { header: 'Địa chỉ', key: 'address', width: 40 },
-    { header: 'Trạng thái', key: 'status', width: 14 },
-    { header: 'Phải đổi mật khẩu', key: 'mustChange', width: 18 },
-    { header: 'Ngày tạo', key: 'createdAt', width: 12 },
-  ];
+  ws.columns = [{ header: 'STT', key: 'no', width: 6 }, ...columnsFor(filters.role)];
   ws.getRow(1).font = { bold: true };
   ws.views = [{ state: 'frozen', ySplit: 1 }];
   rows.forEach((r, i) =>
@@ -164,7 +204,10 @@ export async function exportAccounts(query) {
       fullName: r.fullName,
       roles: r.roles.map((c) => ROLE_TEXT[c] ?? c).join(', '),
       code: r.code ?? '',
+      studentCode: r.studentCode ?? '',
+      teacherCode: r.teacherCode ?? '',
       classNames: r.classNames ?? '',
+      children: r.children ?? '',
       dob: dmy(r.dob),
       gender: GENDER_TEXT[r.gender] ?? '',
       department: r.department ?? '',
@@ -179,7 +222,7 @@ export async function exportAccounts(query) {
   );
   const date = new Date().toLocaleDateString('sv-SE', { timeZone: 'Asia/Ho_Chi_Minh' }).replaceAll('-', '');
   return {
-    fileName: `educonnect-accounts-${date}.xlsx`,
+    fileName: filters.role ? `tai-khoan-${ROLE_FILE[filters.role]}-${date}.xlsx` : `educonnect-accounts-${date}.xlsx`,
     contentType: XLSX_MIME,
     buffer: await workbookBuffer(wb),
   };
@@ -212,9 +255,11 @@ async function loadAccount(db, id) {
   return rows[0];
 }
 
-export async function getAccount(idParam) {
+// School Manager (23/11/2026): student, teacher and parent accounts only, for the email / phone edit.
+export async function getAccount(idParam, actor = null) {
   const id = readId(idParam);
   const account = await loadAccount(pool, id);
+  assertScope(actor, account);
   const [student, teacher, parent, lastLogin] = await Promise.all([
     pool.query('SELECT student_code AS code, dob, gender FROM students WHERE user_id = $1', [id]),
     pool.query('SELECT teacher_code AS code, department FROM teachers WHERE user_id = $1', [id]),
@@ -233,49 +278,99 @@ export async function getAccount(idParam) {
   };
 }
 
-// ---------------------------------------------------------------- UC-99 Update Login Identifiers
+// ---------------------------------------------------------------- UC-99 Update Account (SCR-62)
+// System Admin edits the username and the fields an import file carries (UC-96 templates): full name, email, phone,
+// address, and per role the student code / date of birth / gender, the teacher code / department, the parent's
+// occupation. Nothing else: class, parent links, subjects and assignments stay with the School Manager (decided
+// 22/11/2026 with the supervisor). Same checks as UC-95 (readAccountInput) plus the username rule.
+// School Manager (23/11/2026, supervisor's request, option a): email and phone of student, teacher and parent
+// accounts only; every other field keeps its value (the rest of the profile is edited on FE-02 / FE-03 / FE-14).
 
-export async function updateIdentifiers({ idParam, body = {} }) {
+const throwFieldErrors = (fields) => {
+  throw badRequest('MSG_ACCOUNT_INVALID', 'Some fields are missing or invalid.', { fields });
+};
+const same = (a, b) => (a ?? null) === (b ?? null);
+const isoDate = (value) => (value ? String(value).slice(0, 10) : null);
+
+// The current values in the shape of the request body (used for the fields a School Manager may not change).
+function bodyOf(a) {
+  return {
+    username: a.username,
+    fullName: a.fullName,
+    email: a.email,
+    phone: a.phone,
+    address: a.address,
+    student: a.student && { studentCode: a.student.code, dob: isoDate(a.student.dob), gender: a.student.gender },
+    teacher: a.teacher && { teacherCode: a.teacher.code, departmentId: null, department: a.teacher.department },
+    parent: a.parent && { occupation: a.parent.occupation },
+  };
+}
+
+export async function updateAccount({ idParam, body: sent = {}, actor = null }) {
   const id = readId(idParam);
-  const account = await loadAccount(pool, id);
+  const before = await getAccount(id, actor);
+  const body = isSchoolManager(actor) ? { ...bodyOf(before), email: sent.email, phone: sent.phone } : sent;
 
+  // Roles never change here: readAccountInput reads only the profile parts of the account's own roles.
+  const { input, errors } = readAccountInput({ ...body, roles: before.roles });
+  delete errors.roles;
   const username = typeof body.username === 'string' ? body.username.trim().toLowerCase() : '';
-  const email = typeof body.email === 'string' && body.email.trim() ? body.email.trim().toLowerCase() : null;
-  const phone = typeof body.phone === 'string' && body.phone.trim() ? normalizePhone(body.phone) : null;
+  if (!username) errors.username = 'REQUIRED';
+  else if (!isValidUsername(username) || username.includes('@')) errors.username = 'INVALID';
+  // A department name kept as it is (maybe no longer in FE-03's list) is not checked again.
+  const keepsDepartment =
+    input.teacher && input.teacher.departmentId == null && same(input.teacher.department, before.teacher?.department);
+  if (keepsDepartment) delete input.teacher.departmentId;
+  else if (needsDepartments(input)) applyDepartment(input, errors, await listDepartments());
+  if (Object.keys(errors).length) throwFieldErrors(errors);
 
-  const fields = {};
-  if (!username) fields.username = 'REQUIRED';
-  else if (!isValidUsername(username) || username.includes('@')) fields.username = 'INVALID';
-  if (email && (!EMAIL_RE.test(email) || email.length > 150)) fields.email = 'INVALID';
-  if (phone && !PHONE_RE.test(phone)) fields.phone = 'INVALID';
-  if (!phone && account.roles.includes('PARENT')) fields.phone = 'REQUIRED_FOR_PARENT';
-  if (Object.keys(fields).length) throw badRequest('MSG_ACCOUNT_INVALID', 'Some fields are missing or invalid.', { fields });
+  const { student: s, teacher: t, parent: p } = input;
+  const unchanged =
+    username === before.username &&
+    same(input.fullName, before.fullName) &&
+    same(input.email, before.email?.toLowerCase()) &&
+    same(input.phone, before.phone) &&
+    same(input.address, before.address) &&
+    (!s || (same(s.studentCode, before.student?.code) && same(s.dob, isoDate(before.student?.dob)) && same(s.gender, before.student?.gender))) &&
+    (!t || (same(t.teacherCode, before.teacher?.code) && same(t.department, before.teacher?.department))) &&
+    (!p || same(p.occupation, before.parent?.occupation));
+  if (unchanged) throw badRequest('MSG_NOTHING_CHANGED', 'Nothing was changed.');
 
-  if (username === account.username && email === (account.email?.toLowerCase() ?? null) && phone === account.phone) {
-    throw badRequest('MSG_NOTHING_CHANGED', 'Nothing was changed.');
-  }
-
-  const { rows } = await pool.query(
-    `SELECT
-       EXISTS (SELECT 1 FROM users WHERE username = $1 AND user_id <> $4) AS username,
-       EXISTS (SELECT 1 FROM users WHERE $2::text IS NOT NULL AND LOWER(email) = $2 AND user_id <> $4) AS email,
-       EXISTS (SELECT 1 FROM users WHERE $3::text IS NOT NULL AND phone = $3 AND user_id <> $4) AS phone`,
-    [username, email, phone, id],
-  );
-  for (const [field, used] of Object.entries(rows[0])) if (used) fields[field] = 'DUPLICATE';
-  if (Object.keys(fields).length) throw badRequest('MSG_ACCOUNT_INVALID', 'Some fields are missing or invalid.', { fields });
+  const duplicates = await findDuplicates(pool, input, id);
+  const { rows } = await pool.query('SELECT EXISTS (SELECT 1 FROM users WHERE username = $1 AND user_id <> $2) AS used', [
+    username,
+    id,
+  ]);
+  if (rows[0].used) duplicates.username = 'DUPLICATE';
+  if (Object.keys(duplicates).length) throwFieldErrors(duplicates);
 
   try {
-    await pool.query('UPDATE users SET username = $1, email = $2, phone = $3 WHERE user_id = $4', [
-      username,
-      email,
-      phone,
-      id,
-    ]);
+    await withTransaction(async (db) => {
+      await db.query('UPDATE users SET username = $1, full_name = $2, email = $3, phone = $4, address = $5 WHERE user_id = $6', [
+        username,
+        input.fullName,
+        input.email,
+        input.phone,
+        input.address,
+        id,
+      ]);
+      if (s) {
+        await db.query('UPDATE students SET student_code = $1, dob = $2, gender = $3 WHERE user_id = $4', [
+          s.studentCode,
+          s.dob,
+          s.gender,
+          id,
+        ]);
+      }
+      if (t) await db.query('UPDATE teachers SET teacher_code = $1, department = $2 WHERE user_id = $3', [t.teacherCode, t.department, id]);
+      if (p) await db.query('UPDATE parents SET occupation = $1 WHERE user_id = $2', [p.occupation, id]);
+    });
   } catch (err) {
     if (err.code === '23505') {
-      const field = /username/.test(err.constraint) ? 'username' : /email/.test(err.constraint) ? 'email' : 'phone';
-      throw badRequest('MSG_ACCOUNT_INVALID', 'Some fields are missing or invalid.', { fields: { [field]: 'DUPLICATE' } });
+      // Taken by another account in the meantime.
+      const taken = await findDuplicates(pool, input, id);
+      if (/username/.test(err.constraint ?? '')) taken.username = 'DUPLICATE';
+      if (Object.keys(taken).length) throwFieldErrors(taken);
     }
     throw err;
   }
@@ -285,13 +380,10 @@ export async function updateIdentifiers({ idParam, body = {} }) {
 // ---------------------------------------------------------------- UC-100 / UC-101 (System Admin and School Manager)
 
 // School Manager acts only on accounts without the System Admin or School Manager role (permissions note 1).
+// `actor` null = an internal call (no check).
 function assertScope(actor, account) {
-  if (actor.activeRole === 'SYSTEM_ADMIN') return;
-  const inScope =
-    actor.activeRole === 'SCHOOL_MANAGER' &&
-    account.roles.length > 0 &&
-    account.roles.every((r) => SCHOOL_ROLES.includes(r));
-  if (!inScope) throw forbidden();
+  if (!actor || actor.activeRole === 'SYSTEM_ADMIN') return;
+  if (!(isSchoolManager(actor) && onlySchoolRoles(account.roles))) throw forbidden();
 }
 
 const stateError = (message) => new AppError(409, 'MSG_ACCOUNT_STATE', message);
@@ -426,8 +518,94 @@ export async function clearTemporaryLock({ idParam, actor, ip }) {
 export async function getSecurityState({ idParam, actor }) {
   const account = await loadAccount(pool, readId(idParam));
   assertScope(actor, account);
-  const { id, username, fullName, status, tempLocked, lockedUntil, mustChangePassword, roles, pendingResetRequest } = account;
-  return { id, username, fullName, status, tempLocked, lockedUntil, mustChangePassword, roles, pendingResetRequest };
+  const { id, username, fullName, phone, status, tempLocked, lockedUntil, mustChangePassword, roles, pendingResetRequest } =
+    account;
+  return { id, username, fullName, phone, status, tempLocked, lockedUntil, mustChangePassword, roles, pendingResetRequest };
+}
+
+// ---------------------------------------------------------------- add a role (24/11/2026, option 2)
+// An account is created or imported with the one role of its page; a combinable role is added afterwards from the
+// account detail (System Admin) or the teacher / parent detail page (School Manager). Roles are only added, never
+// removed (user_roles has no soft delete). Business rules §1: Student and System Admin stand alone; other roles combine.
+// System Admin adds Teacher, Parent or School Manager; School Manager adds Teacher or Parent to a teacher / parent
+// account (scope.js). The role profile is created in the same transaction: a teacher code (+ department), a parent
+// occupation and a phone number (required for a parent, typed here when the account has none).
+
+export const ADDABLE_ROLES = ['TEACHER', 'PARENT', 'SCHOOL_MANAGER'];
+
+// Roles the actor may add to an account with `roles` (empty: none). Shared with the client rule in profileKinds.js.
+export function addableRoles(roles, actor) {
+  if (roles.some((r) => r === 'STUDENT' || r === 'SYSTEM_ADMIN')) return [];
+  const allowed = isSchoolManager(actor) ? ['TEACHER', 'PARENT'] : ADDABLE_ROLES;
+  return allowed.filter((r) => !roles.includes(r));
+}
+
+export async function addRole({ idParam, body = {}, actor, ip }) {
+  const id = readId(idParam);
+  const account = await loadAccount(pool, id);
+  assertScope(actor, account);
+  const role = body.role;
+  if (!ADDABLE_ROLES.includes(role)) throw badRequest('MSG_ACCOUNT_INVALID', 'Some fields are missing or invalid.', { fields: { role: 'INVALID' } });
+  if (isSchoolManager(actor) && role === 'SCHOOL_MANAGER') throw forbidden();
+  const fail = (fields) => {
+    throw badRequest('MSG_ACCOUNT_INVALID', 'Some fields are missing or invalid.', { fields });
+  };
+  if (account.roles.includes(role)) fail({ role: 'ALREADY_ASSIGNED' });
+  if (!addableRoles(account.roles, actor).includes(role)) fail({ role: 'EXCLUSIVE' });
+
+  // Same field rules as UC-95 for the new role's profile; the phone is the account's unless it has none.
+  const newPhone = !account.phone && role === 'PARENT';
+  const { input, errors } = readAccountInput({
+    fullName: account.fullName,
+    roles: [role],
+    phone: newPhone ? body.phone : account.phone,
+    teacher: body.teacher,
+    parent: body.parent,
+  });
+  if (!newPhone) delete errors.phone;
+  if (needsDepartments(input)) applyDepartment(input, errors, await listDepartments());
+  if (Object.keys(errors).length) fail(errors);
+  const duplicates = await findDuplicates(pool, { email: null, phone: newPhone ? input.phone : null, teacher: input.teacher }, id);
+  if (Object.keys(duplicates).length) fail(duplicates);
+
+  try {
+    await withTransaction(async (client) => {
+      // FOR UPDATE: two admins adding a role to the same account at once are applied one after the other.
+      const { rows } = await client.query(
+        `SELECT EXISTS (SELECT 1 FROM user_roles ur JOIN roles r ON r.role_id = ur.role_id
+                        WHERE ur.user_id = u.user_id AND r.role_code = $2) AS has
+         FROM users u WHERE u.user_id = $1 FOR UPDATE`,
+        [id, role],
+      );
+      if (rows[0].has) fail({ role: 'ALREADY_ASSIGNED' });
+      await client.query('INSERT INTO user_roles (user_id, role_id) SELECT $1, role_id FROM roles WHERE role_code = $2', [id, role]);
+      if (input.teacher) {
+        await client.query('INSERT INTO teachers (user_id, teacher_code, department) VALUES ($1, $2, $3)', [
+          id, input.teacher.teacherCode, input.teacher.department,
+        ]);
+      }
+      if (input.parent) await client.query('INSERT INTO parents (user_id, occupation) VALUES ($1, $2)', [id, input.parent.occupation]);
+      if (newPhone) await client.query('UPDATE users SET phone = $2, updated_at = NOW() WHERE user_id = $1', [id, input.phone]);
+      // Teachers and School Managers are in the school teacher group (business-rules §4), as at creation.
+      if (needsSchoolGroup([role])) await joinSchoolGroup(client, [id]);
+    });
+  } catch (err) {
+    if (err.code === '23505') {
+      const taken = await findDuplicates(pool, { email: null, phone: newPhone ? input.phone : null, teacher: input.teacher }, id);
+      if (Object.keys(taken).length) fail(taken);
+    }
+    throw err;
+  }
+
+  await logActivity({
+    userId: actor.userId,
+    action: 'ROLE_CHANGE',
+    targetType: 'USER',
+    targetId: id,
+    detail: { added: role, roles: [...account.roles, role] },
+    ip,
+  });
+  return getAccount(String(id), actor);
 }
 
 // ---------------------------------------------------------------- password reset requests (business-rules §3, 27/10)

@@ -17,15 +17,20 @@ const RULES = {
   'password_reset.request_cooldown_minutes': { type: 'int', min: 1, max: 1440 },
   // FE-06: how long after sending a message its sender can still delete it for everyone (business rules §13).
   'chat.delete_for_everyone_minutes': { type: 'int', min: 1, max: 1440 },
-  'attendance.edit_deadline_time': { type: 'time' },
 };
+
+// Keys still in system_settings but no longer on this page (System Admin neither sees nor edits them).
+// attendance.edit_deadline_time (23/11/2026): FE-12 keeps reading it; Dung moves it to the School Manager's settings.
+const NOT_ON_PAGE = ['attendance.edit_deadline_time'];
 
 export async function listSettings() {
   const { rows } = await pool.query(
     `SELECT s.setting_key AS key, s.setting_value AS value, s.description, s.updated_at AS "updatedAt",
             u.full_name AS "updatedByName", u.username AS "updatedByUsername"
      FROM system_settings s LEFT JOIN users u ON u.user_id = s.updated_by
+     WHERE s.setting_key <> ALL($1::text[])
      ORDER BY s.setting_key`,
+    [NOT_ON_PAGE],
   );
   return { items: rows.map((r) => ({ ...r, rule: RULES[r.key] ?? null })) };
 }
@@ -57,7 +62,7 @@ export async function updateSettings({ values, actorId, ip }) {
   const fields = {};
   const changes = [];
   for (const [key, raw] of Object.entries(values)) {
-    if (!old.has(key)) {
+    if (!old.has(key) || NOT_ON_PAGE.includes(key)) {
       fields[key] = 'UNKNOWN';
       continue;
     }

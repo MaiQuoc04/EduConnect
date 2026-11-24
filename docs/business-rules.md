@@ -19,6 +19,15 @@ The app serves **one high school** (grades 10–12). Users never self-register.
   **active role** (`req.user.activeRole`), never the union of roles.
 - `SYSTEM_ADMIN` and `STUDENT` are **exclusive**: an account with one of them has no other role. Other roles combine
   freely (e.g. Teacher + Parent, School Manager + Teacher). Check this in code when assigning roles.
+- **How a second role is given (24/11/2026, Linh, option 2):** an account is created (UC-95) or imported (UC-96) with
+  **one** role – the role of the page or file; `POST /admin/accounts` refuses two roles (`ONE_ROLE`). A combinable
+  role is **added afterwards** with "Thêm vai trò" (`POST /admin/accounts/:id/roles`, part of UC-99, 24/11/2026): System Admin on
+  Account Detail (SCR-60) adds Teacher, Parent or School Manager; School Manager on the teacher / parent detail page
+  adds Teacher or Parent to a teacher / parent account (not to an account that has the School Manager role). The new
+  role's profile is created in the same transaction with the UC-95 rules: Teacher = teacher code (required, unique) +
+  department; Parent = occupation, and a phone number when the account has none (required for a parent, unique);
+  Teacher / School Manager join the school teacher group (§4). Logged as `ROLE_CHANGE`. Roles are **never removed**
+  (`user_roles` has no soft delete). The user sees the new role in the role switcher after the next sign-in.
 - "School Manager does not teach" means the SM role has no teaching rights; teaching rights come from the Teacher role.
 
 ## 2. Features (14) and owners
@@ -53,6 +62,11 @@ Boundaries that are easy to get wrong:
   (FE-07)** – never mix them.
 
 ## 3. Accounts and sign-in (FE-01, FE-13)
+- **Who manages accounts (23/11/2026, supervisor's request):** the School Manager manages student, teacher and parent
+  accounts day to day – create one by one or from a file, export, edit email and phone, reset password, lock / unlock –
+  from their student, teacher and parent lists, with FE-13's pages and checks. System Admin can do the same on its own
+  account pages, helps when needed and is the only one who manages School Manager and System Admin accounts (System
+  Admin accounts are never created from the UI: `npm run seed:admin`). Usernames are changed by System Admin only.
 - Flow: the school collects data outside the system → SA imports / creates accounts → SM manages profiles.
   Importing accounts (SA) is separate from importing classes (SM); a class import needs the accounts to exist.
 - **System Admin accounts are never created from the screens or the import** (01/11/2026): SA is a sensitive role;
@@ -753,7 +767,9 @@ Boundaries that are easy to get wrong:
 
 ## 12. Attendance (FE-12)
 - Per period, 4 statuses: `PRESENT`, `LATE`, `ABSENT_EXCUSED`, `ABSENT_UNEXCUSED`. No leave-request feature.
-- The subject teacher takes attendance for periods they teach and can edit until **23:59 the same day**. After that:
+- The subject teacher takes attendance for periods they teach and can edit until **23:59 the same day** (the time is
+  a School Manager setting, "Cài đặt hệ thống", default 23:59 – moved from the System Admin settings 24/11/2026, Dung,
+  proposed: `patch_v0.3_school_settings_attendance.sql` waits for the lead). After that:
   the homeroom teacher (own class) can only switch excused ↔ unexcused, until the semester is closed; every other
   change is SM only.
   Why (18/11/2026, lead): present / late / absent is what the subject teacher sees in the period, so it is fixed
@@ -801,7 +817,8 @@ Boundaries that are easy to get wrong:
   - The homeroom teacher may switch excused ↔ unexcused as soon as a period is taken (also on the same day), not only
     after the subject teacher's deadline.
   - SM cannot enter a period that has not started yet (same as everyone).
-  - "Present rate" = (present + late) / records; late is also counted apart.
+  - "Present rate" = (present + late) / records; late is also counted apart. **Confirmed by the lead 23/11/2026**: a
+    late student did attend the period (Circular 22 counts only absences), the late count stays visible on its own.
   - The reason of a homeroom / SM change is quoted in the notification to the student and parents; the teacher's note
     is quoted in the first notification.
   - Saving only a note (same status) writes no history row and sends nothing.
@@ -821,10 +838,14 @@ Boundaries that are easy to get wrong:
 
 ## 13. System administration (FE-13)
 - `system_settings` (key–value, loaded by SQL; SA edits values only): sign-in lock thresholds, upload limits, OTP
-  lifetime, password reset request cooldown, attendance edit deadline, chat delete-for-everyone time. Allowed values
+  lifetime, password reset request cooldown, chat delete-for-everyone time (the attendance edit deadline moves to the
+  School Manager settings `school_settings`, 24/11/2026, proposed – see §12). Allowed values
   (01/11/2026): wrong passwords before a lock 3–10; lock step 1–60 min; lock max 1–1440 min; images / files 1–50 MB;
   videos 1–50 MB (lowered from 200 by the lead 11/11/2026: the Supabase Free plan takes files up to 50 MB); OTP lifetime 1–30 min; reset request cooldown 1–1440 min (default 15); attendance deadline a time
   `HH:MM`; `chat.delete_for_everyone_minutes` 1–1440 min (default 15, §6; agreed by the lead 07/11/2026).
+  23/11/2026 (Linh): the attendance edit deadline (`attendance.edit_deadline_time`) is no longer on the System Admin
+  settings page; the row stays in `system_settings` and FE-12 keeps reading it. Dung moves its editing to the School
+  Manager's settings page.
 - `activity_logs` (never deleted) records only important actions: sign-in success / failure, account create /
   import / lock / unlock, password reset, role change, setting change, grade unlock. **The log is only kept in the
   database – there is no screen to view it** (UC "View Activity Log" and its screen removed 01/11/2026 on the

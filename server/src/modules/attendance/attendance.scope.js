@@ -1,7 +1,7 @@
 import { pool } from '../../config/db.js';
 import { badRequest, forbidden, notFound } from '../../utils/AppError.js';
-import { getSetting } from '../../utils/settings.js';
-import { DEFAULT_DEADLINE, LESSON_START_SQL, MODES, SETTING_DEADLINE, TODAY_SQL, TZ } from './attendance.constants.js';
+import { attendanceDeadline } from '../school-settings/schoolSettings.service.js';
+import { DEFAULT_DEADLINE, LESSON_START_SQL, MODES, TODAY_SQL, TZ } from './attendance.constants.js';
 
 // FE-12 Attendance (owner: Quoc) – lookups, data scope and the edit windows of business rules §12 / permissions.md
 // notes 7, 12, 13, 14. Permissions follow the ACTIVE role; System Admin never reaches FE-12 (routes refuse it).
@@ -25,9 +25,11 @@ export function parseDate(value, { required = false } = {}) {
   return text;
 }
 
-// The subject teacher's deadline of the day (system setting, SA edits it; HH:MM). A broken value falls back to 23:59.
+// The subject teacher's deadline of the day (HH:MM). Since 24/11/2026 a School Manager setting ("Cài đặt hệ thống",
+// school_settings); until patch_v0.3_school_settings_attendance.sql moves the row, the System Admin value in
+// system_settings is used. A broken value falls back to 23:59.
 export async function deadlineTime() {
-  const value = String(await getSetting(SETTING_DEADLINE, DEFAULT_DEADLINE)).trim();
+  const value = String(await attendanceDeadline()).trim();
   return /^([01]\d|2[0-3]):[0-5]\d$/.test(value) ? value : DEFAULT_DEADLINE;
 }
 

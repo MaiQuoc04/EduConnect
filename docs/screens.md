@@ -1,10 +1,12 @@
-# Screen list (84)
+# Screen list (SCR-1..SCR-86, SCR-48 removed)
 
 Source: Report 3 section 5.1 (draft v1.3). Screen numbers here are Report 3's; the numbering in `Screen_List_Report3_v1.2` (ordered by FE) differs. Besides desktop, 8 screens also need a mobile layout (decided 18/10): Login Page, Group Feed, Group Post Detail, Chat Room, School Feed, Timetable View, Academic Results, Child Attendance. No dashboard screen.
 
 SCR-74..SCR-83 (added 18/11/2026 by the lead): pages already running in the code that had no screen number. Existing
 numbers are never changed (code comments refer to them). Screens marked "(planned)" belong to FE-09 / FE-12, still being
 built in Iteration 3. SCR-84 (added 20/11/2026): the group comment report queue merged on 19/11/2026 (FE-05).
+SCR-85 (added 23/11/2026, FE-13, already in Report 3): contact details of an account changed by the School Manager.
+SCR-86 (added 24/11/2026 by the lead): the School Manager settings page merged on 24/11/2026 (FE-10, UC-133).
 
 | # | Screen | Feature | Description |
 |---|---|---|---|
@@ -66,10 +68,10 @@ built in Iteration 3. SCR-84 (added 20/11/2026): the group comment report queue 
 | 56 | Class Attendance | FE-12 | Allows Teacher to view and manage attendance records for an authorized class. (planned) |
 | 57 | Teaching Schedule | FE-10 | Displays the teaching schedule assigned to the Teacher. |
 | 58 | Teaching Schedule Detail | FE-10 | Displays detailed information about a selected teaching schedule entry. |
-| 59 | Account List | FE-13 | Displays user accounts managed at the system administration level. |
-| 60 | Account Detail | FE-13 | Displays detailed information and administrative status of a selected user account. |
-| 61 | Create Account | FE-13 | Allows System Admin to create a new user account and assign the appropriate role. |
-| 62 | Update Account | FE-13 | Allows System Admin to update information and administrative attributes of an existing user account. |
+| 59 | Account List | FE-13 | Displays user accounts managed at the system administration level. Since 23/11/2026 one page per account type under the menu group "Quản lý tài khoản" (Học sinh, Giáo viên, Phụ huynh, Quản lý nhà trường, Quản trị hệ thống): the list with the role fixed, plus "Thêm" (SCR-61) and "Nhập từ file" (SCR-76) except for System Admin accounts. The list of every account ("Tài khoản người dùng") was removed. |
+| 60 | Account Detail | FE-13 | Displays detailed information and administrative status of a selected user account. Since 24/11/2026 also "Thêm vai trò" next to the role chips (add a combinable role, business rules §1); School Manager has the same button in the account card of the teacher / parent detail pages. |
+| 61 | Create Account | FE-13 | Allows System Admin to create a new user account and assign the appropriate role. Since 24/11/2026 the account gets only the role of the page (no role picker); a combinable role is added on SCR-60. |
+| 62 | Update Account | FE-13 | Allows System Admin to update the username and the fields of the import file of an existing user account (UC-99, 22/11/2026). |
 | 63 | System Settings | FE-13 | Allows System Admin to view and manage system-level configuration settings. |
 | 64 | Maintenance Announcement | FE-13 | Allows System Admin to manage maintenance announcements shown to system users. |
 | 65 | School Year & Semester | FE-04 | Allows School Manager to create and update school years, create the two semesters of a school year, and close a semester. |
@@ -92,3 +94,5 @@ built in Iteration 3. SCR-84 (added 20/11/2026): the group comment report queue 
 | 82 | School Calendar | FE-10 | Lists upcoming and past school-wide dates; School Manager adds, edits and deletes them (UC-126, UC-127). |
 | 83 | Comment Reports | FE-08 | Allows School Manager to review reported comments of school announcements and delete the comment or dismiss the reports (UC-120). |
 | 84 | Group Comment Reports | FE-05 | Allows the homeroom teacher (class groups) and the School Manager (teacher group) to review reported group feed comments and delete the comment or dismiss the reports; tabs waiting, deleted, dismissed (UC-131). |
+| 85 | Update Contact Information | FE-13 | Allows School Manager to change the email and phone number of a student, teacher or parent account, opened from “Tài khoản đăng nhập” on the detail page (UC-99). |
+| 86 | School Settings | FE-10 | Allows School Manager to set the school-wide values used by other features: the teaching load of automatic scheduling and the time until which a subject teacher can edit the attendance of the day (UC-133). Page title “Cài đặt hệ thống”, route /school-settings. |

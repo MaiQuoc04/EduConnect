@@ -16,6 +16,8 @@ const LOAD_ERROR = 'Không tải được thông tin phụ huynh. Vui lòng th�
 const SAVE_ERROR = 'Không lưu được thông tin phụ huynh. Vui lòng thử lại.';
 const EMPTY_VALUE = 'Chưa cập nhật';
 const SA_ONLY = 'Chỉ Quản trị hệ thống thay đổi được.';
+// FE-13 (23/11/2026): School Manager edits email and phone from "Tài khoản đăng nhập" on the detail page.
+const CONTACT_HELP = 'Sửa ở thẻ Tài khoản đăng nhập của trang chi tiết.';
 // TODO (lead, Quoc): these two UC-09 / UC-106 codes are not in messages.js yet; UpdateStudentPage handles them on the
 // page too. Move them to messages.js together and drop this table.
 const PAGE_ERRORS = {
@@ -514,8 +516,8 @@ export default function UpdateParentPage() {
           </div>
           <div className="update-parent-grid">
             <ReadOnlyField label="Tên đăng nhập" value={parent.username} mono help={SA_ONLY} />
-            <ReadOnlyField label="Số điện thoại" value={parent.phone} mono help={SA_ONLY} />
-            <ReadOnlyField label="Email" value={parent.email} help={SA_ONLY} />
+            <ReadOnlyField label="Số điện thoại" value={parent.phone} mono help={CONTACT_HELP} />
+            <ReadOnlyField label="Email" value={parent.email} help={CONTACT_HELP} />
           </div>
         </section>
 

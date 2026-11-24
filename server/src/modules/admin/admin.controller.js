@@ -5,6 +5,9 @@ import * as control from './accountControl.service.js';
 import * as maintenance from './maintenance.service.js';
 import * as settings from './settings.service.js';
 
+// Who acts: System Admin or (23/11/2026) School Manager, limited to student, teacher and parent accounts (scope.js).
+const actorOf = (req) => ({ userId: req.user.userId, activeRole: req.user.activeRole });
+
 // Multer reads file names as latin1; turn them back into UTF-8 so Vietnamese names show correctly.
 function uploadedFile(req) {
   if (!req.file) return null;
@@ -13,13 +16,13 @@ function uploadedFile(req) {
 
 // UC-95 Create Account. The answer holds a password shown once: never cache it.
 export async function createAccount(req, res) {
-  const result = await accounts.createAccount({ body: req.body, actorId: req.user.userId, ip: req.ip });
+  const result = await accounts.createAccount({ body: req.body, actor: actorOf(req), actorId: req.user.userId, ip: req.ip });
   res.set('Cache-Control', 'no-store').status(201).json(result);
 }
 
 // UC-96 Import Accounts – template download.
 export async function importTemplate(req, res) {
-  const { fileName, contentType, buffer } = await accountImport.buildTemplate(req.query.type);
+  const { fileName, contentType, buffer } = await accountImport.buildTemplate(req.query.type, actorOf(req));
   res
     .set('Content-Type', contentType)
     .set('Content-Disposition', `attachment; filename="${fileName}"`)
@@ -28,7 +31,7 @@ export async function importTemplate(req, res) {
 
 // UC-96 – check the file, nothing is saved.
 export async function previewImport(req, res) {
-  res.json(await accountImport.previewImport({ file: uploadedFile(req), type: req.body?.type }));
+  res.json(await accountImport.previewImport({ file: uploadedFile(req), type: req.body?.type, actor: actorOf(req) }));
 }
 
 // UC-96 – create the valid rows; the answer holds passwords shown once.
@@ -36,6 +39,7 @@ export async function importAccounts(req, res) {
   const result = await accountImport.importAccounts({
     file: uploadedFile(req),
     type: req.body?.type,
+    actor: actorOf(req),
     actorId: req.user.userId,
     ip: req.ip,
   });
@@ -43,7 +47,6 @@ export async function importAccounts(req, res) {
 }
 
 // ---------------------------------------------------------------- UC-97..98 accounts
-const actorOf = (req) => ({ userId: req.user.userId, activeRole: req.user.activeRole });
 
 export async function listAccounts(req, res) {
   res.json(await control.listAccounts(req.query)); // UC-97
@@ -59,7 +62,7 @@ export async function listClassOptions(_req, res) {
 }
 
 export async function exportAccounts(req, res) {
-  const { fileName, contentType, buffer } = await control.exportAccounts(req.query); // UC-98
+  const { fileName, contentType, buffer } = await control.exportAccounts(req.query, actorOf(req)); // UC-98
   res
     .set('Content-Type', contentType)
     .set('Content-Disposition', `attachment; filename="${fileName}"`)
@@ -67,11 +70,15 @@ export async function exportAccounts(req, res) {
 }
 
 export async function getAccount(req, res) {
-  res.json(await control.getAccount(req.params.id));
+  res.json(await control.getAccount(req.params.id, actorOf(req)));
 }
 
-export async function updateIdentifiers(req, res) {
-  res.json(await control.updateIdentifiers({ idParam: req.params.id, body: req.body })); // UC-99
+export async function updateAccount(req, res) {
+  res.json(await control.updateAccount({ idParam: req.params.id, body: req.body, actor: actorOf(req) })); // UC-99
+}
+
+export async function addRole(req, res) {
+  res.json(await control.addRole({ idParam: req.params.id, body: req.body, actor: actorOf(req), ip: req.ip })); // 24/11
 }
 
 export async function getSecurityState(req, res) {

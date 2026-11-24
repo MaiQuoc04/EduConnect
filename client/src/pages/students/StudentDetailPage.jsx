@@ -8,6 +8,7 @@ import { errorText, GENDER_LABELS, RELATIONSHIP_LABELS } from '../../messages.js
 import { formatDate } from '../../utils/format.js';
 import { clearHandedOverDetail, peekHandedOverDetail } from './detailHandoff.js';
 import './StudentDetailPage.css';
+import SchoolAccountCard from '../admin/SchoolAccountCard.jsx';
 
 // Same labels as the Student List (SCR-07).
 const ENROLLMENT_LABELS = { STUDYING: 'Đang học', TRANSFERRED: 'Đã chuyển lớp', DROPPED: 'Đã nghỉ học' };
@@ -595,6 +596,8 @@ export default function StudentDetailPage() {
         <div className="student-detail-side">
           <ClassTimeline current={current} history={enrollmentHistory} />
           <ParentsCard parents={parents} />
+          {/* FE-13: email / phone, password reset, lock (School Manager, 23/11/2026) */}
+          <SchoolAccountCard userId={student.userId} username={student.username} />
         </div>
       </div>
     </div>

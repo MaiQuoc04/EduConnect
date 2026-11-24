@@ -1,9 +1,10 @@
-# Use cases (132) – numbering after the 20/10/2026 database review
+# Use cases (UC-01..UC-133, UC-89 removed) – numbering after the 20/10/2026 database review
 
 UC-117..UC-128 (added 18/11/2026 by the lead): features already built in the code that had no use case yet; each is
 listed under its feature below. UC-129..UC-131 (added 20/11/2026 by the lead): the group feed comment likes and
 reports merged on 19/11/2026 (FE-05, Khanh; business rules §5). UC-132 (proposed by Khanh, approved by the lead 20/11/2026):
-hide a 1-1 chat or a team from one's own conversation list (FE-06; business rules §6).
+hide a 1-1 chat or a team from one's own conversation list (FE-06; business rules §6). UC-133 (added 24/11/2026 by the
+lead): the School Manager settings page merged on 24/11/2026 (FE-10, Dung; screen SCR-86).
 
 Source: Report 3 section 4.2 (draft v1.3). Actor "User" = any signed-in account. "Homeroom Teacher" is not a role: it is a Teacher who is `classes.homeroom_teacher_id` of that class.
 
@@ -157,6 +158,7 @@ Source: Report 3 section 4.2 (draft v1.3). Actor "User" = any signed-in account.
 | UC-80 | Delete Calendar Event | Teacher (event creator) | Class Calendar Events | Delete one's own event. |
 | UC-122 | Configure Period Times | School Manager | Class Timetable | Set the start of each session and one length for every period; every timetable, past weeks included, shows the new times (added 18/11/2026). |
 | UC-123 | Schedule Automatically | School Manager | Class Timetable | Make a draft of teaching assignments and / or class timetables for a semester that follows the hard and soft scheduling rules, review it and apply it; nothing is saved before applying (added 18/11/2026). |
+| UC-133 | Configure School Settings | School Manager | Class Timetable | Set the school-wide values used by other features: the teaching load of automatic scheduling (norm, homeroom teacher norm, maximum over the norm, periods per day) and the time until which a subject teacher can edit the attendance of the day (default 23:59); every change is logged (added 24/11/2026). |
 | UC-124 | View Timetable History | School Manager | Class Timetable | View every saved timetable of a class (who saved it and when, dates still in force, what replaced it, periods held) and export the history to CSV (added 18/11/2026). |
 | UC-125 | Look Up Teacher Schedule | School Manager | Teaching Schedule | From the teaching assignment screen, find a teacher by name, code, department or subject and view their teaching schedule week by week (added 18/11/2026). |
 | UC-126 | Manage School Calendar | School Manager | School Calendar | Add, edit and delete school-wide dates (title, start, optional end, venue, note) for the whole school or one grade (added 18/11/2026). |
@@ -191,11 +193,11 @@ Source: Report 3 section 4.2 (draft v1.3). Actor "User" = any signed-in account.
 
 | ID | Use case | Actor | Sub-feature | Description |
 |---|---|---|---|---|
-| UC-95 | Create Account | System Admin | Account Provisioning | Create an account for any role except System Admin; username generated automatically by role; random temporary password shown once. |
-| UC-96 | Import Accounts | System Admin | Account Provisioning | Import accounts from a file with checks and a preview. |
+| UC-95 | Create Account | System Admin, School Manager | Account Provisioning | Create an account for any role except System Admin (School Manager: student, teacher, parent only, 23/11/2026); username generated automatically by role; random temporary password shown once. Since 22/11/2026 started from the profile page of the role (Students, Teachers, Parents, School Managers), whose role is ticked and fixed. Since 24/11/2026 the account gets only that one role (no role picker, like an import row); a combinable role is added afterwards with "Thêm vai trò" (UC-99). |
+| UC-96 | Import Accounts | System Admin, School Manager | Account Provisioning | Import accounts from a file with checks and a preview. Since 22/11/2026 started from the profile page of the role, file type fixed to that role. |
 | UC-97 | View Account List | System Admin | Account Provisioning | List all accounts, filtered by role and status. |
-| UC-98 | Export Account List | System Admin | Account Provisioning | Export the account list (no passwords; initial passwords are only shown once, on screen or in the import result file). |
-| UC-99 | Update Login Identifiers | System Admin | Account Control | Change an account's email, phone number or username. |
+| UC-98 | Export Account List | System Admin, School Manager | Account Provisioning | Export the account list (no passwords; initial passwords are only shown once, on screen or in the import result file). Since 23/11/2026 one file per account type with the columns of its import template; School Manager: student and parent accounts (teachers: UC-115). |
+| UC-99 | Update Login Identifiers | System Admin, School Manager | Account Control | Change an account's username and the fields of the import file (22/11/2026): full name, email, phone, address, student code / date of birth / gender, teacher code / department, parent occupation. Not classes, parent links, subjects or assignments (School Manager). School Manager (23/11/2026): email and phone of student, teacher and parent accounts only. Since 24/11/2026 both also add a combinable role with its profile ("Thêm vai trò"): System Admin adds Teacher, Parent or School Manager on SCR-60; School Manager adds Teacher or Parent to a teacher / parent account from its detail page; Student and System Admin accounts take no other role; roles are never removed (business rules §1). |
 | UC-100 | Reset Password | System Admin, School Manager | Account Control | Reset a password to a random temporary one (School Manager: student, parent and teacher accounts only). Also reads the one-time password of a password reset request of an account without email. |
 | UC-101 | Lock / Unlock Account | System Admin, School Manager | Account Control | Lock or unlock an account, or clear a temporary sign-in lock (same scope as UC-100). |
 | UC-102 | Configure System Settings | System Admin | System Configuration & Maintenance | Change system settings. |
