@@ -503,16 +503,6 @@ export default function TeacherListPage() {
         )}
       </div>
 
-      {/* ── Admin note ── */}
-      <div className="tc-admin-note">
-        <Icon name="info" className="tc-note-icon" />
-        <p>
-          <strong>Lưu ý quản trị tài khoản:</strong>{' '}
-          Tài khoản cán bộ giáo viên được khởi tạo tập trung bởi Quản trị viên hệ thống (System Admin).
-          Quản lý trường học thực hiện cập nhật phân công bộ môn, lớp chủ nhiệm và rà soát trạng thái hoạt động
-          giảng dạy theo phân cấp.
-        </p>
-      </div>
     </div>
   );
 }

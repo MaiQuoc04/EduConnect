@@ -164,7 +164,6 @@ export default function RegistrationListPage() {
           </div>
         )}
       </section>
-      <div className="notice ink"><Icon name="info" /><p>Danh sách xuất Excel theo đúng bộ lọc và từ khoá đang chọn. Số điện thoại phụ huynh chỉ hiện với giáo viên.</p></div>
     </div>
   );
 }
