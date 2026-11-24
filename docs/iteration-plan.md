@@ -144,6 +144,14 @@ reactions, attachments) is merged into one place after both are on `develop`.
   of "ĐTB chung" and "Hạng"; SCR-48 Class Ranking and its menu item removed (`/grades/ranking` redirects). No schema
   change. **Open:** subjects assessed by comments (Đạt / Chưa đạt), conduct and the titles Học sinh Giỏi / Xuất sắc
   need schema changes – to agree with the lead. SRS: UC-88, UC-89, SCR-47, SCR-48 to update.
+- **FE-03 / FE-07 / FE-10 clean-up (24/11/2026, Dung, `fix/fe-10-calendar-one-class`, not merged yet):** class calendar
+  (UC-76): a student sees their own class, no "Tất cả lớp" picker (teachers and parents keep it); always-shown
+  reminder notes removed from Dung's pages (calendar, timetable views / editor, period times, school settings,
+  extracurricular form and registration list, teacher list, teaching assignment); duplicates removed: the teacher
+  schedule lookup on SCR-19 (same as the weekly schedule on Teacher Detail, UC-16; endpoint
+  `GET /timetables/teachers/:teacherId/week` removed) and the version list inside the timetable editor (the history page
+  UC-124 stays, linked from the editor). No schema change. **Open (lead):** remove UC-125 from use-cases.md /
+  permissions.md and the R3 SRS, or keep it pointing to Teacher Detail.
 - **FE-10 School Manager settings (21/11/2026, Dung, `feature/fe-10-school-settings`, merged into `develop` 24/11):** new page
   "Cài đặt hệ thống" for the School Manager (`/school-settings`, menu "Quản trị hệ thống"; `GET` / `PUT
   /api/v1/school-settings`, module `server/src/modules/school-settings`). First group, moved from part "4. Giáo viên"
