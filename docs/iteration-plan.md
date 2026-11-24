@@ -41,8 +41,11 @@ reactions, attachments) is merged into one place after both are on `develop`.
     yet). `patch_v0.3_school_settings_attendance.sql` **still proposed, not run** – the app works without it
     (`school_settings` first, then the `system_settings` value 23:59; a School Manager save writes into
     `school_settings`).
-  - **Open (lead):** approve / run that patch; Dung's `// ASSUMPTION:` earliest deadline 12:00; UC / SCR numbers for
-    the School Manager settings page.
+  - **Open (lead):** approve / run that patch; Dung's `// ASSUMPTION:` earliest deadline 12:00.
+  - **Numbers given (24/11/2026, lead):** UC-133 Configure School Settings, SCR-86 School Settings (use-cases.md,
+    screens.md, permissions.md; SCR-85 Update Contact Information of FE-13 added to screens.md, it was only in R3).
+    Owed (Dung): replace "id pending" in R3 10.1.11 and in the UC / screen lists, add the screenshot; add the
+    `school_settings` table to R4 I.3 (56 tables). Owed (Linh): R4 I.2 lists 22 packages, now 23 (`school-settings`).
   - Still not merged: `feature/fe-08-school-feed` (`baaa3a5`, Anh, 19/11).
 
 - **FE-13 merged into `develop` (24/11/2026, Quoc, `feature/fe-13-system-administration`, merge `a9c656e`;
