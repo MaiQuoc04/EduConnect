@@ -28,13 +28,30 @@ reactions, attachments) is merged into one place after both are on `develop`.
 
 ## Current status (read first; update after every merge, schema patch or new decision)
 
+- **FE-10 School Manager settings + FE-07 fix merged into `develop` (24/11/2026, Quoc; client `npm run build` and
+  server `npm test` (21/21) pass):**
+  - `fix/fe-07-registration-list` (Dung, PR #16, merge `a9a5324`): UC-56 / UC-57 registration list and export no
+    longer fail without a search (the accent parameters `$3` / `$4` are sent only with a search).
+  - `feature/fe-10-school-settings` (Dung, PR #17): School Manager "Cài đặt hệ thống" (`/school-settings`: teaching
+    load of automatic scheduling + **attendance edit deadline**, so the FE-13 gap is closed), automatic scheduling
+    draft edited by hand / teacher change in the cell editor / teacher load cards (details in Dung's entries below).
+    Conflict in `client/src/navigation.js` resolved: FE-13's "Quản lý tài khoản" group kept, Dung's comment on
+    "Quản trị hệ thống". FE-12 `attendance.scope.js` reads the deadline through `attendanceDeadline()` (2 lines, reviewed).
+  - **DB:** `school_settings` on the shared DB (read-only check 24/11: the 4 `teaching.*` rows; no attendance row
+    yet). `patch_v0.3_school_settings_attendance.sql` **still proposed, not run** – the app works without it
+    (`school_settings` first, then the `system_settings` value 23:59; a School Manager save writes into
+    `school_settings`).
+  - **Open (lead):** approve / run that patch; Dung's `// ASSUMPTION:` earliest deadline 12:00; UC / SCR numbers for
+    the School Manager settings page.
+  - Still not merged: `feature/fe-08-school-feed` (`baaa3a5`, Anh, 19/11).
+
 - **FE-13 merged into `develop` (24/11/2026, Quoc, `feature/fe-13-system-administration`, merge `a9c656e`;
   client `npm run build` and server `npm test` (21/21) pass; Linh's work of 22–24/11 below):** School Manager manages student / teacher / parent accounts, "Thêm vai trò", menu "Quản lý tài khoản",
   System Admin profile pages, settings changes. No schema change; `patch_v0.3_class_periods_settings_remove.sql`
   already run (read-only check 24/11: both `timetable.class_periods_*` rows gone). Scope checked on the server
   (`admin/scope.js`, `assertScope`): School Manager is refused on accounts with the SM / SA role, edits only email and
   phone, exports per type, never adds the SM role. Touches FE-02 / FE-03 / FE-14 pages (one import and a few lines
-  each) – tell Anh and Dung. **Gap until `feature/fe-10-school-settings` (Dung, `af1b774`) is merged:** nobody can
+  each) – tell Anh and Dung. **Gap closed 24/11 by the FE-10 settings merge (above); before it** nobody could
   edit `attendance.edit_deadline_time` (FE-12 still reads it).
 
 - **FE-13 roles: one role at creation, "Thêm vai trò" afterwards (24/11/2026, Linh, option 2; business rules §1,
@@ -105,6 +122,32 @@ reactions, attachments) is merged into one place after both are on `develop`.
   of "ĐTB chung" and "Hạng"; SCR-48 Class Ranking and its menu item removed (`/grades/ranking` redirects). No schema
   change. **Open:** subjects assessed by comments (Đạt / Chưa đạt), conduct and the titles Học sinh Giỏi / Xuất sắc
   need schema changes – to agree with the lead. SRS: UC-88, UC-89, SCR-47, SCR-48 to update.
+- **FE-10 School Manager settings (21/11/2026, Dung, `feature/fe-10-school-settings`, merged into `develop` 24/11):** new page
+  "Cài đặt hệ thống" for the School Manager (`/school-settings`, menu "Quản trị hệ thống"; `GET` / `PUT
+  /api/v1/school-settings`, module `server/src/modules/school-settings`). First group, moved from part "4. Giáo viên"
+  of automatic scheduling (SCR-80): teacher norm, homeroom teacher norm, periods over the norm, periods a day.
+  Automatic scheduling reads them on every run and apply (no longer in the request) and shows them read only; the
+  busy teachers list stays on SCR-80. **DB: `patch_v0.3_school_settings.sql` (new table `school_settings`, 4 rows
+  17 / 13 / 4 / 4) – approved by the lead, run on the shared DB 21/11 by Dung; 56 tables.** Schema file updated, so
+  `scripts/dev-local-db.js` gets the table and its rows. Separate from `system_settings` (System Admin only, UC-102).
+  **Owed:** UC / SCR id for the page (lead), use-cases.md / screens.md / permissions.md rows, SRS screen description.
+- **Attendance deadline moved to the School Manager settings (24/11/2026, Dung, `feature/fe-10-school-settings`,
+  not merged yet; PROPOSED):** "Giờ cuối giáo viên bộ môn được sửa điểm danh trong ngày" (`attendance.edit_deadline_time`,
+  §12) is now edited by the School Manager in "Cài đặt hệ thống" (group "Điểm danh", time 12:00–23:59, default 23:59)
+  instead of the System Admin. FE-12 `deadlineTime()` (`attendance.scope.js`, Quoc's module – one function changed)
+  reads `school_settings` first, then the old `system_settings` row, then 23:59, so nothing changes before the patch.
+  **DB: `patch_v0.3_school_settings_attendance.sql` (copies the value into `school_settings`, deletes the
+  `system_settings` row so the SA screen stops showing it) – NOT run, waiting for the lead.** Schema file updated.
+  Open: the earliest time 12:00 is an assumption; the SA page label for the key (Linh, `SystemSettingsPage.jsx`) can be
+  removed after the patch.
+- **FE-10 automatic scheduling: draft edited by hand before "Áp dụng" (21/11/2026, Dung, same branch, not merged
+  yet):** on SCR-80 the School Manager can move a lesson (click or drag onto another cell of the class = swap), put
+  another subject in a cell or leave it empty, and change the teacher of a class and subject (qualified teachers
+  only in the list). Every change is checked again by `POST /api/v1/timetables/auto/check` (nothing saved;
+  `timetable.auto.review.js`): the same hard rules as `/auto/apply` (errors block "Áp dụng") and the soft rules S1–S9 /
+  GAP (warnings with their weights), each with its cell, shown on the grids and in "Cần chú ý"; undo and "Về bản
+  gốc". `/auto/run` also returns this review, the subjects of each class and when each teacher is busy (other classes
+  / marked). **No schema change.** `/auto/apply` unchanged (still re-checks everything).
 - **FE-04 / FE-06 follow-ups merged into `develop` (21/11/2026, Quoc, `feature/fe-05-group-feed`, merge `7eb509b`;
   client `npm run build` and server `npm test` (20/20) pass on `develop`):** six commits of Khanh, 20–21/11.
   - **FE-04 class types per grade only** (UC-26, SCR-70, business rules §4): no more "every grade" type, tab and

@@ -115,6 +115,12 @@ export async function runAutoSchedule(config) {
   return data;
 }
 
+// A draft edited by hand: checked again with every rule, nothing saved (21/11/2026)
+export async function checkAutoSchedule({ config, draft }) {
+  const { data } = await api.post('/timetables/auto/check', { config, draft });
+  return data;
+}
+
 export async function applyAutoSchedule({ config, stamp, draft, confirmOverwrite }) {
   const { data } = await api.post('/timetables/auto/apply', { config, stamp, draft, confirmOverwrite });
   return data;

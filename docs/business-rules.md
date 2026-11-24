@@ -767,7 +767,9 @@ Boundaries that are easy to get wrong:
 
 ## 12. Attendance (FE-12)
 - Per period, 4 statuses: `PRESENT`, `LATE`, `ABSENT_EXCUSED`, `ABSENT_UNEXCUSED`. No leave-request feature.
-- The subject teacher takes attendance for periods they teach and can edit until **23:59 the same day**. After that:
+- The subject teacher takes attendance for periods they teach and can edit until **23:59 the same day** (the time is
+  a School Manager setting, "Cài đặt hệ thống", default 23:59 – moved from the System Admin settings 24/11/2026, Dung,
+  proposed: `patch_v0.3_school_settings_attendance.sql` waits for the lead). After that:
   the homeroom teacher (own class) can only switch excused ↔ unexcused, until the semester is closed; every other
   change is SM only.
   Why (18/11/2026, lead): present / late / absent is what the subject teacher sees in the period, so it is fixed
@@ -836,7 +838,8 @@ Boundaries that are easy to get wrong:
 
 ## 13. System administration (FE-13)
 - `system_settings` (key–value, loaded by SQL; SA edits values only): sign-in lock thresholds, upload limits, OTP
-  lifetime, password reset request cooldown, attendance edit deadline, chat delete-for-everyone time. Allowed values
+  lifetime, password reset request cooldown, chat delete-for-everyone time (the attendance edit deadline moves to the
+  School Manager settings `school_settings`, 24/11/2026, proposed – see §12). Allowed values
   (01/11/2026): wrong passwords before a lock 3–10; lock step 1–60 min; lock max 1–1440 min; images / files 1–50 MB;
   videos 1–50 MB (lowered from 200 by the lead 11/11/2026: the Supabase Free plan takes files up to 50 MB); OTP lifetime 1–30 min; reset request cooldown 1–1440 min (default 15); attendance deadline a time
   `HH:MM`; `chat.delete_for_everyone_minutes` 1–1440 min (default 15, §6; agreed by the lead 07/11/2026).

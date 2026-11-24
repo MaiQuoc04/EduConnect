@@ -50,6 +50,7 @@ import TimetableEditorPage from './pages/timetable/TimetableEditorPage.jsx';
 import TimetableHistoryPage from './pages/timetable/TimetableHistoryPage.jsx';
 import TimetableImportPage from './pages/timetable/TimetableImportPage.jsx';
 import PeriodTimesPage from './pages/timetable/PeriodTimesPage.jsx';
+import SchoolSettingsPage from './pages/settings/SchoolSettingsPage.jsx';
 import TimetableAutoPage from './pages/timetable/TimetableAutoPage.jsx';
 import SchoolEventsPage from './pages/calendar/SchoolEventsPage.jsx';
 import TimetableManagementPage from './pages/timetable/TimetableManagementPage.jsx';
@@ -392,6 +393,8 @@ export default function App() {
         <Route path="school-events" element={<ProtectedRoute roles={['SCHOOL_MANAGER', 'TEACHER', 'STUDENT', 'PARENT']}><SchoolEventsPage /></ProtectedRoute>} />
         <Route path="timetables/auto" element={<ProtectedRoute roles={['SCHOOL_MANAGER']}><TimetableAutoPage /></ProtectedRoute>} />
         <Route path="timetables/period-times" element={<ProtectedRoute roles={['SCHOOL_MANAGER']}><PeriodTimesPage /></ProtectedRoute>} />
+        {/* School Manager settings (Dung, 21/11/2026; no SCR id yet) */}
+        <Route path="school-settings" element={<ProtectedRoute roles={['SCHOOL_MANAGER']}><SchoolSettingsPage /></ProtectedRoute>} />
         <Route path="timetables/import" element={<ProtectedRoute roles={['SCHOOL_MANAGER']}><TimetableImportPage /></ProtectedRoute>} />
         <Route path="timetables/classes/:classId/edit" element={<ProtectedRoute roles={['SCHOOL_MANAGER']}><TimetableEditorPage /></ProtectedRoute>} />
         <Route path="timetables/classes/:classId/history" element={<ProtectedRoute roles={['SCHOOL_MANAGER']}><TimetableHistoryPage /></ProtectedRoute>} />

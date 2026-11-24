@@ -19,6 +19,7 @@ router.get('/period-times', ...sm, ctrl.getPeriodTimes); // period start / lengt
 router.put('/period-times', ...sm, ctrl.updatePeriodTimes);
 router.get('/auto/options', ...sm, ctrl.autoOptions); // automatic scheduling (Dung, 17/11/2026)
 router.post('/auto/run', ...sm, ctrl.autoRun); // draft only
+router.post('/auto/check', ...sm, ctrl.autoCheck); // draft edited by hand: checked again, nothing saved (21/11/2026)
 router.post('/auto/apply', ...sm, ctrl.autoApply);
 router.get('/viewable-classes', ...viewers, ctrl.viewable); // UC-74
 router.get('/teaching-schedule/week', requireAuth, requireRole(ROLES.TEACHER), ctrl.teachingWeek); // SCR-57 / UC-75

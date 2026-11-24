@@ -12,6 +12,8 @@ import { AppError, badRequest, notFound } from '../../utils/AppError.js';
 import { syncClassTeachers } from '../classes/classGroups.js';
 import * as teacherQueries from '../teacher/teacher.queries.js';
 import { assignTeachers, countedPeriods, MORNING_LAST, solveTimetable } from './timetable.auto.solver.js';
+import { teachingLoad } from '../school-settings/schoolSettings.service.js';
+import { reviewDraft } from './timetable.auto.review.js';
 import { AUTO_LIMITS, ERROR_CODES } from './timetable.constants.js';
 import { internals } from './timetable.service.js';
 
@@ -33,7 +35,7 @@ export function autoOptions({ schoolYearId }) {
     const years = (await internals.schoolYears()).filter((y) => y.endDate >= day);
     const year = years.find((y) => String(y.id) === String(schoolYearId)) ?? years.find((y) => y.startDate <= day) ?? years.at(-1) ?? null;
     if (!year) return { today: day, years: [], schoolYearId: null, semesters: [], classes: [], subjects: [], teachers: [], timeSlots: [], limits: AUTO_LIMITS };
-    const [{ rows: semesters }, { rows: classes }, { rows: subjects }, { rows: teachers }, slots] = await Promise.all([
+    const [{ rows: semesters }, { rows: classes }, { rows: subjects }, { rows: teachers }, slots, teaching] = await Promise.all([
       pool.query(
         `SELECT semester_id AS "semesterId", semester_no AS "no", to_char(start_date, 'YYYY-MM-DD') AS "startDate",
                 to_char(end_date, 'YYYY-MM-DD') AS "endDate", status
@@ -71,6 +73,7 @@ export function autoOptions({ schoolYearId }) {
          GROUP BY t.teacher_id, u.full_name, t.teacher_code ORDER BY u.full_name`,
       ),
       internals.timeSlots(),
+      teachingLoad(),
     ]);
     // Defaults by code / name (the School Manager changes them on the screen).
     const byCode = (codes) => subjects.filter((s) => codes.includes(String(s.code).toUpperCase())).map((s) => String(s.subjectId));
@@ -88,10 +91,7 @@ export function autoOptions({ schoolYearId }) {
       limits: AUTO_LIMITS,
       defaults: {
         grid: [1, 2, 3, 4, 5].map((w) => ({ weekday: w, morning: 5, afternoon: w === 2 || w === 4 ? 2 : 0 })),
-        norm: AUTO_LIMITS.NORM,
-        homeroomNorm: AUTO_LIMITS.HOMEROOM_NORM,
-        maxOver: AUTO_LIMITS.MAX_OVER,
-        maxPerDay: AUTO_LIMITS.MAX_PER_DAY,
+        ...teaching, // norm, homeroomNorm, maxOver, maxPerDay: School Manager settings, read only on this screen
         maxPerSubjectDay: AUTO_LIMITS.MAX_PER_SUBJECT_DAY,
         heavySubjectIds: byCode(['TOAN', 'VAN', 'ANH']),
         afternoonSubjectIds: subjects.filter((s) => /^chuyên đề/i.test(s.name)).map((s) => String(s.subjectId)),
@@ -174,16 +174,24 @@ async function loadContext(cfg, db = pool) {
 
   // Lessons of the other classes in the range: their teachers are busy at that weekday + period.
   const { rows: busyRows } = await db.query(
-    `SELECT DISTINCT ts.teacher_id::text AS "teacherId", EXTRACT(ISODOW FROM ts."date")::int AS "weekday", sl.period_number AS "period"
-     FROM timetable_slots ts JOIN time_slots sl ON sl.slot_id = ts.slot_id
-     WHERE ts."date" BETWEEN $1::date AND $2::date AND NOT (ts.class_id = ANY($3::bigint[]))`,
+    `SELECT ts.teacher_id::text AS "teacherId", EXTRACT(ISODOW FROM ts."date")::int AS "weekday", sl.period_number AS "period",
+            string_agg(DISTINCT c.class_name, ', ') AS "classNames"
+     FROM timetable_slots ts JOIN time_slots sl ON sl.slot_id = ts.slot_id JOIN classes c ON c.class_id = ts.class_id
+     WHERE ts."date" BETWEEN $1::date AND $2::date AND NOT (ts.class_id = ANY($3::bigint[])) AND ts.teacher_id IS NOT NULL
+     GROUP BY ts.teacher_id, EXTRACT(ISODOW FROM ts."date"), sl.period_number`,
     [start, semester.endDate, cfg.classIds],
   );
   const busy = new Map();
+  // Why a teacher is busy at a cell (shown when a draft is edited by hand): the other classes taught then, or null for a
+  // cell marked busy on the screen.
+  const busyWhy = new Map();
   for (const b of [...busyRows, ...cfg.busy]) {
     const id = String(b.teacherId);
+    const cell = `${b.weekday}-${b.period}`;
     if (!busy.has(id)) busy.set(id, new Set());
-    busy.get(id).add(`${b.weekday}-${b.period}`);
+    busy.get(id).add(cell);
+    if (!busyWhy.has(id)) busyWhy.set(id, new Map());
+    if (!busyWhy.get(id).get(cell)) busyWhy.get(id).set(cell, b.classNames ?? null);
   }
   const teachers = teacherRows.map((t) => ({
     ...t,
@@ -209,7 +217,7 @@ async function loadContext(cfg, db = pool) {
     [cfg.schoolYearId],
   );
   return {
-    day, year, semester, range, classes, teachers, subjectName, current, slots,
+    day, year, semester, range, classes, teachers, subjectName, current, slots, busyWhy,
     withTimetable: new Set(versions.map((v) => v.classId)),
     stamp: createHash('md5').update(`${fp[0].stamp}|${start}`).digest('hex'),
   };
@@ -321,11 +329,16 @@ const solverOptions = (cfg) => ({
 
 // ── run: a draft ───────────────────────────────────────────────────────────
 
-export function runAuto(cfg) {
+export function runAuto(input) {
   return internals.guard(async () => {
+    // Teaching load (norms, periods over the norm, periods a day): the School Manager settings, never the request.
+    const teaching = await teachingLoad();
+    const cfg = { ...input, ...teaching };
     const ctx = await loadContext(cfg);
     const check = preCheck(cfg, ctx);
     const base = {
+      teaching,
+      ...editInfo(ctx),
       range: ctx.range,
       semester: ctx.semester,
       stamp: ctx.stamp,
@@ -398,10 +411,41 @@ export function runAuto(cfg) {
       violations: timetable?.violations ?? [],
       score: timetable?.score ?? 0,
       loads: teacherLoads,
+      // The same checks as a draft edited by hand (POST /auto/check), so the screen shows one kind of list.
+      review: reviewDraft(cfg, ctx, {
+        assignments: Object.entries(assignments).map(([k, teacherId]) => {
+          const [classId, subjectId] = k.split(':');
+          return { classId, subjectId, teacherId: String(teacherId) };
+        }),
+        timetables: Object.fromEntries(Object.entries(timetable?.entries ?? {}).map(([cid, list]) => [cid, list.map((e) => ({ weekday: e.weekday, period: e.period, subjectId: String(e.subjectId) }))])),
+      }),
       teacherNames: Object.fromEntries(ctx.teachers.map((t) => [t.teacherId, t.name])),
       subjectNames: Object.fromEntries(ctx.subjectName),
       loadsBefore: loads,
     };
+  });
+}
+
+// What the screen needs to edit a draft by hand: subjects and periods of each class, its homeroom teacher, and when
+// each teacher is busy (other classes taught then, or null = marked busy on the screen).
+function editInfo(ctx) {
+  return {
+    classSubjects: Object.fromEntries(ctx.classes.map((c) => [c.classId, c.subjects])),
+    homerooms: Object.fromEntries(ctx.classes.map((c) => [c.classId, c.homeroomTeacherId ?? null])),
+    busy: Object.fromEntries([...ctx.busyWhy].map(([t, m]) => [t, Object.fromEntries(m)])),
+    // Periods each teacher already teaches in classes outside the run, and whether they are a homeroom teacher, so the
+    // screen can check the weekly maximum of any teacher before offering them.
+    teacherBase: Object.fromEntries(ctx.teachers.map((t) => [t.teacherId, { base: t.baseLoad, homeroom: Boolean(t.homeroom) }])),
+  };
+}
+
+// ── check: a draft edited by hand, nothing saved (Dung, 21/11/2026) ──────────
+
+export function checkAuto({ config, draft }) {
+  return internals.guard(async () => {
+    const cfg = { ...config, ...(await teachingLoad()) };
+    const ctx = await loadContext(cfg);
+    return { stamp: ctx.stamp, ...reviewDraft(cfg, ctx, draft) };
   });
 }
 
@@ -509,9 +553,11 @@ function checkDraft(cfg, ctx, draft) {
   return { assign, entries };
 }
 
-export function applyAuto({ config: cfg, stamp, confirmOverwrite, draft }, user) {
+export function applyAuto({ config, stamp, confirmOverwrite, draft }, user) {
   return internals.guard(() =>
     withTransaction(async (db) => {
+      // Re-checked with the settings in force now (they may have changed since the draft was made).
+      const cfg = { ...config, ...(await teachingLoad(db)) };
       // One run at a time per year: lock its classes (SCR-19 saves lock them too).
       await teacherQueries.lockClassesOfYear(cfg.schoolYearId, db);
       const ctx = await loadContext(cfg, db);
