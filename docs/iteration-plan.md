@@ -28,8 +28,8 @@ reactions, attachments) is merged into one place after both are on `develop`.
 
 ## Current status (read first; update after every merge, schema patch or new decision)
 
-- **FE-13 merged into `develop` (24/11/2026, Quoc, `feature/fe-13-system-administration`, Linh's work of 22–24/11
-  below):** School Manager manages student / teacher / parent accounts, "Thêm vai trò", menu "Quản lý tài khoản",
+- **FE-13 merged into `develop` (24/11/2026, Quoc, `feature/fe-13-system-administration`, merge `a9c656e`;
+  client `npm run build` and server `npm test` (21/21) pass; Linh's work of 22–24/11 below):** School Manager manages student / teacher / parent accounts, "Thêm vai trò", menu "Quản lý tài khoản",
   System Admin profile pages, settings changes. No schema change; `patch_v0.3_class_periods_settings_remove.sql`
   already run (read-only check 24/11: both `timetable.class_periods_*` rows gone). Scope checked on the server
   (`admin/scope.js`, `assertScope`): School Manager is refused on accounts with the SM / SA role, edits only email and
