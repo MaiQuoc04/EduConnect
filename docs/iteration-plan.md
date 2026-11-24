@@ -32,7 +32,7 @@ reactions, attachments) is merged into one place after both are on `develop`.
   server `npm test` (21/21) pass):**
   - `fix/fe-07-registration-list` (Dung, PR #16, merge `a9a5324`): UC-56 / UC-57 registration list and export no
     longer fail without a search (the accent parameters `$3` / `$4` are sent only with a search).
-  - `feature/fe-10-school-settings` (Dung, PR #17): School Manager "Cài đặt hệ thống" (`/school-settings`: teaching
+  - `feature/fe-10-school-settings` (Dung, PR #17, merge `8dbaec9`): School Manager "Cài đặt hệ thống" (`/school-settings`: teaching
     load of automatic scheduling + **attendance edit deadline**, so the FE-13 gap is closed), automatic scheduling
     draft edited by hand / teacher change in the cell editor / teacher load cards (details in Dung's entries below).
     Conflict in `client/src/navigation.js` resolved: FE-13's "Quản lý tài khoản" group kept, Dung's comment on
