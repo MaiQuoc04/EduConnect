@@ -64,6 +64,7 @@ export default function ClassCalendarPage() {
   const { activeRole } = useAuth();
   const isTeacher = activeRole === 'TEACHER';
   const isParent = activeRole === 'PARENT';
+  const isStudent = activeRole === 'STUDENT';
   const [params, setParams] = useSearchParams();
   const [options, setOptions] = useState(null);
   const [data, setData] = useState(null);
@@ -110,7 +111,10 @@ export default function ClassCalendarPage() {
   useEffect(() => { load(); }, [load]);
 
   const items = options?.items ?? [];
-  const current = items.find((it) => String(it.classId) === classId);
+  // A student studies in one class: no "Tất cả lớp" choice, the class is shown as is (Dung's request 24/11/2026).
+  // Teachers (several classes) and parents (several children) keep the picker.
+  const only = isStudent ? items[0] ?? null : null;
+  const current = items.find((it) => String(it.classId) === classId) ?? only;
   const days = weekStart ? Array.from({ length: 7 }, (_, i) => addDays(weekStart, i)) : [];
   const weekEnd = days[6];
   const all = data?.events ?? [];
@@ -143,7 +147,7 @@ export default function ClassCalendarPage() {
         <div>
           <div className="cal-title-row">
             <h1 className="headline-lg">Lịch lớp</h1>
-            <span className="cal-class-tag">{current ? `Lớp ${current.className}` : 'Tất cả lớp của bạn'}</span>
+            <span className="cal-class-tag">{current ? `Lớp ${current.className}` : isParent ? 'Tất cả các con' : 'Tất cả lớp của bạn'}</span>
           </div>
           <p>Lịch kiểm tra, họp phụ huynh và các mốc sinh hoạt chung của lớp, kèm lịch chung của trường. Sự kiện tự hiện với người được xem.</p>
         </div>
@@ -175,6 +179,12 @@ export default function ClassCalendarPage() {
             <span className="cal-weeklabel">{weekNo ? `Tuần ${weekNo} · ` : ''}{dm(weekStart)} – {dmy(weekEnd)}</span>
             <button type="button" className="cal-today-btn" onClick={() => setParam({ date: '' })}>Hôm nay</button>
           </div>
+          {isStudent ? (only && (
+            <div className="cal-picker">
+              <span className="label-upper">Lớp</span>
+              <strong>{only.className}</strong>
+            </div>
+          )) : (
           <label className="cal-picker">
             <span className="label-upper">{isParent ? 'Con' : 'Lớp'}</span>
             <select value={classId} onChange={(e) => setParam({ classId: e.target.value })}>
@@ -186,6 +196,7 @@ export default function ClassCalendarPage() {
               ))}
             </select>
           </label>
+          )}
         </div>
         <div className="cal-strip">
           {days.map((d, i) => {
@@ -267,14 +278,6 @@ export default function ClassCalendarPage() {
                 ))}
               </ul>
             )}
-          </div>
-          <div className="cal-box cal-note">
-            <Icon name="info" size="sm" />
-            <span>
-              {isTeacher
-                ? 'Bạn tạo sự kiện cho môn mình dạy; giáo viên chủ nhiệm tạo thêm sự kiện chung của lớp. Người được xem nhận thông báo và được nhắc trước 1 ngày.'
-                : 'Lịch chỉ để xem. Muốn điều chỉnh sự kiện, vui lòng trao đổi với giáo viên đã tạo sự kiện.'}
-            </span>
           </div>
         </aside>
       </div>

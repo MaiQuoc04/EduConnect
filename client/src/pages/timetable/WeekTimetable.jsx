@@ -346,7 +346,6 @@ function WeekMatrix({ week, days, slots, byCell, day, onDay, now }) {
           <MatrixGroup key={String(g.morning)} g={g} days={days} byCell={byCell} day={day} onDay={onDay} week={week} now={now} />
         ))}
       </div>
-      <p className="tt-matrix-foot caption"><Icon name="info" size="sm" />Bấm vào ngày hoặc tiết để xem lịch của ngày đó.</p>
     </div>
   );
 }
@@ -437,7 +436,6 @@ export default function WeekTimetable({ week, view, secondLine, emptyText, aside
             <span><i className="tt-key is-today" />Hôm nay</span>
             <span><i className="tt-key is-live" />Tiết đang diễn ra</span>
             {mineCount > 0 && <span><i className="tt-key is-mine" />Tiết bạn dạy ({mineCount} tiết tuần này)</span>}
-            <span className="tt-legend-hint">Bấm vào một tiết để xem chi tiết.</span>
           </div>
         </div>
       )}

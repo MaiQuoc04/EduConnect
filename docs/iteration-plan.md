@@ -13,13 +13,14 @@ people on your own – ask the team lead (Quoc).
 
 ## Summary
 
-Code due dates: It1 30/10, It2 13/11, It3 27/11.
+Code due dates: It1 30/10, It2 13/11, It3 **25/11 10:00** (moved from 27/11 on 24/11/2026 so that the Report 5 test
+rounds finish before the reports are due at the end of 26/11 – see "Report 5 test schedule" under Current status).
 
 | Iteration | Dates | Quoc | Anh | Dung | Khanh | Linh |
 |---|---|---|---|---|---|---|
 | Iteration 1 | 19/10 – 30/10/2026 | FE-01 | FE-02 | FE-03 | FE-04 | FE-13 |
 | Iteration 2 | 02/11 – 13/11/2026 | review | FE-08, FE-14 | FE-10 timetable | FE-05, FE-06 | testing, integration |
-| Iteration 3 | 16/11 – 27/11/2026 | FE-09, FE-12 | – | FE-10 calendar, FE-07 | – | FE-11 |
+| Iteration 3 | 16/11 – 25/11/2026 | FE-09, FE-12 | – | FE-10 calendar, FE-07 | – | FE-11 |
 
 FE-10 is split: timetable in It2, class calendar in It3. It2 changed by the lead on 03/11/2026: Anh takes FE-08 School
 Feed and FE-14 Parent Management (follows FE-02), Khanh takes FE-05 Group Feed and FE-06 Messaging (follow FE-04
@@ -27,6 +28,24 @@ groups; FE-06 moved back from It3). FE-05 and FE-08 are built separately; code t
 reactions, attachments) is merged into one place after both are on `develop`.
 
 ## Current status (read first; update after every merge, schema patch or new decision)
+
+- **Report 5 test schedule (decided 24/11/2026, lead):** reports R1–R7 are due at the **end of 26/11/2026**, so the
+  last test round is run just before that and everything else is planned backwards from it. "Round" means a run of
+  the whole set of Report 5 test cases (Round 2 and 3 re-run the failed cases plus the main flows after the fixes),
+  not an iteration.
+
+  | When | Work |
+  |---|---|
+  | 24/11 | Test plan 5.0 and the frames of 5.1–5.5 (done, on Drive) |
+  | 24/11 evening – 25/11 10:00 | Everyone writes the test cases in their own sheets (FE for 5.1 / 5.2, BF for 5.3 / 5.5) |
+  | **25/11 10:00** | **It3 code due (code freeze for testing):** after this only fixes of defects found by the test rounds are merged; a feature merged later gets N/A with a note |
+  | 25/11 10:00 – 12:00 | Test case review (Quoc) |
+  | 25/11 13:00 – 20:00 | Round 1: UT + IT on the local test DB, ST (BF-01..BF-12) and NFR (5.4) |
+  | 25/11 20:00 – 26/11 08:00 | Fix the Critical / Major defects of Round 1 (feature owner) |
+  | 26/11 08:00 – 12:00 | Round 2: failed cases + main flows again |
+  | 26/11 13:00 – 17:00 | Round 3 (last round) + acceptance scripts SC-01..SC-12 |
+  | 26/11 17:00 – end of day | Quoc fills 5.0 II.3 from the Test Statistics sheets; reports submitted |
+  | Weeks 13–14 | Only revising and finishing Reports 6 and 7; no code or test changes |
 
 - **FE-10 School Manager settings + FE-07 fix merged into `develop` (24/11/2026, Quoc; client `npm run build` and
   server `npm test` (21/21) pass):**
@@ -125,6 +144,14 @@ reactions, attachments) is merged into one place after both are on `develop`.
   of "ĐTB chung" and "Hạng"; SCR-48 Class Ranking and its menu item removed (`/grades/ranking` redirects). No schema
   change. **Open:** subjects assessed by comments (Đạt / Chưa đạt), conduct and the titles Học sinh Giỏi / Xuất sắc
   need schema changes – to agree with the lead. SRS: UC-88, UC-89, SCR-47, SCR-48 to update.
+- **FE-03 / FE-07 / FE-10 clean-up (24/11/2026, Dung, `fix/fe-10-calendar-one-class`, PR #18, merged into `develop` 25/11, merge `1928cdb`):** class calendar
+  (UC-76): a student sees their own class, no "Tất cả lớp" picker (teachers and parents keep it); always-shown
+  reminder notes removed from Dung's pages (calendar, timetable views / editor, period times, school settings,
+  extracurricular form and registration list, teacher list, teaching assignment); duplicates removed: the teacher
+  schedule lookup on SCR-19 (same as the weekly schedule on Teacher Detail, UC-16; endpoint
+  `GET /timetables/teachers/:teacherId/week` removed) and the version list inside the timetable editor (the history page
+  UC-124 stays, linked from the editor). No schema change. **Open (lead):** remove UC-125 from use-cases.md /
+  permissions.md and the R3 SRS, or keep it pointing to Teacher Detail.
 - **FE-10 School Manager settings (21/11/2026, Dung, `feature/fe-10-school-settings`, merged into `develop` 24/11):** new page
   "Cài đặt hệ thống" for the School Manager (`/school-settings`, menu "Quản trị hệ thống"; `GET` / `PUT
   /api/v1/school-settings`, module `server/src/modules/school-settings`). First group, moved from part "4. Giáo viên"
@@ -880,7 +907,7 @@ Timetable part only (UC-70..75).
 
 ### Quoc: Review.
 
-## Iteration 3 (16/11 – 27/11/2026)
+## Iteration 3 (16/11 – 25/11/2026)
 
 ### Dung: FE-10 Schedule Management (5 UC)
 

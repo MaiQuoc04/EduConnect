@@ -587,7 +587,7 @@ Boundaries that are easy to get wrong:
     pattern, creator and `created_at`. So rows of a class with the same `created_at` are one saved timetable (its
     first row keeps the range and pattern as saved), and a row deleted at time T was replaced by the save of the
     same class created at T. No schema change. Periods already held (before the start of a save) are never touched.
-    Screen: "Lịch sử" on SCR-27 / "Xem toàn bộ lịch sử" in the editor – `/timetables/classes/:classId/history`
+    Screen: "Lịch sử" on SCR-27 / "Lịch sử thời khoá biểu" in the editor (the editor's own version list was removed 24/11/2026: it repeated this page) – `/timetables/classes/:classId/history`
     (School Manager): every save with who / when, dates still in force, what replaced which dates, periods held and
     with attendance, the weekly pattern (cells changed from the replaced timetable highlighted) and a CSV export.
     Versions trimmed before 17/11/2026 only show the part left.
@@ -598,10 +598,10 @@ Boundaries that are easy to get wrong:
   - Signed in as a teacher (18/11/2026): in a class timetable the teacher's own lessons are coloured green with
     "Bạn dạy" and the legend counts them for the week (`mine` / `myLessons` of the week API, worked out on the
     server from the signed-in account). In the teaching schedule every lesson is theirs, so all are coloured.
-  - **Teacher schedule lookup (18/11/2026):** on the teaching assignment screen (SCR-19) the School Manager opens "Tra
-    lịch dạy giáo viên", types a name, teacher code, department or subject and sees that teacher's teaching schedule
-    week by week (same lessons as SCR-57; `GET /timetables/teachers/:teacherId/week`, School Manager only).
-  - **Finding the lessons (18/11/2026):** "Lịch dạy" (and the lookup above) shows "Lịch dạy sắp tới" – per class and
+  - **Teacher schedule lookup (18/11/2026) – removed 24/11/2026 (Dung, lead to confirm):** it duplicated the weekly
+    teaching schedule on Teacher Detail (SCR-15, UC-16); the button on SCR-19 and `GET /timetables/teachers/:teacherId/week`
+    are gone. UC-125 to be removed from the lists by the lead.
+  - **Finding the lessons (18/11/2026):** "Lịch dạy" shows "Lịch dạy sắp tới" – per class and
     subject the lessons from today (first / last date, periods a week, how many left) and the dates of teaching
     assignments whose class has no timetable yet (e.g. semester II). Opened on a week without lessons, it jumps once to
     the first week with lessons (with "Về tuần này"); an empty week offers "Tuần có tiết trước / tiếp theo".

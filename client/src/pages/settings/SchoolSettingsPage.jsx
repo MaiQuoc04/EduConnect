@@ -1,5 +1,4 @@
 import { useCallback, useEffect, useState } from 'react';
-import { Link } from 'react-router-dom';
 import { getSchoolSettings, saveSchoolSettings } from '../../api/schoolSettings.js';
 import Icon from '../../components/Icon.jsx';
 import { useToast } from '../../context/ToastContext.jsx';
@@ -19,7 +18,6 @@ const SECTIONS = [
     group: 'teaching',
     title: 'Giáo viên',
     intro: 'Định mức giảng dạy dùng khi xếp tự động phân công và thời khoá biểu.',
-    note: <>Danh sách giáo viên bận vẫn chọn riêng cho từng lần xếp ở trang <Link to="/timetables/auto">Xếp tự động</Link>. Thời khoá biểu đã lưu không thay đổi khi sửa các giá trị này.</>,
     fields: [
       { key: 'norm', label: 'Định mức giáo viên', unit: 'tiết/tuần', help: 'Số tiết một giáo viên dạy trong tuần (Thông tư 05/2025: 17 tiết với giáo viên THPT).' },
       { key: 'homeroomNorm', label: 'Định mức giáo viên chủ nhiệm', unit: 'tiết/tuần', help: 'Giáo viên chủ nhiệm được giảm tiết; không lớn hơn định mức giáo viên.' },
@@ -31,7 +29,6 @@ const SECTIONS = [
     group: 'attendance',
     title: 'Điểm danh',
     intro: 'Thời hạn giáo viên bộ môn được sửa điểm danh các tiết mình dạy.',
-    note: 'Sau giờ này, giáo viên chủ nhiệm chỉ còn đổi được vắng có phép ↔ không phép, và Quản lý nhà trường sửa được khi cần (quy định điểm danh §12). Áp dụng ngay cho các tiết của hôm nay.',
     fields: [
       { key: 'editDeadlineTime', type: 'time', label: 'Giờ cuối giáo viên bộ môn được sửa điểm danh trong ngày', unit: 'cùng ngày', help: 'Giáo viên bộ môn sửa được điểm danh của tiết mình dạy đến giờ này trong chính ngày học.' },
     ],
@@ -172,7 +169,6 @@ export default function SchoolSettingsPage() {
                 );
               })}
             </div>
-            <div className="notice ink"><Icon name="info" /><p>{s.note}</p></div>
           </section>
         ))}
 

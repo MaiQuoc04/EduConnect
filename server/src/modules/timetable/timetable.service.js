@@ -620,32 +620,5 @@ export async function teachingWeek({ date }, user) {
   return { ...frame, lessons: lessons.map((l) => ({ ...l, mine: true })), periodsThisWeek: lessons.length, ...around };
 }
 
-// GET /timetables/teachers/:teacherId/week?date= (School Manager, "Tra cứu lịch dạy" on the teaching assignment
-// screen – Dung, 18/11/2026): the teaching schedule of any teacher, same rows as SCR-57.
-export async function teacherWeek({ teacherId, date }) {
-  const { rows } = await pool.query(
-    `SELECT t.teacher_id AS "teacherId", t.teacher_code AS "teacherCode", u.full_name AS "fullName", t.department,
-            u.status,
-            (SELECT c.class_name FROM classes c JOIN school_years sy ON sy.school_year_id = c.school_year_id
-             WHERE c.homeroom_teacher_id = t.teacher_id AND c.deleted_at IS NULL
-               AND CURRENT_DATE BETWEEN sy.start_date AND sy.end_date LIMIT 1) AS "homeroomClass",
-            COALESCE((SELECT string_agg(s.subject_name, ', ' ORDER BY s.subject_name) FROM teacher_subjects x
-                      JOIN subjects s ON s.subject_id = x.subject_id WHERE x.teacher_id = t.teacher_id), '') AS "subjects"
-     FROM teachers t JOIN users u ON u.user_id = t.user_id WHERE t.teacher_id = $1`,
-    [teacherId],
-  );
-  if (!rows.length) throw notFound('TEACHER_NOT_FOUND', 'Teacher not found.');
-  const frame = await weekFrame(date);
-  const [lessons, around] = await Promise.all([lessonsOfTeacher(teacherId, frame), teacherOverview(teacherId, frame)]);
-  return {
-    ...around,
-    teacher: rows[0],
-    ...frame,
-    lessons,
-    periodsThisWeek: lessons.length,
-    classesThisWeek: [...new Set(lessons.map((l) => l.className))].sort(),
-  };
-}
-
 // Used by the import (same transaction rules as the editor).
 export const internals = { classInfo, today, checkRange, checkEntries, saveVersion, timeSlots, classSubjects, guard, schoolYears };
