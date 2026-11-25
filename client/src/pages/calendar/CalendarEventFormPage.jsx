@@ -438,14 +438,6 @@ export default function CalendarEventFormPage() {
           {fieldError('MSG_EVENT_VIEWERS') && <p className="field-error">{fieldError('MSG_EVENT_VIEWERS')}</p>}
         </div>
 
-        <div className="cal-callout">
-          <Icon name="notifications_active" />
-          <div>
-            <strong>Thông báo tự động</strong>
-            <p>Người được xem nhận thông báo khi sự kiện được tạo, và một lần nhắc trước giờ bắt đầu 1 ngày (sự kiện tạo sát giờ hơn 1 ngày thì không nhắc). Đổi giờ thì nhắc lại theo giờ mới; dời sát giờ hơn 1 ngày thì nhắc ngay.</p>
-          </div>
-        </div>
-
         {saveError && !['MSG_EVENT_TITLE', 'MSG_EVENT_TIME', 'MSG_EVENT_VIEWERS', 'MSG_EVENT_SUBJECT_NOT_TAUGHT'].includes(saveError.code) && (
           <div className="notice amber" role="alert"><Icon name="error_outline" />
             <div>
