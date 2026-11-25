@@ -152,6 +152,11 @@ reactions, attachments) is merged into one place after both are on `develop`.
   `GET /timetables/teachers/:teacherId/week` removed) and the version list inside the timetable editor (the history page
   UC-124 stays, linked from the editor). No schema change. **Open (lead):** remove UC-125 from use-cases.md /
   permissions.md and the R3 SRS, or keep it pointing to Teacher Detail.
+- **FE-10 automatic scheduling fix (25/11/2026, Dung, `fix/fe-10-auto-fixed-busy`):** the HĐTN of the fixed cells
+  (Chào cờ, Sinh hoạt lớp) no longer goes to a teacher who teaches a class outside the run at a fixed cell (found when
+  re-taking the R3 screenshots: 12D1 got the teacher who has Chào cờ in 10A1, so its two fixed lessons could not be
+  placed). Pre-check: teachers busy at a fixed cell are not counted for `FIXED_TEACHERS`; new blocking error
+  `FIXED_TEACHER_BUSY` for a kept assignment. Solver unit tests added (`timetable.auto.solver.test.js`).
 - **FE-10 School Manager settings (21/11/2026, Dung, `feature/fe-10-school-settings`, merged into `develop` 24/11):** new page
   "Cài đặt hệ thống" for the School Manager (`/school-settings`, menu "Quản trị hệ thống"; `GET` / `PUT
   /api/v1/school-settings`, module `server/src/modules/school-settings`). First group, moved from part "4. Giáo viên"

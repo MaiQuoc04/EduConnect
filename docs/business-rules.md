@@ -686,8 +686,8 @@ Boundaries that are easy to get wrong:
   - Week grid (default 5 mornings × 5 + Tuesday and Thursday afternoons × 2 = 29 cells; morning ≤ 5, afternoon ≤ 3,
     ≤ 6 days – Công văn 7291). Periods per week from `track_subjects`, changeable for the semester being scheduled
     (History: 1 in semester I, 2 in semester II). Fixed cells: Chào cờ (Monday period 1) and Sinh hoạt lớp (Friday
-    period 5) taken from HĐTN, a different teacher in every class (the homeroom teacher first); they do not count
-    towards the norm.
+    period 5) taken from HĐTN, a different teacher in every class (the homeroom teacher first), never a teacher who
+    teaches a class outside the run at a fixed cell (25/11/2026); they do not count towards the norm.
   - Norm 17 periods/week, homeroom teacher 13 (Thông tư 05/2025), at most 4 over (ASSUMPTION: school's choice).
   - Hard rules (never broken, re-checked on apply): qualified teacher, one teacher per (class, subject), weekly cap,
     no teacher / class clash (lessons of classes not in the run included), exact periods per subject, only grid cells,
@@ -698,7 +698,8 @@ Boundaries that are easy to get wrong:
     overload, imbalance, homeroom teacher not teaching their class.
   - Checked before running (blocking): grid periods missing in `time_slots`, a class needing more periods than cells,
     not enough teachers for a subject (need vs norm + overload of the qualified teachers), not enough teachers for
-    the fixed cells, too few rooms, timetable-only mode without running assignments.
+    the fixed cells (teachers busy at a fixed cell not counted), a kept HĐTN teacher busy at a fixed cell
+    (`FIXED_TEACHER_BUSY`), too few rooms, timetable-only mode without running assignments.
   - Apply: refused when assignments or timetables changed since the draft (`MSG_AUTO_STALE`), when a class already has
     a timetable / assignments and the overwrite is not confirmed (`MSG_AUTO_CONFIRM`), or when the draft breaks a hard
     rule or misses lessons. Lessons with attendance are kept; class groups follow the new assignments (FE-04 sync).

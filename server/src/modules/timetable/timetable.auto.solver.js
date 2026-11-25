@@ -5,7 +5,7 @@
 // Step A – teaching assignment: greedy with balancing (fewest qualified teachers first, then the teacher with the most
 //   room under their norm), then pairwise improvement. Hard: H1 qualified, H2 one teacher per (class, subject),
 //   H3 weekly cap; the subject of the fixed slots (Chào cờ, Sinh hoạt lớp) gets a different teacher in every class
-//   (the fixed slots are at the same time in every class).
+//   (the fixed slots are at the same time in every class) and never a teacher busy at a fixed slot.
 // Step B – timetable: a constraint satisfaction problem. Hardest lessons first, each into the free cell that adds the
 //   least penalty, a one-step repair (move the lesson in the way) when no cell is free, then local search (swap two
 //   cells of a class) until the time limit. Hard (never broken): H4 teacher clash (+ busy cells and the other classes'
@@ -54,6 +54,12 @@ export function assignTeachers({ classes, teachers, fixedAssignments = {}, optio
   const load = new Map(teachers.map((t) => [String(t.teacherId), t.baseLoad ?? 0]));
   const fixedSubject = o.fixed?.slots?.length ? String(o.fixed.subjectId) : null;
   const fixedTaken = new Set(); // teachers that already teach the fixed-slot subject somewhere
+  // Teachers busy at a fixed slot (a lesson of a class outside this run, or a cell marked busy) cannot take the
+  // fixed-slot subject: its lessons are pinned to those cells in every class (25/11/2026, 12D1 / 10A1 case).
+  const fixedCells = fixedSubject ? o.fixed.slots.map((f) => cellKey(f.weekday, f.period)) : [];
+  const busyAtFixed = new Set(teachers
+    .filter((t) => (t.busy ?? []).some((k) => fixedCells.includes(k)))
+    .map((t) => String(t.teacherId)));
   const assignments = {};
   const unassigned = [];
 
@@ -90,7 +96,8 @@ export function assignTeachers({ classes, teachers, fixedAssignments = {}, optio
     }
     const isFixed = fixedSubject && String(p.s.subjectId) === fixedSubject;
     const fits = p.qualified.filter(
-      (t) => load.get(String(t.teacherId)) + p.counted <= capOf(t) && !(isFixed && fixedTaken.has(String(t.teacherId))),
+      (t) => load.get(String(t.teacherId)) + p.counted <= capOf(t)
+        && !(isFixed && (fixedTaken.has(String(t.teacherId)) || busyAtFixed.has(String(t.teacherId)))),
     );
     if (!fits.length) {
       const reason = p.qualified.every((t) => load.get(String(t.teacherId)) + p.counted > capOf(t)) ? 'OVER_CAP' : 'FIXED_CLASH';

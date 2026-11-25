@@ -255,6 +255,22 @@ function preCheck(cfg, ctx) {
     for (const s of c.subjects) demand.set(s.subjectId, (demand.get(s.subjectId) ?? 0) + s.periods);
   }
   const keepOrFixed = cfg.mode === 'TIMETABLE' || cfg.keepAssignments;
+  const fixedCells = new Set(fixedSlots.map((f) => `${f.weekday}-${f.period}`));
+
+  // A kept assignment of the fixed-slot subject whose teacher is busy at a fixed slot: its pinned lesson cannot be
+  // placed (25/11/2026 – HĐTN of 12D1 kept for a teacher who has Chào cờ in 10A1 at the same time).
+  if (keepOrFixed && fixedCells.size) {
+    for (const c of ctx.classes) {
+      if (!c.subjects.some((s) => s.subjectId === cfg.fixed.subjectId)) continue;
+      const t = teacherById.get(ctx.current.get(pairKey(c.classId, cfg.fixed.subjectId)));
+      const cell = t && t.busy.find((k) => fixedCells.has(k));
+      if (cell) {
+        const [weekday, period] = cell.split('-').map(Number);
+        errors.push({ code: 'FIXED_TEACHER_BUSY', classId: c.classId, className: c.className, teacher: t.name, weekday, period,
+          classes: ctx.busyWhy.get(t.teacherId)?.get(cell) ?? null });
+      }
+    }
+  }
 
   if (cfg.mode === 'TIMETABLE') {
     // Step B alone: every pair needs a running assignment with an active teacher.
@@ -295,7 +311,8 @@ function preCheck(cfg, ctx) {
     }
     if (cfg.fixed?.slots.length) {
       const needing = ctx.classes.filter((c) => c.subjects.some((s) => s.subjectId === cfg.fixed.subjectId)).length;
-      const q = qualified(cfg.fixed.subjectId).length;
+      // A teacher busy at a fixed slot (lesson of another class) cannot take the fixed-slot subject (25/11/2026).
+      const q = qualified(cfg.fixed.subjectId).filter((t) => !t.busy.some((k) => fixedCells.has(k))).length;
       if (needing > q && !keepOrFixed) {
         errors.push({ code: 'FIXED_TEACHERS', subjectId: cfg.fixed.subjectId, subject: ctx.subjectName.get(cfg.fixed.subjectId), classes: needing, teachers: q });
       }

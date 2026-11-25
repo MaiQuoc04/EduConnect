@@ -51,7 +51,7 @@ const REASONS = {
   FIXED_SLOT: 'ô cố định đã bị chiếm',
   NO_QUALIFIED: 'không giáo viên nào dạy được môn này',
   OVER_CAP: 'mọi giáo viên dạy được đều đã kín định mức',
-  FIXED_CLASH: 'các giáo viên dạy được đều đã phụ trách môn này ở lớp khác (ô cố định trùng giờ)',
+  FIXED_CLASH: 'các giáo viên dạy được đều đã phụ trách môn này ở lớp khác hoặc đang dạy lớp khác vào giờ ô cố định',
 };
 
 function checkText(e, names) {
@@ -68,7 +68,8 @@ function checkText(e, names) {
     case 'NO_QUALIFIED': return `Môn ${sub(e.subjectId)}: chưa có giáo viên nào đăng ký dạy.`;
     case 'NOT_ENOUGH_TEACHERS': return `Môn ${sub(e.subjectId)}: cần ${e.need} tiết/tuần nhưng ${e.teachers} giáo viên chỉ nhận tối đa ${e.capacity} tiết – thiếu ${e.short} tiết (khoảng ${e.teachersMore} giáo viên nữa).`;
     case 'OVER_NORM_NEEDED': return `Môn ${sub(e.subjectId)}: phải có giáo viên dạy vượt định mức.`;
-    case 'FIXED_TEACHERS': return `Môn ${sub(e.subjectId)} có ô cố định cùng giờ ở ${e.classes} lớp nhưng chỉ ${e.teachers} giáo viên dạy được – mỗi lớp cần một người khác nhau.`;
+    case 'FIXED_TEACHERS': return `Môn ${sub(e.subjectId)} có ô cố định cùng giờ ở ${e.classes} lớp nhưng chỉ ${e.teachers} giáo viên dạy được và rảnh vào giờ đó – mỗi lớp cần một người khác nhau.`;
+    case 'FIXED_TEACHER_BUSY': return `Lớp ${e.className}: ${e.teacher} phụ trách môn của ô cố định nhưng ${WEEKDAY_LONG[e.weekday - 1]} tiết ${e.period} đang dạy ${e.classes ? `lớp ${e.classes}` : 'ô đánh dấu bận'}. Hãy đổi giáo viên ở màn Phân công giảng dạy hoặc chọn "Phân công + xếp tiết".`;
     case 'ROOM_TOO_FEW': return `Môn ${sub(e.subjectId)}: ${e.need} tiết/tuần nhưng ${e.rooms} phòng × ${e.cells} ô không đủ.`;
     case 'BUSY_UNKNOWN_TEACHER': return 'Có ô bận của giáo viên không còn trong danh sách.';
     default: return e.code;
