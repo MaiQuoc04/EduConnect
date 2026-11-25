@@ -1,7 +1,7 @@
 import { useEffect, useId, useRef, useState } from 'react';
 import { Link, useLocation, useNavigate, useParams } from 'react-router-dom';
 import { listParents } from '../../api/parents.js';
-import { getStudentParents, linkParent, listStudents, unlinkParent } from '../../api/students.js';
+import { getStudentParents, linkParent, unlinkParent } from '../../api/students.js';
 import Avatar from '../../components/Avatar.jsx';
 import Icon from '../../components/Icon.jsx';
 import { useToast } from '../../context/ToastContext.jsx';
@@ -11,9 +11,6 @@ import './UpdateStudentRelationshipPage.css';
 
 const MAX_PARENTS = 2; // business-rules §3
 const RELATIONSHIP_TYPES = ['FATHER', 'MOTHER', 'GUARDIAN']; // sent exactly like this (the server is case sensitive)
-const MIN_QUERY_LENGTH = 2;
-const SEARCH_DELAY_MS = 300;
-const SEARCH_PAGE_SIZE = 8;
 const PHONE_DELAY_MS = 400;
 // Same rule as the server (utils/phone.js, business-rules §3): 0 followed by 9 digits once normalised.
 const PHONE_PATTERN = /^0\d{9}$/;
@@ -230,12 +227,10 @@ function parentWithPhone(items, phone) {
   return parent ? { ...parent, linkedStudentCount: parent.childrenCount } : null;
 }
 
-// Picking an EXISTING parent account, two read-only ways, both show the parent's name before linking:
-//  - "Tìm theo số điện thoại" (default): the phone identifies a parent (required for parents, business-rules §3) and
-//    School Manager has it in the student's file. Looked up with FE-14's UC-104 parent list (GET /parents?q=<phone>,
-//    PARENT accounts only, LOCKED ones included); an exact phone match is required.
-//  - "Qua anh, chị, em": search a student who studies at the school (GET /students?q=), then pick one of THEIR
-//    linked parents (GET /students/:id/parents) – useful when the phone number is not at hand.
+// Picking an EXISTING parent account, one read-only way that shows the parent's name before linking: the phone
+// identifies a parent (required for parents, business-rules §3) and School Manager has it in the student's file.
+// Looked up with FE-14's UC-104 parent list (GET /parents?q=<phone>, PARENT accounts only, LOCKED ones included); an
+// exact phone match is required.
 function PhoneLookup({ disabled, onSelect }) {
   const [phone, setPhone] = useState('');
   const [result, setResult] = useState(null); // { found, parent? } for the number currently typed
@@ -326,176 +321,8 @@ function PhoneLookup({ disabled, onSelect }) {
   );
 }
 
-function SiblingPicker({ studentId, linkedIds, disabled, selected, onSelect }) {
-  const [query, setQuery] = useState('');
-  const [results, setResults] = useState(null);
-  const [searching, setSearching] = useState(false);
-  const [searchError, setSearchError] = useState('');
-  const [sibling, setSibling] = useState(null);
-  const [siblingParents, setSiblingParents] = useState(null);
-  const [parentsError, setParentsError] = useState('');
-
-  useEffect(() => {
-    const q = query.trim();
-    if (q.length < MIN_QUERY_LENGTH || sibling) {
-      setResults(null);
-      setSearching(false);
-      return undefined;
-    }
-    const controller = new AbortController();
-    setSearching(true);
-    const timer = setTimeout(() => {
-      listStudents({ q, page: 1, pageSize: SEARCH_PAGE_SIZE }, { signal: controller.signal })
-        .then((data) => {
-          setResults(data.items.filter((s) => String(s.studentId) !== String(studentId)));
-          setSearchError('');
-        })
-        .catch(() => {
-          if (!controller.signal.aborted) setSearchError('Không tìm được học sinh. Vui lòng thử lại.');
-        })
-        .finally(() => {
-          if (!controller.signal.aborted) setSearching(false);
-        });
-    }, SEARCH_DELAY_MS);
-    return () => {
-      clearTimeout(timer);
-      controller.abort();
-    };
-  }, [query, sibling, studentId]);
-
-  useEffect(() => {
-    if (!sibling) return undefined;
-    const controller = new AbortController();
-    setSiblingParents(null);
-    setParentsError('');
-    getStudentParents(sibling.studentId, { signal: controller.signal })
-      .then((data) => setSiblingParents(data.parents))
-      .catch(() => {
-        if (!controller.signal.aborted) setParentsError('Không tải được phụ huynh của học sinh này. Vui lòng thử lại.');
-      });
-    return () => controller.abort();
-  }, [sibling]);
-
-  function clear() {
-    setSibling(null);
-    setSiblingParents(null);
-    onSelect(null);
-  }
-
-  if (sibling) {
-    return (
-      <div className="update-relationship-sibling">
-        <div className="update-relationship-sibling-head">
-          <div>
-            <p className="caption muted">Phụ huynh của học sinh</p>
-            <p className="strong">
-              {sibling.fullName} <span className="mono caption muted">{sibling.studentCode}</span>
-              {sibling.className && <span className="caption muted"> · Lớp {sibling.className}</span>}
-            </p>
-          </div>
-          <button type="button" className="btn btn-tertiary" onClick={clear} disabled={disabled}>
-            Chọn học sinh khác
-          </button>
-        </div>
-        {parentsError && <p className="field-error">{parentsError}</p>}
-        {!siblingParents && !parentsError && <p className="caption muted">Đang tải phụ huynh…</p>}
-        {siblingParents?.length === 0 && (
-          <p className="caption muted">Học sinh này chưa có phụ huynh nào được liên kết.</p>
-        )}
-        {siblingParents?.length > 0 && (
-          <ul className="update-relationship-options" role="list">
-            {siblingParents.map((p) => {
-              const already = linkedIds.has(p.parentId);
-              const active = selected?.parentId === p.parentId;
-              return (
-                <li key={p.parentId}>
-                  <button
-                    type="button"
-                    className={`update-relationship-option${active ? ' active' : ''}`}
-                    onClick={() => onSelect({ ...p, known: true })}
-                    disabled={disabled || already}
-                    aria-pressed={active}
-                  >
-                    <Avatar src={p.avatarUrl} name={p.fullName} size={36} />
-                    <span>
-                      <span className="strong">{p.fullName}</span>
-                      <span className="caption muted">
-                        <span className="mono">{p.phone || 'Thiếu số điện thoại'}</span>
-                        {' · '}
-                        {already ? 'Đã liên kết với học sinh này' : `${relationshipLabel(p.relationshipType)} của ${sibling.fullName}`}
-                      </span>
-                    </span>
-                    {active && <Icon name="check_circle" size="sm" filled />}
-                  </button>
-                </li>
-              );
-            })}
-          </ul>
-        )}
-      </div>
-    );
-  }
-
-  return (
-    <div className="field">
-      <label className="field-label" htmlFor="update-relationship-search">
-        Tìm học sinh là anh, chị, em
-      </label>
-      <div className="input-wrap">
-        <Icon name="search" size="sm" className="update-relationship-input-icon" />
-        <input
-          id="update-relationship-search"
-          className="input update-relationship-search"
-          type="search"
-          value={query}
-          onChange={(e) => setQuery(e.target.value)}
-          placeholder="Nhập họ tên hoặc mã học sinh"
-          disabled={disabled}
-          autoComplete="off"
-          aria-describedby="update-relationship-search-help"
-        />
-      </div>
-      <span id="update-relationship-search-help" className="field-help">
-        Chọn một học sinh đang học tại trường, sau đó chọn phụ huynh đã liên kết với học sinh đó.
-      </span>
-      {searchError && <p className="field-error">{searchError}</p>}
-      {searching && <p className="caption muted">Đang tìm…</p>}
-      {!searching && results?.length === 0 && <p className="caption muted">Không có học sinh phù hợp.</p>}
-      {!searching && results?.length > 0 && (
-        <ul className="update-relationship-options" role="list">
-          {results.map((s) => (
-            <li key={`${s.studentId}-${s.classId ?? ''}`}>
-              <button
-                type="button"
-                className="update-relationship-option"
-                onClick={() => {
-                  setSibling(s);
-                  setQuery('');
-                }}
-                disabled={disabled || !s.parentCount}
-              >
-                <Avatar src={s.avatarUrl} name={s.fullName} size={36} />
-                <span>
-                  <span className="strong">{s.fullName}</span>
-                  <span className="caption muted">
-                    <span className="mono">{s.studentCode}</span>
-                    {s.className && ` · Lớp ${s.className}`}
-                    {' · '}
-                    {s.parentCount ? `${s.parentCount} phụ huynh` : 'Chưa có phụ huynh'}
-                  </span>
-                </span>
-                <Icon name="chevron_right" size="sm" />
-              </button>
-            </li>
-          ))}
-        </ul>
-      )}
-    </div>
-  );
-}
-
 // The parent about to be linked, always with a name: School Manager checks the person before linking.
-// linkedStudentCount comes from the phone lookup only (UC-104 childrenCount); occupation from both ways.
+// linkedStudentCount comes from the phone lookup (UC-104 childrenCount).
 function SelectedParent({ parent, alreadyLinked }) {
   return (
     <div className="update-relationship-selected">
@@ -527,7 +354,7 @@ function SelectedParent({ parent, alreadyLinked }) {
 // its own with the linked parents on the left and the "new link" panel on the right. Left out of the design on
 // purpose: the unlink reason (student_parents has no column for it), the permission checkboxes and the extra
 // relationship types (the schema has only FATHER / MOTHER / GUARDIAN), search by name / ID card (the parent is found
-// by exact phone through FE-14's parent list, or through a sibling, see PhoneLookup).
+// by exact phone through FE-14's parent list, see PhoneLookup).
 // Both actions answer with the whole UC-12 data, which replaces the page state: no extra GET after a success.
 export default function UpdateStudentRelationshipPage() {
   const { studentId } = useParams();
@@ -548,7 +375,6 @@ export default function UpdateStudentRelationshipPage() {
   const [loadError, setLoadError] = useState(null);
   const [attempt, setAttempt] = useState(0);
 
-  const [mode, setMode] = useState('phone'); // 'phone' | 'sibling'
   const [selected, setSelected] = useState(null); // { parentId, fullName, phone, ... } of the parent to link
   const [relationship, setRelationship] = useState('');
   const [parentError, setParentError] = useState('');
@@ -647,14 +473,6 @@ export default function UpdateStudentRelationshipPage() {
     setRelationshipError('');
     setFormError('');
     setPickerKey((n) => n + 1);
-  }
-
-  function chooseMode(next) {
-    if (next === mode) return;
-    setMode(next);
-    setSelected(null);
-    setParentError('');
-    setFormError('');
   }
 
   function chooseParent(parent) {
@@ -885,28 +703,8 @@ export default function UpdateStudentRelationshipPage() {
           <form onSubmit={askLink} noValidate>
             <fieldset className="update-relationship-fieldset" disabled={locked}>
               <legend className="field-label">Chọn phụ huynh</legend>
-              <div className="update-relationship-modes" role="group" aria-label="Cách chọn phụ huynh">
-                <button type="button" className={mode === 'phone' ? 'active' : undefined} aria-pressed={mode === 'phone'} onClick={() => chooseMode('phone')}>
-                  Tìm theo số điện thoại
-                </button>
-                <button type="button" className={mode === 'sibling' ? 'active' : undefined} aria-pressed={mode === 'sibling'} onClick={() => chooseMode('sibling')}>
-                  Qua anh, chị, em
-                </button>
-              </div>
-
               <div className={parentError ? 'field invalid' : 'field'}>
-                {mode === 'phone' ? (
-                  <PhoneLookup key={pickerKey} disabled={locked} onSelect={chooseParent} />
-                ) : (
-                  <SiblingPicker
-                    key={pickerKey}
-                    studentId={student.studentId}
-                    linkedIds={linkedIds}
-                    disabled={locked}
-                    selected={selected}
-                    onSelect={chooseParent}
-                  />
-                )}
+                <PhoneLookup key={pickerKey} disabled={locked} onSelect={chooseParent} />
                 {parentError && (
                   <span className="field-error" role="alert">
                     {parentError}
