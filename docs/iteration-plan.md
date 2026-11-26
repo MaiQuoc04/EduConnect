@@ -29,6 +29,25 @@ reactions, attachments) is merged into one place after both are on `develop`.
 
 ## Current status (read first; update after every merge, schema patch or new decision)
 
+- **FE-12 automatic filling of the later periods (26/11/2026, lead decision, Quoc; not merged yet, on Quoc's
+  working tree):** saving a period saves the later periods of the same class, day and session at once (absent stays
+  with its note, late → present, a student not on the source list → present), per student up to the first later period
+  where a person recorded that student; rows marked `attendances.auto_from_slot_id`; an unchanged save keeps them
+  automatic, a change of status or note by a person clears it; history reason "Tự điền theo tiết N"; automatic rows
+  notify nothing, a person's change on one says "… từ tiết N". Replaces the draft prefill of 23/11 (kept only for
+  sessions without automatic rows, same copy rule). business-rules §12 point 3 rewritten.
+  - **DB:** `patch_v0.3_attendance_auto.sql` (+ `educonnect_schema_v0.3.sql`) approved and **run on the shared DB
+    26/11/2026** (column `auto_from_slot_id` BIGINT NULL + FK checked after the run; existing 11 rows untouched, all
+    NULL = recorded by a person). Old server code ignores the column, so the code can be merged whenever ready.
+  - Tested on the local DB (`auto.mjs`, 30 checks: the four lead cases, unchanged save, correction flowing on, stop at
+    a person's row, note-only change, afternoon separate); server `npm test` 24/24, client build OK.
+  - **FE-09 fix (26/11/2026, same working tree):** the child chips of SCR-04 showed the class of a school year that has
+    not started (a student promoted early, UC-11: HS2602 "11A1" instead of 10A1; 8 students on the shared DB); the
+    class is now that of the latest started school year, a future one only when there is no other.
+  - **Reports owed (Quoc):** R3 BF-12 main steps, UC-90 normal flow / postconditions, SCR-56 notice, BR-40 / GBR on
+    notifications; R4 II.1.2 explanation + sequence UC-90 (fillLaterPeriods step), I.3 attendances (new column);
+    R5.1 UTC-ATT cases for the automatic filling.
+
 - **Report 5 test schedule (decided 24/11/2026, lead):** reports R1–R7 are due at the **end of 26/11/2026**, so the
   last test round is run just before that and everything else is planned backwards from it. "Round" means a run of
   the whole set of Report 5 test cases (Round 2 and 3 re-run the failed cases plus the main flows after the fixes),
