@@ -21,12 +21,15 @@ export const PASSWORD_RULES = [
   },
 ];
 
-// Returns [{ key, label, state: 'pass' | 'fail' | 'unknown' }]; failures reported by the server win.
+// Returns [{ key, label, state: 'pass' | 'fail' | 'unknown' | 'later' }]; failures reported by the server win.
+// 'unknown' = nothing typed yet; 'later' = typed, but the client cannot check this rule (e.g. the previous password
+// after a reload of the forced change, or the identifiers on Forgot Password): the server checks it on save, so the
+// checklist does not count it as unmet (FE-13 owner, 27/11/2026).
 export function evaluatePassword(password, context = {}, serverFailed = []) {
   return PASSWORD_RULES.map((rule) => {
     if (serverFailed.includes(rule.key)) return { ...rule, state: 'fail' };
     if (!password) return { ...rule, state: 'unknown' };
     const result = rule.test(password, context);
-    return { ...rule, state: result === null ? 'unknown' : result ? 'pass' : 'fail' };
+    return { ...rule, state: result === null ? 'later' : result ? 'pass' : 'fail' };
   });
 }
