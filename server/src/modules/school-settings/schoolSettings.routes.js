@@ -7,6 +7,7 @@ const router = Router();
 const sm = [requireAuth, requireRole('SCHOOL_MANAGER')];
 
 router.get('/', ...sm, ctrl.get);
+router.get('/impact', ...sm, ctrl.impact); // FE-04: what is above a lowered limit
 router.put('/', ...sm, ctrl.update);
 
 export default router;
