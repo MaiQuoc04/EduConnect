@@ -19,7 +19,7 @@ import { AUTO_LIMITS } from '../timetable/timetable.constants.js';
 
 export const ERROR_CODES = Object.freeze({
   NOT_READY: 'MSG_SCHOOL_SETTINGS_NOT_READY', // 503 – patch_v0.3_school_settings.sql not run on this database
-  INVALID: 'MSG_SCHOOL_SETTINGS_INVALID', // 400 details: { field, reason: REQUIRED | RANGE | TIME | ABOVE_DAYS, min?, max? }
+  INVALID: 'MSG_SCHOOL_SETTINGS_INVALID', // 400 details: { field, reason: REQUIRED | RANGE | TIME | ABOVE_DAYS | ABOVE_MAX, min?, max? }
   CHANGED: 'MSG_SCHOOL_SETTINGS_CHANGED', // 409 – saved by someone else after the page was opened
   NOTHING: 'MSG_NOTHING_CHANGED', // 400 – same code as the System Admin settings
 });
@@ -32,6 +32,8 @@ const TIME_RE = /^([01]\d|2[0-3]):[0-5]\d$/;
 export const GROUPS = Object.freeze({
   teaching: {
     // Never above the legal caps: 25 periods a week for a teacher, 7 periods a day for a class (and 7 × 6 a week).
+    // "Nên dạy" (27/11/2026): the norm, a warning only – a homeroom teacher's is 4 less (Thông tư 05/2025).
+    teacherNormWeek: { key: 'teaching.teacher_norm_week', type: 'int', fallback: AUTO_LIMITS.TEACHER_NORM_WEEK, min: 1, max: AUTO_LIMITS.TEACHER_MAX_WEEK },
     teacherMaxWeek: { key: 'teaching.teacher_max_week', type: 'int', fallback: AUTO_LIMITS.TEACHER_MAX_WEEK, min: 1, max: AUTO_LIMITS.TEACHER_MAX_WEEK },
     classMaxDay: { key: 'teaching.class_max_day', type: 'int', fallback: AUTO_LIMITS.CLASS_MAX_DAY, min: 1, max: AUTO_LIMITS.CLASS_MAX_DAY },
     classMaxWeek: { key: 'teaching.class_max_week', type: 'int', fallback: AUTO_LIMITS.CLASS_MAX_WEEK, min: 1, max: AUTO_LIMITS.CLASS_MAX_DAY * AUTO_LIMITS.DAYS_MAX },
@@ -104,7 +106,7 @@ async function read(db, opts) {
   }
 }
 
-// The teacher and class limits in force { teacherMaxWeek, classMaxDay, classMaxWeek } (automatic scheduling on every
+// The teacher and class limits in force { teacherNormWeek, teacherMaxWeek, classMaxDay, classMaxWeek } (automatic scheduling on every
 // run and apply, class timetable saves, teaching assignment saves).
 export async function schoolLimits(db = pool) {
   return (await read(db)).teaching;
@@ -139,6 +141,9 @@ export function checkBody(body) {
     }
   }
   if (!Object.keys(out).length) throw invalid('teaching', 'REQUIRED');
+  if (out.teaching && out.teaching.teacherNormWeek > out.teaching.teacherMaxWeek) {
+    throw invalid('teacherNormWeek', 'ABOVE_MAX', { max: out.teaching.teacherMaxWeek });
+  }
   // A week of more periods than classMaxDay × 6 school days can never be filled.
   if (out.teaching && out.teaching.classMaxWeek > out.teaching.classMaxDay * AUTO_LIMITS.DAYS_MAX) {
     throw invalid('classMaxWeek', 'ABOVE_DAYS', { max: out.teaching.classMaxDay * AUTO_LIMITS.DAYS_MAX });

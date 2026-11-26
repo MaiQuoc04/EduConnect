@@ -14,7 +14,7 @@ import * as teacherQueries from '../teacher/teacher.queries.js';
 import { assignTeachers, countedPeriods, MORNING_LAST, solveTimetable } from './timetable.auto.solver.js';
 import { schoolLimits } from '../school-settings/schoolSettings.service.js';
 import { reviewDraft } from './timetable.auto.review.js';
-import { AUTO_LIMITS, ERROR_CODES } from './timetable.constants.js';
+import { AUTO_LIMITS, ERROR_CODES, normOf } from './timetable.constants.js';
 import { internals } from './timetable.service.js';
 
 const conflict = (code, message, details) => new AppError(409, code, message, details);
@@ -308,6 +308,9 @@ function preCheck(cfg, ctx) {
       if (!keepOrFixed && counted > capacity) {
         errors.push({ code: 'NOT_ENOUGH_TEACHERS', subjectId: sid, subject: ctx.subjectName.get(sid), need: counted, capacity,
           short: counted - capacity, teachersMore: Math.ceil((counted - capacity) / cfg.teacherMaxWeek), teachers: q.length });
+      } else if (!keepOrFixed && counted > q.reduce((n, t) => n + Math.max(0, normOf(cfg, t.homeroom) - t.baseLoad), 0)) {
+        // Warning only (27/11/2026): some teacher will have to teach more than "nên dạy".
+        warnings.push({ code: 'OVER_NORM_NEEDED', subjectId: sid, subject: ctx.subjectName.get(sid), need: counted });
       }
     }
     if (cfg.fixed?.slots.length) {
@@ -405,7 +408,11 @@ export function runAuto(input) {
     const used = new Set(Object.values(assignments).map(String));
     const teacherLoads = ctx.teachers
       .filter((t) => used.has(t.teacherId))
-      .map((t) => ({ teacherId: t.teacherId, name: t.name, homeroom: t.homeroom, cap: cfg.teacherMaxWeek, base: t.baseLoad, load: load.get(t.teacherId) ?? 0 }))
+      .map((t) => {
+        const l = load.get(t.teacherId) ?? 0;
+        const norm = normOf(cfg, t.homeroom);
+        return { teacherId: t.teacherId, name: t.name, homeroom: t.homeroom, norm, cap: cfg.teacherMaxWeek, base: t.baseLoad, load: l, over: Math.max(0, l - norm) };
+      })
       .sort((x, y) => y.load - x.load || x.name.localeCompare(y.name, 'vi'));
 
     return {

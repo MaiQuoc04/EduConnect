@@ -64,6 +64,7 @@ function checkText(e, names) {
     case 'NOT_ASSIGNED': return `Còn ${e.count} cặp lớp – môn chưa có phân công đang chạy: ${e.items.map((i) => `${i.className} – ${i.subject}${i.locked ? ' (giáo viên bị khoá)' : ''}`).join('; ')}. Hãy chọn "Phân công + xếp tiết".`;
     case 'NO_QUALIFIED': return `Môn ${sub(e.subjectId)}: chưa có giáo viên nào đăng ký dạy.`;
     case 'NOT_ENOUGH_TEACHERS': return `Môn ${sub(e.subjectId)}: cần ${e.need} tiết/tuần nhưng ${e.teachers} giáo viên chỉ nhận tối đa ${e.capacity} tiết – thiếu ${e.short} tiết (khoảng ${e.teachersMore} giáo viên nữa).`;
+    case 'OVER_NORM_NEEDED': return `Môn ${sub(e.subjectId)}: sẽ có giáo viên dạy quá số tiết nên dạy (chỉ cảnh báo, vẫn xếp được).`;
     case 'GRID_DAY_LIMIT': return `Khung tuần có ${e.days.map((d) => `${WEEKDAY_LONG[d.weekday - 1]} ${d.periods} tiết`).join(', ')}, quá ${e.max} tiết/ngày của lớp (Cài đặt hệ thống).`;
     case 'GRID_WEEK_LIMIT': return `Khung tuần có ${e.cells} ô, quá ${e.max} tiết/tuần của lớp (Cài đặt hệ thống).`;
     case 'FIXED_TEACHERS': return `Môn ${sub(e.subjectId)} có ô cố định cùng giờ ở ${e.classes} lớp nhưng chỉ ${e.teachers} giáo viên dạy được và rảnh vào giờ đó – mỗi lớp cần một người khác nhau.`;
@@ -121,6 +122,7 @@ function problemText(v, names, className) {
     case 'PERIODS_OVER': return `${cls} – ${sub}: xếp ${v.placed} tiết, thừa so với ${v.need} tiết/tuần.`;
     case 'FIXED_SLOT': return `${cls}: ô cố định ${v.label || ''} ${at} phải là ${sub}.`;
     case 'S9': return `${cls}: GVCN ${teacher} không dạy tiết nào của lớp mình.`;
+    case 'OVER_NORM': return `${teacher}: ${v.load} tiết/tuần, quá số tiết nên dạy ${v.norm} (chỉ cảnh báo, không chặn).`;
     default: return violationText(v, names, className);
   }
 }
@@ -513,13 +515,15 @@ export default function TimetableAutoPage() {
     const list = opts.teachers.filter((t) => (t.subjectIds ?? []).map(String).includes(sid)).map((t) => {
       const tid = String(t.teacherId);
       const cap = Number(teaching.teacherMaxWeek);
+      // "Nên dạy" (27/11/2026, warning only): the norm, 4 less for a homeroom teacher (Thông tư 05/2025).
+      const norm = Math.max(0, Number(teaching.teacherNormWeek ?? 17) - (result?.teacherBase?.[tid]?.homeroom ? 4 : 0));
       const now = loadNow(tid);
       // What the teacher teaches now: the classes of this draft (by subject) + periods in classes outside the run.
       const teaches = assignList.filter((a) => a.teacherId === tid && periodsOf2(a.classId, a.subjectId) > 0)
         .map((a) => ({ label: `${names.subjects[a.subjectId]} ${className(a.classId)}`, periods: periodsOf2(a.classId, a.subjectId) }));
       const outside = result?.teacherBase?.[tid]?.base ?? 0;
       const homeroom = Boolean(result?.teacherBase?.[tid]?.homeroom);
-      const base = { tid, name: t.name, code: t.code, now, cap, teaches, outside, homeroom, add };
+      const base = { tid, name: t.name, code: t.code, now, norm, cap, teaches, outside, homeroom, add };
       if (tid === cur) return { ...base, current: true, after: now, why: '' };
       const after = now + add;
       const clashAt = cells.filter((k) => teacherElsewhere(tid, classId, k));
@@ -530,15 +534,17 @@ export default function TimetableAutoPage() {
       else if (after > cap) why = `nhận thêm ${add} tiết thì thành ${after}/tuần, quá số tiết tối đa ${cap}`;
       return { ...base, current: false, after, why };
     });
-    if (cur && !list.some((x) => x.current)) list.unshift({ tid: cur, name: names.teachers[cur] ?? cur, code: '', now: loadNow(cur), after: loadNow(cur), cap: Number(teaching.teacherMaxWeek), teaches: [], outside: 0, homeroom: false, add, current: true, why: '' });
+    if (cur && !list.some((x) => x.current)) list.unshift({ tid: cur, name: names.teachers[cur] ?? cur, code: '', now: loadNow(cur), after: loadNow(cur), norm: Number(teaching.teacherNormWeek ?? 17), cap: Number(teaching.teacherMaxWeek), teaches: [], outside: 0, homeroom: false, add, current: true, why: '' });
     return list.sort((a, b) => Number(b.current) - Number(a.current) || Number(Boolean(a.why)) - Number(Boolean(b.why)) || a.after - b.after || a.name.localeCompare(b.name, 'vi'));
   };
 
   // One teacher in "Đổi giáo viên": load now (with the classes), the weekly maximum, load after taking this class and subject.
   const teacherCard = (t, subjectLabel) => {
     const left = t.cap - t.after;
+    const overNorm = t.after - t.norm;
     const status = left < 0 ? { cls: 'is-over', text: `Quá số tiết tối đa ${-left} tiết` }
-      : left === 0 ? { cls: 'is-full', text: 'Vừa đủ số tiết tối đa' } : { cls: 'is-under', text: `Còn nhận được ${left} tiết` };
+      : overNorm > 0 ? { cls: 'is-over', text: `Quá số tiết nên dạy ${overNorm} tiết – vẫn được phép (tối đa ${t.cap})` }
+        : left === 0 ? { cls: 'is-full', text: 'Vừa đủ số tiết tối đa' } : { cls: 'is-under', text: `Còn nhận được ${left} tiết` };
     return (
       <>
         <strong className="ta-tc-name">{t.name}{t.homeroom && <span className="ta-tag">GVCN</span>}{t.current && <span className="ta-tag is-hand">Đang phân công</span>}</strong>
@@ -548,9 +554,9 @@ export default function TimetableAutoPage() {
           {t.teaches.length > 5 ? `, … ${t.teaches.length - 5} lớp khác` : ''}
           {t.outside ? ` + ${t.outside} tiết ở lớp ngoài lần xếp` : ''}
         </span>
-        <span className="ta-tc-row"><span>Tối đa</span><b>{t.cap} tiết/tuần</b></span>
+        <span className="ta-tc-row"><span>Nên dạy{t.homeroom ? ' (GVCN)' : ''} / tối đa</span><b>{t.norm} / {t.cap} tiết/tuần</b></span>
         {!t.current && <span className="ta-tc-row"><span>Nếu nhận {subjectLabel} (+{t.add})</span><b>{t.after} tiết/tuần</b></span>}
-        <span className={`ta-tc-status ${status.cls}`}>{t.current ? (left < 0 ? `Đang quá số tiết tối đa ${-left} tiết` : left === 0 ? 'Đang vừa đủ số tiết tối đa' : `Còn nhận được ${left} tiết`) : status.text}</span>
+        <span className={`ta-tc-status ${status.cls}`}>{t.current ? (left < 0 ? `Đang quá số tiết tối đa ${-left} tiết` : overNorm > 0 ? `Đang quá số tiết nên dạy ${overNorm} tiết (vẫn được phép)` : left === 0 ? 'Đang vừa đủ số tiết tối đa' : `Còn nhận được ${left} tiết`) : status.text}</span>
       </>
     );
   };
@@ -580,7 +586,7 @@ export default function TimetableAutoPage() {
     const o = original.get(`${a.classId}:${a.subjectId}`);
     return !o || (o.teacherId !== a.teacherId ? true : o.changed);
   }).length;
-  const fullTeachers = loadsNow.filter((l) => l.load >= l.cap);
+  const overNormTeachers = loadsNow.filter((l) => l.over > 0);
   const missing = review
     ? review.errors.filter((v) => v.code === 'PERIODS_SHORT').reduce((n, v) => n + v.need - v.placed, 0) + review.errors.filter((v) => v.code === 'NO_TEACHER').length
     : (result?.unplaced ?? []).reduce((n, u) => n + u.count, 0) + (result?.unassigned ?? []).length;
@@ -723,7 +729,7 @@ export default function TimetableAutoPage() {
           {/* School-wide limits of "Cài đặt hệ thống" (26/11/2026, replace the norms): shown here, edited in /school-settings. */}
           <div className="ta-load-summary">
             <p>
-              Giáo viên dạy tối đa <strong>{opts.defaults.teacherMaxWeek}</strong> tiết/tuần
+              Giáo viên nên dạy <strong>{opts.defaults.teacherNormWeek}</strong> tiết/tuần (GVCN <strong>{Math.max(0, opts.defaults.teacherNormWeek - 4)}</strong>), tối đa <strong>{opts.defaults.teacherMaxWeek}</strong>
               {form.mode !== 'ASSIGN' && <> · lớp học tối đa <strong>{opts.defaults.classMaxDay}</strong> tiết/ngày, <strong>{opts.defaults.classMaxWeek}</strong> tiết/tuần</>}
             </p>
             <Link className="tt-link" to="/school-settings"><Icon name="settings" size="sm" /> Sửa trong Cài đặt hệ thống</Link>
@@ -821,7 +827,7 @@ export default function TimetableAutoPage() {
                     <div className="card card-outline"><span className="label-upper">Lớp</span><strong>{Object.keys(timetablesNow ?? {}).length || result.existing.length}</strong><span className="caption muted">{dmy(result.range.start)} – {dmy(result.range.end)}</span></div>
                     <div className="card card-outline"><span className="label-upper">Phân công đổi</span><strong>{changed}</strong><span className="caption muted">trên {result.assignments.length} cặp lớp – môn</span></div>
                     <div className="card card-outline"><span className="label-upper">Chưa xếp được</span><strong className={missing ? 'tt-red' : ''}>{missing}</strong><span className="caption muted">tiết / cặp</span></div>
-                    <div className="card card-outline"><span className="label-upper">Điểm phạt</span><strong>{review?.score ?? result.score}</strong><span className="caption muted">{fullTeachers.length} GV đủ số tiết tối đa</span></div>
+                    <div className="card card-outline"><span className="label-upper">Điểm phạt</span><strong>{review?.score ?? result.score}</strong><span className="caption muted">{overNormTeachers.length} GV quá số tiết nên dạy</span></div>
                   </div>
                   <div className={`ta-edit-bar${review && !review.ok ? ' has-errors' : ''}`} role="status">
                     <Icon name={checking ? 'hourglass_top' : review && !review.ok ? 'error_outline' : 'edit_note'} size="sm" />
@@ -1066,17 +1072,17 @@ export default function TimetableAutoPage() {
                   {view === 'load' && (
                     <div className="ta-panel ta-table-wrap">
                       <table className="table">
-                        <thead><tr><th>Giáo viên</th><th>Tối đa</th><th>Lớp khác</th><th>Tổng</th><th>Còn nhận</th></tr></thead>
+                        <thead><tr><th>Giáo viên</th><th>Nên dạy</th><th>Tối đa</th><th>Lớp khác</th><th>Tổng</th><th>Quá nên dạy</th></tr></thead>
                         <tbody>
                           {loadsNow.map((l) => (
                             <tr key={l.teacherId}>
-                              <td>{l.name}{l.homeroom && <span className="ta-tag">GVCN</span>}</td><td>{l.cap}</td><td>{l.base}</td><td><strong>{l.load}</strong></td>
-                              <td className={l.load > l.cap ? 'tt-red' : 'tt-muted'}>{l.cap - l.load}</td>
+                              <td>{l.name}{l.homeroom && <span className="ta-tag">GVCN</span>}</td><td>{l.norm}</td><td>{l.cap}</td><td>{l.base}</td><td><strong>{l.load}</strong></td>
+                              <td className={l.load > l.cap ? 'tt-red' : l.over ? 'tt-off' : 'tt-muted'}>{l.over ? `+${l.over}` : '—'}</td>
                             </tr>
                           ))}
                         </tbody>
                       </table>
-                      <p className="caption muted">Tính cả tiết ở các lớp không nằm trong lần xếp này; Chào cờ và Sinh hoạt lớp không tính.</p>
+                      <p className="caption muted">Tính cả tiết ở các lớp không nằm trong lần xếp này; Chào cờ và Sinh hoạt lớp không tính. Quá số tiết nên dạy chỉ là cảnh báo; quá số tiết tối đa thì không áp dụng được.</p>
                     </div>
                   )}
                   {view === 'issues' && review && (

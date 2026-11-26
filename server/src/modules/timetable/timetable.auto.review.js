@@ -13,6 +13,7 @@
 //     S7 afternoon subject in the morning, S9 homeroom teacher not teaching their class, GAP empty cell before a lesson.
 // Pure function: the context is loaded by timetable.auto.js (loadContext).
 import { countedPeriods, DEFAULT_WEIGHTS, MORNING_LAST } from './timetable.auto.solver.js';
+import { normOf } from './timetable.constants.js';
 
 const pairKey = (classId, subjectId) => `${classId}:${subjectId}`;
 const cellKey = (w, p) => `${w}-${p}`;
@@ -77,10 +78,16 @@ export function reviewDraft(cfg, ctx, draft) {
   const used = new Set(assign.values());
   const loads = ctx.teachers
     .filter((t) => used.has(t.teacherId))
-    .map((t) => ({ teacherId: t.teacherId, name: t.name, homeroom: t.homeroom, cap: cfg.teacherMaxWeek, base: t.baseLoad, load: load.get(t.teacherId) ?? 0 }))
+    .map((t) => {
+      const l = load.get(t.teacherId) ?? 0;
+      const norm = normOf(cfg, t.homeroom);
+      return { teacherId: t.teacherId, name: t.name, homeroom: t.homeroom, norm, cap: cfg.teacherMaxWeek, base: t.baseLoad, load: l, over: Math.max(0, l - norm) };
+    })
     .sort((x, y) => y.load - x.load || x.name.localeCompare(y.name, 'vi'));
   for (const l of loads) {
     if (cfg.mode !== 'TIMETABLE' && l.load > l.cap) errors.push({ code: 'OVER_CAP', teacherId: l.teacherId, load: l.load, cap: l.cap });
+    // Over "nên dạy" (27/11/2026): a warning without penalty – it never blocks and does not change the score.
+    else if (l.over > 0) warnings.push({ code: 'OVER_NORM', weight: 0, teacherId: l.teacherId, load: l.load, norm: l.norm });
   }
   // S9: the homeroom teacher teaches nothing in their class.
   for (const c of ctx.classes) {

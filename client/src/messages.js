@@ -4,6 +4,7 @@ import { DEPARTMENT_REASON_TEXT, NAME_REASON_TEXT } from './utils/teacherValidat
 // Add a line here whenever a module introduces a new error code.
 // Field names of the School Manager settings, for MSG_SCHOOL_SETTINGS_INVALID.
 const SCHOOL_SETTING_LABELS = {
+  teacherNormWeek: 'Số tiết giáo viên nên dạy / tuần',
   teacherMaxWeek: 'Số tiết giáo viên dạy tối đa / tuần',
   classMaxDay: 'Số tiết tối đa của lớp học / ngày',
   classMaxWeek: 'Số tiết tối đa của lớp học / tuần',
@@ -272,7 +273,8 @@ const ERROR_MESSAGES = {
   MSG_PERIOD_TIMES_EMPTY: 'Chưa có tiết học nào trong cơ sở dữ liệu.',
   // School Manager settings (Dung, 21/11/2026)
   MSG_SCHOOL_SETTINGS_INVALID: ({ field, reason, min, max } = {}) =>
-    reason === 'ABOVE_DAYS' ? `Số tiết tối đa của lớp học / tuần không được lớn hơn ${max} (số tiết / ngày × 6 ngày).`
+    reason === 'ABOVE_MAX' ? `Số tiết giáo viên nên dạy không được lớn hơn số tiết dạy tối đa (${max}).`
+      : reason === 'ABOVE_DAYS' ? `Số tiết tối đa của lớp học / tuần không được lớn hơn ${max} (số tiết / ngày × 6 ngày).`
       : reason === 'RANGE' ? `${SCHOOL_SETTING_LABELS[field] ?? 'Giá trị'} phải là số nguyên từ ${min} đến ${max}.`
         : reason === 'TIME' ? `${SCHOOL_SETTING_LABELS[field] ?? 'Giờ'} phải là giờ hợp lệ (HH:MM) từ ${min} đến ${max}.`
         : `Vui lòng nhập ${(SCHOOL_SETTING_LABELS[field] ?? 'đủ các giá trị').toLowerCase()}.`,

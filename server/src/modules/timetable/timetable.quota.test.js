@@ -46,3 +46,10 @@ describe('classLimitErrors (school settings, 26/11/2026)', () => {
     assert.equal(r.periods, 42);
   });
 });
+
+describe('normOf – "nên dạy" (27/11/2026, warning only)', async () => {
+  const { normOf } = await import('./timetable.constants.js');
+  it('is the school norm for a subject teacher', () => assert.equal(normOf({ teacherNormWeek: 17 }, false), 17));
+  it('is 4 less for a homeroom teacher (Thông tư 05/2025)', () => assert.equal(normOf({ teacherNormWeek: 17 }, true), 13));
+  it('never goes below 0', () => assert.equal(normOf({ teacherNormWeek: 3 }, true), 0));
+});
