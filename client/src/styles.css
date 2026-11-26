@@ -645,6 +645,7 @@ a.link-row .icon:last-child { color: var(--graphite-400); }
 .track-periods-cell > .muted { line-height: 32px; }
 .track-cell-error { margin: 4px 0 0 auto; max-width: 220px; white-space: normal; text-align: right; }
 .track-help { margin-top: -8px; }
+.track-total-over { color: var(--red-pen); font-weight: 600; } /* above the class week limit (27/11/2026) */
 .track-footer { padding-top: 16px; border-top: 1px solid var(--graphite-200); }
 
 /* ---------- classes & class groups (SCR-20, FE-04 UC-27/UC-28) ---------- */
@@ -770,6 +771,7 @@ a.link-row .icon:last-child { color: var(--graphite-400); }
 .pick-basket .link-button { justify-self: start; }
 .review { display: grid; gap: 16px; }
 .review-max { font-size: 14px; font-weight: 400; }
+.review-over { color: var(--amber); } /* above the recommended class size (27/11/2026) */
 .review-table td { vertical-align: top; padding-top: 8px; padding-bottom: 8px; }
 .review-table th.num, .review-table td.num { width: 48px; text-align: right; }
 @media (max-width: 900px) {

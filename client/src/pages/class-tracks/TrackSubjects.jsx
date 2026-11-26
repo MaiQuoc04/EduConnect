@@ -6,21 +6,23 @@ import { errorText } from '../../messages.js';
 import { yearLabel } from '../school-years/schoolYearLabels.js';
 import { trackLabel } from './trackLabel.js';
 
-// Same limit as the server (UC-26): periods per week 1–10. Every subject weight is 1 and is not shown (agreed 01/11).
-const PERIODS_MAX = 10;
+// Same limits as the server (UC-26). Since 27/11/2026 they are School Manager settings ("Cài đặt hệ thống", SCR-86),
+// sent with the subjects (data.limits): periods of one subject 1..subjectMaxWeek, all subjects of the type at most
+// classMaxWeek a week (Chào cờ / Sinh hoạt lớp count). These defaults are only used if an older server sends none.
+// Every subject weight is 1 and is not shown (agreed 01/11).
+const DEFAULT_LIMITS = Object.freeze({ subjectMaxWeek: 10, classMaxWeek: 38 });
 
 // The reason a periods value is not accepted, in Vietnamese, or '' when it is valid. One message per case so the
 // user never has to guess (empty / not a whole number / zero / above the limit).
-function periodsError(text) {
+function periodsError(text, max) {
   const value = text.trim();
   if (value === '') return 'Nhập số tiết mỗi tuần.';
   if (!/^\d+$/.test(value)) return 'Số tiết phải là số nguyên, ví dụ 3.';
   const n = Number(value);
   if (n < 1) return 'Tối thiểu 1 tiết. Nếu lớp không học môn này, hãy bỏ chọn ở cột Áp dụng.';
-  if (n > PERIODS_MAX) return `Tối đa ${PERIODS_MAX} tiết mỗi tuần (đang nhập ${n}).`;
+  if (n > max) return `Tối đa ${max} tiết mỗi tuần (đang nhập ${n}).`;
   return '';
 }
-const periodsValid = (text) => !periodsError(text);
 
 // "Toán học, Ngữ văn" or "Toán học, Ngữ văn, Vật lý và 2 môn khác".
 function subjectList(names) {
@@ -43,6 +45,8 @@ const sameRow = (a, b) => a.on === b.on && (!a.on || a.periods.trim() === b.peri
 export default function TrackSubjects({ data, tracks, onSaved, onEdit, onDeleted, onDirtyChange }) {
   const toast = useToast();
   const { track, schoolYear, subjects } = data;
+  const limits = data.limits ?? DEFAULT_LIMITS;
+  const periodsValid = (text) => !periodsError(text, limits.subjectMaxWeek);
   const [initial, setInitial] = useState(() => initialRows(subjects));
   const [rows, setRows] = useState(initial);
   const [saving, setSaving] = useState(false);
@@ -75,6 +79,8 @@ export default function TrackSubjects({ data, tracks, onSaved, onEdit, onDeleted
     (sum, s) => sum + (periodsValid(rows[s.subjectId].periods) ? Number(rows[s.subjectId].periods) : 0),
     0,
   );
+  const overTotal = totalPeriods > limits.classMaxWeek; // the valid rows alone are already above the week limit
+  const totalError = `Tổng số tiết là ${totalPeriods}, vượt giới hạn ${limits.classMaxWeek} tiết mỗi tuần của một lớp. Hãy giảm số tiết hoặc bỏ bớt môn.`;
 
   const setRow = (id, patch) => setRows((r) => ({ ...r, [id]: { ...r[id], ...patch } }));
   const touch = (id) => setTouched((t) => (t.has(id) ? t : new Set(t).add(id)));
@@ -84,7 +90,7 @@ export default function TrackSubjects({ data, tracks, onSaved, onEdit, onDeleted
     const row = rows[s.subjectId];
     if (!row.on || !canEditPeriods) return '';
     if (row.periods.trim() === '' && !touched.has(s.subjectId)) return '';
-    return periodsError(row.periods);
+    return periodsError(row.periods, limits.subjectMaxWeek);
   }
 
   // Fills the table from another class type of the same year; nothing is saved until "Lưu thay đổi".
@@ -122,6 +128,8 @@ export default function TrackSubjects({ data, tracks, onSaved, onEdit, onDeleted
       return;
     }
     setShowInvalidSummary(false);
+    if (overTotal) return; // the reason is already shown under the table
+
     setSaving(true);
     setError('');
     try {
@@ -233,7 +241,7 @@ export default function TrackSubjects({ data, tracks, onSaved, onEdit, onDeleted
                   <th className="check">Áp dụng</th>
                   <th>Mã môn</th>
                   <th>Tên môn học</th>
-                  <th className="num">Số tiết/tuần (1–{PERIODS_MAX})</th>
+                  <th className="num">Số tiết/tuần (1–{limits.subjectMaxWeek})</th>
                 </tr>
               </thead>
               <tbody>
@@ -292,6 +300,11 @@ export default function TrackSubjects({ data, tracks, onSaved, onEdit, onDeleted
           {subjects.length === 0 && <p className="subject-empty muted">Trường chưa có môn học nào.</p>}
           <p className="field-help track-help">Mọi môn có hệ số như nhau khi tính điểm trung bình.</p>
 
+          {overTotal && canEditPeriods && (
+            <p className="form-error" role="alert">
+              {totalError}
+            </p>
+          )}
           {showInvalidSummary && invalid && (
             <p className="form-error" role="alert">
               Còn {invalidSubjects.length} môn có số tiết chưa hợp lệ:{' '}
@@ -307,7 +320,10 @@ export default function TrackSubjects({ data, tracks, onSaved, onEdit, onDeleted
           {canEditPeriods && (
             <div className="card-footer track-footer">
               <span className="left">
-                {chosen.length} môn · {totalPeriods} tiết mỗi tuần
+                {chosen.length} môn ·{' '}
+                <span className={overTotal ? 'track-total-over' : undefined}>
+                  {totalPeriods}/{limits.classMaxWeek} tiết mỗi tuần
+                </span>
                 {invalid && ` · chưa tính ${invalidSubjects.length} môn chưa hợp lệ`}
               </span>
               <button

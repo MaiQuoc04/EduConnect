@@ -1,8 +1,10 @@
 import { Link } from 'react-router-dom';
 import { GROUP_TYPE_LABELS } from '../groups/groupLabels.js';
+import { DEFAULT_SIZE_LIMITS } from './studentPick.js';
 
 // SCR-20 table view (UC-29): every shown class on one row, for scanning many classes at once.
-export default function ClassTable({ classes, loading }) {
+// Class size labels as on the cards (School Manager settings, 27/11/2026).
+export default function ClassTable({ classes, loading, sizeLimits = DEFAULT_SIZE_LIMITS }) {
   return (
     <div className={`card card-outline class-table${loading ? ' is-loading' : ''}`}>
       <div className="table-scroll">
@@ -33,7 +35,14 @@ export default function ClassTable({ classes, loading }) {
                     <span className="class-warn">Chưa có giáo viên chủ nhiệm</span>
                   )}
                 </td>
-                <td className="num">{c.studentCount} học sinh</td>
+                <td className="num">
+                  {c.studentCount} học sinh
+                  {c.studentCount > sizeLimits.maxStudents ? (
+                    <span className="pill red"> Vượt sĩ số tối đa</span>
+                  ) : c.studentCount > sizeLimits.warnStudents && (
+                    <span className="pill amber"> Vượt khuyến nghị</span>
+                  )}
+                </td>
                 <td>
                   <span className="chips">
                     {c.groups.map((g) => (

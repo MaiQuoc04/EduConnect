@@ -4,30 +4,39 @@ import Icon from '../../components/Icon.jsx';
 import { useToast } from '../../context/ToastContext.jsx';
 import { errorText } from '../../messages.js';
 import { yearLabel } from '../school-years/schoolYearLabels.js';
-import { MAX_CLASS_SIZE } from './studentPick.js';
+import OverWarningConfirm, { isOverWarning } from './OverWarningConfirm.jsx';
+import { DEFAULT_SIZE_LIMITS } from './studentPick.js';
 import StudentPicker from './StudentPicker.jsx';
 import StudentReview from './StudentReview.jsx';
 
 // SCR-20 – UC-28, adding students to a class that already exists (e.g. joining mid-year): the same picker and check
 // as creating a class. The new students and their linked parents join the class groups.
 // Business-rules §4 (agreed 03/11/2026): part of UC-28 rather than a new UC.
-export default function ClassAddStudentsPanel({ schoolYear, cls, onCancel, onDone }) {
+export default function ClassAddStudentsPanel({ schoolYear, cls, sizeLimits = DEFAULT_SIZE_LIMITS, onCancel, onDone }) {
   const toast = useToast();
   const [step, setStep] = useState(0);
   const [picked, setPicked] = useState([]);
   const [error, setError] = useState('');
   const [saving, setSaving] = useState(false);
-  const capacity = Math.max(0, MAX_CLASS_SIZE - cls.studentCount);
+  const [warning, setWarning] = useState(null); // 409 MSG_CLASS_OVER_WARNING waiting for a confirmation
+  const capacity = Math.max(0, sizeLimits.maxStudents - cls.studentCount);
 
-  async function handleSubmit() {
+  async function handleSubmit(confirmOverWarning = false) {
     setSaving(true);
     setError('');
     try {
-      const { data } = await api.post(`/classes/${cls.classId}/students`, { studentIds: picked.map((s) => s.studentId) });
+      const { data } = await api.post(`/classes/${cls.classId}/students`, {
+        studentIds: picked.map((s) => s.studentId),
+        ...(confirmOverWarning && { confirmOverWarning: true }),
+      });
       toast(`Đã thêm ${data.added} học sinh vào lớp ${data.className}. Sĩ số hiện tại ${data.studentCount}.`);
       onDone();
     } catch (err) {
-      setError(errorText(err));
+      if (isOverWarning(err)) setWarning(err);
+      else {
+        setWarning(null);
+        setError(errorText(err));
+      }
       setSaving(false);
     }
   }
@@ -41,7 +50,7 @@ export default function ClassAddStudentsPanel({ schoolYear, cls, onCancel, onDon
             Lớp {cls.className}
             <span className="caption muted">
               {' '}
-              · Đang có {cls.studentCount}/{MAX_CLASS_SIZE} học sinh
+              · Đang có {cls.studentCount}/{sizeLimits.maxStudents} học sinh
             </span>
           </h2>
         </div>
@@ -50,7 +59,7 @@ export default function ClassAddStudentsPanel({ schoolYear, cls, onCancel, onDon
       {capacity === 0 ? (
         <div className="notice">
           <Icon name="info" />
-          <p>Lớp đã đủ {MAX_CLASS_SIZE} học sinh nên không thêm được nữa.</p>
+          <p>Lớp đã đủ sĩ số tối đa {sizeLimits.maxStudents} học sinh nên không thêm được nữa.</p>
         </div>
       ) : step === 0 ? (
         <StudentPicker
@@ -63,9 +72,18 @@ export default function ClassAddStudentsPanel({ schoolYear, cls, onCancel, onDon
         <StudentReview
           students={picked}
           currentCount={cls.studentCount}
+          sizeLimits={sizeLimits}
           onRemove={(s) => setPicked((list) => list.filter((x) => x.studentId !== s.studentId))}
         />
       )}
+
+      <OverWarningConfirm
+        warning={warning}
+        busy={saving}
+        confirmLabel={`Vẫn thêm ${picked.length} học sinh`}
+        onConfirm={() => handleSubmit(true)}
+        onCancel={() => setWarning(null)}
+      />
 
       {error && (
         <p className="form-error" role="alert">
@@ -79,7 +97,7 @@ export default function ClassAddStudentsPanel({ schoolYear, cls, onCancel, onDon
             Huỷ
           </button>
         ) : (
-          <button type="button" className="btn btn-secondary" onClick={() => setStep(0)} disabled={saving}>
+          <button type="button" className="btn btn-secondary" onClick={() => { setWarning(null); setStep(0); }} disabled={saving}>
             <Icon name="arrow_back" size="sm" />
             Quay lại
           </button>
@@ -91,7 +109,7 @@ export default function ClassAddStudentsPanel({ schoolYear, cls, onCancel, onDon
               <Icon name="arrow_forward" size="sm" />
             </button>
           ) : (
-            <button type="button" className="btn btn-primary" onClick={handleSubmit} disabled={saving || !picked.length}>
+            <button type="button" className="btn btn-primary" onClick={() => handleSubmit()} disabled={saving || !picked.length || Boolean(warning)}>
               {saving ? 'Đang thêm…' : `Thêm ${picked.length} học sinh`}
             </button>
           ))}

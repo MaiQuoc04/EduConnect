@@ -7,11 +7,11 @@ import {
   conflict,
   enrollAndSyncGroups,
   lockOpenYear,
-  MAX_CLASS_SIZE,
   normalizeClassName,
   previousYearSql,
   resolveYear,
 } from './classes.service.js';
+import { classSizeLimits } from './classSize.js';
 
 // UC-27 Import Class List (SCR-20). One row per student: class name, grade, class type, student code. Accounts
 // must already exist (business-rules §3). Two steps: preview (no write) and import (the same file again, checked
@@ -19,7 +19,7 @@ import {
 // in the year only gets the new students (agreed 27/10).
 
 const COLUMNS = { className: 'Tên lớp', grade: 'Khối', track: 'Loại lớp', studentCode: 'Mã học sinh' };
-const MAX_ROWS = 2000; // ASSUMPTION: about 40 classes × 45 students
+const MAX_ROWS = 2000; // ASSUMPTION: about 40 classes × 45–55 students
 
 const fold = (text) => String(text ?? '').trim().replace(/\s+/g, ' ').toLowerCase();
 
@@ -29,6 +29,8 @@ async function analyze(db, year, rows) {
   const errors = [];
   const warnings = [];
   const add = (list, row, code, value) => list.push(value === undefined ? { row, code } : { row, code, value });
+  // Class size settings (27/11/2026), read through the pool: a missing table must not abort the import transaction.
+  const size = await classSizeLimits();
 
   const items = rows.map(({ row, values }) => ({
     row,
@@ -187,11 +189,14 @@ async function analyze(db, year, rows) {
       target.skipped += 1;
       continue;
     }
-    // At most MAX_CLASS_SIZE studying students per class (agreed 29/10): the rows past the limit are errors.
-    if (target.current + target.studentIds.length >= MAX_CLASS_SIZE) {
+    // Class size (27/11/2026): a row past the hard cap is an error; a row past the recommended size is a warning –
+    // importing the file after the preview is the School Manager's confirmation.
+    const after = target.current + target.studentIds.length + 1;
+    if (after > size.maxStudents) {
       add(errors, row, 'ROW_CLASS_FULL', item.className);
       continue;
     }
+    if (after > size.warnStudents) add(warnings, row, 'WARN_CLASS_OVER_RECOMMENDED', item.className);
     // ASSUMPTION (agreed 27/10): a locked account is still imported, with a warning (business-rules §3).
     if (student.status === 'LOCKED') add(warnings, row, 'WARN_STUDENT_LOCKED', item.studentCode);
     if (!student.parentIds.length) add(warnings, row, 'WARN_NO_PARENT', item.studentCode);

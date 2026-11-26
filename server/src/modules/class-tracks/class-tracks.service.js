@@ -1,5 +1,6 @@
 import { pool, withTransaction } from '../../config/db.js';
 import { AppError, badRequest, notFound } from '../../utils/AppError.js';
+import { schoolLimits } from '../school-settings/schoolSettings.service.js';
 
 // UC-26 Manage Class Types (SCR-70 "Loại lớp & số tiết"). A class type (class_tracks) belongs to one grade or to
 // every grade (grade_level_id NULL) and is shared by every school year; its subjects and periods per week
@@ -7,11 +8,49 @@ import { AppError, badRequest, notFound } from '../../utils/AppError.js';
 // Agreed 01/11: every subject weight is 1 – track_subjects.weight is always written as 1.00 and no longer shown,
 // so the year average of business-rules §11 is a plain average.
 
-const conflict = (code, message) => new AppError(409, code, message);
+const conflict = (code, message, details) => new AppError(409, code, message, details);
 
 const WEIGHT = '1.00';
-// ASSUMPTION: periods per week is a whole number 1–10; business-rules give no range (agreed 27/10).
-const PERIODS_MAX = 10;
+// Periods per week (27/11/2026, lead agreed): no fixed 1–10 any more. School Manager settings (SCR-86, UC-133):
+//   subjectMaxWeek (default 10) – most periods of one subject a week (MSG_TRACK_PERIODS_RANGE, details { max });
+//   classMaxWeek   (default 38, FE-10) – most periods of all subjects of a class type a week (MSG_TRACK_PERIODS_TOTAL,
+//                    details { total, max }); Chào cờ / Sinh hoạt lớp (HĐTN) count (lead, 27/11/2026).
+// A class type already above a lowered limit keeps its rows; it is saved again only once it is back within the limits.
+// Read through the pool, not the transaction: a missing school_settings table must not abort it (defaults then).
+async function periodLimits() {
+  const { subjectMaxWeek, classMaxWeek } = await schoolLimits();
+  return { subjectMaxWeek, classMaxWeek };
+}
+
+// Class types of school years that have not ended whose subjects break the period limits (SCR-86 before lowering
+// them, and the copy below). -> { subjects: [{ trackId, trackName, gradeLevel, yearName, subjectName, periods }],
+// tracks: [{ trackId, trackName, gradeLevel, yearName, total }] }. schoolYearId limits it to one year.
+export async function tracksOverLimits(db, { subjectMaxWeek, classMaxWeek, schoolYearId = null }) {
+  // $1 = school year (or NULL for every year that has not ended), $2 = the limit of each query.
+  const scope = `FROM track_subjects ts
+     JOIN class_tracks ct ON ct.track_id = ts.track_id AND ct.deleted_at IS NULL
+     LEFT JOIN grade_levels gl ON gl.grade_level_id = ct.grade_level_id
+     JOIN school_years sy ON sy.school_year_id = ts.school_year_id AND CURRENT_DATE <= sy.end_date
+     JOIN subjects s ON s.subject_id = ts.subject_id AND s.deleted_at IS NULL
+     WHERE ($1::bigint IS NULL OR ts.school_year_id = $1::bigint)`;
+  const { rows: subjects } = await db.query(
+    `SELECT ct.track_id AS "trackId", ct.track_name AS "trackName", gl.grade_level_name AS "gradeLevel",
+            sy.year_name AS "yearName", s.subject_name AS "subjectName", ts.periods_per_week AS "periods"
+     ${scope} AND ts.periods_per_week > $2::int
+     ORDER BY sy.year_name, gl.grade_level_name, ct.track_name, s.subject_name`,
+    [schoolYearId, subjectMaxWeek],
+  );
+  const { rows: tracks } = await db.query(
+    `SELECT ct.track_id AS "trackId", ct.track_name AS "trackName", gl.grade_level_name AS "gradeLevel",
+            sy.year_name AS "yearName", SUM(ts.periods_per_week)::int AS "total"
+     ${scope}
+     GROUP BY ct.track_id, ct.track_name, gl.grade_level_name, sy.year_name
+     HAVING SUM(ts.periods_per_week) > $2::int
+     ORDER BY sy.year_name, gl.grade_level_name, ct.track_name`,
+    [schoolYearId, classMaxWeek],
+  );
+  return { subjects, tracks };
+}
 
 function parseId(value, message) {
   const id = Number(value);
@@ -269,16 +308,20 @@ export async function getTrackSubjects(idParam, { schoolYearId }) {
      ORDER BY s.subject_id`,
     [id, schoolYear?.schoolYearId ?? null],
   );
-  return { track, schoolYear, copySource: await findCopySource(schoolYear), subjects };
+  // limits: the School Manager period settings the screen checks against (SCR-86, 27/11/2026).
+  return { track, schoolYear, copySource: await findCopySource(schoolYear), subjects, limits: await periodLimits() };
 }
 
 // One row of the save body -> { subjectId, periods }. A weight sent by an older client is ignored.
-function validateItem(item) {
+function validateItem(item, { subjectMaxWeek }) {
   const subjectId = Number(item?.subjectId);
   if (!Number.isSafeInteger(subjectId) || subjectId <= 0) throw notFound('NOT_FOUND', 'Subject not found.');
   const periods = Number(item.periodsPerWeek);
-  if (!Number.isInteger(periods) || periods < 1 || periods > PERIODS_MAX) {
-    throw badRequest('MSG_TRACK_PERIODS_RANGE', `Periods per week is a whole number from 1 to ${PERIODS_MAX}.`);
+  if (!Number.isInteger(periods) || periods < 1 || periods > subjectMaxWeek) {
+    throw badRequest('MSG_TRACK_PERIODS_RANGE', `Periods per week is a whole number from 1 to ${subjectMaxWeek}.`, {
+      max: subjectMaxWeek,
+      subjectId,
+    });
   }
   return { subjectId, periods };
 }
@@ -294,9 +337,17 @@ export async function saveTrackSubjects(idParam, { schoolYearId, items }) {
     throw badRequest('MSG_REQUIRED', 'Please choose a school year.');
   }
   if (!Array.isArray(items)) throw badRequest('MSG_REQUIRED', 'Please send the list of subjects.');
-  const wanted = items.map(validateItem);
+  const limits = await periodLimits();
+  const wanted = items.map((item) => validateItem(item, limits));
   const ids = wanted.map((w) => w.subjectId);
   if (new Set(ids).size !== ids.length) throw badRequest('MSG_TRACK_SUBJECT_DUPLICATE', 'A subject is listed twice.');
+  const total = wanted.reduce((sum, w) => sum + w.periods, 0);
+  if (total > limits.classMaxWeek) {
+    throw badRequest('MSG_TRACK_PERIODS_TOTAL', `A class type has at most ${limits.classMaxWeek} periods a week.`, {
+      total,
+      max: limits.classMaxWeek,
+    });
+  }
 
   await withTransaction(async (client) => {
     const year = await lockYear(client, schoolYearId);
@@ -365,6 +416,12 @@ export async function copyYear({ fromSchoolYearId, toSchoolYearId }) {
       [fromId, toId],
     );
     if (!rowCount) throw badRequest('MSG_TRACK_COPY_EMPTY', 'The source school year has no class type settings.');
+    // ASSUMPTION (27/11/2026, not answered by the lead): a copy that breaks the period limits is refused as a whole
+    // (same rule as saving one class type); the School Manager lowers the source year or raises the settings first.
+    const over = await tracksOverLimits(client, { ...(await periodLimits()), schoolYearId: toId });
+    if (over.subjects.length || over.tracks.length) {
+      throw conflict('MSG_TRACK_COPY_OVER_LIMIT', 'Some class types break the period limits; nothing was copied.', over);
+    }
     return { copied: rowCount };
   });
 }

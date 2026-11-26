@@ -2,6 +2,7 @@ import { pool, withTransaction } from '../../config/db.js';
 import { AppError, badRequest, notFound } from '../../utils/AppError.js';
 import { containsPattern, VI_TRANSLATE } from '../../utils/search.js';
 import { addClassGroupMembers, ensureClassGroups } from './classGroups.js';
+import { checkClassSize, classSizeLimits } from './classSize.js';
 
 // FE-04 Class & Group Management – classes and their groups (owner: Khanh). Screen SCR-20 Group List
 // ("Lớp & nhóm lớp"). UC-27 import lives in classImport.service.js and shares the helpers below.
@@ -116,7 +117,8 @@ export async function listClasses({ schoolYearId }) {
      ORDER BY gl.grade_level_name, c.class_name`,
     [schoolYear?.schoolYearId ?? null],
   );
-  return { schoolYear, classes: rows };
+  // sizeLimits: the class size settings { warnStudents, maxStudents } the cards and forms show (27/11/2026).
+  return { schoolYear, classes: rows, sizeLimits: await classSizeLimits() };
 }
 
 async function getClass(classId) {
@@ -124,11 +126,8 @@ async function getClass(classId) {
   return rows[0];
 }
 
-// Agreed 29/10 (Khanh, FE-04): a class has at most 45 studying students. Checked by UC-28 (create, add students)
-// and UC-27 (import).
-export const MAX_CLASS_SIZE = 45;
-const classFull = (current) =>
-  conflict('MSG_CLASS_FULL', `A class has at most ${MAX_CLASS_SIZE} students.`, { max: MAX_CLASS_SIZE, current });
+// Class size (27/11/2026): no fixed 45 any more – warning and hard cap are School Manager settings, checked by
+// checkClassSize (classSize.js) for UC-28 (create, add students), UC-27 (import), UC-10 and UC-11.
 
 const PICK_PAGE = 30;
 const MAX_PASTED_CODES = 200;
@@ -266,7 +265,6 @@ export async function createClass(input, userId) {
   const gradeLevelId = parseId(input.gradeLevelId, 'Grade not found.');
   const trackId = parseId(input.trackId, 'Class type not found.');
   const studentIds = parseStudentIds(input.studentIds);
-  if (studentIds.length > MAX_CLASS_SIZE) throw classFull(0);
 
   const classId = await withTransaction(async (client) => {
     const year = await lockOpenYear(client, input.schoolYearId);
@@ -297,6 +295,9 @@ export async function createClass(input, userId) {
     if (taken.length) throw conflict('MSG_CLASS_NAME_TAKEN', 'This class already exists in the school year.');
 
     await checkFreeStudents(client, year.schoolYearId, studentIds);
+    await checkClassSize([{ className, current: 0, adding: studentIds.length }], {
+      confirmOverWarning: input.confirmOverWarning === true,
+    });
 
     const { rows } = await client.query(
       `INSERT INTO classes (class_name, grade_level_id, school_year_id, track_id)
@@ -334,7 +335,6 @@ export async function addStudents(classIdParam, input, userId) {
       `SELECT COUNT(*) AS "count" FROM class_enrollments WHERE class_id = $1 AND status = 'STUDYING'`,
       [classId],
     );
-    if (size[0].count + studentIds.length > MAX_CLASS_SIZE) throw classFull(size[0].count);
 
     const { rows: left } = await client.query(
       `SELECT 1 FROM class_enrollments WHERE class_id = $1 AND student_id = ANY($2::bigint[]) AND status <> 'STUDYING'`,
@@ -342,6 +342,10 @@ export async function addStudents(classIdParam, input, userId) {
     );
     if (left.length) throw conflict('MSG_STUDENT_LEFT_CLASS', 'A student already left this class and cannot rejoin it.');
     await checkFreeStudents(client, year.schoolYearId, studentIds);
+    // Class size last, so a confirmation is only asked when nothing else is wrong.
+    await checkClassSize([{ classId, className: cls[0].className, current: size[0].count, adding: studentIds.length }], {
+      confirmOverWarning: input.confirmOverWarning === true,
+    });
 
     return enrollAndSyncGroups(client, { classId, className: cls[0].className, studentIds, createdBy: userId });
   });

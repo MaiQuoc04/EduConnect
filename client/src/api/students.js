@@ -53,15 +53,20 @@ export async function updateStudent(studentId, changes) {
 }
 
 // UC-10 POST /students/:studentId/transfer -> { student, fromEnrollment, toEnrollment, groupChanges, warnings }.
-// The body is only { toClassId }: the server rejects any other key (there is no "reason", see UC-10).
-export async function transferStudent(studentId, toClassId) {
-  const { data } = await api.post(`/students/${encodeURIComponent(studentId)}/transfer`, { toClassId });
+// The body is { toClassId, confirmOverWarning? }: the server rejects any other key (there is no "reason", see UC-10).
+// confirmOverWarning (27/11/2026, FE-04 class size): sent after the School Manager confirmed a 409 MSG_CLASS_OVER_WARNING.
+export async function transferStudent(studentId, toClassId, { confirmOverWarning = false } = {}) {
+  const { data } = await api.post(`/students/${encodeURIComponent(studentId)}/transfer`, {
+    toClassId,
+    ...(confirmOverWarning && { confirmOverWarning: true }),
+  });
   return data;
 }
 
 // UC-11 POST /students/promote -> { summary: { total, promoted, skipped }, results, warnings }. Answers 200 even when
 // some students are SKIPPED (each result says why); only a problem with the whole request is an error.
-// body: { fromSchoolYearId, toSchoolYearId, groups: [{ toClassId, studentIds }] } – no other key is accepted.
+// body: { fromSchoolYearId, toSchoolYearId, groups: [{ toClassId, studentIds }], confirmOverWarning? } – no other key
+// is accepted. confirmOverWarning (27/11/2026): sent after the School Manager confirmed a 409 MSG_CLASS_OVER_WARNING.
 export async function promoteStudents(body) {
   const { data } = await api.post('/students/promote', body);
   return data;

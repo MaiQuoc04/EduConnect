@@ -4,7 +4,8 @@ import Icon from '../../components/Icon.jsx';
 import { useToast } from '../../context/ToastContext.jsx';
 import { errorText } from '../../messages.js';
 import { yearLabel } from '../school-years/schoolYearLabels.js';
-import { MAX_CLASS_SIZE } from './studentPick.js';
+import OverWarningConfirm, { isOverWarning } from './OverWarningConfirm.jsx';
+import { DEFAULT_SIZE_LIMITS } from './studentPick.js';
 import StudentPicker from './StudentPicker.jsx';
 import StudentReview from './StudentReview.jsx';
 
@@ -22,8 +23,8 @@ function nameCode(name, gradeName, takenNames) {
 
 // SCR-20 – UC-28 Create Class Group, as three steps: the class, its students, a check before saving. Students come
 // from a pasted list of codes or a search, and only those the class may take (business-rules §4 "Who puts a student
-// in a class"; previous-year students go by promotion, UC-11). Creates the class with its three groups; at most 45 students (agreed 29/10).
-export default function ClassCreateForm({ schoolYear, takenNames = [], onCancel, onDone }) {
+// in a class"; previous-year students go by promotion, UC-11). Creates the class with its three groups; class size from the School Manager settings (27/11/2026).
+export default function ClassCreateForm({ schoolYear, sizeLimits = DEFAULT_SIZE_LIMITS, takenNames = [], onCancel, onDone }) {
   const toast = useToast();
   const [step, setStep] = useState(0);
   const [grades, setGrades] = useState([]);
@@ -31,6 +32,7 @@ export default function ClassCreateForm({ schoolYear, takenNames = [], onCancel,
   const [form, setForm] = useState({ className: '', gradeLevelId: '', trackId: '' });
   const [picked, setPicked] = useState([]);
   const [error, setError] = useState(null); // { field: 'name' | null, text }
+  const [warning, setWarning] = useState(null); // 409 MSG_CLASS_OVER_WARNING waiting for a confirmation
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
@@ -85,7 +87,7 @@ export default function ClassCreateForm({ schoolYear, takenNames = [], onCancel,
     setStep((s) => s + 1);
   }
 
-  async function handleSubmit() {
+  async function handleSubmit(confirmOverWarning = false) {
     setSaving(true);
     setError(null);
     try {
@@ -95,12 +97,19 @@ export default function ClassCreateForm({ schoolYear, takenNames = [], onCancel,
         gradeLevelId: Number(form.gradeLevelId),
         trackId: Number(form.trackId),
         studentIds: picked.map((s) => s.studentId),
+        ...(confirmOverWarning && { confirmOverWarning: true }),
       });
       toast(
         `Đã tạo lớp ${data.className} với ${data.studentCount} học sinh, cùng nhóm chung, nhóm học sinh và nhóm phụ huynh.`,
       );
       onDone();
     } catch (err) {
+      if (isOverWarning(err)) {
+        setWarning(err);
+        setSaving(false);
+        return;
+      }
+      setWarning(null);
       const nameError = NAME_CODES.includes(err.code);
       setError({ field: nameError ? 'name' : null, text: errorText(err) });
       if (nameError) setStep(0);
@@ -193,7 +202,7 @@ export default function ClassCreateForm({ schoolYear, takenNames = [], onCancel,
       {step === 1 && (
         <StudentPicker
           schoolYear={schoolYear}
-          capacity={MAX_CLASS_SIZE}
+          capacity={sizeLimits.maxStudents}
           picked={picked}
           setPicked={setPicked}
         />
@@ -203,6 +212,7 @@ export default function ClassCreateForm({ schoolYear, takenNames = [], onCancel,
         <>
           <StudentReview
             students={picked}
+            sizeLimits={sizeLimits}
             onRemove={(s) => setPicked((list) => list.filter((x) => x.studentId !== s.studentId))}
           />
           <div className="notice ink">
@@ -214,6 +224,14 @@ export default function ClassCreateForm({ schoolYear, takenNames = [], onCancel,
           </div>
         </>
       )}
+
+      <OverWarningConfirm
+        warning={warning}
+        busy={saving}
+        confirmLabel="Vẫn tạo lớp"
+        onConfirm={() => handleSubmit(true)}
+        onCancel={() => setWarning(null)}
+      />
 
       {error && !error.field && (
         <p className="form-error" role="alert">
@@ -227,7 +245,7 @@ export default function ClassCreateForm({ schoolYear, takenNames = [], onCancel,
             Huỷ
           </button>
         ) : (
-          <button type="button" className="btn btn-secondary" onClick={() => setStep((s) => s - 1)} disabled={saving}>
+          <button type="button" className="btn btn-secondary" onClick={() => { setWarning(null); setStep((s) => s - 1); }} disabled={saving}>
             <Icon name="arrow_back" size="sm" />
             Quay lại
           </button>
@@ -238,7 +256,7 @@ export default function ClassCreateForm({ schoolYear, takenNames = [], onCancel,
             <Icon name="arrow_forward" size="sm" />
           </button>
         ) : (
-          <button type="button" className="btn btn-primary" onClick={handleSubmit} disabled={saving}>
+          <button type="button" className="btn btn-primary" onClick={() => handleSubmit()} disabled={saving || Boolean(warning)}>
             {saving ? 'Đang tạo…' : 'Tạo lớp và 3 nhóm'}
           </button>
         )}

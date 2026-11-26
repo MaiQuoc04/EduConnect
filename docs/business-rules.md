@@ -160,9 +160,10 @@ Boundaries that are easy to get wrong:
     FE-02)**: from the school year **right before** the destination year, into a destination year that has not
     ended; to the **next grade or the same grade** (repeating a year; grade 12 can only repeat); only students still
     `STUDYING` in the source year count (a student transferred inside that year moves from the class they study in
-    now); at most 200 students per call; a target class never goes over 45 studying students (the call is refused).
+    now); at most 200 students per call; class size as below (hard cap refuses the call, above the recommended size the
+    call needs a confirmation listing every class concerned).
   - **Transfer (UC-10, FE-02)**: to another class of the **same school year and the same grade**, not once the year
-    has ended, not into a full class (45). Back to a class the student already studied in that year (11D1 → 11A1 →
+    has ended, not into a full class (class size as below; above the recommended size after a confirmation). Back to a class the student already studied in that year (11D1 → 11A1 →
     11D1): the old enrollment is **reopened** (`STUDYING`, `left_at` cleared) with its grades and attendance –
     `UNIQUE (student_id, class_id)` stays (lead, 03/11/2026).
   - **Create class / import class list (UC-28, UC-27, FE-04)** only take students who were **not studying in a
@@ -184,7 +185,12 @@ Boundaries that are easy to get wrong:
   than 2 parents (existing links + rows of the file), the same student–parent pair twice in the file. A new link
   adds the parent to GENERAL + PARENT of the child's current class, as UC-13 does. Not logged (like UC-13).
 - Every class has a **class type** (`class_tracks`, NOT NULL), e.g. type A = Maths/Physics/Chemistry focus.
-  `track_subjects` holds, per school year, the subjects and **periods per week** (whole number 1–10) of that type;
+  `track_subjects` holds, per school year, the subjects and **periods per week** of that type – a whole number from 1
+  to the School Manager setting "most periods of one subject a week" (default 10, at most 12 = 2 a day × 6 days), and
+  all subjects of the type together at most the setting "most periods of a class a week" (default 38, see "Period
+  limits" §10; Chào cờ / Sinh hoạt lớp count). Both checked when saving a type (SCR-70) and when copying a year (a copy
+  above the limits is refused as a whole – ASSUMPTION 27/11/2026). A type already above a lowered limit keeps its rows
+  and is saved again only once it is back within the limits (27/11/2026, lead agreed);
   copied from the previous year by default; editable, but subjects can no longer be added or removed **once the year
   has grades** (periods per week stay editable). Removing a subject from a type hard-deletes its `track_subjects`
   row (allowed only while the year has no grades and has not ended, §14).
@@ -199,8 +205,14 @@ Boundaries that are easy to get wrong:
 - **Every subject weight is 1** (agreed 01/11/2026, in line with Circular 22/2021): `track_subjects.weight` is
   always 1.00 and is not shown.
 - **Classes** (FE-04, agreed 03/11/2026): a class name is the grade followed by 1–8 letters or digits, no spaces or
-  accents (`10A1`, `12CT`; typed names are upper-cased). A class has at most **45 studying students**, checked when
-  creating a class, adding students, importing a class list, transferring (UC-10) and promoting (UC-11). UC-28 creates a class and also adds students to
+  accents (`10A1`, `12CT`; typed names are upper-cased). **Class size** (27/11/2026, lead agreed – replaces the fixed 45): two
+  School Manager settings (SCR-86, UC-133): a **recommended size** (default 45, Điều lệ trường) and a **hard cap**
+  (default 55; both 10–60, recommended ≤ hard cap). Counted as `STUDYING` students plus the students being added.
+  Above the recommended size the action is done only after the School Manager confirms (the request carries
+  `confirmOverWarning`; without it 409 `MSG_CLASS_OVER_WARNING`); the hard cap is never passed (`MSG_CLASS_FULL`).
+  Checked when creating a class, adding students, importing a class list (rows past the hard cap are errors, rows
+  past the recommended size warnings), transferring (UC-10) and promoting (UC-11). Lowering the hard cap keeps the
+  students of a class already above it (the screens show "Vượt sĩ số tối đa"); only adding more is refused. UC-28 creates a class and also adds students to
   an existing class, only the students it may take (see "Who puts a student in a class"). A class list import has at most 2000 rows; a locked
   account is still imported, with a warning.
 - Homeroom teacher may be empty → show a warning so SM assigns one.
@@ -699,6 +711,10 @@ Boundaries that are easy to get wrong:
     periods of 45 minutes a day, at least 5 days and at most 11 sessions a week) and a week (default 38, ASSUMPTION:
     the dispatch sets no weekly cap – 5 days × 7 + 3; at most the day limit × 6). The School Manager may lower these
     values but not raise them above the legal caps (teacher 25, class 7 a day, 42 a week).
+    27/11/2026 (Khanh, FE-04): the same page also holds the most periods of one subject a week (default 10, 1–12, not
+    above the class week) and the class size settings (§4); the class types of SCR-70 are checked against the class
+    week limit too. Lowering the hard cap or a period limit first lists what is already above it (`GET
+    /school-settings/impact`) and asks for a confirmation; nothing existing is changed.
     **"Nên dạy" (27/11/2026, Dung):** the norm of Thông tư 05/2025 is built in, not a setting: 17 periods a week, a
     homeroom teacher 4 less (13). Warning only, never blocks: automatic scheduling shows it per
     teacher (warning `OVER_NORM_NEEDED` before running, `OVER_NORM` with no penalty on a draft) and SCR-19 saves the

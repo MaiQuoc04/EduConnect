@@ -3,10 +3,18 @@ import { DEPARTMENT_REASON_TEXT, NAME_REASON_TEXT } from './utils/teacherValidat
 // Vietnamese UI text for API error codes. The server keeps its messages in English; the client shows these.
 // Add a line here whenever a module introduces a new error code.
 // Field names of the School Manager settings, for MSG_SCHOOL_SETTINGS_INVALID.
+// "10A1, 10A2, 11B3" or "10A1, 10A2, 11B3 và 2 lớp khác" (FE-04 class size and period limits).
+const shortList = (names, unit) =>
+  names.length <= 3 ? names.join(', ') : `${names.slice(0, 3).join(', ')} và ${names.length - 3} ${unit} khác`;
+const trackText = (t) => (t.gradeLevel ? `${t.trackName} · khối ${t.gradeLevel}` : t.trackName);
+
 const SCHOOL_SETTING_LABELS = {
   teacherMaxWeek: 'Số tiết giáo viên dạy tối đa / tuần',
   classMaxDay: 'Số tiết tối đa của lớp học / ngày',
   classMaxWeek: 'Số tiết tối đa của lớp học / tuần',
+  subjectMaxWeek: 'Số tiết tối đa của một môn / tuần',
+  warnStudents: 'Sĩ số khuyến nghị',
+  maxStudents: 'Sĩ số tối đa',
   editDeadlineTime: 'Giờ cuối giáo viên bộ môn được sửa điểm danh',
 };
 
@@ -74,7 +82,14 @@ const ERROR_MESSAGES = {
   MSG_TRACK_GRADE_IN_USE: 'Đang có lớp thuộc khối khác dùng loại lớp này nên không đổi khối được.',
   MSG_TRACK_DESCRIPTION_LENGTH: 'Mô tả tối đa 255 ký tự.',
   MSG_TRACK_IN_USE: 'Đang có lớp thuộc loại này nên không xoá được.',
-  MSG_TRACK_PERIODS_RANGE: 'Số tiết mỗi tuần là số nguyên từ 1 đến 10.',
+  // Period limits are School Manager settings (27/11/2026): the numbers come from details.
+  MSG_TRACK_PERIODS_RANGE: ({ max } = {}) => `Số tiết mỗi tuần của một môn là số nguyên từ 1 đến ${max ?? 10}.`,
+  MSG_TRACK_PERIODS_TOTAL: ({ total, max } = {}) =>
+    `Tổng số tiết là ${total}, vượt giới hạn ${max} tiết mỗi tuần của một lớp. Hãy giảm số tiết hoặc bỏ bớt môn.`,
+  MSG_TRACK_COPY_OVER_LIMIT: ({ subjects = [], tracks = [] } = {}) => {
+    const names = [...new Set([...tracks, ...subjects].map(trackText))];
+    return `Chưa sao chép: ${names.length} loại lớp của năm nguồn vượt giới hạn số tiết trong Cài đặt hệ thống (${shortList(names, 'loại lớp')}). Hãy sửa năm nguồn hoặc cài đặt rồi thử lại.`;
+  },
   MSG_TRACK_SUBJECT_DUPLICATE: 'Một môn học bị chọn hai lần.',
   MSG_TRACK_WEIGHTS_LOCKED: 'Năm học đã có điểm nên không thể thêm hoặc bỏ môn.',
   MSG_TRACK_CONFIG_EXISTS: 'Năm học này đã có thiết lập môn cho các loại lớp.',
@@ -144,8 +159,12 @@ const ERROR_MESSAGES = {
   MSG_DIRECT_LOCKED: 'Tài khoản này đã bị khoá nên không nhận được tin nhắn.',
   MSG_DIRECT_OUT_OF_SCOPE: 'Bạn không còn nhắn tin được với người này.',
   MSG_CLASS_STUDENT_DUPLICATE: 'Một học sinh bị chọn hai lần.',
-  MSG_CLASS_FULL: ({ max, current } = {}) =>
-    `Một lớp có tối đa ${max ?? 45} học sinh${current ? `; lớp đang có ${current} học sinh` : ''}.`,
+  // Class size settings (27/11/2026): hard cap (MSG_CLASS_FULL) and recommended size (MSG_CLASS_OVER_WARNING, the
+  // screens ask for a confirmation instead of showing it as an error).
+  MSG_CLASS_FULL: ({ max, current, className } = {}) =>
+    `${className ? `Lớp ${className}: m` : 'M'}ột lớp có tối đa ${max ?? 55} học sinh${current ? `; lớp đang có ${current} học sinh` : ''}.`,
+  MSG_CLASS_OVER_WARNING: ({ warn, classes = [] } = {}) =>
+    `${classes.map((c) => `Lớp ${c.className} sẽ có ${c.after} học sinh`).join('; ')}, vượt sĩ số khuyến nghị ${warn}.`,
   MSG_PASTE_TOO_MANY: ({ max } = {}) => `Mỗi lần dán tối đa ${max ?? 200} mã học sinh.`,
   MSG_STUDENT_LEFT_CLASS: 'Có học sinh đã chuyển đi hoặc thôi học ở lớp này nên không thêm lại được.',
   MSG_STUDENT_PREVIOUS_YEAR: ({ students } = {}) =>
@@ -273,6 +292,8 @@ const ERROR_MESSAGES = {
   // School Manager settings (Dung, 21/11/2026)
   MSG_SCHOOL_SETTINGS_INVALID: ({ field, reason, min, max } = {}) =>
     reason === 'ABOVE_DAYS' ? `Số tiết tối đa của lớp học / tuần không được lớn hơn ${max} (số tiết / ngày × 6 ngày).`
+      : reason === 'ABOVE_CLASS_WEEK' ? `Số tiết tối đa của một môn không được lớn hơn số tiết tối đa của lớp học / tuần (${max}).`
+      : reason === 'ABOVE_MAX_STUDENTS' ? `Sĩ số khuyến nghị không được lớn hơn sĩ số tối đa (${max}).`
       : reason === 'RANGE' ? `${SCHOOL_SETTING_LABELS[field] ?? 'Giá trị'} phải là số nguyên từ ${min} đến ${max}.`
         : reason === 'TIME' ? `${SCHOOL_SETTING_LABELS[field] ?? 'Giờ'} phải là giờ hợp lệ (HH:MM) từ ${min} đến ${max}.`
         : `Vui lòng nhập ${(SCHOOL_SETTING_LABELS[field] ?? 'đủ các giá trị').toLowerCase()}.`,
@@ -469,12 +490,13 @@ const IMPORT_ROW_MESSAGES = {
   ROW_STUDENT_NOT_FOUND: (v) => `Không tìm thấy học sinh mã ${v}.`,
   ROW_STUDENT_DUPLICATE: (v) => `Mã học sinh ${v} xuất hiện nhiều lần trong tệp.`,
   ROW_STUDENT_IN_OTHER_CLASS: (v) => `Học sinh đang học lớp ${v} trong năm học này.`,
-  ROW_CLASS_FULL: (v) => `Lớp ${v} đã đủ 45 học sinh, dòng này vượt sĩ số.`,
+  ROW_CLASS_FULL: (v) => `Lớp ${v} đã đủ sĩ số tối đa, dòng này vượt sĩ số.`,
   ROW_STUDENT_PREVIOUS_YEAR: (v) => `Học sinh đã học lớp ${v} năm học trước. Hãy xếp lớp bằng chức năng Lên lớp.`,
   ROW_STUDENT_LEFT_CLASS: (v) => `Học sinh đã chuyển đi hoặc thôi học ở lớp ${v}.`,
   WARN_ALREADY_IN_CLASS: (v) => `Học sinh ${v} đã có trong lớp, dòng này được bỏ qua.`,
   WARN_STUDENT_LOCKED: (v) => `Tài khoản học sinh ${v} đang bị khoá.`,
   WARN_NO_PARENT: (v) => `Học sinh ${v} chưa liên kết phụ huynh.`,
+  WARN_CLASS_OVER_RECOMMENDED: (v) => `Lớp ${v} vượt sĩ số khuyến nghị khi thêm dòng này (vẫn được nhập).`,
 };
 
 export const importRowText = ({ code, value }) => IMPORT_ROW_MESSAGES[code]?.(value) ?? code;

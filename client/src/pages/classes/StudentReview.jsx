@@ -1,13 +1,14 @@
 import Icon from '../../components/Icon.jsx';
-import { formatDob, GENDER_LABELS, MAX_CLASS_SIZE, reviewWarnings } from './studentPick.js';
+import { DEFAULT_SIZE_LIMITS, formatDob, GENDER_LABELS, reviewWarnings } from './studentPick.js';
 import { StudentInfo } from './StudentPicker.jsx';
 
 const names = (list) => list.map((s) => s.fullName).join(', ');
 
-// UC-28 last step: who will join the class, with what to double-check. Warnings never block the save; the class
-// size (agreed 29/10: at most 45) is also checked by the server.
-export default function StudentReview({ students, currentCount = 0, onRemove }) {
+// UC-28 last step: who will join the class, with what to double-check. Warnings never block the save; above the
+// recommended class size the save asks for a confirmation, the hard cap is also checked by the server (27/11/2026).
+export default function StudentReview({ students, currentCount = 0, sizeLimits = DEFAULT_SIZE_LIMITS, onRemove }) {
   const total = currentCount + students.length;
+  const overWarn = total > sizeLimits.warnStudents;
   const male = students.filter((s) => s.gender === 'MALE').length;
   const female = students.filter((s) => s.gender === 'FEMALE').length;
   const w = reviewWarnings(students);
@@ -22,9 +23,9 @@ export default function StudentReview({ students, currentCount = 0, onRemove }) 
         </div>
         <div>
           <dt>Sĩ số sau khi lưu</dt>
-          <dd>
+          <dd className={overWarn ? 'review-over' : undefined}>
             {total}
-            <span className="muted review-max">/{MAX_CLASS_SIZE}</span>
+            <span className="muted review-max">/{sizeLimits.maxStudents}</span>
           </dd>
         </div>
         <div>
@@ -36,6 +37,16 @@ export default function StudentReview({ students, currentCount = 0, onRemove }) 
           <dd>{female}</dd>
         </div>
       </dl>
+
+      {overWarn && (
+        <div className="notice amber">
+          <Icon name="groups" />
+          <p>
+            Sĩ số sau khi lưu là {total}, vượt sĩ số khuyến nghị {sizeLimits.warnStudents}. Hệ thống sẽ hỏi lại trước khi
+            lưu; sĩ số tối đa là {sizeLimits.maxStudents}.
+          </p>
+        </div>
+      )}
 
       {(w.sameName.length > 0 || w.locked.length > 0 || w.noParent.length > 0) && (
         <div className="import-rows warn">
