@@ -29,12 +29,12 @@ const TIME_RE = /^([01]\d|2[0-3]):[0-5]\d$/;
 // group -> field (API, camelCase) -> row key, type, built-in default, allowed range.
 // New keys (26/11/2026) are new rows of school_settings (no schema change); the old rows teaching.norm,
 // teaching.homeroom_norm, teaching.max_over and teaching.max_periods_per_day are no longer read.
-const DAY_MAX = AUTO_LIMITS.MORNING_MAX + AUTO_LIMITS.AFTERNOON_MAX; // periods 1..10 of a day
 export const GROUPS = Object.freeze({
   teaching: {
-    teacherMaxWeek: { key: 'teaching.teacher_max_week', type: 'int', fallback: AUTO_LIMITS.TEACHER_MAX_WEEK, min: 1, max: 40 },
-    classMaxDay: { key: 'teaching.class_max_day', type: 'int', fallback: AUTO_LIMITS.CLASS_MAX_DAY, min: 1, max: DAY_MAX },
-    classMaxWeek: { key: 'teaching.class_max_week', type: 'int', fallback: AUTO_LIMITS.CLASS_MAX_WEEK, min: 1, max: DAY_MAX * AUTO_LIMITS.DAYS_MAX },
+    // Never above the legal caps: 25 periods a week for a teacher, 7 periods a day for a class (and 7 × 6 a week).
+    teacherMaxWeek: { key: 'teaching.teacher_max_week', type: 'int', fallback: AUTO_LIMITS.TEACHER_MAX_WEEK, min: 1, max: AUTO_LIMITS.TEACHER_MAX_WEEK },
+    classMaxDay: { key: 'teaching.class_max_day', type: 'int', fallback: AUTO_LIMITS.CLASS_MAX_DAY, min: 1, max: AUTO_LIMITS.CLASS_MAX_DAY },
+    classMaxWeek: { key: 'teaching.class_max_week', type: 'int', fallback: AUTO_LIMITS.CLASS_MAX_WEEK, min: 1, max: AUTO_LIMITS.CLASS_MAX_DAY * AUTO_LIMITS.DAYS_MAX },
   },
   attendance: {
     // ASSUMPTION: earliest 12:00 (not in the business rules) – an earlier deadline would close the morning periods

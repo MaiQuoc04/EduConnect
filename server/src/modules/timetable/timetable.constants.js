@@ -37,9 +37,10 @@ export const AUTO_LIMITS = Object.freeze({
   DAYS_MAX: 6, // at most 6 school days a week (Monday .. Saturday)
   CLASSES_MAX: 200,
   // School-wide limits, defaults of "Cài đặt hệ thống" (Dung, 26/11/2026 – replace the teacher norms):
+  // The default is also the highest value the School Manager may set (legal caps).
   TEACHER_MAX_WEEK: 25, // norm 17 (Thông tư 05/2025) + at most 50 % over it = 25.5, rounded down
-  CLASS_MAX_DAY: 8, // 5 morning + 3 afternoon periods
-  CLASS_MAX_WEEK: 40,
+  CLASS_MAX_DAY: 7, // Công văn 4567/BGDĐT-GDPT (2025): a pupil has at most 7 periods of 45 minutes a day
+  CLASS_MAX_WEEK: 38, // ASSUMPTION (no cap in the dispatch, which allows at most 11 sessions a week): 5 days × 7 + 3
   MAX_PER_SUBJECT_DAY: 2, // hard: a subject at most 2 periods a day in a class
   BUSY_MAX: 3000,
   TIME_LIMIT_SEC: 5, // default search time; 1..30

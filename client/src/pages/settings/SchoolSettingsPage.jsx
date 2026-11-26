@@ -21,9 +21,9 @@ const SECTIONS = [
     title: 'Giới hạn số tiết',
     intro: 'Áp dụng cho toàn trường khi phân công giảng dạy, xếp tự động và lưu thời khoá biểu.',
     fields: [
-      { key: 'teacherMaxWeek', label: 'Số tiết giáo viên dạy tối đa một tuần', unit: 'tiết/tuần', help: 'Định mức 17 tiết/tuần (Thông tư 05/2025), dạy vượt không quá 50 %, tức tối đa 25 tiết/tuần.' },
-      { key: 'classMaxDay', label: 'Số tiết lớp học tối đa một ngày', unit: 'tiết/ngày', help: 'Công văn 4567/BGDĐT-GDPT: học sinh học không quá 7 tiết/ngày, mỗi tiết 45 phút; mỗi buổi tối đa 5 tiết.' },
-      { key: 'classMaxWeek', label: 'Số tiết lớp học tối đa một tuần', unit: 'tiết/tuần', help: 'Học tối thiểu 5 ngày và tối đa 11 buổi/tuần (Công văn 4567). Không lớn hơn số tiết tối đa một ngày nhân 6 ngày.' },
+      { key: 'teacherMaxWeek', label: 'Số tiết giáo viên dạy tối đa một tuần', unit: 'tiết/tuần', help: 'Định mức 17 tiết/tuần (Thông tư 05/2025), dạy vượt không quá 50% định mức.' },
+      { key: 'classMaxDay', label: 'Số tiết lớp học tối đa một ngày', unit: 'tiết/ngày', help: 'Công văn 4567/BGDĐT-GDPT: học sinh học không quá 7 tiết/ngày, mỗi tiết 45 phút.' },
+      { key: 'classMaxWeek', label: 'Số tiết lớp học tối đa một tuần', unit: 'tiết/tuần', help: 'Học tối thiểu 5 ngày, tối đa 11 buổi/tuần (Công văn 4567); không lớn hơn số tiết một ngày × 6.' },
     ],
   },
   {
