@@ -149,7 +149,9 @@ function Rules() {
   );
 }
 
-function ConfirmDialog({ open, fromYear, toYear, fromClass, groups, count, busy, onCancel, onConfirm }) {
+// overWarning (27/11/2026, FE-04 class size): the 409 MSG_CLASS_OVER_WARNING of the first try, listing every class that
+// goes above the recommended size; the button then sends the promotion again with the confirmation.
+function ConfirmDialog({ open, fromYear, toYear, fromClass, groups, count, busy, overWarning, onCancel, onConfirm }) {
   const ref = useRef(null);
   useEffect(() => {
     const dialog = ref.current;
@@ -201,6 +203,12 @@ function ConfirmDialog({ open, fromYear, toYear, fromClass, groups, count, busy,
             của năm cũ được giữ nguyên.
           </p>
         </div>
+        {overWarning && (
+          <div className="notice amber" role="alert">
+            <Icon name="groups" size="sm" />
+            <p>{errorText(overWarning)} Bạn vẫn muốn lên lớp vào các lớp này?</p>
+          </div>
+        )}
       </div>
       <div className="transfer-student-dialog-actions">
         {/* The safe button gets the focus: confirming must be a deliberate click. */}
@@ -209,7 +217,7 @@ function ConfirmDialog({ open, fromYear, toYear, fromClass, groups, count, busy,
         </button>
         <button type="button" className="btn btn-primary" onClick={onConfirm} disabled={busy}>
           <Icon name={busy ? 'progress_activity' : 'upgrade'} size="sm" className={busy ? 'transfer-student-spin' : undefined} />
-          {busy ? 'Đang lên lớp…' : 'Xác nhận lên lớp'}
+          {busy ? 'Đang lên lớp…' : overWarning ? 'Vẫn lên lớp' : 'Xác nhận lên lớp'}
         </button>
       </div>
     </dialog>
@@ -389,6 +397,7 @@ export default function PromoteStudentsPanel({ tabs }) {
   const [errors, setErrors] = useState({});
   const [formError, setFormError] = useState('');
   const [confirming, setConfirming] = useState(false);
+  const [overWarning, setOverWarning] = useState(null); // 409 MSG_CLASS_OVER_WARNING waiting for a confirmation
   const [busy, setBusy] = useState(false);
   const inFlight = useRef(false); // a second click before React re-renders must not send a second promotion
   const [result, setResult] = useState(null);
@@ -572,6 +581,7 @@ export default function PromoteStudentsPanel({ tabs }) {
       document.querySelector('.promote-students [aria-invalid="true"], .promote-students .field-error')?.closest('.field, .promote-students-step')?.scrollIntoView({ block: 'center' });
       return;
     }
+    setOverWarning(null);
     setConfirming(true);
   }
 
@@ -586,14 +596,21 @@ export default function PromoteStudentsPanel({ tabs }) {
         toClassId: g.target.classId,
         studentIds: chosen.filter((s) => groupKeyOf(s.studentId) === g.key).map((s) => s.studentId),
       })),
+      ...(overWarning && { confirmOverWarning: true }),
     };
     try {
       const res = await promoteStudents(body);
       setResult(res);
+      setOverWarning(null);
       setConfirming(false);
       toast(res.summary.promoted ? `Đã lên lớp cho ${res.summary.promoted} học sinh.` : 'Không có học sinh nào được lên lớp.');
       window.scrollTo({ top: 0 });
     } catch (err) {
+      if (err.code === 'MSG_CLASS_OVER_WARNING') {
+        setOverWarning(err); // the dialog stays open and asks again
+        return;
+      }
+      setOverWarning(null);
       setConfirming(false);
       const text = promoteErrorText(err);
       if (err.code === 'MSG_SAME_SCHOOL_YEAR' || err.code === 'MSG_INVALID_YEAR_ORDER') {
@@ -998,7 +1015,11 @@ export default function PromoteStudentsPanel({ tabs }) {
           groups={groups.map((g) => ({ ...g, count: countOf(g.key) }))}
           count={chosen.length}
           busy={busy}
-          onCancel={() => setConfirming(false)}
+          overWarning={overWarning}
+          onCancel={() => {
+            setOverWarning(null);
+            setConfirming(false);
+          }}
           onConfirm={confirm}
         />
       )}

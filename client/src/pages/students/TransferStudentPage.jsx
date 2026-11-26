@@ -235,7 +235,9 @@ function Rules() {
   );
 }
 
-function ConfirmDialog({ open, student, fromClassName, toName, busy, onCancel, onConfirm }) {
+// overWarning (27/11/2026, FE-04 class size): the 409 MSG_CLASS_OVER_WARNING of the first try; the dialog then says
+// the class goes above the recommended size and the button sends the transfer again with the confirmation.
+function ConfirmDialog({ open, student, fromClassName, toName, busy, overWarning, onCancel, onConfirm }) {
   const ref = useRef(null);
   useEffect(() => {
     const dialog = ref.current;
@@ -275,6 +277,12 @@ function ConfirmDialog({ open, student, fromClassName, toName, busy, onCancel, o
             giữ nguyên.
           </p>
         </div>
+        {overWarning && (
+          <div className="notice amber" role="alert">
+            <Icon name="groups" size="sm" />
+            <p>{errorText(overWarning)} Bạn vẫn muốn chuyển học sinh vào lớp này?</p>
+          </div>
+        )}
       </div>
       <div className="transfer-student-dialog-actions">
         {/* The safe button gets the focus: confirming must be a deliberate click. */}
@@ -283,7 +291,7 @@ function ConfirmDialog({ open, student, fromClassName, toName, busy, onCancel, o
         </button>
         <button type="button" className="btn btn-primary" onClick={onConfirm} disabled={busy}>
           <Icon name={busy ? 'progress_activity' : 'move_up'} size="sm" className={busy ? 'transfer-student-spin' : undefined} />
-          {busy ? 'Đang chuyển lớp…' : 'Xác nhận chuyển lớp'}
+          {busy ? 'Đang chuyển lớp…' : overWarning ? 'Vẫn chuyển lớp' : 'Xác nhận chuyển lớp'}
         </button>
       </div>
     </dialog>
@@ -436,6 +444,7 @@ function TransferStudentView() {
   const [formError, setFormError] = useState('');
   const [submitted, setSubmitted] = useState(false);
   const [confirming, setConfirming] = useState(false);
+  const [overWarning, setOverWarning] = useState(null); // 409 MSG_CLASS_OVER_WARNING waiting for a confirmation
   const [busy, setBusy] = useState(false);
   const inFlight = useRef(false); // a second click before React re-renders must not send a second transfer
   const [result, setResult] = useState(null);
@@ -527,21 +536,29 @@ function TransferStudentView() {
       setClassError(errorText({ code: 'MSG_TRANSFER_SAME_CLASS' }));
       return;
     }
+    setOverWarning(null);
     setConfirming(true);
   }
 
   async function confirm() {
+    const confirmOverWarning = Boolean(overWarning);
     if (inFlight.current) return;
     inFlight.current = true;
     setBusy(true);
     try {
-      const res = await transferStudent(student.studentId, target.classId);
+      const res = await transferStudent(student.studentId, target.classId, { confirmOverWarning });
       setResult(res);
+      setOverWarning(null);
       setConfirming(false);
       toast(`Đã chuyển học sinh sang lớp ${res.toEnrollment.className}.`);
       setAttempt((n) => n + 1); // refresh the class history beside the result
       window.scrollTo({ top: 0 });
     } catch (err) {
+      if (err.code === 'MSG_CLASS_OVER_WARNING') {
+        setOverWarning(err); // the dialog stays open and asks again
+        return;
+      }
+      setOverWarning(null);
       setConfirming(false);
       if (err.status === 404 || err.code === 'MSG_STUDENT_NOT_FOUND') {
         setLoadError(err);
@@ -689,7 +706,11 @@ function TransferStudentView() {
           fromClassName={current.className}
           toName={toName}
           busy={busy}
-          onCancel={() => setConfirming(false)}
+          overWarning={overWarning}
+          onCancel={() => {
+            setOverWarning(null);
+            setConfirming(false);
+          }}
           onConfirm={confirm}
         />
       )}
