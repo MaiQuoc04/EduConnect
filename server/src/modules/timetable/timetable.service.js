@@ -7,6 +7,7 @@
 import { pool, withTransaction } from '../../config/db.js';
 import { AppError, badRequest, notFound } from '../../utils/AppError.js';
 import { ERROR_CODES, ROLES, TIMETABLE_LIMITS } from './timetable.constants.js';
+import { overQuota } from './timetable.quota.js';
 
 const conflict = (code, message, details) => new AppError(409, code, message, details);
 
@@ -260,7 +261,14 @@ const PLANNED = `
 
 // Saves the pattern for [start, end] inside an open transaction and generates the periods. Throws 409 with the
 // problems (no teacher assigned / teacher busy in another class) – the caller's transaction is then rolled back.
+// Every save goes through saveVersion (editor, Excel import, automatic scheduling), so the rule is checked here.
 async function saveVersion(db, { cls, start, end, entries, userId }) {
+  const over = overQuota(await classSubjects(cls, db), entries);
+  if (over.length) {
+    throw badRequest(ERROR_CODES.TIMETABLE_OVER_QUOTA, 'Some subjects have more periods than the class type allows.', {
+      items: over,
+    });
+  }
   await freeRange(cls.classId, start, end, db);
   const { rows: created } = await db.query(
     `INSERT INTO timetables (class_id, start_date, end_date, created_by) VALUES ($1, $2::date, $3::date, $4)

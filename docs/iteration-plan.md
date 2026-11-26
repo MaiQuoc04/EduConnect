@@ -47,6 +47,16 @@ reactions, attachments) is merged into one place after both are on `develop`.
   | 26/11 17:00 – end of day | Quoc fills 5.0 II.3 from the Test Statistics sheets; reports submitted |
   | Weeks 13–14 | Only revising and finishing Reports 6 and 7; no code or test changes |
 
+- **FE-10 periods per week enforced (26/11/2026, Dung, `feature/fe-10-timetable-quota`, not merged yet – lead to
+  review; changes business rule §10 "shown but not enforced"):** a subject can no longer get more periods in a class
+  timetable than its class type allows (`track_subjects.periods_per_week`). Server: `saveVersion` refuses the pattern
+  with `MSG_TIMETABLE_OVER_QUOTA` (400, `details.items`), so the editor (UC-71 / UC-73), the Excel import (UC-72, the
+  class is reported with the message) and the automatic scheduling apply are all covered; pure check in
+  `timetable.quota.js` with unit tests (`timetable.quota.test.js`). Client (SCR-28 / SCR-30): picking a subject that
+  already has its periods, or saving a pattern over the quota, opens a blocking dialog with one OK button; the server
+  error opens the same dialog. Fewer periods are still allowed. Merged after Round 3, so FE-10 / BF-04 test cases
+  need one more case each (Dung).
+
 - **FE-13 / FE-02 fixes merged into `develop` (26/11/2026, Linh, `feature/fe-13-system-administration`, merge
   `822d3bc`; client `npm run build` and server `npm test` (24/24) pass):**
   - `ff65dda` (UC-103): the maintenance form with an end before the start returns `BEFORE_START` instead of a 500

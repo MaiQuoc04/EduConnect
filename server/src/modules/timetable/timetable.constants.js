@@ -59,6 +59,7 @@ export const ERROR_CODES = Object.freeze({
   TIMETABLE_SUBJECT_NOT_IN_CLASS: 'MSG_TIMETABLE_SUBJECT_NOT_IN_CLASS', // details: { subjects }
   TIMETABLE_NO_TEACHER: 'MSG_TIMETABLE_NO_TEACHER', // details: { items: [{ subject, from, to, periods }] }
   TIMETABLE_TEACHER_CLASH: 'MSG_TIMETABLE_TEACHER_CLASH', // details: { items: [{ date, period, teacher, otherClass }] }
+  TIMETABLE_OVER_QUOTA: 'MSG_TIMETABLE_OVER_QUOTA', // details: { items: [{ subject, periods, periodsPerWeek }] } – more periods than track_subjects
   TIMETABLES_NOT_READY: 'MSG_TIMETABLES_NOT_READY', // tables timetables / timetable_entries missing on this database
   IMPORT_FILE: 'MSG_IMPORT_FILE',
   IMPORT_TEMPLATE: 'MSG_IMPORT_TEMPLATE', // details: { missing }

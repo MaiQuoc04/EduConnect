@@ -222,6 +222,8 @@ const ERROR_MESSAGES = {
     `Một số môn${className ? ` của lớp ${className}` : ''} chưa có giáo viên được phân công trong khoảng ngày này. Hãy phân công giảng dạy trước.`,
   MSG_TIMETABLE_TEACHER_CLASH: ({ className } = {}) =>
     `Trùng giờ: giáo viên đã có tiết ở lớp khác cùng giờ${className ? ` (khi xếp lớp ${className})` : ''}.`,
+  MSG_TIMETABLE_OVER_QUOTA: ({ className, items = [] } = {}) =>
+    `Vượt số tiết quy định${className ? ` ở lớp ${className}` : ''}: ${items.map((i) => `${i.subject} ${i.periods} / ${i.periodsPerWeek} tiết`).join('; ')}. Hãy bớt tiết rồi lưu lại.`,
   MSG_TIMETABLE_IMPORT_HAS_ERRORS: 'File còn lỗi nên chưa lưu lớp nào. Hãy sửa theo kết quả kiểm tra rồi nhập lại.',
   // FE-10 school calendar (Lịch của trường)
   MSG_SCHOOL_EVENT_NOT_FOUND: 'Không tìm thấy sự kiện này. Sự kiện có thể đã bị xoá.',

@@ -58,6 +58,56 @@ function CellEditor({ value, subjects, label, alignRight, onChange, onClose }) {
   );
 }
 
+// Periods of each subject in the pattern against track_subjects.periods_per_week. Fewer periods are allowed (the
+// panel shows "Thiếu"); more are refused here and by the server (MSG_TIMETABLE_OVER_QUOTA, 26/11/2026, Dung).
+function overQuota(subjects, cells) {
+  const count = {};
+  for (const v of Object.values(cells)) if (v.subjectId) count[v.subjectId] = (count[v.subjectId] ?? 0) + 1;
+  return subjects
+    .filter((s) => (count[String(s.subjectId)] ?? 0) > s.periodsPerWeek)
+    .map((s) => ({ subject: s.name, periods: count[String(s.subjectId)], periodsPerWeek: s.periodsPerWeek }));
+}
+
+// Blocking message with one button, shown when a subject would get more periods than its class type allows.
+function QuotaDialog({ alert, onClose }) {
+  const ref = useRef(null);
+  useEffect(() => {
+    const onKey = (e) => (e.key === 'Escape' || e.key === 'Enter') && onClose();
+    window.addEventListener('keydown', onKey);
+    ref.current?.focus();
+    return () => window.removeEventListener('keydown', onKey);
+  }, [onClose]);
+  return (
+    <div className="tt-overlay" onClick={onClose}>
+      <div className="tt-dialog tt-dialog-sm" role="alertdialog" aria-modal="true" aria-labelledby="tt-quota-title"
+        aria-describedby="tt-quota-body" onClick={(e) => e.stopPropagation()}>
+        <header className="tt-dialog-head">
+          <div>
+            <span className="label-upper">Số tiết theo loại lớp</span>
+            <h2 id="tt-quota-title" className="tt-dialog-title">{alert.saving ? 'Không thể lưu thời khoá biểu' : 'Không thể thêm tiết'}</h2>
+          </div>
+          <button type="button" className="tt-navbtn is-plain" onClick={onClose} aria-label="Đóng"><Icon name="close" size="sm" /></button>
+        </header>
+        <div className="tt-dialog-body tt-quota-alert" id="tt-quota-body">
+          <Icon name="cancel" filled className="tt-quota-icon" />
+          <div>
+            <p>{alert.saving ? 'Có môn vượt số tiết quy định trong một tuần:' : 'Môn này đã đủ số tiết quy định trong một tuần:'}</p>
+            <ul>
+              {alert.items.map((i) => (
+                <li key={i.subject}><strong>{i.subject}</strong>: {i.periods} / {i.periodsPerWeek} tiết{i.periods > i.periodsPerWeek ? ` (thừa ${i.periods - i.periodsPerWeek})` : ''}</li>
+              ))}
+            </ul>
+            <p className="tt-muted">{alert.saving ? 'Hãy bớt tiết của môn này rồi lưu lại.' : 'Hãy xoá hoặc đổi một tiết khác của môn này trước khi thêm.'}</p>
+          </div>
+        </div>
+        <footer className="tt-dialog-foot"><span />
+          <button ref={ref} type="button" className="btn btn-primary" onClick={onClose}>OK</button>
+        </footer>
+      </div>
+    </div>
+  );
+}
+
 export default function TimetableEditorPage() {
   const { classId } = useParams();
   const navigate = useNavigate();
@@ -69,6 +119,7 @@ export default function TimetableEditorPage() {
   const [end, setEnd] = useState('');
   const [loadError, setLoadError] = useState('');
   const [saveError, setSaveError] = useState(null);
+  const [quotaAlert, setQuotaAlert] = useState(null); // { items, saving } – subjects over periods_per_week
   const [saving, setSaving] = useState(false);
   const [shift, setShift] = useState('all');
   const [editing, setEditing] = useState(null);
@@ -176,6 +227,15 @@ export default function TimetableEditorPage() {
     .filter((g) => g.slots.length);
 
   const setCell = (k, v) => {
+    // Adding a period to a subject that already has its periods per week is refused at once.
+    if (v.subjectId && String(v.subjectId) !== cells[k]?.subjectId) {
+      const s = subjectsById[String(v.subjectId)];
+      const n = Object.entries(cells).filter(([x, c]) => x !== k && c.subjectId === String(v.subjectId)).length;
+      if (s && n >= s.periodsPerWeek) {
+        setQuotaAlert({ saving: false, items: [{ subject: s.name, periods: n, periodsPerWeek: s.periodsPerWeek }] });
+        return;
+      }
+    }
     setTouched((t) => new Set(t).add(k));
     setCells((c) => {
       const next = { ...c };
@@ -187,6 +247,11 @@ export default function TimetableEditorPage() {
 
   async function save() {
     if (rangeError) return;
+    const over = overQuota(data.subjects, cells);
+    if (over.length) {
+      setQuotaAlert({ saving: true, items: over });
+      return;
+    }
     if (total === 0 && !window.confirm(`Mẫu thời khoá biểu đang trống. Lưu sẽ xoá các tiết chưa điểm danh của lớp ${cls.className} từ ${dmy(start)} đến ${dmy(end || cls.schoolYear.endDate)}. Tiếp tục?`)) return;
     setSaving(true);
     setSaveError(null);
@@ -203,7 +268,8 @@ export default function TimetableEditorPage() {
       else toast(`Đã lưu thời khoá biểu lớp ${cls.className} từ ${dmy(r.startDate)} đến ${dmy(r.endDate)}: tạo ${r.generated} tiết${r.kept ? `, giữ ${r.kept} tiết đã điểm danh` : ''}.`);
       await load(r.startDate);
     } catch (err) {
-      setSaveError(err);
+      if (err.code === 'MSG_TIMETABLE_OVER_QUOTA') setQuotaAlert({ saving: true, items: err.details?.items ?? [] });
+      else setSaveError(err);
     } finally {
       setSaving(false);
     }
@@ -422,6 +488,7 @@ export default function TimetableEditorPage() {
           )}
         </aside>
       </div>
+      {quotaAlert && <QuotaDialog alert={quotaAlert} onClose={() => setQuotaAlert(null)} />}
     </div>
   );
 }
