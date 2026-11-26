@@ -5,6 +5,7 @@ import { ERROR_CODES, TEACHING_RULES, USER_STATUS } from './teacher.constants.js
 import { cellLabel, currentYearId, toSchoolYear, toSchoolYearList, toTeachingBoard } from './teacher.format.js';
 import * as queries from './teacher.queries.js';
 import { syncClassTeachers } from '../classes/classGroups.js';
+import { schoolLimits } from '../school-settings/schoolSettings.service.js';
 
 /**
  * Picks the school year and the view range [from, to]. Assignments are date ranges (business-rules §4), so the
@@ -121,6 +122,9 @@ export async function saveTeachingAssignments({ schoolYearId, startDate, endDate
       }
     }
 
+    // Weekly load of the new teachers before the change (school setting "Số tiết giáo viên dạy tối đa / tuần").
+    const loadsBefore = await queries.findMaxWeeklyLoads(teacherIds, start, end, conn);
+
     const clashes = [];
     const blocked = [];
     for (const ch of changes) {
@@ -147,6 +151,19 @@ export async function saveTeachingAssignments({ schoolYearId, startDate, endDate
     }
     if (clashes.length) {
       throw new AppError(409, ERROR_CODES.TIMETABLE_CLASH, 'The new teacher already teaches at those periods.', { items: clashes });
+    }
+    // 26/11/2026: a teacher may not get more periods a week than the school allows. Only a change that raises a
+    // teacher's load above the limit is refused (a teacher already over it can still lose periods).
+    if (teacherIds.length) {
+      const { teacherMaxWeek } = await schoolLimits(conn);
+      const loadsAfter = await queries.findMaxWeeklyLoads(teacherIds, start, end, conn);
+      const names = new Map((await queries.findTeachersWithSubjectIds(teacherIds, conn)).map((t) => [String(t.teacherId), t.fullName]));
+      const over = teacherIds
+        .filter((id) => (loadsAfter.get(String(id)) ?? 0) > teacherMaxWeek && (loadsAfter.get(String(id)) ?? 0) > (loadsBefore.get(String(id)) ?? 0))
+        .map((id) => ({ teacher: names.get(String(id)) ?? String(id), load: loadsAfter.get(String(id)), max: teacherMaxWeek }));
+      if (over.length) {
+        throw new AppError(409, ERROR_CODES.TEACHER_OVER_WEEK_LIMIT, 'A teacher would teach more periods a week than allowed.', { items: over });
+      }
     }
 
     // Business-rules §4 "Class group membership follows the class": the class groups follow the new assignments,

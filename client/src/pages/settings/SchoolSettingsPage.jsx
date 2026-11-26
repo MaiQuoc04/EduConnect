@@ -7,7 +7,9 @@ import '../timetable/timetable.css';
 import './schoolSettings.css';
 
 // "Cài đặt hệ thống" of the School Manager (Dung, 21/11/2026). Groups:
-//   Giáo viên – the teaching load used by automatic scheduling (moved from part "4. Giáo viên" of SCR-80);
+//   Giới hạn số tiết – school-wide limits (26/11/2026, replace the teacher norms): periods a teacher teaches at most in
+//               a week, periods a class has at most in a day and in a week. Checked by automatic scheduling, every
+//               class timetable save (editor, Excel import) and the teaching assignment (SCR-19);
 //   Điểm danh – the time until which a subject teacher can edit the attendance of the day (moved from the System Admin
 //               settings 24/11/2026; business rules §12).
 // The System Admin has its own settings page (/admin/settings, UC-102); these values are the school's.
@@ -16,13 +18,12 @@ import './schoolSettings.css';
 const SECTIONS = [
   {
     group: 'teaching',
-    title: 'Giáo viên',
-    intro: 'Định mức giảng dạy dùng khi xếp tự động phân công và thời khoá biểu.',
+    title: 'Giới hạn số tiết',
+    intro: 'Áp dụng cho toàn trường khi phân công giảng dạy, xếp tự động và lưu thời khoá biểu.',
     fields: [
-      { key: 'norm', label: 'Định mức giáo viên', unit: 'tiết/tuần', help: 'Số tiết một giáo viên dạy trong tuần (Thông tư 05/2025: 17 tiết với giáo viên THPT).' },
-      { key: 'homeroomNorm', label: 'Định mức giáo viên chủ nhiệm', unit: 'tiết/tuần', help: 'Giáo viên chủ nhiệm được giảm tiết; không lớn hơn định mức giáo viên.' },
-      { key: 'maxOver', label: 'Vượt định mức tối đa', unit: 'tiết/tuần', help: 'Xếp tự động không phân công quá định mức cộng số tiết này.' },
-      { key: 'maxPerDay', label: 'Số tiết tối đa một ngày', unit: 'tiết/ngày', help: 'Xếp tự động hạn chế xếp cho một giáo viên quá số tiết này trong một ngày.' },
+      { key: 'teacherMaxWeek', label: 'Số tiết giáo viên dạy tối đa một tuần', unit: 'tiết/tuần', help: 'Định mức 17 tiết/tuần (Thông tư 05/2025), dạy vượt không quá 50 %, tức tối đa 25 tiết/tuần.' },
+      { key: 'classMaxDay', label: 'Số tiết lớp học tối đa một ngày', unit: 'tiết/ngày', help: 'Công văn 4567/BGDĐT-GDPT: học sinh học không quá 7 tiết/ngày, mỗi tiết 45 phút; mỗi buổi tối đa 5 tiết.' },
+      { key: 'classMaxWeek', label: 'Số tiết lớp học tối đa một tuần', unit: 'tiết/tuần', help: 'Học tối thiểu 5 ngày và tối đa 11 buổi/tuần (Công văn 4567). Không lớn hơn số tiết tối đa một ngày nhân 6 ngày.' },
     ],
   },
   {
@@ -52,7 +53,9 @@ function check(form, limits) {
     else values[f.group][f.key] = Number(v);
   }
   const t = values.teaching;
-  if (!problems['teaching.norm'] && !problems['teaching.homeroomNorm'] && t.homeroomNorm > t.norm) problems['teaching.homeroomNorm'] = 'Không được lớn hơn định mức giáo viên.';
+  if (!problems['teaching.classMaxDay'] && !problems['teaching.classMaxWeek'] && t.classMaxWeek > t.classMaxDay * 6) {
+    problems['teaching.classMaxWeek'] = `Không lớn hơn ${t.classMaxDay * 6} (${t.classMaxDay} tiết/ngày × 6 ngày).`;
+  }
   return { problems, values };
 }
 

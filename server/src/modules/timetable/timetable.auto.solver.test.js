@@ -9,7 +9,7 @@ import { assignTeachers, solveTimetable } from './timetable.auto.solver.js';
 const HDTN = '9';
 const MATH = '1';
 const fixed = { subjectId: HDTN, slots: [{ weekday: 1, period: 1, label: 'Chào cờ' }, { weekday: 5, period: 5, label: 'Sinh hoạt lớp' }] };
-const options = { norm: 17, homeroomNorm: 13, maxOver: 4, fixed, seed: 1, timeLimitMs: 300 };
+const options = { teacherMaxWeek: 25, fixed, seed: 1, timeLimitMs: 300 };
 const days = [1, 2, 3, 4, 5].map((weekday) => ({ weekday, periods: [1, 2, 3, 4, 5] }));
 const teacher = (teacherId, subjectIds, extra = {}) => ({ teacherId, subjectIds, homeroom: false, baseLoad: 0, busy: [], ...extra });
 const cls = (classId, homeroomTeacherId) => ({

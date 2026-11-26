@@ -32,14 +32,14 @@ export const PERIOD_TIME_LIMITS = Object.freeze({
 // CT GDPT 2018 (Thông tư 32/2018 sửa bởi 13/2022), Công văn 7291 (sáng ≤ 5, chiều ≤ 3 tiết) and Thông tư 05/2025
 // (17 tiết/tuần, GVCN 13). The School Manager can change every value on the screen before running.
 export const AUTO_LIMITS = Object.freeze({
-  MORNING_MAX: 5, // Công văn 7291: a THPT morning has at most 5 periods
-  AFTERNOON_MAX: 3, // ... and an afternoon at most 3
+  MORNING_MAX: 5, // a session (buổi) has at most 5 periods of 45 minutes
+  AFTERNOON_MAX: 5, // 26/11/2026: was 3; the class limit a day is now the School Manager setting (classMaxDay)
   DAYS_MAX: 6, // at most 6 school days a week (Monday .. Saturday)
   CLASSES_MAX: 200,
-  NORM: 17, // Thông tư 05/2025: THPT teacher
-  HOMEROOM_NORM: 13, // homeroom teacher: 4 periods less
-  MAX_OVER: 4, // ASSUMPTION (school's choice, no legal hard cap): at most 4 periods over the norm
-  MAX_PER_DAY: 4, // soft: a teacher teaches at most 4 periods a day
+  // School-wide limits, defaults of "Cài đặt hệ thống" (Dung, 26/11/2026 – replace the teacher norms):
+  TEACHER_MAX_WEEK: 25, // norm 17 (Thông tư 05/2025) + at most 50 % over it = 25.5, rounded down
+  CLASS_MAX_DAY: 8, // 5 morning + 3 afternoon periods
+  CLASS_MAX_WEEK: 40,
   MAX_PER_SUBJECT_DAY: 2, // hard: a subject at most 2 periods a day in a class
   BUSY_MAX: 3000,
   TIME_LIMIT_SEC: 5, // default search time; 1..30
@@ -60,6 +60,7 @@ export const ERROR_CODES = Object.freeze({
   TIMETABLE_NO_TEACHER: 'MSG_TIMETABLE_NO_TEACHER', // details: { items: [{ subject, from, to, periods }] }
   TIMETABLE_TEACHER_CLASH: 'MSG_TIMETABLE_TEACHER_CLASH', // details: { items: [{ date, period, teacher, otherClass }] }
   TIMETABLE_OVER_QUOTA: 'MSG_TIMETABLE_OVER_QUOTA', // details: { items: [{ subject, periods, periodsPerWeek }] } – more periods than track_subjects
+  TIMETABLE_CLASS_LIMIT: 'MSG_TIMETABLE_CLASS_LIMIT', // details: { days: [{ weekday, periods }], maxDay, periods, maxWeek } – school settings
   TIMETABLES_NOT_READY: 'MSG_TIMETABLES_NOT_READY', // tables timetables / timetable_entries missing on this database
   IMPORT_FILE: 'MSG_IMPORT_FILE',
   IMPORT_TEMPLATE: 'MSG_IMPORT_TEMPLATE', // details: { missing }

@@ -47,6 +47,18 @@ reactions, attachments) is merged into one place after both are on `develop`.
   | 26/11 17:00 – end of day | Quoc fills 5.0 II.3 from the Test Statistics sheets; reports submitted |
   | Weeks 13–14 | Only revising and finishing Reports 6 and 7; no code or test changes |
 
+- **FE-10 / FE-03 period limits replace the teacher norms (26/11/2026, Dung, `feature/fe-10-system-limits` on top of
+  `feature/fe-10-timetable-quota`, not merged yet – lead to review; changes business rules §10):** "Cài đặt hệ thống"
+  (SCR-86) now has three school-wide values instead of the norms: most periods a teacher teaches a week (25), most
+  periods a class has a day (7, Công văn 4567) and a week (38). New `school_settings` keys `teaching.teacher_max_week`,
+  `teaching.class_max_day`, `teaching.class_max_week` (rows written on the first save, no schema change); the old
+  rows `teaching.norm`, `teaching.homeroom_norm`, `teaching.max_over`, `teaching.max_periods_per_day` are no longer
+  read (lead may soft-clean them later). Checked by automatic scheduling (weekly cap, grid day / week, `GRID_DAY_LIMIT`,
+  `GRID_WEEK_LIMIT`; soft rules S1 and S4 removed; afternoon may now have up to 5 periods), every class timetable save
+  (`MSG_TIMETABLE_CLASS_LIMIT`; editor and Excel import) and the teaching assignment SCR-19
+  (`MSG_TEACHER_OVER_WEEK_LIMIT`). The timetable editor gets the class limits and refuses a period that breaks one
+  when it is picked. FE-03 / FE-10 test cases about the norms (5.1–5.3) need updating (Dung).
+
 - **FE-10 periods per week enforced (26/11/2026, Dung, `feature/fe-10-timetable-quota`, not merged yet – lead to
   review; changes business rule §10 "shown but not enforced"):** a subject can no longer get more periods in a class
   timetable than its class type allows (`track_subjects.periods_per_week`). Server: `saveVersion` refuses the pattern

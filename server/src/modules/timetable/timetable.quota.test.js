@@ -3,7 +3,7 @@
 // Run: npm test (node --test, no database). saveVersion calls overQuota before it changes anything.
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
-import { overQuota } from './timetable.quota.js';
+import { classLimitErrors, overQuota } from './timetable.quota.js';
 
 const subjects = [
   { subjectId: 7, code: 'DIA', name: 'Địa lí', periodsPerWeek: 1 },
@@ -27,5 +27,22 @@ describe('overQuota', () => {
   });
   it('compares ids given as numbers or strings', () => {
     assert.equal(overQuota(subjects, [{ subjectId: 7 }, { subjectId: '7' }]).length, 1);
+  });
+});
+
+describe('classLimitErrors (school settings, 26/11/2026)', () => {
+  const limits = { classMaxDay: 8, classMaxWeek: 40 };
+  const day = (weekday, n) => Array.from({ length: n }, (_, i) => entry(weekday, i + 1, 1));
+  it('accepts a week inside both limits', () => {
+    assert.equal(classLimitErrors([...day(1, 8), ...day(2, 8), ...day(3, 8), ...day(4, 8), ...day(5, 8)], limits), null);
+  });
+  it('reports a day over the day limit', () => {
+    assert.deepEqual(classLimitErrors([...day(2, 9), ...day(3, 5)], limits), { days: [{ weekday: 2, periods: 9 }], maxDay: 8, periods: 14, maxWeek: 40 });
+  });
+  it('reports a week over the week limit even when every day fits', () => {
+    const e = [1, 2, 3, 4, 5, 6].flatMap((w) => day(w, 7)); // 42 periods
+    const r = classLimitErrors(e, limits);
+    assert.deepEqual(r.days, []);
+    assert.equal(r.periods, 42);
   });
 });

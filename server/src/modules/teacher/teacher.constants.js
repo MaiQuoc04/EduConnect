@@ -83,4 +83,6 @@ export const ERROR_CODES = Object.freeze({
   TEACHER_NOT_QUALIFIED: 'MSG_TEACHER_NOT_QUALIFIED',
   ASSIGNMENT_IN_TIMETABLE: 'MSG_ASSIGNMENT_IN_TIMETABLE',
   TIMETABLE_CLASH: 'MSG_TIMETABLE_CLASH',
+  // 409 details: { items: [{ teacher, load, max }] } – more periods a week than the school setting (26/11/2026)
+  TEACHER_OVER_WEEK_LIMIT: 'MSG_TEACHER_OVER_WEEK_LIMIT',
 });

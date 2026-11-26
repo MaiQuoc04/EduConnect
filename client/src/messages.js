@@ -4,10 +4,9 @@ import { DEPARTMENT_REASON_TEXT, NAME_REASON_TEXT } from './utils/teacherValidat
 // Add a line here whenever a module introduces a new error code.
 // Field names of the School Manager settings, for MSG_SCHOOL_SETTINGS_INVALID.
 const SCHOOL_SETTING_LABELS = {
-  norm: 'Định mức giáo viên',
-  homeroomNorm: 'Định mức giáo viên chủ nhiệm',
-  maxOver: 'Số tiết vượt định mức tối đa',
-  maxPerDay: 'Số tiết tối đa một ngày',
+  teacherMaxWeek: 'Số tiết giáo viên dạy tối đa / tuần',
+  classMaxDay: 'Số tiết tối đa của lớp học / ngày',
+  classMaxWeek: 'Số tiết tối đa của lớp học / tuần',
   editDeadlineTime: 'Giờ cuối giáo viên bộ môn được sửa điểm danh',
 };
 
@@ -224,6 +223,12 @@ const ERROR_MESSAGES = {
     `Trùng giờ: giáo viên đã có tiết ở lớp khác cùng giờ${className ? ` (khi xếp lớp ${className})` : ''}.`,
   MSG_TIMETABLE_OVER_QUOTA: ({ className, items = [] } = {}) =>
     `Vượt số tiết quy định${className ? ` ở lớp ${className}` : ''}: ${items.map((i) => `${i.subject} ${i.periods} / ${i.periodsPerWeek} tiết`).join('; ')}. Hãy bớt tiết rồi lưu lại.`,
+  MSG_TIMETABLE_CLASS_LIMIT: ({ className, days = [], maxDay, periods, maxWeek } = {}) => {
+    const parts = days.map((d) => `${['Thứ Hai', 'Thứ Ba', 'Thứ Tư', 'Thứ Năm', 'Thứ Sáu', 'Thứ Bảy', 'Chủ nhật'][d.weekday - 1]} ${d.periods} tiết`);
+    const day = parts.length ? `quá ${maxDay} tiết/ngày (${parts.join(', ')})` : '';
+    const week = periods > maxWeek ? `quá ${maxWeek} tiết/tuần (đang có ${periods} tiết)` : '';
+    return `Thời khoá biểu${className ? ` lớp ${className}` : ''} ${[day, week].filter(Boolean).join(' và ')}. Giới hạn đặt ở Cài đặt hệ thống.`;
+  },
   MSG_TIMETABLE_IMPORT_HAS_ERRORS: 'File còn lỗi nên chưa lưu lớp nào. Hãy sửa theo kết quả kiểm tra rồi nhập lại.',
   // FE-10 school calendar (Lịch của trường)
   MSG_SCHOOL_EVENT_NOT_FOUND: 'Không tìm thấy sự kiện này. Sự kiện có thể đã bị xoá.',
@@ -247,7 +252,6 @@ const ERROR_MESSAGES = {
           : field === 'grid' && reason === 'TOO_MANY_DAYS' ? `Một tuần học tối đa ${max} ngày.`
             : field === 'grid' && reason === 'EMPTY' ? 'Khung tuần chưa có tiết nào.'
               : field === 'grid' && reason === 'SUNDAY' ? 'Không xếp học vào Chủ nhật.'
-                : field === 'homeroomNorm' ? 'Định mức GVCN không được lớn hơn định mức chung.'
                   : field === 'fixed' && reason === 'DUPLICATE_SLOT' ? 'Hai ô cố định trùng nhau.'
                     : 'Thiết lập xếp tự động không hợp lệ. Vui lòng kiểm tra lại.',
   MSG_SEMESTER_NOT_FOUND: 'Không tìm thấy học kỳ. Vui lòng tải lại trang.',
@@ -268,7 +272,7 @@ const ERROR_MESSAGES = {
   MSG_PERIOD_TIMES_EMPTY: 'Chưa có tiết học nào trong cơ sở dữ liệu.',
   // School Manager settings (Dung, 21/11/2026)
   MSG_SCHOOL_SETTINGS_INVALID: ({ field, reason, min, max } = {}) =>
-    reason === 'ABOVE_NORM' ? 'Định mức GVCN không được lớn hơn định mức của giáo viên.'
+    reason === 'ABOVE_DAYS' ? `Số tiết tối đa của lớp học / tuần không được lớn hơn ${max} (số tiết / ngày × 6 ngày).`
       : reason === 'RANGE' ? `${SCHOOL_SETTING_LABELS[field] ?? 'Giá trị'} phải là số nguyên từ ${min} đến ${max}.`
         : reason === 'TIME' ? `${SCHOOL_SETTING_LABELS[field] ?? 'Giờ'} phải là giờ hợp lệ (HH:MM) từ ${min} đến ${max}.`
         : `Vui lòng nhập ${(SCHOOL_SETTING_LABELS[field] ?? 'đủ các giá trị').toLowerCase()}.`,
@@ -368,6 +372,9 @@ const ERROR_MESSAGES = {
       .map((i) => `${i.cell} – giáo viên mới đã dạy ${i.items.map((x) => `${x.otherClass} tiết ${x.period} ngày ${formatVnDate(x.date)}`).join(', ')}`)
       .join('; ') +
     '.',
+  MSG_TEACHER_OVER_WEEK_LIMIT: ({ items = [] } = {}) =>
+    `Vượt số tiết giáo viên dạy tối đa: ${items.map((i) => `${i.teacher} sẽ dạy ${i.load} tiết/tuần (tối đa ${i.max})`).join('; ')}. ` +
+    'Hãy chọn giáo viên khác hoặc đổi giới hạn ở Cài đặt hệ thống.',
   MSG_OCCUPATION_TOO_LONG: ({ max } = {}) => `Nghề nghiệp không được vượt quá ${max ?? 100} ký tự.`,
   MSG_ADDRESS_TOO_LONG: ({ max } = {}) => `Địa chỉ không được vượt quá ${max ?? 500} ký tự.`,
   // FE-13 System Administration

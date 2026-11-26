@@ -2,14 +2,14 @@
 // move lessons, put another subject in a cell or change the teacher of a class and subject before "Áp dụng"; every
 // change is checked here against the same rules as the solver and the apply step (business rules §10):
 //   errors (block "Áp dụng", same set as checkDraft() in timetable.auto.js):
-//     teacher not qualified / locked, no teacher for a class and subject, weekly cap (norm + periods over it), the
+//     teacher not qualified / locked, no teacher for a class and subject, weekly cap (school setting "Số tiết giáo viên dạy tối đa / tuần"), the
 //     fixed-slot subject taught by the same teacher in two classes, a cell outside the week grid, two lessons in one
 //     cell of a class, a subject the class does not learn, too many periods of a subject in one day, a teacher marked
 //     busy, a teacher teaching another class at that time (other classes of the run or classes outside the run),
 //     rooms of a subject, periods of a subject not exactly those of the class type, a fixed slot (Chào cờ, Sinh hoạt
 //     lớp) moved;
-//   warnings (soft rules, with the weights of the screen): S1 over the norm, S2 teacher gaps, S3 two periods of a
-//     subject in a day not adjacent, S4 teacher periods a day, S5 a subject packed into one day, S6 heavy subject late,
+//   warnings (soft rules, with the weights of the screen): S2 teacher gaps, S3 two periods of a
+//     subject in a day not adjacent, S5 a subject packed into one day, S6 heavy subject late,
 //     S7 afternoon subject in the morning, S9 homeroom teacher not teaching their class, GAP empty cell before a lesson.
 // Pure function: the context is loaded by timetable.auto.js (loadContext).
 import { countedPeriods, DEFAULT_WEIGHTS, MORNING_LAST } from './timetable.auto.solver.js';
@@ -77,15 +77,10 @@ export function reviewDraft(cfg, ctx, draft) {
   const used = new Set(assign.values());
   const loads = ctx.teachers
     .filter((t) => used.has(t.teacherId))
-    .map((t) => {
-      const norm = t.homeroom ? cfg.homeroomNorm : cfg.norm;
-      const l = load.get(t.teacherId) ?? 0;
-      return { teacherId: t.teacherId, name: t.name, homeroom: t.homeroom, norm, cap: norm + cfg.maxOver, base: t.baseLoad, load: l, over: Math.max(0, l - norm) };
-    })
-    .sort((x, y) => y.over - x.over || y.load - x.load || x.name.localeCompare(y.name, 'vi'));
+    .map((t) => ({ teacherId: t.teacherId, name: t.name, homeroom: t.homeroom, cap: cfg.teacherMaxWeek, base: t.baseLoad, load: load.get(t.teacherId) ?? 0 }))
+    .sort((x, y) => y.load - x.load || x.name.localeCompare(y.name, 'vi'));
   for (const l of loads) {
     if (cfg.mode !== 'TIMETABLE' && l.load > l.cap) errors.push({ code: 'OVER_CAP', teacherId: l.teacherId, load: l.load, cap: l.cap });
-    else if (l.over > 0) warnings.push({ code: 'S1', weight: l.over * W.S1, teacherId: l.teacherId, load: l.load, norm: l.norm });
   }
   // S9: the homeroom teacher teaches nothing in their class.
   for (const c of ctx.classes) {
@@ -216,20 +211,17 @@ export function reviewDraft(cfg, ctx, draft) {
     }
   }
 
-  // Soft rules of the teachers: S2 gaps inside a session, S4 periods a day.
+  // Soft rule of the teachers: S2 gaps inside a session.
   for (const [t, cells] of teacherCells) {
     for (const w of days) {
-      let count = 0;
       for (const sess of [0, 1]) {
         const ps = [...grid].filter((k) => Number(k.split('-')[0]) === w).map((k) => Number(k.split('-')[1])).filter((p) => sessionOf(p) === sess).sort((a, b) => a - b);
         const teach = ps.filter((p) => cells.has(cellKey(w, p)) || ctx.busyWhy?.get(t)?.get(cellKey(w, p)));
-        count += ps.filter((p) => cells.has(cellKey(w, p))).length;
         if (teach.length >= 2) {
           const gaps = ps.filter((p) => p > teach[0] && p < teach[teach.length - 1] && !teach.includes(p)).length;
           if (gaps) warnings.push({ code: 'S2', weight: gaps * W.S2, teacherId: t, weekday: w, count: gaps });
         }
       }
-      if (count > cfg.maxPerDay) warnings.push({ code: 'S4', weight: (count - cfg.maxPerDay) * W.S4, teacherId: t, weekday: w, count, max: cfg.maxPerDay });
     }
   }
   return finish({ errors, warnings, loads });
