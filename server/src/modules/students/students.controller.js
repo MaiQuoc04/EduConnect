@@ -198,10 +198,17 @@ export async function update(req, res) {
 
 // --- UC-10 ---------------------------------------------------------------------------------------------------
 
-// The only key UC-10 accepts. There is no "reason": class_enrollments has no column for it and transfers are not
+// The keys UC-10 accepts. There is no "reason": class_enrollments has no column for it and transfers are not
 // in activity_logs (business-rules §13), so a reason could not be stored; it is rejected like any unknown key
-// instead of being accepted and thrown away.
-const TRANSFER_FIELDS = ['toClassId'];
+// instead of being accepted and thrown away. confirmOverWarning (27/11/2026, FE-04 class size): true once the School
+// Manager confirmed going above the recommended class size.
+const TRANSFER_FIELDS = ['toClassId', 'confirmOverWarning'];
+
+const confirmFlag = (value) => {
+  if (value === undefined) return false;
+  if (typeof value !== 'boolean') throw invalid('confirmOverWarning');
+  return value;
+};
 
 // UC-10 Transfer Student: move a student to another class of the same school year.
 export async function transfer(req, res) {
@@ -217,12 +224,13 @@ export async function transfer(req, res) {
   // A JSON number, as every id the API returns (BIGINT -> Number, db.js).
   const { toClassId } = body;
   if (!Number.isSafeInteger(toClassId) || toClassId < 1) throw invalid('toClassId');
-  res.json(await studentsService.transferStudent(studentId, toClassId));
+  const confirmOverWarning = confirmFlag(body.confirmOverWarning);
+  res.json(await studentsService.transferStudent(studentId, toClassId, { confirmOverWarning }));
 }
 
 // --- UC-11 ---------------------------------------------------------------------------------------------------
 
-const PROMOTE_FIELDS = ['fromSchoolYearId', 'toSchoolYearId', 'groups'];
+const PROMOTE_FIELDS = ['fromSchoolYearId', 'toSchoolYearId', 'groups', 'confirmOverWarning'];
 const PROMOTE_GROUP_FIELDS = ['toClassId', 'studentIds'];
 
 const isId = (value) => Number.isSafeInteger(value) && value >= 1;
@@ -252,6 +260,7 @@ export async function promote(req, res) {
       'The destination school year must differ from the source school year. Use transfer (UC-10) within a year.');
   }
   if (!Array.isArray(groups) || groups.length === 0) throw invalid('groups');
+  const confirmOverWarning = confirmFlag(body.confirmOverWarning);
 
   const seen = new Set();
   const duplicates = new Set();
@@ -281,6 +290,7 @@ export async function promote(req, res) {
     fromSchoolYearId,
     toSchoolYearId,
     groups: groups.map(({ toClassId, studentIds }) => ({ toClassId, studentIds })),
+    confirmOverWarning,
   }));
 }
 
