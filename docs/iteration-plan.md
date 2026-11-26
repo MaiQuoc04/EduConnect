@@ -47,7 +47,22 @@ reactions, attachments) is merged into one place after both are on `develop`.
   | 26/11 17:00 – end of day | Quoc fills 5.0 II.3 from the Test Statistics sheets; reports submitted |
   | Weeks 13–14 | Only revising and finishing Reports 6 and 7; no code or test changes |
 
-- **FE-04 SCR-70 periods message (26/11/2026, Khanh, on `feature/fe-05-group-feed`, not merged):** a wrong
+- **FE-13 / FE-02 fixes merged into `develop` (26/11/2026, Linh, `feature/fe-13-system-administration`, merge
+  `822d3bc`; client `npm run build` and server `npm test` (24/24) pass):**
+  - `ff65dda` (UC-103): the maintenance form with an end before the start returns `BEFORE_START` instead of a 500
+    (the overlap check uses `GREATEST(start, end)` as the upper bound of `tstzrange`).
+  - `21500d6` (UC-07, SCR student list, FE-02 page): every student is listed by default (students without a class
+    this year first, then the classes); the "Chưa xếp lớp" checkbox became one more choice of the enrollment status
+    select; the API takes `placement=ASSIGNED | UNASSIGNED` (the old `unassigned=true` still works); the search also
+    matches the username. Merged after Round 3 (26/11 17:00), so the UC-07 test cases written for the checkbox need
+    checking against the new select. Tell Anh (FE-02 owner). Left over: `.student-list-toggle` in `StudentListPage.css` is unused.
+
+- **FE-08 `baaa3a5` merged into `develop` (25/11/2026, Quoc, merge `e6f8833`):** Anh's commit of 19/11 removes
+  "Qua anh, chị, em" from linking a parent to a student (FE-02 page `UpdateStudentRelationshipPage`); only the phone
+  lookup remains. Client only.
+
+- **FE-04 SCR-70 periods message (26/11/2026, Khanh, on `feature/fe-05-group-feed`, merged into `develop` 26/11, merge
+  `cef24c8`; merged after Round 3, so the UC-26 test cases may need the new messages):** a wrong
   "Số tiết/tuần" now shows its reason under the box (empty / not a whole number / 0 / above 10; an empty box only
   after leaving it or a save attempt), the column header shows "(1–10)", saving with wrong values names the subjects
   ("Còn n môn …") and focuses the first one, the footer total notes the rows it skips. Client only; the server rule
@@ -71,7 +86,7 @@ reactions, attachments) is merged into one place after both are on `develop`.
     screens.md, permissions.md; SCR-85 Update Contact Information of FE-13 added to screens.md, it was only in R3).
     Owed (Dung): replace "id pending" in R3 10.1.11 and in the UC / screen lists, add the screenshot; add the
     `school_settings` table to R4 I.3 (56 tables). Owed (Linh): R4 I.2 lists 22 packages, now 23 (`school-settings`).
-  - Still not merged: `feature/fe-08-school-feed` (`baaa3a5`, Anh, 19/11).
+  - Still not merged: `feature/fe-08-school-feed` (`baaa3a5`, Anh, 19/11) – merged 25/11, `e6f8833`.
 
 - **FE-13 merged into `develop` (24/11/2026, Quoc, `feature/fe-13-system-administration`, merge `a9c656e`;
   client `npm run build` and server `npm test` (21/21) pass; Linh's work of 22–24/11 below):** School Manager manages student / teacher / parent accounts, "Thêm vai trò", menu "Quản lý tài khoản",
