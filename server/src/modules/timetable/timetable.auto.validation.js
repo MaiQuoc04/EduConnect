@@ -29,7 +29,7 @@ const idMap = (v, field, min, max) => {
   return out;
 };
 
-// norm, homeroomNorm, maxOver and maxPerDay are no longer sent: they are the School Manager settings
+// The teacher and class limits are not sent: they are the School Manager settings
 // (school-settings module, Dung 21/11/2026) and timetable.auto.js reads them on every run and apply.
 const FIELDS = ['schoolYearId', 'semesterId', 'classIds', 'mode', 'keepAssignments', 'grid', 'periods', 'maxPerSubjectDay', 'rooms', 'busy', 'heavySubjectIds', 'afternoonSubjectIds', 'fixed', 'weights',
   'seed', 'timeLimitSec'];
@@ -86,6 +86,7 @@ export function autoConfig(b) {
   if (b.weights !== undefined && b.weights !== null) {
     if (!isPlainObject(b.weights)) throw bad('weights', 'FORMAT');
     for (const [k, v] of Object.entries(b.weights)) {
+      if (k === 'S1' || k === 'S4') continue; // removed with the teacher norms (26/11/2026); old saved settings still send them
       if (!(k in DEFAULT_WEIGHTS)) throw bad('weights', 'UNKNOWN');
       weights[k] = int(v, 'weights', 0, 100);
     }

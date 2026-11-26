@@ -58,6 +58,98 @@ function CellEditor({ value, subjects, label, alignRight, onChange, onClose }) {
   );
 }
 
+// Periods of each subject in the pattern against track_subjects.periods_per_week. Fewer periods are allowed (the
+// panel shows "Thiếu"); more are refused here and by the server (MSG_TIMETABLE_OVER_QUOTA, 26/11/2026, Dung).
+function overQuota(subjects, cells) {
+  const count = {};
+  for (const v of Object.values(cells)) if (v.subjectId) count[v.subjectId] = (count[v.subjectId] ?? 0) + 1;
+  return subjects
+    .filter((s) => (count[String(s.subjectId)] ?? 0) > s.periodsPerWeek)
+    .map((s) => ({ subject: s.name, periods: count[String(s.subjectId)], periodsPerWeek: s.periodsPerWeek }));
+}
+
+// Days with more periods than classMaxDay and the week total against classMaxWeek (school settings "Cài đặt hệ
+// thống", 26/11/2026). Same rule as the server (MSG_TIMETABLE_CLASS_LIMIT). null when the pattern fits.
+function classLimit(cells, limits) {
+  if (!limits) return null;
+  const byDay = {};
+  let periods = 0;
+  for (const [k, v] of Object.entries(cells)) {
+    if (!v.subjectId) continue;
+    const w = Number(k.split('|')[0]);
+    byDay[w] = (byDay[w] ?? 0) + 1;
+    periods += 1;
+  }
+  const days = Object.entries(byDay).filter(([, n]) => n > limits.classMaxDay).map(([w, n]) => ({ weekday: Number(w), periods: n }));
+  if (!days.length && periods <= limits.classMaxWeek) return null;
+  return { days, maxDay: limits.classMaxDay, periods, maxWeek: limits.classMaxWeek };
+}
+
+// The text of the blocking dialog: subjects over their periods per week, or the class over its limits.
+// A subject over its periods per week is only a warning (27/11/2026): the period is added, and saving asks first.
+const subjectAlert = (saving, items, onConfirm) => ({
+  warn: true,
+  onConfirm,
+  label: 'Số tiết theo loại lớp',
+  title: saving ? 'Vẫn lưu thời khoá biểu?' : 'Môn vượt số tiết quy định',
+  intro: saving ? 'Có môn vượt số tiết quy định trong một tuần:' : 'Đã thêm tiết, nhưng môn này vượt số tiết quy định trong một tuần:',
+  lines: items.map((i) => ({ key: i.subject, strong: i.subject, text: `: ${i.periods} / ${i.periodsPerWeek} tiết${i.periods > i.periodsPerWeek ? ` (thừa ${i.periods - i.periodsPerWeek})` : ''}` })),
+  hint: saving ? 'Bạn có thể quay lại bớt tiết, hoặc vẫn lưu như hiện tại.' : 'Đây chỉ là cảnh báo; nếu thêm nhầm, hãy xoá tiết vừa thêm.',
+});
+const classAlert = (saving, l) => ({
+  label: 'Giới hạn số tiết của lớp',
+  title: saving ? 'Không thể lưu thời khoá biểu' : 'Không thể thêm tiết',
+  intro: saving ? 'Thời khoá biểu của lớp vượt giới hạn của nhà trường:' : 'Thêm tiết này thì lớp vượt giới hạn của nhà trường:',
+  lines: [
+    ...l.days.map((d) => ({ key: `d${d.weekday}`, strong: WEEKDAY_LONG[d.weekday - 1], text: `: ${d.periods} tiết (tối đa ${l.maxDay} tiết/ngày)` })),
+    ...(l.periods > l.maxWeek ? [{ key: 'week', strong: 'Cả tuần', text: `: ${l.periods} tiết (tối đa ${l.maxWeek} tiết/tuần)` }] : []),
+  ],
+  hint: saving ? 'Hãy bớt tiết rồi lưu lại. Giới hạn đặt ở Cài đặt hệ thống.' : 'Hãy chọn ô ở ngày khác hoặc bớt tiết. Giới hạn đặt ở Cài đặt hệ thống.',
+});
+
+// Blocking message with one button.
+function LimitDialog({ alert, onClose }) {
+  const ref = useRef(null);
+  useEffect(() => {
+    const onKey = (e) => e.key === 'Escape' && onClose(); // Enter presses the focused button
+    window.addEventListener('keydown', onKey);
+    ref.current?.focus();
+    return () => window.removeEventListener('keydown', onKey);
+  }, [onClose]);
+  return (
+    <div className="tt-overlay" onClick={onClose}>
+      <div className="tt-dialog tt-dialog-sm" role="alertdialog" aria-modal="true" aria-labelledby="tt-quota-title"
+        aria-describedby="tt-quota-body" onClick={(e) => e.stopPropagation()}>
+        <header className="tt-dialog-head">
+          <div>
+            <span className="label-upper">{alert.label}</span>
+            <h2 id="tt-quota-title" className="tt-dialog-title">{alert.title}</h2>
+          </div>
+          <button type="button" className="tt-navbtn is-plain" onClick={onClose} aria-label="Đóng"><Icon name="close" size="sm" /></button>
+        </header>
+        <div className="tt-dialog-body tt-quota-alert" id="tt-quota-body">
+          <Icon name={alert.warn ? 'warning' : 'cancel'} filled className={`tt-quota-icon${alert.warn ? ' is-warn' : ''}`} />
+          <div>
+            <p>{alert.intro}</p>
+            <ul>{alert.lines.map((i) => <li key={i.key}><strong>{i.strong}</strong>{i.text}</li>)}</ul>
+            <p className="tt-muted">{alert.hint}</p>
+          </div>
+        </div>
+        <footer className="tt-dialog-foot"><span />
+          {alert.onConfirm ? (
+            <span className="tt-dialog-actions">
+              <button ref={ref} type="button" className="btn btn-secondary" onClick={onClose}>Quay lại sửa</button>
+              <button type="button" className="btn btn-primary" onClick={alert.onConfirm}>Vẫn lưu</button>
+            </span>
+          ) : (
+            <button ref={ref} type="button" className="btn btn-primary" onClick={onClose}>OK</button>
+          )}
+        </footer>
+      </div>
+    </div>
+  );
+}
+
 export default function TimetableEditorPage() {
   const { classId } = useParams();
   const navigate = useNavigate();
@@ -69,6 +161,7 @@ export default function TimetableEditorPage() {
   const [end, setEnd] = useState('');
   const [loadError, setLoadError] = useState('');
   const [saveError, setSaveError] = useState(null);
+  const [quotaAlert, setQuotaAlert] = useState(null); // dialog text: subjectAlert() / classAlert()
   const [saving, setSaving] = useState(false);
   const [shift, setShift] = useState('all');
   const [editing, setEditing] = useState(null);
@@ -176,6 +269,24 @@ export default function TimetableEditorPage() {
     .filter((g) => g.slots.length);
 
   const setCell = (k, v) => {
+    // A period over the subject's periods per week is added with a warning (27/11/2026 – no longer refused).
+    let overWarn = null;
+    if (v.subjectId && String(v.subjectId) !== cells[k]?.subjectId) {
+      const s = subjectsById[String(v.subjectId)];
+      const n = Object.entries(cells).filter(([x, c]) => x !== k && c.subjectId === String(v.subjectId)).length;
+      if (s && n >= s.periodsPerWeek) overWarn = subjectAlert(false, [{ subject: s.name, periods: n + 1, periodsPerWeek: s.periodsPerWeek }]);
+    }
+    // A new period in an empty cell must keep the class inside its limits a day and a week.
+    if (v.subjectId && !cells[k]?.subjectId) {
+      const l = classLimit({ ...cells, [k]: { subjectId: String(v.subjectId) } }, data.limits);
+      const w = Number(k.split('|')[0]);
+      // Only what this period breaks: its own day, or the week.
+      const days = l ? l.days.filter((d) => d.weekday === w) : [];
+      if (l && (days.length || l.periods > l.maxWeek)) {
+        setQuotaAlert(classAlert(false, { ...l, days }));
+        return;
+      }
+    }
     setTouched((t) => new Set(t).add(k));
     setCells((c) => {
       const next = { ...c };
@@ -183,10 +294,21 @@ export default function TimetableEditorPage() {
       else delete next[k];
       return next;
     });
+    if (overWarn) setQuotaAlert(overWarn);
   };
 
-  async function save() {
+  async function save(confirmedOver = false) {
     if (rangeError) return;
+    const limit = classLimit(cells, data.limits);
+    if (limit) {
+      setQuotaAlert(classAlert(true, limit));
+      return;
+    }
+    const over = overQuota(data.subjects, cells);
+    if (over.length && !confirmedOver) {
+      setQuotaAlert(subjectAlert(true, over, () => { setQuotaAlert(null); save(true); }));
+      return;
+    }
     if (total === 0 && !window.confirm(`Mẫu thời khoá biểu đang trống. Lưu sẽ xoá các tiết chưa điểm danh của lớp ${cls.className} từ ${dmy(start)} đến ${dmy(end || cls.schoolYear.endDate)}. Tiếp tục?`)) return;
     setSaving(true);
     setSaveError(null);
@@ -203,7 +325,8 @@ export default function TimetableEditorPage() {
       else toast(`Đã lưu thời khoá biểu lớp ${cls.className} từ ${dmy(r.startDate)} đến ${dmy(r.endDate)}: tạo ${r.generated} tiết${r.kept ? `, giữ ${r.kept} tiết đã điểm danh` : ''}.`);
       await load(r.startDate);
     } catch (err) {
-      setSaveError(err);
+      if (err.code === 'MSG_TIMETABLE_CLASS_LIMIT' && err.details) setQuotaAlert(classAlert(true, err.details));
+      else setSaveError(err);
     } finally {
       setSaving(false);
     }
@@ -234,7 +357,7 @@ export default function TimetableEditorPage() {
         {!data.ended && (
           <div className="tt-head-actions">
             <button type="button" className="btn btn-secondary" onClick={cancel} disabled={saving}>{dirty ? 'Huỷ thay đổi' : 'Huỷ'}</button>
-            <button type="button" className="btn btn-primary" disabled={saving || !!rangeError || (!creating && !dirty)} onClick={save}
+            <button type="button" className="btn btn-primary" disabled={saving || !!rangeError || (!creating && !dirty)} onClick={() => save()}
               title={rangeError || (!creating && !dirty ? 'Chưa có thay đổi nào để lưu' : undefined)}>
               <Icon name={creating ? 'done_all' : 'check'} size="sm" /> {saving ? 'Đang lưu…' : creating ? 'Lưu TKB' : 'Lưu thay đổi'}
             </button>
@@ -422,6 +545,7 @@ export default function TimetableEditorPage() {
           )}
         </aside>
       </div>
+      {quotaAlert && <LimitDialog alert={quotaAlert} onClose={() => setQuotaAlert(null)} />}
     </div>
   );
 }

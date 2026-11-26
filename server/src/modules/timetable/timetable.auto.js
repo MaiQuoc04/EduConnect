@@ -12,9 +12,9 @@ import { AppError, badRequest, notFound } from '../../utils/AppError.js';
 import { syncClassTeachers } from '../classes/classGroups.js';
 import * as teacherQueries from '../teacher/teacher.queries.js';
 import { assignTeachers, countedPeriods, MORNING_LAST, solveTimetable } from './timetable.auto.solver.js';
-import { teachingLoad } from '../school-settings/schoolSettings.service.js';
+import { schoolLimits } from '../school-settings/schoolSettings.service.js';
 import { reviewDraft } from './timetable.auto.review.js';
-import { AUTO_LIMITS, ERROR_CODES } from './timetable.constants.js';
+import { AUTO_LIMITS, ERROR_CODES, normOf } from './timetable.constants.js';
 import { internals } from './timetable.service.js';
 
 const conflict = (code, message, details) => new AppError(409, code, message, details);
@@ -73,7 +73,7 @@ export function autoOptions({ schoolYearId }) {
          GROUP BY t.teacher_id, u.full_name, t.teacher_code ORDER BY u.full_name`,
       ),
       internals.timeSlots(),
-      teachingLoad(),
+      schoolLimits(),
     ]);
     // Defaults by code / name (the School Manager changes them on the screen).
     const byCode = (codes) => subjects.filter((s) => codes.includes(String(s.code).toUpperCase())).map((s) => String(s.subjectId));
@@ -91,7 +91,7 @@ export function autoOptions({ schoolYearId }) {
       limits: AUTO_LIMITS,
       defaults: {
         grid: [1, 2, 3, 4, 5].map((w) => ({ weekday: w, morning: 5, afternoon: w === 2 || w === 4 ? 2 : 0 })),
-        ...teaching, // norm, homeroomNorm, maxOver, maxPerDay: School Manager settings, read only on this screen
+        ...teaching, // teacherMaxWeek, classMaxDay, classMaxWeek: School Manager settings, read only on this screen
         maxPerSubjectDay: AUTO_LIMITS.MAX_PER_SUBJECT_DAY,
         heavySubjectIds: byCode(['TOAN', 'VAN', 'ANH']),
         afternoonSubjectIds: subjects.filter((s) => /^chuyên đề/i.test(s.name)).map((s) => String(s.subjectId)),
@@ -237,6 +237,10 @@ function preCheck(cfg, ctx) {
   const inGrid = new Set(days.flatMap((d) => d.periods.map((p) => `${d.weekday}-${p}`)));
   const outside = fixedSlots.filter((f) => !inGrid.has(`${f.weekday}-${f.period}`));
   if (outside.length) errors.push({ code: 'FIXED_OUTSIDE_GRID', slots: outside });
+  // The week grid must fit the school's class limits ("Cài đặt hệ thống", 26/11/2026).
+  const longDays = days.filter((d) => d.periods.length > cfg.classMaxDay).map((d) => ({ weekday: d.weekday, periods: d.periods.length }));
+  if (longDays.length) errors.push({ code: 'GRID_DAY_LIMIT', days: longDays, max: cfg.classMaxDay });
+  if (cells > cfg.classMaxWeek) errors.push({ code: 'GRID_WEEK_LIMIT', cells, max: cfg.classMaxWeek });
 
   const teacherById = new Map(ctx.teachers.map((t) => [t.teacherId, t]));
   const qualified = (sid) => ctx.teachers.filter((t) => t.status === 'ACTIVE' && t.subjectIds.includes(sid));
@@ -300,12 +304,12 @@ function preCheck(cfg, ctx) {
         const s = c.subjects.find((x) => x.subjectId === sid);
         return n + (s ? countedPeriods(sid, s.periods, cfg) : 0);
       }, 0);
-      const capacity = q.reduce((n, t) => n + Math.max(0, (t.homeroom ? cfg.homeroomNorm : cfg.norm) + cfg.maxOver - t.baseLoad), 0);
+      const capacity = q.reduce((n, t) => n + Math.max(0, cfg.teacherMaxWeek - t.baseLoad), 0);
       if (!keepOrFixed && counted > capacity) {
-        const avg = cfg.norm;
         errors.push({ code: 'NOT_ENOUGH_TEACHERS', subjectId: sid, subject: ctx.subjectName.get(sid), need: counted, capacity,
-          short: counted - capacity, teachersMore: Math.ceil((counted - capacity) / avg), teachers: q.length });
-      } else if (!keepOrFixed && counted > q.reduce((n, t) => n + Math.max(0, (t.homeroom ? cfg.homeroomNorm : cfg.norm) - t.baseLoad), 0)) {
+          short: counted - capacity, teachersMore: Math.ceil((counted - capacity) / cfg.teacherMaxWeek), teachers: q.length });
+      } else if (!keepOrFixed && counted > q.reduce((n, t) => n + Math.max(0, normOf(cfg, t.homeroom) - t.baseLoad), 0)) {
+        // Warning only (27/11/2026): some teacher will have to teach more than "nên dạy".
         warnings.push({ code: 'OVER_NORM_NEEDED', subjectId: sid, subject: ctx.subjectName.get(sid), need: counted });
       }
     }
@@ -330,10 +334,7 @@ function preCheck(cfg, ctx) {
 }
 
 const solverOptions = (cfg) => ({
-  norm: cfg.norm,
-  homeroomNorm: cfg.homeroomNorm,
-  maxOver: cfg.maxOver,
-  maxPerDay: cfg.maxPerDay,
+  teacherMaxWeek: cfg.teacherMaxWeek,
   maxPerSubjectDay: cfg.maxPerSubjectDay,
   rooms: cfg.rooms,
   heavy: cfg.heavySubjectIds,
@@ -348,8 +349,8 @@ const solverOptions = (cfg) => ({
 
 export function runAuto(input) {
   return internals.guard(async () => {
-    // Teaching load (norms, periods over the norm, periods a day): the School Manager settings, never the request.
-    const teaching = await teachingLoad();
+    // Teacher and class limits ("Cài đặt hệ thống" of the School Manager), never the request.
+    const teaching = await schoolLimits();
     const cfg = { ...input, ...teaching };
     const ctx = await loadContext(cfg);
     const check = preCheck(cfg, ctx);
@@ -408,11 +409,11 @@ export function runAuto(input) {
     const teacherLoads = ctx.teachers
       .filter((t) => used.has(t.teacherId))
       .map((t) => {
-        const norm = t.homeroom ? cfg.homeroomNorm : cfg.norm;
         const l = load.get(t.teacherId) ?? 0;
-        return { teacherId: t.teacherId, name: t.name, homeroom: t.homeroom, norm, base: t.baseLoad, load: l, over: Math.max(0, l - norm) };
+        const norm = normOf(cfg, t.homeroom);
+        return { teacherId: t.teacherId, name: t.name, homeroom: t.homeroom, norm, cap: cfg.teacherMaxWeek, base: t.baseLoad, load: l, over: Math.max(0, l - norm) };
       })
-      .sort((x, y) => y.over - x.over || y.load - x.load || x.name.localeCompare(y.name, 'vi'));
+      .sort((x, y) => y.load - x.load || x.name.localeCompare(y.name, 'vi'));
 
     return {
       ok: true,
@@ -460,7 +461,7 @@ function editInfo(ctx) {
 
 export function checkAuto({ config, draft }) {
   return internals.guard(async () => {
-    const cfg = { ...config, ...(await teachingLoad()) };
+    const cfg = { ...config, ...(await schoolLimits()) };
     const ctx = await loadContext(cfg);
     return { stamp: ctx.stamp, ...reviewDraft(cfg, ctx, draft) };
   });
@@ -509,7 +510,7 @@ function checkDraft(cfg, ctx, draft) {
     for (const [t, l] of load) {
       const tt = teacherById.get(t);
       if (!tt) continue;
-      const cap = (tt.homeroom ? cfg.homeroomNorm : cfg.norm) + cfg.maxOver;
+      const cap = cfg.teacherMaxWeek;
       if (l > cap && [...assign.values()].includes(t)) throw fail('OVER_CAP', { teacher: tt.name, load: l, cap });
     }
   }
@@ -574,7 +575,7 @@ export function applyAuto({ config, stamp, confirmOverwrite, draft }, user) {
   return internals.guard(() =>
     withTransaction(async (db) => {
       // Re-checked with the settings in force now (they may have changed since the draft was made).
-      const cfg = { ...config, ...(await teachingLoad(db)) };
+      const cfg = { ...config, ...(await schoolLimits(db)) };
       // One run at a time per year: lock its classes (SCR-19 saves lock them too).
       await teacherQueries.lockClassesOfYear(cfg.schoolYearId, db);
       const ctx = await loadContext(cfg, db);

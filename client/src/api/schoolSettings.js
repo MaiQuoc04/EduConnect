@@ -7,7 +7,7 @@ export async function getSchoolSettings() {
   return data;
 }
 
-// teaching: { norm, homeroomNorm, maxOver, maxPerDay }, attendance: { editDeadlineTime: 'HH:MM' } (each optional);
+// teaching: { teacherMaxWeek, classMaxDay, classMaxWeek }, attendance: { editDeadlineTime: 'HH:MM' } (each optional);
 // stamp from the last read (409 MSG_SCHOOL_SETTINGS_CHANGED)
 export async function saveSchoolSettings({ teaching, attendance, stamp }) {
   const { data } = await api.put('/school-settings', { teaching, attendance, stamp });

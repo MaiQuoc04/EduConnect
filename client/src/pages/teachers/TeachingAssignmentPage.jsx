@@ -120,6 +120,7 @@ export default function TeachingAssignmentPage() {
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState(null);
   const [saveError, setSaveError] = useState(null);
+  const [normNotice, setNormNotice] = useState([]); // teachers over "nên dạy" after the last save (warning only)
   const [saving, setSaving] = useState(false);
 
   const load = useCallback(async (params = {}) => {
@@ -216,6 +217,7 @@ export default function TeachingAssignmentPage() {
   async function handleSave() {
     setSaving(true);
     setSaveError(null);
+    setNormNotice([]);
     try {
       const data = await saveTeachingAssignments({
         schoolYearId: Number(board.schoolYear.id),
@@ -229,6 +231,7 @@ export default function TeachingAssignmentPage() {
         })),
       });
       setBoard(data);
+      setNormNotice(data.normWarnings ?? []);
       setDraft({});
       setPicker(null);
       toast(`Đã lưu ${changes.length} thay đổi phân công, áp dụng từ ${formatDate(data.from)} đến ${formatDate(data.to)}.`);
@@ -514,6 +517,15 @@ export default function TeachingAssignmentPage() {
 
           {editable && (
             <div className="hr-savebar">
+              {normNotice.length > 0 && (
+                <div className="notice ta-norm-notice" role="status">
+                  <Icon name="info" size="sm" />
+                  <span>
+                    Đã lưu. Vượt số tiết nên dạy: {normNotice.map((n) => `${n.teacher} ${n.load}/${n.norm} tiết/tuần${n.homeroom ? ' (GVCN)' : ''}`).join('; ')}. Vẫn trong mức tối đa nên không bị chặn.
+                  </span>
+                  <button type="button" className="hr-inline-btn" onClick={() => setNormNotice([])}>Ẩn</button>
+                </div>
+              )}
               {saveError && (
                 <div className="form-error ta-save-error" role="alert">
                   <Icon name="error" size="sm" /><span>{saveError.text}</span>

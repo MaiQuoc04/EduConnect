@@ -48,7 +48,9 @@ function checkRows(result) {
     }
   }
   for (const c of result.classes.filter((x) => x.ok)) {
-    out.push({ key: `ok${c.classId}`, className: c.className, when: `${c.periodsPerWeek} tiết/tuần`, subject: '—', ok: true, generated: c.generated });
+    // A subject over its periods per week is saved with a warning (27/11/2026).
+    const over = (c.overQuota ?? []).map((i) => `${i.subject} ${i.periods}/${i.periodsPerWeek} tiết (thừa ${i.periods - i.periodsPerWeek})`);
+    out.push({ key: `ok${c.classId}`, className: c.className, when: `${c.periodsPerWeek} tiết/tuần`, subject: '—', ok: true, generated: c.generated, warn: over });
   }
   return out;
 }
@@ -203,7 +205,12 @@ export function ImportDialog({ open, onClose, onDone, years, today, initialYearI
                         <td>{r.when}</td>
                         <td><span className={r.subjectBad ? 'tt-wavy' : ''}>{r.subject}</span></td>
                         <td>
-                          {r.ok ? <span className="tt-muted">{r.generated} tiết sẽ được tạo</span> : (
+                          {r.ok ? (
+                            <>
+                              <span className="tt-muted">{r.generated} tiết sẽ được tạo</span>
+                              {r.warn?.length > 0 && <span className="tt-pen-note tt-off"><Icon name="warning" size="sm" />Vượt số tiết quy định: {r.warn.join('; ')}</span>}
+                            </>
+                          ) : (
                             <>
                               {r.teacher && <span className="tt-wavy">{r.teacher}</span>}
                               {r.notes.map((n, i) => <span key={i} className="tt-pen-note"><Icon name="edit" size="sm" />{n}</span>)}

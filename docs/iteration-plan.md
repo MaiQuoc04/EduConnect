@@ -66,6 +66,33 @@ reactions, attachments) is merged into one place after both are on `develop`.
   | 26/11 17:00 – end of day | Quoc fills 5.0 II.3 from the Test Statistics sheets; reports submitted |
   | Weeks 13–14 | Only revising and finishing Reports 6 and 7; no code or test changes |
 
+- **FE-10 / FE-03 period limits replace the teacher norms (26/11/2026, Dung, `feature/fe-10-system-limits` on top of
+  `feature/fe-10-timetable-quota`, not merged yet – lead to review; changes business rules §10):** "Cài đặt hệ thống"
+  (SCR-86) now has three school-wide values instead of the norms: most periods a teacher teaches a week (25), most
+  periods a class has a day (7, Công văn 4567) and a week (38). New `school_settings` keys `teaching.teacher_max_week`,
+  `teaching.class_max_day`, `teaching.class_max_week` (rows written on the first save, no schema change); the old
+  rows `teaching.norm`, `teaching.homeroom_norm`, `teaching.max_over`, `teaching.max_periods_per_day` are no longer
+  read (lead may soft-clean them later). Checked by automatic scheduling (weekly cap, grid day / week, `GRID_DAY_LIMIT`,
+  `GRID_WEEK_LIMIT`; soft rules S1 and S4 removed; afternoon may now have up to 5 periods), every class timetable save
+  (`MSG_TIMETABLE_CLASS_LIMIT`; editor and Excel import) and the teaching assignment SCR-19
+  (`MSG_TEACHER_OVER_WEEK_LIMIT`). The timetable editor gets the class limits and refuses a period that breaks one
+  when it is picked. FE-03 / FE-10 test cases about the norms (5.1–5.3) need updating (Dung).
+  27/11/2026: built-in "nên dạy" 17 periods a week, homeroom teacher 13 (Thông tư 05/2025, not a setting) – warning
+  only (auto scheduling loads / `OVER_NORM`, SCR-19 notice after saving).
+  27/11/2026: a subject over its periods per week (`feature/fe-10-timetable-quota`) is now a warning only – editor
+  warning + "Quay lại sửa / Vẫn lưu" on save, server returns `overQuota`, import shows it; class and teacher limits
+  still block.
+
+- **FE-10 periods per week enforced (26/11/2026, Dung, `feature/fe-10-timetable-quota`, not merged yet – lead to
+  review; changes business rule §10 "shown but not enforced"):** a subject can no longer get more periods in a class
+  timetable than its class type allows (`track_subjects.periods_per_week`). Server: `saveVersion` refuses the pattern
+  with `MSG_TIMETABLE_OVER_QUOTA` (400, `details.items`), so the editor (UC-71 / UC-73), the Excel import (UC-72, the
+  class is reported with the message) and the automatic scheduling apply are all covered; pure check in
+  `timetable.quota.js` with unit tests (`timetable.quota.test.js`). Client (SCR-28 / SCR-30): picking a subject that
+  already has its periods, or saving a pattern over the quota, opens a blocking dialog with one OK button; the server
+  error opens the same dialog. Fewer periods are still allowed. Merged after Round 3, so FE-10 / BF-04 test cases
+  need one more case each (Dung).
+
 - **FE-13 / FE-02 fixes merged into `develop` (26/11/2026, Linh, `feature/fe-13-system-administration`, merge
   `822d3bc`; client `npm run build` and server `npm test` (24/24) pass):**
   - `ff65dda` (UC-103): the maintenance form with an end before the start returns `BEFORE_START` instead of a 500

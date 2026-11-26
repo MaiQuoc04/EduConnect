@@ -610,8 +610,12 @@ Boundaries that are easy to get wrong:
   - Two School Managers on the same class: a save made from an editor opened before someone else's save is refused
     (`MSG_TIMETABLE_STALE`, reload first). An empty pattern is allowed and removes the periods without attendance of
     the range (the screen asks first). A school year that has ended is read only (no create / update / import).
-  - Subjects must be subjects of the class type for that year (`track_subjects`); one subject per period. The number
-    of periods per subject is shown against `track_subjects.periods_per_week` but not enforced (ASSUMPTION).
+  - Subjects must be subjects of the class type for that year (`track_subjects`); one subject per period. More
+    periods of a subject in the weekly pattern than `track_subjects.periods_per_week` is a **warning only** (Dung,
+    26/11/2026 refused it, 27/11/2026 changed to a warning): the editor adds the period and shows a warning, and
+    saving asks "Quay lại sửa / Vẫn lưu"; the server saves and returns the subjects over it in `overQuota` (the Excel
+    import shows them on the class row). `MSG_TIMETABLE_OVER_QUOTA` is no longer thrown. Fewer periods are allowed
+    (shown as "Thiếu n"). Automatic scheduling still places exactly the periods of each subject.
   - ASSUMPTION: lessons are Monday–Saturday (no Sunday); periods come from `time_slots`; no holiday calendar yet –
     SM shortens the range or changes the pattern for a holiday week.
   - Import (UC-72): one .xlsx, one row per lesson (class, weekday 2–7, period, subject code or name, room) for one or
@@ -683,21 +687,37 @@ Boundaries that are easy to get wrong:
   only, timetable only (uses the running assignments). The server makes a **draft**; nothing is saved until "Áp dụng".
   - Range: from today (or the semester's first day) to the semester's last day. New assignments run from that day to
     the end of the school year (one teacher per class and subject); history before it is kept (same code as SCR-19).
-  - Week grid (default 5 mornings × 5 + Tuesday and Thursday afternoons × 2 = 29 cells; morning ≤ 5, afternoon ≤ 3,
-    ≤ 6 days – Công văn 7291). Periods per week from `track_subjects`, changeable for the semester being scheduled
+  - Week grid (default 5 mornings × 5 + Tuesday and Thursday afternoons × 2 = 29 cells; a session ≤ 5 periods,
+    ≤ 6 days; a day and the whole grid within the class limits below). Periods per week from `track_subjects`, changeable for the semester being scheduled
     (History: 1 in semester I, 2 in semester II). Fixed cells: Chào cờ (Monday period 1) and Sinh hoạt lớp (Friday
     period 5) taken from HĐTN, a different teacher in every class (the homeroom teacher first), never a teacher who
-    teaches a class outside the run at a fixed cell (25/11/2026); they do not count towards the norm.
-  - Norm 17 periods/week, homeroom teacher 13 (Thông tư 05/2025), at most 4 over (ASSUMPTION: school's choice).
+    teaches a class outside the run at a fixed cell (25/11/2026); they do not count towards the teacher's load.
+  - **Period limits (26/11/2026, Dung – replace the norms; no separate norm for homeroom teachers, no periods over a
+    norm, no teacher limit a day):** School Manager settings "Cài đặt hệ thống" (SCR-86, UC-133), one value for the
+    whole school: most periods a teacher teaches a week (default 25 = norm 17 of Thông tư 05/2025 + at most 50 % over
+    it, 25.5 rounded down), most periods a class has a day (default 7 – Công văn 4567/BGDĐT-GDPT 2025: at most 7
+    periods of 45 minutes a day, at least 5 days and at most 11 sessions a week) and a week (default 38, ASSUMPTION:
+    the dispatch sets no weekly cap – 5 days × 7 + 3; at most the day limit × 6). The School Manager may lower these
+    values but not raise them above the legal caps (teacher 25, class 7 a day, 42 a week).
+    **"Nên dạy" (27/11/2026, Dung):** the norm of Thông tư 05/2025 is built in, not a setting: 17 periods a week, a
+    homeroom teacher 4 less (13). Warning only, never blocks: automatic scheduling shows it per
+    teacher (warning `OVER_NORM_NEEDED` before running, `OVER_NORM` with no penalty on a draft) and SCR-19 saves the
+    change and lists the teachers over it (`normWarnings`). The solver does not aim at it (it balances the loads). Checked by automatic scheduling (grid and weekly cap), by every save of a class
+    timetable – editor and Excel import – (`MSG_TIMETABLE_CLASS_LIMIT`, details: days over the limit and the week
+    total) and by the teaching assignment SCR-19 (`MSG_TEACHER_OVER_WEEK_LIMIT`: the load is the sum of
+    `periods_per_week` of the teacher's assignments on any day of the range; ASSUMPTION: Chào cờ / Sinh hoạt lớp count
+    there, so only a change that raises a teacher above the limit is refused). The timetable editor refuses a period
+    that breaks a limit when it is picked.
   - Hard rules (never broken, re-checked on apply): qualified teacher, one teacher per (class, subject), weekly cap,
     no teacher / class clash (lessons of classes not in the run included), exact periods per subject, only grid cells,
     rooms per subject (e.g. Tin học 1 room), teacher busy cells, at most 2 periods of a subject per day.
-  - Soft rules (weighted penalty, weights editable): teacher gaps, two periods of a subject not adjacent, more than 4
-    periods a day, a subject packed into one day, heavy subjects (Toán, Văn, Anh) at periods 4–5 or afternoon,
-    afternoon subjects in the morning, empty cells before a lesson (empty cells go to the end of a session),
-    overload, imbalance, homeroom teacher not teaching their class.
-  - Checked before running (blocking): grid periods missing in `time_slots`, a class needing more periods than cells,
-    not enough teachers for a subject (need vs norm + overload of the qualified teachers), not enough teachers for
+  - Soft rules (weighted penalty, weights editable): teacher gaps, two periods of a subject not adjacent, a subject
+    packed into one day, heavy subjects (Toán, Văn, Anh) at periods 4–5 or afternoon, afternoon subjects in the
+    morning, empty cells before a lesson (empty cells go to the end of a session), imbalance between teachers of a
+    subject, homeroom teacher not teaching their class (S1 overload and S4 teacher periods a day removed 26/11/2026).
+  - Checked before running (blocking): grid periods missing in `time_slots`, a grid day or week over the class limits
+    (`GRID_DAY_LIMIT`, `GRID_WEEK_LIMIT`), a class needing more periods than cells, not enough teachers for a subject
+    (need vs the weekly maximum of the qualified teachers), not enough teachers for
     the fixed cells (teachers busy at a fixed cell not counted), a kept HĐTN teacher busy at a fixed cell
     (`FIXED_TEACHER_BUSY`), too few rooms, timetable-only mode without running assignments.
   - Apply: refused when assignments or timetables changed since the draft (`MSG_AUTO_STALE`), when a class already has

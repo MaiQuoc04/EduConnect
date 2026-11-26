@@ -700,3 +700,10 @@
 .ta-tc-status.is-full { background: var(--graphite-50); color: var(--graphite-700) !important; }
 .ta-tc-status.is-over { background: var(--amber-bg); color: var(--amber) !important; }
 .ta-tc-pick { color: var(--ink-600) !important; font-weight: 600; font-size: 13px !important; margin-top: 2px; }
+
+/* Over periods per week (26/11/2026): blocking message with one button */
+.tt-quota-alert { flex-direction: row; align-items: flex-start; gap: 16px; }
+.tt-quota-alert ul { margin: 8px 0; padding-left: 18px; }
+.tt-quota-alert li strong { color: var(--graphite-900); font-weight: 600; }
+.icon.tt-quota-icon { flex: none; font-size: 36px; color: var(--red-pen); }
+.icon.tt-quota-icon.is-warn { color: var(--amber); } /* warning only (subject over its periods, 27/11/2026) */

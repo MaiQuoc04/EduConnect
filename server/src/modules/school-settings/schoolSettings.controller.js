@@ -7,7 +7,7 @@ export async function get(req, res) {
   res.json(await service.getSettings());
 }
 
-// PUT /api/v1/school-settings { teaching?: { norm, homeroomNorm, maxOver, maxPerDay }, attendance?: { editDeadlineTime },
+// PUT /api/v1/school-settings { teaching?: { teacherMaxWeek, classMaxDay, classMaxWeek }, attendance?: { editDeadlineTime },
 // stamp }
 export async function update(req, res) {
   const values = service.checkBody(req.body);
