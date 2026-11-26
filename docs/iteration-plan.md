@@ -29,8 +29,8 @@ reactions, attachments) is merged into one place after both are on `develop`.
 
 ## Current status (read first; update after every merge, schema patch or new decision)
 
-- **FE-12 automatic filling of the later periods (26/11/2026, lead decision, Quoc; not merged yet, on Quoc's
-  working tree):** saving a period saves the later periods of the same class, day and session at once (absent stays
+- **FE-12 automatic filling of the later periods (26/11/2026, lead decision, Quoc; committed to `develop` 27/11,
+  `e707d10`, after the R5 submission):** saving a period saves the later periods of the same class, day and session at once (absent stays
   with its note, late → present, a student not on the source list → present), per student up to the first later period
   where a person recorded that student; rows marked `attendances.auto_from_slot_id`; an unchanged save keeps them
   automatic, a change of status or note by a person clears it; history reason "Tự điền theo tiết N"; automatic rows
@@ -67,7 +67,10 @@ reactions, attachments) is merged into one place after both are on `develop`.
   | Weeks 13–14 | Only revising and finishing Reports 6 and 7; no code or test changes |
 
 - **FE-10 / FE-03 period limits replace the teacher norms (26/11/2026, Dung, `feature/fe-10-system-limits` on top of
-  `feature/fe-10-timetable-quota`, not merged yet – lead to review; changes business rules §10):** "Cài đặt hệ thống"
+  `feature/fe-10-timetable-quota`, merged into `develop` 27/11, merge `72ebd65`; changes business rules §10 – approved by
+  the lead 27/11/2026 after the R5 submission because the business rules needed it; client build and server `npm test`
+  (35/35) pass. Owed (Dung): one value for the legal cap of a class week – `timetable.constants.js` says the default 38
+  is also the highest, the settings allow 7 × 6 = 42, business rules say 42; R3/R4/R5 parts on the norms and UC-133):** "Cài đặt hệ thống"
   (SCR-86) now has three school-wide values instead of the norms: most periods a teacher teaches a week (25), most
   periods a class has a day (7, Công văn 4567) and a week (38). New `school_settings` keys `teaching.teacher_max_week`,
   `teaching.class_max_day`, `teaching.class_max_week` (rows written on the first save, no schema change); the old
@@ -83,8 +86,8 @@ reactions, attachments) is merged into one place after both are on `develop`.
   warning + "Quay lại sửa / Vẫn lưu" on save, server returns `overQuota`, import shows it; class and teacher limits
   still block.
 
-- **FE-10 periods per week enforced (26/11/2026, Dung, `feature/fe-10-timetable-quota`, not merged yet – lead to
-  review; changes business rule §10 "shown but not enforced"):** a subject can no longer get more periods in a class
+- **FE-10 periods per week enforced (26/11/2026, Dung, `feature/fe-10-timetable-quota`, merged with `feature/fe-10-system-limits`
+  27/11, merge `72ebd65`; changes business rule §10 "shown but not enforced"):** a subject can no longer get more periods in a class
   timetable than its class type allows (`track_subjects.periods_per_week`). Server: `saveVersion` refuses the pattern
   with `MSG_TIMETABLE_OVER_QUOTA` (400, `details.items`), so the editor (UC-71 / UC-73), the Excel import (UC-72, the
   class is reported with the message) and the automatic scheduling apply are all covered; pure check in
