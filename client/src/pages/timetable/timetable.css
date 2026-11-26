@@ -706,3 +706,4 @@
 .tt-quota-alert ul { margin: 8px 0; padding-left: 18px; }
 .tt-quota-alert li strong { color: var(--graphite-900); font-weight: 600; }
 .icon.tt-quota-icon { flex: none; font-size: 36px; color: var(--red-pen); }
+.icon.tt-quota-icon.is-warn { color: var(--amber); } /* warning only (subject over its periods, 27/11/2026) */

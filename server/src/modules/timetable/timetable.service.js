@@ -263,14 +263,11 @@ const PLANNED = `
 
 // Saves the pattern for [start, end] inside an open transaction and generates the periods. Throws 409 with the
 // problems (no teacher assigned / teacher busy in another class) – the caller's transaction is then rolled back.
-// Every save goes through saveVersion (editor, Excel import, automatic scheduling), so the rule is checked here.
+// Every save goes through saveVersion (editor, Excel import, automatic scheduling), so the rules are checked here.
+// A subject over its periods per week is only a warning (27/11/2026, Dung): the pattern is saved and the subjects
+// over it come back in `overQuota` (the editor asks before saving, the import shows them).
 async function saveVersion(db, { cls, start, end, entries, userId }) {
   const over = overQuota(await classSubjects(cls, db), entries);
-  if (over.length) {
-    throw badRequest(ERROR_CODES.TIMETABLE_OVER_QUOTA, 'Some subjects have more periods than the class type allows.', {
-      items: over,
-    });
-  }
   const limit = classLimitErrors(entries, await schoolLimits(db));
   if (limit) throw badRequest(ERROR_CODES.TIMETABLE_CLASS_LIMIT, 'The class has more periods than the school allows.', limit);
   await freeRange(cls.classId, start, end, db);
@@ -357,7 +354,7 @@ async function saveVersion(db, { cls, start, end, entries, userId }) {
        AND EXISTS (SELECT 1 FROM attendances a WHERE a.timetable_slot_id = ts.timetable_slot_id)`,
     [cls.classId, start, end],
   );
-  return { timetableId, generated: inserted[0].n, removed: removed[0].n, kept: kept[0].n };
+  return { timetableId, generated: inserted[0].n, removed: removed[0].n, kept: kept[0].n, overQuota: over };
 }
 
 // Checks the range against today and the class's school year. Returns { start, end }.

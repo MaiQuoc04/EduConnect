@@ -62,7 +62,8 @@ export const ERROR_CODES = Object.freeze({
   TIMETABLE_SUBJECT_NOT_IN_CLASS: 'MSG_TIMETABLE_SUBJECT_NOT_IN_CLASS', // details: { subjects }
   TIMETABLE_NO_TEACHER: 'MSG_TIMETABLE_NO_TEACHER', // details: { items: [{ subject, from, to, periods }] }
   TIMETABLE_TEACHER_CLASH: 'MSG_TIMETABLE_TEACHER_CLASH', // details: { items: [{ date, period, teacher, otherClass }] }
-  TIMETABLE_OVER_QUOTA: 'MSG_TIMETABLE_OVER_QUOTA', // details: { items: [{ subject, periods, periodsPerWeek }] } – more periods than track_subjects
+  // Not thrown since 27/11/2026 (a subject over its periods per week is a warning, `overQuota` of the save result).
+  TIMETABLE_OVER_QUOTA: 'MSG_TIMETABLE_OVER_QUOTA', // details: { items: [{ subject, periods, periodsPerWeek }] }
   TIMETABLE_CLASS_LIMIT: 'MSG_TIMETABLE_CLASS_LIMIT', // details: { days: [{ weekday, periods }], maxDay, periods, maxWeek } – school settings
   TIMETABLES_NOT_READY: 'MSG_TIMETABLES_NOT_READY', // tables timetables / timetable_entries missing on this database
   IMPORT_FILE: 'MSG_IMPORT_FILE',

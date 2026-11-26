@@ -610,12 +610,12 @@ Boundaries that are easy to get wrong:
   - Two School Managers on the same class: a save made from an editor opened before someone else's save is refused
     (`MSG_TIMETABLE_STALE`, reload first). An empty pattern is allowed and removes the periods without attendance of
     the range (the screen asks first). A school year that has ended is read only (no create / update / import).
-  - Subjects must be subjects of the class type for that year (`track_subjects`); one subject per period. A subject
-    may **not** have more periods in the weekly pattern than `track_subjects.periods_per_week` (Dung, 26/11/2026 –
-    Địa lí 10A1 could be saved with 2 / 1 periods): the editor refuses the extra period when it is picked and refuses
-    the save with a message (one OK button) naming the subjects; the server refuses every save – editor, Excel import,
-    automatic scheduling – with `MSG_TIMETABLE_OVER_QUOTA` (`details.items`: subject, periods, periodsPerWeek) and
-    changes nothing. Fewer periods are allowed (shown as "Thiếu n").
+  - Subjects must be subjects of the class type for that year (`track_subjects`); one subject per period. More
+    periods of a subject in the weekly pattern than `track_subjects.periods_per_week` is a **warning only** (Dung,
+    26/11/2026 refused it, 27/11/2026 changed to a warning): the editor adds the period and shows a warning, and
+    saving asks "Quay lại sửa / Vẫn lưu"; the server saves and returns the subjects over it in `overQuota` (the Excel
+    import shows them on the class row). `MSG_TIMETABLE_OVER_QUOTA` is no longer thrown. Fewer periods are allowed
+    (shown as "Thiếu n"). Automatic scheduling still places exactly the periods of each subject.
   - ASSUMPTION: lessons are Monday–Saturday (no Sunday); periods come from `time_slots`; no holiday calendar yet –
     SM shortens the range or changes the pattern for a holiday week.
   - Import (UC-72): one .xlsx, one row per lesson (class, weekday 2–7, period, subject code or name, room) for one or

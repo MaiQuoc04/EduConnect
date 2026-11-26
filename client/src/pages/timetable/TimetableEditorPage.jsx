@@ -86,12 +86,15 @@ function classLimit(cells, limits) {
 }
 
 // The text of the blocking dialog: subjects over their periods per week, or the class over its limits.
-const subjectAlert = (saving, items) => ({
+// A subject over its periods per week is only a warning (27/11/2026): the period is added, and saving asks first.
+const subjectAlert = (saving, items, onConfirm) => ({
+  warn: true,
+  onConfirm,
   label: 'Số tiết theo loại lớp',
-  title: saving ? 'Không thể lưu thời khoá biểu' : 'Không thể thêm tiết',
-  intro: saving ? 'Có môn vượt số tiết quy định trong một tuần:' : 'Môn này đã đủ số tiết quy định trong một tuần:',
+  title: saving ? 'Vẫn lưu thời khoá biểu?' : 'Môn vượt số tiết quy định',
+  intro: saving ? 'Có môn vượt số tiết quy định trong một tuần:' : 'Đã thêm tiết, nhưng môn này vượt số tiết quy định trong một tuần:',
   lines: items.map((i) => ({ key: i.subject, strong: i.subject, text: `: ${i.periods} / ${i.periodsPerWeek} tiết${i.periods > i.periodsPerWeek ? ` (thừa ${i.periods - i.periodsPerWeek})` : ''}` })),
-  hint: saving ? 'Hãy bớt tiết của môn này rồi lưu lại.' : 'Hãy xoá hoặc đổi một tiết khác của môn này trước khi thêm.',
+  hint: saving ? 'Bạn có thể quay lại bớt tiết, hoặc vẫn lưu như hiện tại.' : 'Đây chỉ là cảnh báo; nếu thêm nhầm, hãy xoá tiết vừa thêm.',
 });
 const classAlert = (saving, l) => ({
   label: 'Giới hạn số tiết của lớp',
@@ -108,7 +111,7 @@ const classAlert = (saving, l) => ({
 function LimitDialog({ alert, onClose }) {
   const ref = useRef(null);
   useEffect(() => {
-    const onKey = (e) => (e.key === 'Escape' || e.key === 'Enter') && onClose();
+    const onKey = (e) => e.key === 'Escape' && onClose(); // Enter presses the focused button
     window.addEventListener('keydown', onKey);
     ref.current?.focus();
     return () => window.removeEventListener('keydown', onKey);
@@ -125,7 +128,7 @@ function LimitDialog({ alert, onClose }) {
           <button type="button" className="tt-navbtn is-plain" onClick={onClose} aria-label="Đóng"><Icon name="close" size="sm" /></button>
         </header>
         <div className="tt-dialog-body tt-quota-alert" id="tt-quota-body">
-          <Icon name="cancel" filled className="tt-quota-icon" />
+          <Icon name={alert.warn ? 'warning' : 'cancel'} filled className={`tt-quota-icon${alert.warn ? ' is-warn' : ''}`} />
           <div>
             <p>{alert.intro}</p>
             <ul>{alert.lines.map((i) => <li key={i.key}><strong>{i.strong}</strong>{i.text}</li>)}</ul>
@@ -133,7 +136,14 @@ function LimitDialog({ alert, onClose }) {
           </div>
         </div>
         <footer className="tt-dialog-foot"><span />
-          <button ref={ref} type="button" className="btn btn-primary" onClick={onClose}>OK</button>
+          {alert.onConfirm ? (
+            <span className="tt-dialog-actions">
+              <button ref={ref} type="button" className="btn btn-secondary" onClick={onClose}>Quay lại sửa</button>
+              <button type="button" className="btn btn-primary" onClick={alert.onConfirm}>Vẫn lưu</button>
+            </span>
+          ) : (
+            <button ref={ref} type="button" className="btn btn-primary" onClick={onClose}>OK</button>
+          )}
         </footer>
       </div>
     </div>
@@ -259,14 +269,12 @@ export default function TimetableEditorPage() {
     .filter((g) => g.slots.length);
 
   const setCell = (k, v) => {
-    // Adding a period to a subject that already has its periods per week is refused at once.
+    // A period over the subject's periods per week is added with a warning (27/11/2026 – no longer refused).
+    let overWarn = null;
     if (v.subjectId && String(v.subjectId) !== cells[k]?.subjectId) {
       const s = subjectsById[String(v.subjectId)];
       const n = Object.entries(cells).filter(([x, c]) => x !== k && c.subjectId === String(v.subjectId)).length;
-      if (s && n >= s.periodsPerWeek) {
-        setQuotaAlert(subjectAlert(false, [{ subject: s.name, periods: n, periodsPerWeek: s.periodsPerWeek }]));
-        return;
-      }
+      if (s && n >= s.periodsPerWeek) overWarn = subjectAlert(false, [{ subject: s.name, periods: n + 1, periodsPerWeek: s.periodsPerWeek }]);
     }
     // A new period in an empty cell must keep the class inside its limits a day and a week.
     if (v.subjectId && !cells[k]?.subjectId) {
@@ -286,18 +294,19 @@ export default function TimetableEditorPage() {
       else delete next[k];
       return next;
     });
+    if (overWarn) setQuotaAlert(overWarn);
   };
 
-  async function save() {
+  async function save(confirmedOver = false) {
     if (rangeError) return;
-    const over = overQuota(data.subjects, cells);
-    if (over.length) {
-      setQuotaAlert(subjectAlert(true, over));
-      return;
-    }
     const limit = classLimit(cells, data.limits);
     if (limit) {
       setQuotaAlert(classAlert(true, limit));
+      return;
+    }
+    const over = overQuota(data.subjects, cells);
+    if (over.length && !confirmedOver) {
+      setQuotaAlert(subjectAlert(true, over, () => { setQuotaAlert(null); save(true); }));
       return;
     }
     if (total === 0 && !window.confirm(`Mẫu thời khoá biểu đang trống. Lưu sẽ xoá các tiết chưa điểm danh của lớp ${cls.className} từ ${dmy(start)} đến ${dmy(end || cls.schoolYear.endDate)}. Tiếp tục?`)) return;
@@ -316,8 +325,7 @@ export default function TimetableEditorPage() {
       else toast(`Đã lưu thời khoá biểu lớp ${cls.className} từ ${dmy(r.startDate)} đến ${dmy(r.endDate)}: tạo ${r.generated} tiết${r.kept ? `, giữ ${r.kept} tiết đã điểm danh` : ''}.`);
       await load(r.startDate);
     } catch (err) {
-      if (err.code === 'MSG_TIMETABLE_OVER_QUOTA') setQuotaAlert(subjectAlert(true, err.details?.items ?? []));
-      else if (err.code === 'MSG_TIMETABLE_CLASS_LIMIT' && err.details) setQuotaAlert(classAlert(true, err.details));
+      if (err.code === 'MSG_TIMETABLE_CLASS_LIMIT' && err.details) setQuotaAlert(classAlert(true, err.details));
       else setSaveError(err);
     } finally {
       setSaving(false);
@@ -349,7 +357,7 @@ export default function TimetableEditorPage() {
         {!data.ended && (
           <div className="tt-head-actions">
             <button type="button" className="btn btn-secondary" onClick={cancel} disabled={saving}>{dirty ? 'Huỷ thay đổi' : 'Huỷ'}</button>
-            <button type="button" className="btn btn-primary" disabled={saving || !!rangeError || (!creating && !dirty)} onClick={save}
+            <button type="button" className="btn btn-primary" disabled={saving || !!rangeError || (!creating && !dirty)} onClick={() => save()}
               title={rangeError || (!creating && !dirty ? 'Chưa có thay đổi nào để lưu' : undefined)}>
               <Icon name={creating ? 'done_all' : 'check'} size="sm" /> {saving ? 'Đang lưu…' : creating ? 'Lưu TKB' : 'Lưu thay đổi'}
             </button>
