@@ -312,7 +312,9 @@ export async function updateAccount({ idParam, body: sent = {}, actor = null }) 
   const body = isSchoolManager(actor) ? { ...bodyOf(before), email: sent.email, phone: sent.phone } : sent;
 
   // Roles never change here: readAccountInput reads only the profile parts of the account's own roles.
-  const { input, errors } = readAccountInput({ ...body, roles: before.roles });
+  // The account's own codes stay valid even in the older 4-digit format (business-rules §3, 27/11/2026).
+  const keep = { studentCode: before.student?.code, teacherCode: before.teacher?.code };
+  const { input, errors } = readAccountInput({ ...body, roles: before.roles }, { keep });
   delete errors.roles;
   const username = typeof body.username === 'string' ? body.username.trim().toLowerCase() : '';
   if (!username) errors.username = 'REQUIRED';

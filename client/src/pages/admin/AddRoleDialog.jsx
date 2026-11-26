@@ -14,7 +14,7 @@ import './admin.css';
 // The server (POST /admin/accounts/:id/roles) repeats every check.
 
 const ORDER = ['TEACHER', 'PARENT', 'SCHOOL_MANAGER'];
-const CODE_RE = /^GV\d{4}$/;
+const CODE_RE = /^GV\d{6}$/; // business rules §3: GV + 6 digits (27/11/2026)
 
 // Roles `activeRole` may add to an account with `roles` – same rule as accountControl.addableRoles on the server.
 export function addableRoles(roles = [], activeRole) {
@@ -150,7 +150,7 @@ function AddRoleDialog({ account, choices, onClose, onAdded }) {
               <span>
                 Mã giáo viên<span className="required">*</span>
               </span>
-              <span className="hint">GV + 4 chữ số</span>
+              <span className="hint">GV + 6 chữ số</span>
             </span>
             <input
               className="input mono"
@@ -160,7 +160,7 @@ function AddRoleDialog({ account, choices, onClose, onAdded }) {
                 setErrors((x) => ({ ...x, teacherCode: undefined }));
               }}
               maxLength={6}
-              placeholder="GV0001"
+              placeholder="GV000001"
             />
             {err('teacherCode') && <span className="field-error">{err('teacherCode')}</span>}
           </label>

@@ -25,7 +25,7 @@ const XLSX_MIME = 'application/vnd.openxmlformats-officedocument.spreadsheetml.s
 
 // Columns of the template, in order. All three are required.
 const COLUMNS = [
-  { key: 'studentCode', header: 'Mã học sinh', note: 'HS + 4 số', width: 18 },
+  { key: 'studentCode', header: 'Mã học sinh', note: 'mã của học sinh', width: 18 },
   { key: 'phone', header: 'Số điện thoại phụ huynh', width: 26 },
   { key: 'relationship', header: 'Quan hệ', note: 'Bố/Mẹ/Người giám hộ', width: 30 },
 ];
@@ -55,7 +55,7 @@ export async function buildTemplate() {
   ws.getRow(1).font = { bold: true };
   ws.getRow(1).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF4F1FA' } };
   ws.views = [{ state: 'frozen', ySplit: 1 }];
-  ws.addRow({ studentCode: 'HS0001', phone: '0905000041', relationship: 'Bố' }); // example row
+  ws.addRow({ studentCode: 'HS000001', phone: '0905000041', relationship: 'Bố' }); // example row
 
   const help = wb.addWorksheet('Huong dan');
   help.columns = [{ width: 110 }];
@@ -63,7 +63,7 @@ export async function buildTemplate() {
     'Mẫu nhập liên kết phụ huynh – học sinh – EduConnect',
     'Mỗi dòng của trang "Lien ket" là một liên kết giữa một học sinh và một phụ huynh. Không đổi tên các cột ở dòng 1.',
     'Dòng 2 là dòng ví dụ: hãy xoá hoặc thay bằng dữ liệu thật trước khi nhập.',
-    'Mã học sinh gồm HS và 4 chữ số, ví dụ HS0001.',
+    'Mã học sinh ghi đúng mã của học sinh trong hệ thống, ví dụ HS000001 (mã cũ 4 chữ số như HS0001 vẫn dùng được).',
     'Số điện thoại là số của tài khoản phụ huynh đã có trong hệ thống (10 chữ số, bắt đầu bằng 0). File này không tạo tài khoản mới.',
     'Quan hệ ghi Bố, Mẹ hoặc Người giám hộ.',
     `Mỗi học sinh có tối đa ${MAX_PARENTS_PER_STUDENT} phụ huynh, tính cả các liên kết đã có.`,
