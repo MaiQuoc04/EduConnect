@@ -21,7 +21,6 @@ const SECTIONS = [
     title: 'Giới hạn số tiết',
     intro: 'Áp dụng cho toàn trường khi phân công giảng dạy, xếp tự động và lưu thời khoá biểu.',
     fields: [
-      { key: 'teacherNormWeek', label: 'Số tiết giáo viên nên dạy một tuần', unit: 'tiết/tuần', help: 'Định mức theo Thông tư 05/2025; giáo viên chủ nhiệm được giảm 4 tiết. Chỉ để cảnh báo, không chặn.' },
       { key: 'teacherMaxWeek', label: 'Số tiết giáo viên dạy tối đa một tuần', unit: 'tiết/tuần', help: 'Dạy vượt không quá 50% định mức (17 + 8,5). Vượt mức này thì không lưu được.' },
       { key: 'classMaxDay', label: 'Số tiết lớp học tối đa một ngày', unit: 'tiết/ngày', help: 'Công văn 4567/BGDĐT-GDPT: học sinh học không quá 7 tiết/ngày, mỗi tiết 45 phút.' },
       { key: 'classMaxWeek', label: 'Số tiết lớp học tối đa một tuần', unit: 'tiết/tuần', help: 'Học tối thiểu 5 ngày, tối đa 11 buổi/tuần (Công văn 4567); không lớn hơn số tiết một ngày × 6.' },
@@ -54,9 +53,6 @@ function check(form, limits) {
     else values[f.group][f.key] = Number(v);
   }
   const t = values.teaching;
-  if (!problems['teaching.teacherNormWeek'] && !problems['teaching.teacherMaxWeek'] && t.teacherNormWeek > t.teacherMaxWeek) {
-    problems['teaching.teacherNormWeek'] = 'Không lớn hơn số tiết giáo viên dạy tối đa.';
-  }
   if (!problems['teaching.classMaxDay'] && !problems['teaching.classMaxWeek'] && t.classMaxWeek > t.classMaxDay * 6) {
     problems['teaching.classMaxWeek'] = `Không lớn hơn ${t.classMaxDay * 6} (${t.classMaxDay} tiết/ngày × 6 ngày).`;
   }

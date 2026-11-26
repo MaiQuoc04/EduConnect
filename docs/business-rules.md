@@ -699,8 +699,8 @@ Boundaries that are easy to get wrong:
     periods of 45 minutes a day, at least 5 days and at most 11 sessions a week) and a week (default 38, ASSUMPTION:
     the dispatch sets no weekly cap – 5 days × 7 + 3; at most the day limit × 6). The School Manager may lower these
     values but not raise them above the legal caps (teacher 25, class 7 a day, 42 a week).
-    **"Nên dạy" (27/11/2026, Dung):** a fourth value, the norm (default 17, Thông tư 05/2025; at most the teacher
-    maximum); a homeroom teacher's is 4 less (13). Warning only, never blocks: automatic scheduling shows it per
+    **"Nên dạy" (27/11/2026, Dung):** the norm of Thông tư 05/2025 is built in, not a setting: 17 periods a week, a
+    homeroom teacher 4 less (13). Warning only, never blocks: automatic scheduling shows it per
     teacher (warning `OVER_NORM_NEEDED` before running, `OVER_NORM` with no penalty on a draft) and SCR-19 saves the
     change and lists the teachers over it (`normWarnings`). The solver does not aim at it (it balances the loads). Checked by automatic scheduling (grid and weekly cap), by every save of a class
     timetable – editor and Excel import – (`MSG_TIMETABLE_CLASS_LIMIT`, details: days over the limit and the week

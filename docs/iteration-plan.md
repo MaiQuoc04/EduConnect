@@ -58,8 +58,8 @@ reactions, attachments) is merged into one place after both are on `develop`.
   (`MSG_TIMETABLE_CLASS_LIMIT`; editor and Excel import) and the teaching assignment SCR-19
   (`MSG_TEACHER_OVER_WEEK_LIMIT`). The timetable editor gets the class limits and refuses a period that breaks one
   when it is picked. FE-03 / FE-10 test cases about the norms (5.1–5.3) need updating (Dung).
-  27/11/2026: fourth value "Số tiết giáo viên nên dạy một tuần" (`teaching.teacher_norm_week`, default 17, homeroom
-  teacher 13) – warning only (auto scheduling loads / `OVER_NORM`, SCR-19 notice after saving).
+  27/11/2026: built-in "nên dạy" 17 periods a week, homeroom teacher 13 (Thông tư 05/2025, not a setting) – warning
+  only (auto scheduling loads / `OVER_NORM`, SCR-19 notice after saving).
 
 - **FE-10 periods per week enforced (26/11/2026, Dung, `feature/fe-10-timetable-quota`, not merged yet – lead to
   review; changes business rule §10 "shown but not enforced"):** a subject can no longer get more periods in a class
