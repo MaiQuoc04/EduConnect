@@ -110,6 +110,22 @@ reactions, attachments) is merged into one place after both are on `develop`.
   "Qua anh, chị, em" from linking a parent to a student (FE-02 page `UpdateStudentRelationshipPage`); only the phone
   lookup remains. Client only.
 
+- **FE-04 class size and period limits as School Manager settings (27/11/2026, Khanh, on `feature/fe-05-group-feed`,
+  not merged; lead agreed: change after the code freeze, warning 45 / hard cap 55, Khanh also edits FE-10 SCR-86 and
+  FE-02 UC-10 / UC-11, HĐTN counts in the week):**
+  - SCR-86 (`school-settings`): `teaching.subjectMaxWeek` (default 10, 1–12, ≤ classMaxWeek) and a new group
+    `classes` (`warnStudents` 45, `maxStudents` 55, 10–60, warn ≤ max); `GET /school-settings/impact` lists
+    what is above a lowered limit (the page asks before saving). New keys are new `school_settings` rows written on
+    the first save (no schema change, no patch; defaults until then). Not added to the default rows of
+    `educonnect_schema_v0.3.sql` (the 26/11 keys are not there either) – for the lead.
+  - Class size (`classes/classSize.js` `checkClassSize`): UC-28 create / add, UC-27 import (warning rows
+    `WARN_CLASS_OVER_RECOMMENDED`), UC-10, UC-11; body flag `confirmOverWarning`; 409 `MSG_CLASS_OVER_WARNING`.
+    `MAX_CLASS_SIZE` removed. GET /classes returns `sizeLimits` (cards / table labels).
+  - SCR-70 (UC-26): periods per subject ≤ `subjectMaxWeek`, total ≤ `classMaxWeek` (`MSG_TRACK_PERIODS_TOTAL`),
+    copy year refused above the limits (`MSG_TRACK_COPY_OVER_LIMIT`, ASSUMPTION – question 6 not answered).
+  - Tests: `npm test` 46/46 (11 new in `classSize.test.js`); API checked on the throw-away local DB (settings,
+    impact, add students, transfer, promotion, track save, copy). Client `npm run build` passes.
+
 - **FE-04 SCR-70 periods message (26/11/2026, Khanh, on `feature/fe-05-group-feed`, merged into `develop` 26/11, merge
   `cef24c8`; merged after Round 3, so the UC-26 test cases may need the new messages):** a wrong
   "Số tiết/tuần" now shows its reason under the box (empty / not a whole number / 0 / above 10; an empty box only
