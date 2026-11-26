@@ -110,8 +110,9 @@ reactions, attachments) is merged into one place after both are on `develop`.
   "Qua anh, chị, em" from linking a parent to a student (FE-02 page `UpdateStudentRelationshipPage`); only the phone
   lookup remains. Client only.
 
-- **FE-04 class size and period limits as School Manager settings (27/11/2026, Khanh, on `feature/fe-05-group-feed`,
-  not merged; lead agreed: change after the code freeze, warning 45 / hard cap 55, Khanh also edits FE-10 SCR-86 and
+- **FE-04 class size and period limits as School Manager settings (27/11/2026, Khanh, `feature/fe-05-group-feed`,
+  merged into `develop` 27/11, merge `0726f80`, server `npm test` 46/46 pass; tell Anh (FE-02 UC-10 / UC-11) and Dung
+  (SCR-86) their code changed; lead agreed: change after the code freeze, warning 45 / hard cap 55, Khanh also edits FE-10 SCR-86 and
   FE-02 UC-10 / UC-11, HĐTN counts in the week):**
   - SCR-86 (`school-settings`): `teaching.subjectMaxWeek` (default 10, 1–12, ≤ classMaxWeek) and a new group
     `classes` (`warnStudents` 45, `maxStudents` 55, 10–60, warn ≤ max); `GET /school-settings/impact` lists
