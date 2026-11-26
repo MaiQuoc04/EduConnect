@@ -21,8 +21,11 @@ export function SocketProvider({ children }) {
   useEffect(() => {
     const token = tokenStore.get();
     if (!userId || !token) return undefined;
-    // Same origin: Vite forwards /socket.io to the API server in development.
-    const s = io({ auth: { token }, transports: ['websocket', 'polling'] });
+    // Production: the frontend (Vercel) and the API server are on different domains, so VITE_SOCKET_URL names the API
+    // server. Development: unset, connect to the same origin and Vite forwards /socket.io to the API server.
+    const url = import.meta.env.VITE_SOCKET_URL;
+    const opts = { auth: { token }, transports: ['websocket', 'polling'] };
+    const s = url ? io(url, opts) : io(opts);
     const connected = () => setStatus('connected');
     const lost = () => setStatus('disconnected');
     s.on('connect', connected);

@@ -10,7 +10,7 @@ The app serves **one high school** (grades 10–12). Users never self-register.
 | Role code | Who | Scope |
 |---|---|---|
 | `SYSTEM_ADMIN` | IT admin | Accounts and system only: create / import / export accounts, change login identifiers, reset passwords and lock / unlock **any** account, system settings, maintenance. **Cannot see any content** (feeds, chats, grades, school posts), is in no group, cannot create teams. |
-| `SCHOOL_MANAGER` | Principal / office staff (several, equal rights) | All school business. Views and updates student / parent / teacher profiles (cannot create or delete them, except importing teacher accounts, UC-116, §4). Resets passwords and locks / unlocks student, parent and teacher accounts. Manages the **school-wide teacher group** (pin / hide / approve) and the school feed. **Does not see class feeds or class chats.** Private messages only with people in the teacher group. Views grades and rankings of the whole school (read only), unlocks grades, views grade history, corrects attendance after the day, sees school-wide attendance statistics. |
+| `SCHOOL_MANAGER` | Principal / office staff (several, equal rights) | All school business. Views and updates student / parent / teacher profiles (cannot create or delete them, except importing teacher accounts, UC-116, §4). Resets passwords and locks / unlocks student, parent and teacher accounts. Manages the **school-wide teacher group** (pin / hide / approve) and the school feed. **Does not see class feeds or class chats.** Private messages only with people in the teacher group. Views grades and academic levels of the whole school (read only), unlocks grades, views grade history, corrects attendance after the day, sees school-wide attendance statistics. |
 | `TEACHER` | Teachers | Teaches assigned classes / subjects. A teacher becomes **Homeroom Teacher** of a class when `classes.homeroom_teacher_id` points to them – this is **not a separate role**. |
 | `STUDENT` | Students | Own data, own classes and groups. |
 | `PARENT` | Parents / guardians | Their children's data; picks a child first on child-specific screens. |
@@ -587,7 +587,7 @@ Boundaries that are easy to get wrong:
     pattern, creator and `created_at`. So rows of a class with the same `created_at` are one saved timetable (its
     first row keeps the range and pattern as saved), and a row deleted at time T was replaced by the save of the
     same class created at T. No schema change. Periods already held (before the start of a save) are never touched.
-    Screen: "Lịch sử" on SCR-27 / "Xem toàn bộ lịch sử" in the editor – `/timetables/classes/:classId/history`
+    Screen: "Lịch sử" on SCR-27 / "Lịch sử thời khoá biểu" in the editor (the editor's own version list was removed 24/11/2026: it repeated this page) – `/timetables/classes/:classId/history`
     (School Manager): every save with who / when, dates still in force, what replaced which dates, periods held and
     with attendance, the weekly pattern (cells changed from the replaced timetable highlighted) and a CSV export.
     Versions trimmed before 17/11/2026 only show the part left.
@@ -598,10 +598,10 @@ Boundaries that are easy to get wrong:
   - Signed in as a teacher (18/11/2026): in a class timetable the teacher's own lessons are coloured green with
     "Bạn dạy" and the legend counts them for the week (`mine` / `myLessons` of the week API, worked out on the
     server from the signed-in account). In the teaching schedule every lesson is theirs, so all are coloured.
-  - **Teacher schedule lookup (18/11/2026):** on the teaching assignment screen (SCR-19) the School Manager opens "Tra
-    lịch dạy giáo viên", types a name, teacher code, department or subject and sees that teacher's teaching schedule
-    week by week (same lessons as SCR-57; `GET /timetables/teachers/:teacherId/week`, School Manager only).
-  - **Finding the lessons (18/11/2026):** "Lịch dạy" (and the lookup above) shows "Lịch dạy sắp tới" – per class and
+  - **Teacher schedule lookup (18/11/2026) – removed 24/11/2026 (Dung, lead to confirm):** it duplicated the weekly
+    teaching schedule on Teacher Detail (SCR-15, UC-16); the button on SCR-19 and `GET /timetables/teachers/:teacherId/week`
+    are gone. UC-125 to be removed from the lists by the lead.
+  - **Finding the lessons (18/11/2026):** "Lịch dạy" shows "Lịch dạy sắp tới" – per class and
     subject the lessons from today (first / last date, periods a week, how many left) and the dates of teaching
     assignments whose class has no timetable yet (e.g. semester II). Opened on a week without lessons, it jumps once to
     the first week with lessons (with "Về tuần này"); an empty week offers "Tuần có tiết trước / tiếp theo".
@@ -686,8 +686,8 @@ Boundaries that are easy to get wrong:
   - Week grid (default 5 mornings × 5 + Tuesday and Thursday afternoons × 2 = 29 cells; morning ≤ 5, afternoon ≤ 3,
     ≤ 6 days – Công văn 7291). Periods per week from `track_subjects`, changeable for the semester being scheduled
     (History: 1 in semester I, 2 in semester II). Fixed cells: Chào cờ (Monday period 1) and Sinh hoạt lớp (Friday
-    period 5) taken from HĐTN, a different teacher in every class (the homeroom teacher first); they do not count
-    towards the norm.
+    period 5) taken from HĐTN, a different teacher in every class (the homeroom teacher first), never a teacher who
+    teaches a class outside the run at a fixed cell (25/11/2026); they do not count towards the norm.
   - Norm 17 periods/week, homeroom teacher 13 (Thông tư 05/2025), at most 4 over (ASSUMPTION: school's choice).
   - Hard rules (never broken, re-checked on apply): qualified teacher, one teacher per (class, subject), weekly cap,
     no teacher / class clash (lessons of classes not in the run included), exact periods per subject, only grid cells,
@@ -698,7 +698,8 @@ Boundaries that are easy to get wrong:
     overload, imbalance, homeroom teacher not teaching their class.
   - Checked before running (blocking): grid periods missing in `time_slots`, a class needing more periods than cells,
     not enough teachers for a subject (need vs norm + overload of the qualified teachers), not enough teachers for
-    the fixed cells, too few rooms, timetable-only mode without running assignments.
+    the fixed cells (teachers busy at a fixed cell not counted), a kept HĐTN teacher busy at a fixed cell
+    (`FIXED_TEACHER_BUSY`), too few rooms, timetable-only mode without running assignments.
   - Apply: refused when assignments or timetables changed since the draft (`MSG_AUTO_STALE`), when a class already has
     a timetable / assignments and the overwrite is not confirmed (`MSG_AUTO_CONFIRM`), or when the draft breaks a hard
     rule or misses lessons. Lessons with attendance are kept; class groups follow the new assignments (FE-04 sync).
@@ -724,17 +725,24 @@ Boundaries that are easy to get wrong:
     each an independent copy that replaces the target's components. If any target already has grades the whole copy
     is refused and nothing changes (14/11/2026).
 - Each individual score is its own `grades` row (`attempt_no`); averages are **not stored**, they are computed:
-  subject semester average = weighted average of the scores present; subject year average = (S1 + 2 × S2) / 3;
-  student semester / year average = average of subjects (every `track_subjects.weight` is 1, so a plain average).
+  subject semester average = weighted average of the scores present; subject year average = (S1 + 2 × S2) / 3.
   Subjects counted = those with a grade structure for the class's grade that year (only the class type's subjects
   when set); a subject without a structure is not counted.
+- **No overall average and no ranking (23/11/2026, Linh, supervisor's request; Circular 22/2021/TT-BGDĐT):** the
+  Circular has no average of all subjects and says students are not compared with each other (Article 4.4), as in the
+  e-contact-book products (vnEdu, SMAS, eNetViet). Instead each student gets an **academic level** per semester and for
+  the year (Article 9), from the rounded subject averages of the period: **Tốt** = every subject ≥ 6.5 and at least 6
+  subjects ≥ 8.0; **Khá** = every subject ≥ 5.0 and at least 6 subjects ≥ 6.5; **Đạt** = at least 6 subjects ≥ 5.0
+  and none below 3.5; **Chưa đạt** = otherwise; no level while a subject has no average yet. ASSUMPTION: every
+  subject with a grade structure is a scored subject (subjects assessed by comments – Đạt / Chưa đạt – are not in the
+  schema yet); with fewer than 6 subjects "at least 6" means all of them. Conduct (rèn luyện) and the titles Học sinh
+  Giỏi / Xuất sắc are not handled yet. UC-89 / SCR-48 Class Ranking removed (`/grades/ranking` goes to the results).
 - **Rounding (Circular 22/2021, 14/11/2026):** every average is rounded to 1 decimal, half up (7.94 → 7.9,
   7.95 → 8.0). Each step uses the **rounded** result of the step before: subject semester average → subject year
-  average → student average. Ranking compares the rounded averages, so students with the same shown average share
-  a rank.
+  average; the academic level is decided on these rounded subject averages.
 - Teachers enter / import grades only for their assigned class + subject, with an assignment that is current or
   still to come (`end_date` ≥ today); a teacher whose assignment has ended can only view. Only **studying** students
-  are edited, required for finalizing and ranked; transferred / dropped students keep their old grades, read only.
+  are edited, required for finalizing and given a level; transferred / dropped students keep their old grades, read only.
   A student moved by UC-10 within the year keeps the scores from the other class; when both classes have the same
   score slot, the score of the current class wins.
 - **Import (UC-84):** an empty score cell keeps the current score (clearing a score is done on the entry screen,
@@ -752,15 +760,17 @@ Boundaries that are easy to get wrong:
 - Every grade entry and change is logged in `grade_histories` (first entry has `old_score` NULL). Grade rows are never
   deleted; clearing a score = `score` NULL.
 - Viewing: students / parents only their own / child's; teachers see all grades of classes they teach; SM sees the
-  whole school (read only). Students / parents see only their own rank.
+  whole school (read only). Students / parents see only their own results.
 - **Students and parents see only finalized grade books (14/11/2026).** A book never finalized is "not published":
-  its scores are left out of every average and rank. A book unlocked by SM for a correction keeps showing the scores
+  its scores are left out of every average and level. A book unlocked by SM for a correction keeps showing the scores
   **as finalized** (rebuilt from `grade_histories`) until the teacher finalizes it again. For teachers and SM an
-  average or rank is provisional while a subject's book of the period is not finalized.
+  average or level is provisional while a subject's book of the period is not finalized.
 
 ## 12. Attendance (FE-12)
 - Per period, 4 statuses: `PRESENT`, `LATE`, `ABSENT_EXCUSED`, `ABSENT_UNEXCUSED`. No leave-request feature.
-- The subject teacher takes attendance for periods they teach and can edit until **23:59 the same day**. After that:
+- The subject teacher takes attendance for periods they teach and can edit until **23:59 the same day** (the time is
+  a School Manager setting, "Cài đặt hệ thống", default 23:59 – moved from the System Admin settings 24/11/2026, Dung,
+  proposed: `patch_v0.3_school_settings_attendance.sql` waits for the lead). After that:
   the homeroom teacher (own class) can only switch excused ↔ unexcused, until the semester is closed; every other
   change is SM only.
   Why (18/11/2026, lead): present / late / absent is what the subject teacher sees in the period, so it is fixed
@@ -780,8 +790,16 @@ Boundaries that are easy to get wrong:
   1. A period can be taken from its start time (`time_slots.start_time`) until the edit deadline of that day.
   2. The sheet of a period = students of the class on that date: `enrolled_at` on or before the date and not left
      (`left_at` NULL or after the date). Records of students who left later stay.
-  3. The sheet opens with everyone PRESENT; the teacher changes the exceptions and saves the **whole class at once**
-     (no partial save). Each student has an optional note (`attendances.note`).
+  3. The sheet of the **first period taken in a session** opens with everyone PRESENT; the teacher changes the
+     exceptions and saves the **whole class at once** (no partial save). Each student has an optional note
+     (`attendances.note`).
+     **Prefill (lead, 23/11/2026):** a period not taken yet opens with the statuses **and notes** of the nearest
+     earlier period of the same class, same day and **same session** (morning = periods 1–5, afternoon = 6–10; the
+     afternoon never copies the morning) that is already taken – copied as they are (a late student stays late). It is
+     only a draft: the period stays "not taken" (and in the SM's list of periods not taken) until its own teacher
+     checks it and saves it (one save confirms it). A student not on the source period's list starts PRESENT.
+     Notifications are unchanged: each saved period with a status other than PRESENT notifies, also when the status
+     was prefilled (a student absent all morning → one notification per period).
   4. A period not taken by the deadline: the subject teacher and the homeroom teacher can no longer enter it; only SM
      enters it, with a reason.
   5. Reason (`attendance_histories.reason`): optional for the subject teacher on the day; **required** for the
@@ -800,7 +818,8 @@ Boundaries that are easy to get wrong:
   - The homeroom teacher may switch excused ↔ unexcused as soon as a period is taken (also on the same day), not only
     after the subject teacher's deadline.
   - SM cannot enter a period that has not started yet (same as everyone).
-  - "Present rate" = (present + late) / records; late is also counted apart.
+  - "Present rate" = (present + late) / records; late is also counted apart. **Confirmed by the lead 23/11/2026**: a
+    late student did attend the period (Circular 22 counts only absences), the late count stays visible on its own.
   - The reason of a homeroom / SM change is quoted in the notification to the student and parents; the teacher's note
     is quoted in the first notification.
   - Saving only a note (same status) writes no history row and sends nothing.
@@ -820,7 +839,8 @@ Boundaries that are easy to get wrong:
 
 ## 13. System administration (FE-13)
 - `system_settings` (key–value, loaded by SQL; SA edits values only): sign-in lock thresholds, upload limits, OTP
-  lifetime, password reset request cooldown, attendance edit deadline, chat delete-for-everyone time. Allowed values
+  lifetime, password reset request cooldown, chat delete-for-everyone time (the attendance edit deadline moves to the
+  School Manager settings `school_settings`, 24/11/2026, proposed – see §12). Allowed values
   (01/11/2026): wrong passwords before a lock 3–10; lock step 1–60 min; lock max 1–1440 min; images / files 1–50 MB;
   videos 1–50 MB (lowered from 200 by the lead 11/11/2026: the Supabase Free plan takes files up to 50 MB); OTP lifetime 1–30 min; reset request cooldown 1–1440 min (default 15); attendance deadline a time
   `HH:MM`; `chat.delete_for_everyone_minutes` 1–1440 min (default 15, §6; agreed by the lead 07/11/2026).

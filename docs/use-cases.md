@@ -1,9 +1,10 @@
-# Use cases (132) – numbering after the 20/10/2026 database review
+# Use cases (UC-01..UC-133, UC-89 removed) – numbering after the 20/10/2026 database review
 
 UC-117..UC-128 (added 18/11/2026 by the lead): features already built in the code that had no use case yet; each is
 listed under its feature below. UC-129..UC-131 (added 20/11/2026 by the lead): the group feed comment likes and
 reports merged on 19/11/2026 (FE-05, Khanh; business rules §5). UC-132 (proposed by Khanh, approved by the lead 20/11/2026):
-hide a 1-1 chat or a team from one's own conversation list (FE-06; business rules §6).
+hide a 1-1 chat or a team from one's own conversation list (FE-06; business rules §6). UC-133 (added 24/11/2026 by the
+lead): the School Manager settings page merged on 24/11/2026 (FE-10, Dung; screen SCR-86).
 
 Source: Report 3 section 4.2 (draft v1.3). Actor "User" = any signed-in account. "Homeroom Teacher" is not a role: it is a Teacher who is `classes.homeroom_teacher_id` of that class.
 
@@ -157,6 +158,7 @@ Source: Report 3 section 4.2 (draft v1.3). Actor "User" = any signed-in account.
 | UC-80 | Delete Calendar Event | Teacher (event creator) | Class Calendar Events | Delete one's own event. |
 | UC-122 | Configure Period Times | School Manager | Class Timetable | Set the start of each session and one length for every period; every timetable, past weeks included, shows the new times (added 18/11/2026). |
 | UC-123 | Schedule Automatically | School Manager | Class Timetable | Make a draft of teaching assignments and / or class timetables for a semester that follows the hard and soft scheduling rules, review it and apply it; nothing is saved before applying (added 18/11/2026). |
+| UC-133 | Configure School Settings | School Manager | Class Timetable | Set the school-wide values used by other features: the teaching load of automatic scheduling (norm, homeroom teacher norm, maximum over the norm, periods per day) and the time until which a subject teacher can edit the attendance of the day (default 23:59); every change is logged (added 24/11/2026). |
 | UC-124 | View Timetable History | School Manager | Class Timetable | View every saved timetable of a class (who saved it and when, dates still in force, what replaced it, periods held) and export the history to CSV (added 18/11/2026). |
 | UC-125 | Look Up Teacher Schedule | School Manager | Teaching Schedule | From the teaching assignment screen, find a teacher by name, code, department or subject and view their teaching schedule week by week (added 18/11/2026). |
 | UC-126 | Manage School Calendar | School Manager | School Calendar | Add, edit and delete school-wide dates (title, start, optional end, venue, note) for the whole school or one grade (added 18/11/2026). |
@@ -173,8 +175,8 @@ Source: Report 3 section 4.2 (draft v1.3). Actor "User" = any signed-in account.
 | UC-85 | Finalize Grades | Teacher | Grade Entry | Finalize the grades of a class, subject and semester, which locks them. |
 | UC-86 | Unlock Grades | School Manager | Grade Control | Unlock finalized grades of a class, subject and semester. |
 | UC-87 | View Grade Change History | School Manager | Grade Control | View who changed which grade and when. |
-| UC-88 | View Grades | Teacher, Student, Parent, School Manager | Results & Ranking | View grades and semester / year averages within the role's scope (student / parent: finalized grade books only). |
-| UC-89 | View Class Ranking | Teacher, Student, Parent, School Manager | Results & Ranking | View the class ranking (student / parent: own rank only). |
+| UC-88 | View Grades | Teacher, Student, Parent, School Manager | Results & Ranking | View grades, semester / year subject averages and the academic level (Tốt / Khá / Đạt / Chưa đạt, Circular 22, since 23/11/2026) within the role's scope (student / parent: finalized grade books only). |
+| UC-89 | View Class Ranking | Teacher, Student, Parent, School Manager | Results & Ranking | **Removed 23/11/2026** (Circular 22: no overall average, students are not compared); replaced by the academic level in UC-88. |
 | UC-128 | Export Grade Book | Teacher, School Manager | Results & Ranking | Export a grade book (class × subject × semester) to Excel, finalized or not: each score, the semester average, the book status and a note (added 18/11/2026). |
 
 ## FE-12 Attendance Management

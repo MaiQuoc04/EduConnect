@@ -1,7 +1,16 @@
 import { pool, withTransaction } from '../../config/db.js';
 import { badRequest, forbidden } from '../../utils/AppError.js';
 import { vietnameseNameOrder } from '../../utils/nameSort.js';
-import { ABSENCES, MODES, NOTE_MAX, REASON_MAX, STATUSES, STATUS_LABELS, TODAY_SQL } from './attendance.constants.js';
+import {
+  ABSENCES,
+  MODES,
+  MORNING_LAST_PERIOD,
+  NOTE_MAX,
+  REASON_MAX,
+  STATUSES,
+  STATUS_LABELS,
+  TODAY_SQL,
+} from './attendance.constants.js';
 import {
   classSubjectScope,
   contextOf,
@@ -197,7 +206,46 @@ function sheetOut(lesson, rows) {
 export async function getSheet(lessonId, user) {
   const ctx = await contextOf(user);
   const lesson = await loadLesson(pool, ctx, lessonId);
-  return sheetOut(lesson, await sheetRows(pool, lesson));
+  const rows = await sheetRows(pool, lesson);
+  const sheet = sheetOut(lesson, rows);
+  if (!sheet.lesson.taken && (lesson.mode === MODES.TEACHER || lesson.mode === MODES.MANAGER)) {
+    sheet.prefill = await prefillOf(pool, lesson);
+  }
+  return sheet;
+}
+
+/**
+ * Prefill of a period not taken yet (lead, 23/11/2026, business rules §12 point 3): the statuses AND notes of the
+ * nearest earlier period of the same class, same day and same session (morning 1–5 / afternoon 6–10) that is already
+ * taken – copied as they are (a late student stays late, notes included). It is only a draft: nothing is stored and
+ * the period stays "not taken" (and in the SM's list of periods not taken) until its teacher saves it. Students not on
+ * that period's list (e.g. enrolled since) are not in `records`; the client starts them as present.
+ * null when no earlier period of the session is taken (the first period of a session: everyone present, as before).
+ */
+async function prefillOf(db, lesson) {
+  const sameSession = lesson.period <= MORNING_LAST_PERIOD ? `sl.period_number <= ${MORNING_LAST_PERIOD}` : `sl.period_number > ${MORNING_LAST_PERIOD}`;
+  const { rows: src } = await db.query(
+    `SELECT ts.timetable_slot_id AS "lessonId", sl.period_number AS "period", sj.subject_name AS "subjectName",
+            tu.full_name AS "teacherName"
+     FROM timetable_slots ts
+     JOIN time_slots sl ON sl.slot_id = ts.slot_id
+     JOIN subjects sj ON sj.subject_id = ts.subject_id
+     JOIN teachers t ON t.teacher_id = ts.teacher_id JOIN users tu ON tu.user_id = t.user_id
+     WHERE ts.class_id = $1 AND ts."date" = $2::date AND sl.period_number < $3 AND ${sameSession}
+       AND EXISTS (SELECT 1 FROM attendances a WHERE a.timetable_slot_id = ts.timetable_slot_id)
+     ORDER BY sl.period_number DESC
+     LIMIT 1`,
+    [lesson.classId, lesson.date, lesson.period],
+  );
+  if (!src[0]) return null;
+  const { rows } = await db.query(
+    `SELECT enrollment_id AS "enrollmentId", status, note FROM attendances WHERE timetable_slot_id = $1`,
+    [src[0].lessonId],
+  );
+  return {
+    ...src[0],
+    records: Object.fromEntries(rows.map((r) => [r.enrollmentId, { status: r.status, note: r.note ?? '' }])),
+  };
 }
 
 // GET /attendances/lessons/:lessonId/history – every action on the period, newest first.

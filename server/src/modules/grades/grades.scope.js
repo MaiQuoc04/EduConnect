@@ -207,7 +207,7 @@ export async function lockBookForWrite(client, classId, subjectId, semesterId) {
 }
 
 // Enrollments of a class (every status: transferred / dropped students keep their old grades, read only).
-// ASSUMPTION (FE-11 owner, 10/11/2026): only STUDYING students are edited, required for finalizing and ranked.
+// ASSUMPTION (FE-11 owner, 10/11/2026): only STUDYING students are edited, required for finalizing and given a level.
 export async function classEnrollments(db, classId) {
   const { rows } = await db.query(
     `SELECT e.enrollment_id AS "enrollmentId", e.status, s.student_id AS "studentId", s.student_code AS "studentCode",

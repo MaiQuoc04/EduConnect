@@ -50,6 +50,7 @@ import TimetableEditorPage from './pages/timetable/TimetableEditorPage.jsx';
 import TimetableHistoryPage from './pages/timetable/TimetableHistoryPage.jsx';
 import TimetableImportPage from './pages/timetable/TimetableImportPage.jsx';
 import PeriodTimesPage from './pages/timetable/PeriodTimesPage.jsx';
+import SchoolSettingsPage from './pages/settings/SchoolSettingsPage.jsx';
 import TimetableAutoPage from './pages/timetable/TimetableAutoPage.jsx';
 import SchoolEventsPage from './pages/calendar/SchoolEventsPage.jsx';
 import TimetableManagementPage from './pages/timetable/TimetableManagementPage.jsx';
@@ -392,6 +393,8 @@ export default function App() {
         <Route path="school-events" element={<ProtectedRoute roles={['SCHOOL_MANAGER', 'TEACHER', 'STUDENT', 'PARENT']}><SchoolEventsPage /></ProtectedRoute>} />
         <Route path="timetables/auto" element={<ProtectedRoute roles={['SCHOOL_MANAGER']}><TimetableAutoPage /></ProtectedRoute>} />
         <Route path="timetables/period-times" element={<ProtectedRoute roles={['SCHOOL_MANAGER']}><PeriodTimesPage /></ProtectedRoute>} />
+        {/* School Manager settings (Dung, 21/11/2026; no SCR id yet) */}
+        <Route path="school-settings" element={<ProtectedRoute roles={['SCHOOL_MANAGER']}><SchoolSettingsPage /></ProtectedRoute>} />
         <Route path="timetables/import" element={<ProtectedRoute roles={['SCHOOL_MANAGER']}><TimetableImportPage /></ProtectedRoute>} />
         <Route path="timetables/classes/:classId/edit" element={<ProtectedRoute roles={['SCHOOL_MANAGER']}><TimetableEditorPage /></ProtectedRoute>} />
         <Route path="timetables/classes/:classId/history" element={<ProtectedRoute roles={['SCHOOL_MANAGER']}><TimetableHistoryPage /></ProtectedRoute>} />
@@ -515,8 +518,9 @@ export default function App() {
           ['grades/control', ['SCHOOL_MANAGER'], <GradeControlPage />], // SCR-68 UC-86
           ['grades/history', ['SCHOOL_MANAGER'], <GradeHistoryPage />], // SCR-68 UC-87
           ['grades/entry', ['TEACHER'], <GradeEntryPage />], // SCR-44 UC-83, UC-84, UC-85
-          ['grades/results', ['SCHOOL_MANAGER', 'TEACHER', 'STUDENT', 'PARENT'], <GradeResultsPage mode="results" />], // SCR-47 UC-88
-          ['grades/ranking', ['SCHOOL_MANAGER', 'TEACHER', 'STUDENT', 'PARENT'], <GradeResultsPage mode="ranking" />], // SCR-48 UC-89
+          ['grades/results', ['SCHOOL_MANAGER', 'TEACHER', 'STUDENT', 'PARENT'], <GradeResultsPage />], // SCR-47 UC-88
+          // SCR-48 Class Ranking removed 23/11/2026 (Circular 22 does not compare students): old links go to the results.
+          ['grades/ranking', ['SCHOOL_MANAGER', 'TEACHER', 'STUDENT', 'PARENT'], <Navigate to="/grades/results" replace />],
           ['grades/students/:studentId', ['SCHOOL_MANAGER', 'TEACHER'], <StudentResultsPage />], // SCR-47 UC-88
         ].map(([path, roles, page]) => (
           <Route key={path} path={path} element={<ProtectedRoute roles={roles}>{page}</ProtectedRoute>} />

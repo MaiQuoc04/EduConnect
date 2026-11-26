@@ -13,13 +13,14 @@ people on your own – ask the team lead (Quoc).
 
 ## Summary
 
-Code due dates: It1 30/10, It2 13/11, It3 27/11.
+Code due dates: It1 30/10, It2 13/11, It3 **25/11 10:00** (moved from 27/11 on 24/11/2026 so that the Report 5 test
+rounds finish before the reports are due at the end of 26/11 – see "Report 5 test schedule" under Current status).
 
 | Iteration | Dates | Quoc | Anh | Dung | Khanh | Linh |
 |---|---|---|---|---|---|---|
 | Iteration 1 | 19/10 – 30/10/2026 | FE-01 | FE-02 | FE-03 | FE-04 | FE-13 |
 | Iteration 2 | 02/11 – 13/11/2026 | review | FE-08, FE-14 | FE-10 timetable | FE-05, FE-06 | testing, integration |
-| Iteration 3 | 16/11 – 27/11/2026 | FE-09, FE-12 | – | FE-10 calendar, FE-07 | – | FE-11 |
+| Iteration 3 | 16/11 – 25/11/2026 | FE-09, FE-12 | – | FE-10 calendar, FE-07 | – | FE-11 |
 
 FE-10 is split: timetable in It2, class calendar in It3. It2 changed by the lead on 03/11/2026: Anh takes FE-08 School
 Feed and FE-14 Parent Management (follows FE-02), Khanh takes FE-05 Group Feed and FE-06 Messaging (follow FE-04
@@ -27,6 +28,53 @@ groups; FE-06 moved back from It3). FE-05 and FE-08 are built separately; code t
 reactions, attachments) is merged into one place after both are on `develop`.
 
 ## Current status (read first; update after every merge, schema patch or new decision)
+
+- **Report 5 test schedule (decided 24/11/2026, lead):** reports R1–R7 are due at the **end of 26/11/2026**, so the
+  last test round is run just before that and everything else is planned backwards from it. "Round" means a run of
+  the whole set of Report 5 test cases (Round 2 and 3 re-run the failed cases plus the main flows after the fixes),
+  not an iteration.
+
+  | When | Work |
+  |---|---|
+  | 24/11 | Test plan 5.0 and the frames of 5.1–5.5 (done, on Drive) |
+  | 24/11 evening – 25/11 10:00 | Everyone writes the test cases in their own sheets (FE for 5.1 / 5.2, BF for 5.3 / 5.5) |
+  | **25/11 10:00** | **It3 code due (code freeze for testing):** after this only fixes of defects found by the test rounds are merged; a feature merged later gets N/A with a note |
+  | 25/11 10:00 – 12:00 | Test case review (Quoc) |
+  | 25/11 13:00 – 20:00 | Round 1: UT + IT on the local test DB, ST (BF-01..BF-12) and NFR (5.4) |
+  | 25/11 20:00 – 26/11 08:00 | Fix the Critical / Major defects of Round 1 (feature owner) |
+  | 26/11 08:00 – 12:00 | Round 2: failed cases + main flows again |
+  | 26/11 13:00 – 17:00 | Round 3 (last round) + acceptance scripts SC-01..SC-12 |
+  | 26/11 17:00 – end of day | Quoc fills 5.0 II.3 from the Test Statistics sheets; reports submitted |
+  | Weeks 13–14 | Only revising and finishing Reports 6 and 7; no code or test changes |
+
+- **FE-10 School Manager settings + FE-07 fix merged into `develop` (24/11/2026, Quoc; client `npm run build` and
+  server `npm test` (21/21) pass):**
+  - `fix/fe-07-registration-list` (Dung, PR #16, merge `a9a5324`): UC-56 / UC-57 registration list and export no
+    longer fail without a search (the accent parameters `$3` / `$4` are sent only with a search).
+  - `feature/fe-10-school-settings` (Dung, PR #17, merge `8dbaec9`): School Manager "Cài đặt hệ thống" (`/school-settings`: teaching
+    load of automatic scheduling + **attendance edit deadline**, so the FE-13 gap is closed), automatic scheduling
+    draft edited by hand / teacher change in the cell editor / teacher load cards (details in Dung's entries below).
+    Conflict in `client/src/navigation.js` resolved: FE-13's "Quản lý tài khoản" group kept, Dung's comment on
+    "Quản trị hệ thống". FE-12 `attendance.scope.js` reads the deadline through `attendanceDeadline()` (2 lines, reviewed).
+  - **DB:** `school_settings` on the shared DB (read-only check 24/11: the 4 `teaching.*` rows; no attendance row
+    yet). `patch_v0.3_school_settings_attendance.sql` **still proposed, not run** – the app works without it
+    (`school_settings` first, then the `system_settings` value 23:59; a School Manager save writes into
+    `school_settings`).
+  - **Open (lead):** approve / run that patch; Dung's `// ASSUMPTION:` earliest deadline 12:00.
+  - **Numbers given (24/11/2026, lead):** UC-133 Configure School Settings, SCR-86 School Settings (use-cases.md,
+    screens.md, permissions.md; SCR-85 Update Contact Information of FE-13 added to screens.md, it was only in R3).
+    Owed (Dung): replace "id pending" in R3 10.1.11 and in the UC / screen lists, add the screenshot; add the
+    `school_settings` table to R4 I.3 (56 tables). Owed (Linh): R4 I.2 lists 22 packages, now 23 (`school-settings`).
+  - Still not merged: `feature/fe-08-school-feed` (`baaa3a5`, Anh, 19/11).
+
+- **FE-13 merged into `develop` (24/11/2026, Quoc, `feature/fe-13-system-administration`, merge `a9c656e`;
+  client `npm run build` and server `npm test` (21/21) pass; Linh's work of 22–24/11 below):** School Manager manages student / teacher / parent accounts, "Thêm vai trò", menu "Quản lý tài khoản",
+  System Admin profile pages, settings changes. No schema change; `patch_v0.3_class_periods_settings_remove.sql`
+  already run (read-only check 24/11: both `timetable.class_periods_*` rows gone). Scope checked on the server
+  (`admin/scope.js`, `assertScope`): School Manager is refused on accounts with the SM / SA role, edits only email and
+  phone, exports per type, never adds the SM role. Touches FE-02 / FE-03 / FE-14 pages (one import and a few lines
+  each) – tell Anh and Dung. **Gap closed 24/11 by the FE-10 settings merge (above); before it** nobody could
+  edit `attendance.edit_deadline_time` (FE-12 still reads it).
 
 - **FE-13 roles: one role at creation, "Thêm vai trò" afterwards (24/11/2026, Linh, option 2; business rules §1,
   permissions 25):** SCR-61 has no role picker – an account is created with the role of its page, like an import row
@@ -55,7 +103,7 @@ reactions, attachments) is merged into one place after both are on `develop`.
   it. **Follow-up owed (Dung):** edit it on the School Manager's settings page (`/school-settings`).
 - **FE-13 settings `timetable.class_periods_min` / `_max` dropped (23/11/2026, Linh):** added 22/11 and removed the next
   day. **DB: `patch_v0.3_class_periods_settings_remove.sql` (deletes the 2 rows) – run on the shared DB 23/11 by Linh.**
-- **FE-13 System Admin profile pages (22/11/2026, Linh, `feature/fe-13-system-administration`, not merged yet;
+- **FE-13 System Admin profile pages (22/11/2026, Linh, `feature/fe-13-system-administration`, merged into `develop` 24/11;
   supervisor's request):** menu "Hồ sơ học sinh", "Hồ sơ giáo viên", "Hồ sơ phụ huynh", "Quản lý nhà trường"
   (`/admin/students|teachers|parents|school-managers`): the UC-97 list with the role fixed, "Thêm" (UC-95, role fixed,
   other combinable roles can be added) and "Nhập từ file" (UC-96, type fixed). "Tài khoản người dùng" keeps the list
@@ -63,6 +111,79 @@ reactions, attachments) is merged into one place after both are on `develop`.
   username and the fields of the import file only. No schema change; FE-02 / FE-03 / FE-14 code untouched. SRS
   (UC-95, 96, 99, SCR-59, 61, 62, 76) to update.
 
+- **Deploy config merged into `develop` (23/11/2026, Quoc, `chore/deploy-config` by Anh, merge `544f60e`; client
+  `npm run build` and server `npm test` (21/21) pass on `develop`):** target Vercel (client) + VPS with nginx and pm2
+  (server) + Supabase (DB and Storage); guide in `DEPLOY.md` (Vietnamese). Client reads `VITE_API_URL` /
+  `VITE_SOCKET_URL` at build time (`api/client.js`, `SocketContext.jsx`; empty or unset = same origin through the
+  Vite proxy, so development is unchanged), `client/.env.example`, `client/vercel.json` (SPA rewrite to
+  `index.html`). Server: `trust proxy` `true` → `1` (one nginx hop, so clients cannot forge `req.ip` in
+  `activity_logs`, §13). No schema change.
+  - **Owed in `DEPLOY.md` (Anh):** §3.1 / §3.3 / §4 still say "PHẢI SỬA CODE" and quote the old code, though this
+    branch already made those changes; it says Node listens only on `127.0.0.1`, but `server.listen(env.port)` listens
+    on every interface (safe while `ufw` keeps port 5000 closed; fix the sentence or bind to `127.0.0.1` in
+    production). At deploy time, check the shared DB for old `/uploads/...` URLs, which break once files are served
+    from Supabase only.
+  - Still not merged (23/11): `feature/fe-08-school-feed` (`baaa3a5`, 19/11), `feature/fe-10-school-settings`
+    (`d474b16`, 23/11), `feature/fe-13-system-administration` (`f32bfbe`, 23/11), `fix/fe-07-registration-list`
+    (`d0db83b`, 21/11).
+
+- **FE-12 prefill merged into `develop` (23/11/2026, Quoc, `feature/fe-12-attendance`, merge `23e4d9f`; build and
+  `npm test` pass on `develop`):** a period
+  not taken yet opens prefilled from the nearest earlier taken period of the same day and session (statuses and
+  notes copied as they are); the period is taken only when its teacher saves it (business rules §12 point 3). Server:
+  `getSheet` returns `prefill` (`attendance.service.js`, `MORNING_LAST_PERIOD` in `attendance.constants.js`); client:
+  `AttendanceSheet.jsx` drafts from it and shows "Đã điền sẵn theo tiết …". No schema change, notifications
+  unchanged. Tested on the local DB: 15 API steps (no prefill for the first period of a session, nearest earlier
+  taken period wins, late / notes copied as is, still "not taken" and in the SM's list until saved, afternoon never
+  copies the morning, notifications as before). Client build passes.
+
+- **FE-11 no overall average and no ranking (23/11/2026, Linh, `feature/fe-11-grade-management`, merged into
+  `develop` 23/11; supervisor's request; business rules §11):** Circular 22 has no average of all subjects and does not compare students, so
+  `overallAverage` / `rankStudents` are gone; each student gets an academic level Tốt / Khá / Đạt / Chưa đạt per
+  semester and year (`academicLevel`, Article 9, unit tested). SCR-47 shows a "Kết quả học tập" column / boxes instead
+  of "ĐTB chung" and "Hạng"; SCR-48 Class Ranking and its menu item removed (`/grades/ranking` redirects). No schema
+  change. **Open:** subjects assessed by comments (Đạt / Chưa đạt), conduct and the titles Học sinh Giỏi / Xuất sắc
+  need schema changes – to agree with the lead. SRS: UC-88, UC-89, SCR-47, SCR-48 to update.
+- **FE-03 / FE-07 / FE-10 clean-up (24/11/2026, Dung, `fix/fe-10-calendar-one-class`, PR #18, merged into `develop` 25/11, merge `1928cdb`):** class calendar
+  (UC-76): a student sees their own class, no "Tất cả lớp" picker (teachers and parents keep it); always-shown
+  reminder notes removed from Dung's pages (calendar, timetable views / editor, period times, school settings,
+  extracurricular form and registration list, teacher list, teaching assignment); duplicates removed: the teacher
+  schedule lookup on SCR-19 (same as the weekly schedule on Teacher Detail, UC-16; endpoint
+  `GET /timetables/teachers/:teacherId/week` removed) and the version list inside the timetable editor (the history page
+  UC-124 stays, linked from the editor). No schema change. **Open (lead):** remove UC-125 from use-cases.md /
+  permissions.md and the R3 SRS, or keep it pointing to Teacher Detail.
+- **FE-10 automatic scheduling fix (25/11/2026, Dung, `fix/fe-10-auto-fixed-busy`, merged into `develop` 25/11, merge
+  `e464504`; also removes the "Thông báo tự động" note from the class event form, SCR-40/42):** the HĐTN of the fixed cells
+  (Chào cờ, Sinh hoạt lớp) no longer goes to a teacher who teaches a class outside the run at a fixed cell (found when
+  re-taking the R3 screenshots: 12D1 got the teacher who has Chào cờ in 10A1, so its two fixed lessons could not be
+  placed). Pre-check: teachers busy at a fixed cell are not counted for `FIXED_TEACHERS`; new blocking error
+  `FIXED_TEACHER_BUSY` for a kept assignment. Solver unit tests added (`timetable.auto.solver.test.js`).
+- **FE-10 School Manager settings (21/11/2026, Dung, `feature/fe-10-school-settings`, merged into `develop` 24/11):** new page
+  "Cài đặt hệ thống" for the School Manager (`/school-settings`, menu "Quản trị hệ thống"; `GET` / `PUT
+  /api/v1/school-settings`, module `server/src/modules/school-settings`). First group, moved from part "4. Giáo viên"
+  of automatic scheduling (SCR-80): teacher norm, homeroom teacher norm, periods over the norm, periods a day.
+  Automatic scheduling reads them on every run and apply (no longer in the request) and shows them read only; the
+  busy teachers list stays on SCR-80. **DB: `patch_v0.3_school_settings.sql` (new table `school_settings`, 4 rows
+  17 / 13 / 4 / 4) – approved by the lead, run on the shared DB 21/11 by Dung; 56 tables.** Schema file updated, so
+  `scripts/dev-local-db.js` gets the table and its rows. Separate from `system_settings` (System Admin only, UC-102).
+  **Owed:** UC / SCR id for the page (lead), use-cases.md / screens.md / permissions.md rows, SRS screen description.
+- **Attendance deadline moved to the School Manager settings (24/11/2026, Dung, `feature/fe-10-school-settings`,
+  not merged yet; PROPOSED):** "Giờ cuối giáo viên bộ môn được sửa điểm danh trong ngày" (`attendance.edit_deadline_time`,
+  §12) is now edited by the School Manager in "Cài đặt hệ thống" (group "Điểm danh", time 12:00–23:59, default 23:59)
+  instead of the System Admin. FE-12 `deadlineTime()` (`attendance.scope.js`, Quoc's module – one function changed)
+  reads `school_settings` first, then the old `system_settings` row, then 23:59, so nothing changes before the patch.
+  **DB: `patch_v0.3_school_settings_attendance.sql` (copies the value into `school_settings`, deletes the
+  `system_settings` row so the SA screen stops showing it) – NOT run, waiting for the lead.** Schema file updated.
+  Open: the earliest time 12:00 is an assumption; the SA page label for the key (Linh, `SystemSettingsPage.jsx`) can be
+  removed after the patch.
+- **FE-10 automatic scheduling: draft edited by hand before "Áp dụng" (21/11/2026, Dung, same branch, not merged
+  yet):** on SCR-80 the School Manager can move a lesson (click or drag onto another cell of the class = swap), put
+  another subject in a cell or leave it empty, and change the teacher of a class and subject (qualified teachers
+  only in the list). Every change is checked again by `POST /api/v1/timetables/auto/check` (nothing saved;
+  `timetable.auto.review.js`): the same hard rules as `/auto/apply` (errors block "Áp dụng") and the soft rules S1–S9 /
+  GAP (warnings with their weights), each with its cell, shown on the grids and in "Cần chú ý"; undo and "Về bản
+  gốc". `/auto/run` also returns this review, the subjects of each class and when each teacher is busy (other classes
+  / marked). **No schema change.** `/auto/apply` unchanged (still re-checks everything).
 - **FE-04 / FE-06 follow-ups merged into `develop` (21/11/2026, Quoc, `feature/fe-05-group-feed`, merge `7eb509b`;
   client `npm run build` and server `npm test` (20/20) pass on `develop`):** six commits of Khanh, 20–21/11.
   - **FE-04 class types per grade only** (UC-26, SCR-70, business rules §4): no more "every grade" type, tab and
@@ -493,6 +614,9 @@ It2: Anh FE-08 + FE-14, Khanh FE-05 + FE-06).
   is `sendClassEventReminders()` (`calendar.reminders.js`): **FE-09 (Quoc) – please call it from the UC-69 job**.
   FE-07 (built on the FE-05 class feed) merged 18/11.
 - **Follow-ups owed:**
+  - **Linh – R3 / R4 after the FE-11 change (lead's review 23/11/2026):** 16 items (UC-89 / SCR-48 still listed,
+    SCR-47 fields, UC-85 postconditions, GBR-31, new GBR-43, R4 package table and IV.4, one code comment) in
+    `docs/report-fixes-fe11-linh.md`. Edit the Drive copies in "Nháp"; tick the items when done.
   - FE-08 school feed sync (18/11, Anh): pop-up **OK'd by the lead and merged**. Still owed on top of it (Quoc or
     Anh): two tabs Bài đăng / Tin tức without "Tất cả" and "Bài đăng" instead of "Thông báo" for ANNOUNCEMENT (§8);
     to settle with Anh: "Hiển thị thêm" = whole post or 1,000 characters + "Đọc toàn bài".
@@ -789,7 +913,7 @@ Timetable part only (UC-70..75).
 
 ### Quoc: Review.
 
-## Iteration 3 (16/11 – 27/11/2026)
+## Iteration 3 (16/11 – 25/11/2026)
 
 ### Dung: FE-10 Schedule Management (5 UC)
 

@@ -26,12 +26,6 @@ export async function saveClassTimetable(classId, { startDate, endDate, entries,
   return data;
 }
 
-// School Manager – the teaching schedule of any teacher for the week of `date` (Dung, 18/11/2026)
-export async function getTeacherWeek(teacherId, date) {
-  const { data } = await api.get(`/timetables/teachers/${teacherId}/week`, { params: date ? { date } : {} });
-  return data;
-}
-
 // UC-74 – classes this user may view (own class, children's classes, taught classes)
 export async function getViewableClasses() {
   const { data } = await api.get('/timetables/viewable-classes');
@@ -112,6 +106,12 @@ export async function getAutoOptions(schoolYearId) {
 
 export async function runAutoSchedule(config) {
   const { data } = await api.post('/timetables/auto/run', config);
+  return data;
+}
+
+// A draft edited by hand: checked again with every rule, nothing saved (21/11/2026)
+export async function checkAutoSchedule({ config, draft }) {
+  const { data } = await api.post('/timetables/auto/check', { config, draft });
   return data;
 }
 

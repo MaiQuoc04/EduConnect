@@ -9,7 +9,9 @@ export const tokenStore = {
 };
 
 // All API calls go through this instance: it adds the token and normalises errors to { code, message }.
-export const api = axios.create({ baseURL: '/api/v1' });
+// VITE_API_URL (set at build time on Vercel) points to the API on its own domain; unset in development, so '/api/v1'
+// goes through the Vite proxy.
+export const api = axios.create({ baseURL: import.meta.env.VITE_API_URL || '/api/v1' });
 
 api.interceptors.request.use((config) => {
   const token = tokenStore.get();

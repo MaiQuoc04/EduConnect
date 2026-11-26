@@ -111,7 +111,6 @@ export default function PeriodTimesPage() {
               </span>
               {problems.duration && <span className="field-error">{problems.duration}</span>}
             </label>
-            <div className="notice ink"><Icon name="info" /><p>Áp dụng cho <strong>mọi ngày, mọi lớp</strong> (cả các tuần đã qua) vì thời khoá biểu chỉ lưu số tiết. Thời khoá biểu, lịch dạy và lịch dạy trong hồ sơ giáo viên hiển thị theo giờ mới ngay sau khi lưu.</p></div>
             {saveError && (
               <div className="notice amber" role="alert"><Icon name="error_outline" />
                 <div>

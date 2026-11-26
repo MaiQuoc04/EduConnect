@@ -1,0 +1,19 @@
+/* School Manager settings (Dung, 21/11/2026) */
+.ss-card { display: grid; gap: 20px; max-width: 880px; }
+.ss-card-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 16px; flex-wrap: wrap; }
+.ss-card-head p { margin: 4px 0 0; }
+.ss-updated { display: grid; gap: 2px; text-align: right; font-size: 13px; }
+.ss-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px 24px; }
+.ss-grid .field { margin: 0; }
+.ss-input { display: flex; align-items: center; gap: 8px; }
+.ss-input .input { max-width: 140px; }
+.ss-unit { color: var(--graphite-500); font-size: 14px; }
+.ss-actions { display: flex; justify-content: flex-end; align-items: center; gap: 8px; }
+.ss-actions .caption { margin-right: auto; }
+@media (max-width: 720px) {
+  .ss-grid { grid-template-columns: 1fr; }
+  .ss-updated { text-align: left; }
+}
+.ss-form { display: grid; gap: 16px; max-width: 880px; }
+.ss-actions.card { padding: 12px 16px; position: sticky; bottom: 0; z-index: 2; }
+.tt-head .ss-updated { align-self: flex-end; }

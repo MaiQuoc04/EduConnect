@@ -60,6 +60,7 @@ Source: Report 3 section 4.4 (draft v1.3). Full = all records; Restricted (n) = 
 | Class timetable | View | No | Full | Restricted (4) | Restricted (4) | Restricted (7) | Restricted (7) |
 | Period times | Configure (UC-122) | No | Full | No | No | No | No |
 | Automatic scheduling | Run / apply (UC-123) | No | Full | No | No | No | No |
+| School settings (teaching load, attendance edit deadline) | View / change (UC-133) | No | Full | No | No | No | No |
 | Timetable history | View / export (UC-124) | No | Full | No | No | No | No |
 | School calendar | Create / update / delete (UC-126) | No | Full | No | No | No | No |
 | School calendar | View (UC-127) | No | Full | Full | Full | Restricted (21) | Restricted (21) |
@@ -70,7 +71,7 @@ Source: Report 3 section 4.4 (draft v1.3). Full = all records; Restricted (n) = 
 | Grade structure | Configure / copy | No | Full | No | No | No | No |
 | Grade | Enter / import / finalize | No | No | Restricted (11) | Restricted (11) | No | No |
 | Grade | Unlock, view change history | No | Full | No | No | No | No |
-| Grade, class ranking | View | No | Full (view only) | Restricted (12) | Restricted (12) | Restricted (7) | Restricted (7) |
+| Grade, academic level | View | No | Full (view only) | Restricted (12) | Restricted (12) | Restricted (7) | Restricted (7) |
 | Grade book | Export to Excel | No | Full | Restricted (12) | Restricted (12) | No | No |
 | Attendance | Take / edit same day | No | No | Restricted (13) | Restricted (13) | No | No |
 | Attendance | Edit after the day | No | Full | Restricted (14) | No | No | No |

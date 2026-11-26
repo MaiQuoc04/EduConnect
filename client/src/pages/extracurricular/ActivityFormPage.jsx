@@ -324,18 +324,6 @@ export default function ActivityFormPage() {
             </label>
           </div>
 
-          <div className="notice ink">
-            <Icon name="info" />
-            <div>
-              <p className="notice-title">Thông báo tự động</p>
-              <p>
-                {editing
-                  ? 'Khi đổi thời gian, địa điểm hoặc hạn đăng ký, phụ huynh của các học sinh đã đăng ký sẽ nhận thông báo. Khi đã có người đăng ký, chỉ tiêu không được nhỏ hơn số đã đăng ký.'
-                  : `Hoạt động được đăng lên bảng tin lớp ${cls?.className ?? ''} và gửi thông báo tới ${cls?.parentCount ?? 0} phụ huynh cùng học sinh của lớp. Phụ huynh chưa đăng ký nhận thêm nhắc trước hạn 1 ngày.`}
-              </p>
-            </div>
-          </div>
-
           <div className="xa-actions">
             <Link to={back} className="btn btn-secondary">Huỷ</Link>
             <button type="submit" className="btn btn-primary" disabled={saving || locked || (editing && !dirty) || cls?.hasFeed === false}>

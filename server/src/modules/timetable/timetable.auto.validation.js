@@ -29,8 +29,9 @@ const idMap = (v, field, min, max) => {
   return out;
 };
 
-const FIELDS = ['schoolYearId', 'semesterId', 'classIds', 'mode', 'keepAssignments', 'grid', 'periods', 'norm', 'homeroomNorm',
-  'maxOver', 'maxPerDay', 'maxPerSubjectDay', 'rooms', 'busy', 'heavySubjectIds', 'afternoonSubjectIds', 'fixed', 'weights',
+// norm, homeroomNorm, maxOver and maxPerDay are no longer sent: they are the School Manager settings
+// (school-settings module, Dung 21/11/2026) and timetable.auto.js reads them on every run and apply.
+const FIELDS = ['schoolYearId', 'semesterId', 'classIds', 'mode', 'keepAssignments', 'grid', 'periods', 'maxPerSubjectDay', 'rooms', 'busy', 'heavySubjectIds', 'afternoonSubjectIds', 'fixed', 'weights',
   'seed', 'timeLimitSec'];
 export const MODES = Object.freeze(['ALL', 'ASSIGN', 'TIMETABLE']);
 
@@ -58,10 +59,6 @@ export function autoConfig(b) {
   if (!grid.length) throw bad('grid', 'EMPTY');
   if (grid.length > L.DAYS_MAX) throw bad('grid', 'TOO_MANY_DAYS', { max: L.DAYS_MAX });
   if (grid.some((d) => d.weekday === 7)) throw bad('grid', 'SUNDAY');
-
-  const norm = int(b.norm ?? L.NORM, 'norm', 1, 40);
-  const homeroomNorm = int(b.homeroomNorm ?? L.HOMEROOM_NORM, 'homeroomNorm', 0, 40);
-  if (homeroomNorm > norm) throw bad('homeroomNorm', 'ABOVE_NORM');
 
   let busy = [];
   if (b.busy !== undefined && b.busy !== null) {
@@ -103,10 +100,6 @@ export function autoConfig(b) {
     keepAssignments: b.keepAssignments ?? false,
     grid,
     periods: idMap(b.periods, 'periods', 0, 15),
-    norm,
-    homeroomNorm,
-    maxOver: int(b.maxOver ?? L.MAX_OVER, 'maxOver', 0, 20),
-    maxPerDay: int(b.maxPerDay ?? L.MAX_PER_DAY, 'maxPerDay', 1, 10),
     maxPerSubjectDay: int(b.maxPerSubjectDay ?? L.MAX_PER_SUBJECT_DAY, 'maxPerSubjectDay', 1, 5),
     rooms: idMap(b.rooms, 'rooms', 1, 100),
     busy,
@@ -131,7 +124,22 @@ export function autoApplyRequest(req) {
   const config = autoConfig(b.config);
   if (typeof b.stamp !== 'string' || !b.stamp || b.stamp.length > 100) throw bad('stamp', 'REQUIRED');
   if (b.confirmOverwrite !== undefined && typeof b.confirmOverwrite !== 'boolean') throw bad('confirmOverwrite', 'FORMAT');
-  const d = b.draft;
+  return { config, stamp: b.stamp, confirmOverwrite: b.confirmOverwrite ?? false, draft: draftOf(b.draft, config) };
+}
+
+// POST /timetables/auto/check { config, draft } – a draft edited by hand, checked without saving (Dung, 21/11/2026).
+export function autoCheckRequest(req) {
+  const b = req.body;
+  if (!isPlainObject(b)) throw bad('body', 'FORMAT');
+  const extra = Object.keys(b).filter((k) => !['config', 'draft'].includes(k));
+  if (extra.length) throw bad(extra[0], 'UNKNOWN');
+  const config = autoConfig(b.config);
+  return { config, draft: draftOf(b.draft, config) };
+}
+
+// The draft of /apply and /check: assignments (unless step B alone) and the weekly pattern of each class (unless
+// step A alone). Shapes only; the rules are checked in timetable.auto.review.js / timetable.auto.js.
+function draftOf(d, config) {
   if (!isPlainObject(d)) throw bad('draft', 'FORMAT');
   let assignments = [];
   if (config.mode !== 'TIMETABLE') {
@@ -152,7 +160,7 @@ export function autoApplyRequest(req) {
       });
     }
   }
-  return { config, stamp: b.stamp, confirmOverwrite: b.confirmOverwrite ?? false, draft: { assignments, timetables } };
+  return { assignments, timetables };
 }
 
 // GET /timetables/auto/options?schoolYearId=

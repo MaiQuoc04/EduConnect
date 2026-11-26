@@ -1,10 +1,10 @@
 import * as timetableImport from './timetable.import.js';
 import * as auto from './timetable.auto.js';
-import { autoApplyRequest, autoOptionsQuery, autoRunRequest } from './timetable.auto.validation.js';
+import { autoApplyRequest, autoCheckRequest, autoOptionsQuery, autoRunRequest } from './timetable.auto.validation.js';
 import * as timetableHistory from './timetable.history.js';
 import * as periodTimes from './timetable.periods.js';
 import * as timetableService from './timetable.service.js';
-import { classIdParam, dateQuery, teacherIdParam, importRequest, listQuery, periodTimesRequest, saveRequest } from './timetable.validation.js';
+import { classIdParam, dateQuery, importRequest, listQuery, periodTimesRequest, saveRequest } from './timetable.validation.js';
 
 // FE-10 timetable (Dung). Controllers check the request, call the service and send the result.
 
@@ -54,11 +54,6 @@ export async function classWeek(req, res) {
   res.json(await timetableService.classWeek({ classId: classIdParam(req), ...dateQuery(req) }, req.user));
 }
 
-// GET /api/v1/timetables/teachers/:teacherId/week?date=  (School Manager: look up a teacher's teaching schedule)
-export async function teacherWeek(req, res) {
-  res.json(await timetableService.teacherWeek({ teacherId: teacherIdParam(req), ...dateQuery(req) }));
-}
-
 // GET /api/v1/timetables/teaching-schedule/week?date=  (SCR-57 / SCR-58, UC-75)
 export async function teachingWeek(req, res) {
   res.json(await timetableService.teachingWeek(dateQuery(req), req.user));
@@ -81,6 +76,11 @@ export async function autoOptions(req, res) {
 
 export async function autoRun(req, res) {
   res.json(await auto.runAuto(autoRunRequest(req)));
+}
+
+// POST /api/v1/timetables/auto/check { config, draft } – a draft edited by hand, checked again (nothing saved)
+export async function autoCheck(req, res) {
+  res.json(await auto.checkAuto(autoCheckRequest(req)));
 }
 
 export async function autoApply(req, res) {

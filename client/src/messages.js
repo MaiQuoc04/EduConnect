@@ -2,6 +2,15 @@ import { DEPARTMENT_REASON_TEXT, NAME_REASON_TEXT } from './utils/teacherValidat
 
 // Vietnamese UI text for API error codes. The server keeps its messages in English; the client shows these.
 // Add a line here whenever a module introduces a new error code.
+// Field names of the School Manager settings, for MSG_SCHOOL_SETTINGS_INVALID.
+const SCHOOL_SETTING_LABELS = {
+  norm: 'Định mức giáo viên',
+  homeroomNorm: 'Định mức giáo viên chủ nhiệm',
+  maxOver: 'Số tiết vượt định mức tối đa',
+  maxPerDay: 'Số tiết tối đa một ngày',
+  editDeadlineTime: 'Giờ cuối giáo viên bộ môn được sửa điểm danh',
+};
+
 const ERROR_MESSAGES = {
   NETWORK_ERROR: 'Không kết nối được máy chủ. Vui lòng thử lại.',
   NETWORK_TIMEOUT: 'Máy chủ không phản hồi. Vui lòng thử lại.',
@@ -255,6 +264,14 @@ const ERROR_MESSAGES = {
             : 'Giờ bắt đầu không hợp lệ (giờ:phút).',
   MSG_PERIOD_TIMES_CHANGED: 'Giờ học vừa được người khác thay đổi sau khi bạn mở trang. Hãy tải lại để xem giờ mới.',
   MSG_PERIOD_TIMES_EMPTY: 'Chưa có tiết học nào trong cơ sở dữ liệu.',
+  // School Manager settings (Dung, 21/11/2026)
+  MSG_SCHOOL_SETTINGS_INVALID: ({ field, reason, min, max } = {}) =>
+    reason === 'ABOVE_NORM' ? 'Định mức GVCN không được lớn hơn định mức của giáo viên.'
+      : reason === 'RANGE' ? `${SCHOOL_SETTING_LABELS[field] ?? 'Giá trị'} phải là số nguyên từ ${min} đến ${max}.`
+        : reason === 'TIME' ? `${SCHOOL_SETTING_LABELS[field] ?? 'Giờ'} phải là giờ hợp lệ (HH:MM) từ ${min} đến ${max}.`
+        : `Vui lòng nhập ${(SCHOOL_SETTING_LABELS[field] ?? 'đủ các giá trị').toLowerCase()}.`,
+  MSG_SCHOOL_SETTINGS_CHANGED: 'Cài đặt vừa được người khác thay đổi sau khi bạn mở trang. Hãy tải lại để xem giá trị mới.',
+  MSG_SCHOOL_SETTINGS_NOT_READY: 'Chưa lưu được cài đặt: cơ sở dữ liệu cần chạy patch_v0.3_school_settings.sql.',
   // FE-10 class calendar (UC-76..UC-80)
   MSG_CALENDAR_NOT_READY: 'Bảng lịch lớp chưa có trong cơ sở dữ liệu.',
   MSG_EVENT_RANGE: 'Chỉ xem được tối đa 62 ngày một lần.',

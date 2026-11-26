@@ -27,11 +27,12 @@ export const NAV_SECTIONS = [
     ],
   },
   {
-    label: 'Quản trị hệ thống', // School Manager sees only the password reset requests here
+    label: 'Quản trị hệ thống', // School Manager sees the password reset requests and its own settings here
     items: [
       // FE-13 System Administration
       { to: '/admin/password-reset-requests', label: 'Yêu cầu cấp lại mật khẩu', icon: 'key', roles: ['SYSTEM_ADMIN', 'SCHOOL_MANAGER'] }, // UC-100 via FE-01 requests
       { to: '/admin/settings', label: 'Cài đặt hệ thống', icon: 'settings', roles: ['SYSTEM_ADMIN'] }, // UC-102
+      { to: '/school-settings', label: 'Cài đặt hệ thống', icon: 'settings', roles: ['SCHOOL_MANAGER'] }, // School Manager settings (Dung, 21/11/2026)
       { to: '/admin/maintenance', label: 'Bảo trì hệ thống', icon: 'engineering', roles: ['SYSTEM_ADMIN'] }, // UC-103
     ],
   },
@@ -65,7 +66,6 @@ export const NAV_SECTIONS = [
     items: [
       { to: '/grades/entry', label: 'Nhập điểm', icon: 'edit_note', roles: ['TEACHER'] }, // SCR-44 UC-83..UC-85
       { to: '/grades/results', label: 'Kết quả học tập', icon: 'grading', roles: ['SCHOOL_MANAGER', 'TEACHER', 'STUDENT', 'PARENT'] }, // SCR-47 UC-88
-      { to: '/grades/ranking', label: 'Xếp hạng lớp', icon: 'leaderboard', roles: ['SCHOOL_MANAGER', 'TEACHER', 'STUDENT', 'PARENT'] }, // SCR-48 UC-89
       { to: '/grades/structure', label: 'Cấu trúc điểm', icon: 'tune', roles: ['SCHOOL_MANAGER'] }, // SCR-25 UC-81, UC-82
       { to: '/grades/control', label: 'Quản lý sổ điểm', icon: 'fact_check', roles: ['SCHOOL_MANAGER'] }, // SCR-68 UC-86, UC-87
     ],

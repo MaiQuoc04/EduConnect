@@ -6,7 +6,6 @@ import { useToast } from '../../context/ToastContext.jsx';
 import { errorText } from '../../messages.js';
 import { formatDate } from '../../utils/format.js';
 import { foldVietnamese } from '../../utils/teacherValidation.js';
-import TeacherScheduleLookup from '../timetable/TeacherScheduleLookup.jsx';
 import './HomeroomAssignmentPage.css'; // shared toolbar / save bar styles (hr-*)
 import './TeachingAssignmentPage.css';
 
@@ -122,7 +121,6 @@ export default function TeachingAssignmentPage() {
   const [loadError, setLoadError] = useState(null);
   const [saveError, setSaveError] = useState(null);
   const [saving, setSaving] = useState(false);
-  const [lookup, setLookup] = useState(searchParams.get('lich') === '1'); // teacher schedule lookup panel
 
   const load = useCallback(async (params = {}) => {
     setLoading(true);
@@ -380,12 +378,6 @@ export default function TeachingAssignmentPage() {
       )}
 
       <div className="ta-rule">
-        <Icon name="info" />
-        <span>
-          <strong>Quy tắc:</strong> mỗi lớp – môn tại một thời điểm có đúng một giáo viên; chỉ chọn được giáo viên đã đăng
-          ký dạy môn đó. Phân công có ngày bắt đầu và kết thúc; lịch sử giáo viên cũ được giữ lại. Tiết đã điểm danh giữ
-          nguyên giáo viên cũ, các tiết chưa điểm danh trong khoảng chuyển sang giáo viên mới.
-        </span>
         <span className="ta-legend">
           <span><i className="ta-sw ta-sw--ok" />Đã phân công</span>
           <span><i className="ta-sw ta-sw--empty" />Chưa có GV</span>
@@ -401,10 +393,6 @@ export default function TeachingAssignmentPage() {
         </div>
       )}
       {board && !board.schoolYear && <div className="hr-empty-card"><Icon name="event_busy" /> Chưa có năm học nào được tạo.</div>}
-
-      {board?.schoolYear && lookup && (
-        <TeacherScheduleLookup teachers={board.teachers} subjects={board.subjects} onClose={() => setLookup(false)} />
-      )}
 
       {board?.schoolYear && (
         <>
@@ -424,9 +412,6 @@ export default function TeachingAssignmentPage() {
               <input type="checkbox" checked={onlyTodo} onChange={(e) => setOnlyTodo(e.target.checked)} />
               Chỉ lớp cần xử lý
             </label>
-            <button type="button" className={`btn ${lookup ? 'btn-primary' : 'btn-secondary'} ta-lookup-btn`} aria-expanded={lookup} onClick={() => setLookup((v) => !v)}>
-              <Icon name="person_search" size="sm" /> Tra lịch dạy giáo viên
-            </button>
             {matchedNames.length > 0 && (
               <span className="ta-focus" title={matchedNames.join(', ')}>
                 <Icon name="person_search" size="sm" />
