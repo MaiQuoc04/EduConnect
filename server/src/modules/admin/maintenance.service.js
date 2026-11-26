@@ -50,12 +50,16 @@ async function readWindow(db, body = {}, exceptId = null) {
   else if (!valid(endAt)) fields.endAt = 'INVALID';
   if (Object.keys(fields).length) throw badRequest('MSG_MAINTENANCE_INVALID', 'Some fields are missing or invalid.', { fields });
 
+  // The overlap range uses GREATEST(start, end) as its upper bound: with an end before the start, tstzrange(start, end)
+  // would raise "range lower bound must be less than or equal to range upper bound" (500) as soon as another window
+  // is upcoming or running, instead of BEFORE_START. The overlap is only reported when the times are valid anyway.
   const { rows } = await db.query(
     `SELECT $1::timestamptz <= NOW() AS "startPast",
             $2::timestamptz <= $1::timestamptz AS "endBeforeStart",
             EXISTS (SELECT 1 FROM maintenance_announcements
                     WHERE deleted_at IS NULL AND end_at > NOW() AND maintenance_id IS DISTINCT FROM $3
-                      AND tstzrange(start_at, end_at) && tstzrange($1::timestamptz, $2::timestamptz)) AS overlap`,
+                      AND tstzrange(start_at, end_at)
+                          && tstzrange($1::timestamptz, GREATEST($1::timestamptz, $2::timestamptz))) AS overlap`,
     [startAt, endAt, exceptId],
   );
   const check = rows[0];

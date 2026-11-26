@@ -103,7 +103,9 @@ export function buildStudentFilter({ q, classId, accountStatus } = {}, params) {
     const from = add(VI_TRANSLATE.from);
     const to = add(VI_TRANSLATE.to);
     const fold = (column) => `lower(translate(${column}, ${from}, ${to}))`;
-    conditions.push(`(${fold('u.full_name')} LIKE ${p} OR lower(s.student_code) LIKE ${p})`);
+    // Name, student code or username (FE-13 owner, 26/11/2026: SM looks a new account up by the username SA
+    // handed over, e.g. "lannths8989").
+    conditions.push(`(${fold('u.full_name')} LIKE ${p} OR lower(s.student_code) LIKE ${p} OR lower(u.username) LIKE ${p})`);
   }
   if (classId) conditions.push(`c.class_id = ${add(classId)}`);
   if (accountStatus) conditions.push(`u.status = ${add(accountStatus)}`);
@@ -117,11 +119,17 @@ const STUDENT_COLUMNS = `s.student_id AS "studentId", u.user_id AS "userId", s.s
             u.email, u.phone`;
 const PARENT_COUNT = `(SELECT COUNT(*) FROM student_parents sp WHERE sp.student_id = s.student_id) AS "parentCount"`;
 
-// UC-07 View Student List (School Manager): search by name / student code, filter by class, enrollment status
-// and account status, within one school year. An empty list is a normal result (the UI shows MSG01).
+// UC-07 View Student List (School Manager): search by name / student code / username, filter by class, enrollment
+// status, account status and placement, within one school year. An empty list is a normal result (the UI shows MSG01).
 // email / phone are returned because only School Manager calls this (business-rules §6, permissions note 2);
 // hide them if another role is ever allowed here.
-export async function listStudents({ q, classId, schoolYearId, status, accountStatus, unassigned, page, pageSize }) {
+// placement (FE-13 owner, 26/11/2026): by default EVERY student is listed – those with a class this year and those
+// without one yet (accounts SA just created) – so a new account is never hidden. 'ASSIGNED' = only students with a
+// class this year, 'UNASSIGNED' = only those without (the old `unassigned=true`). A class or an enrollment status
+// filter needs an enrollment, so it lists assigned students only.
+export async function listStudents({ q, classId, schoolYearId, status, accountStatus, unassigned, placement, page, pageSize }) {
+  const mode = unassigned || placement === 'UNASSIGNED' ? 'UNASSIGNED'
+    : placement === 'ASSIGNED' || classId || status ? 'ASSIGNED' : 'ALL';
   const yearId = await resolveSchoolYearId({ schoolYearId, classId });
   if (!yearId) return { items: [], page, pageSize, total: 0 };
 
@@ -137,7 +145,7 @@ export async function listStudents({ q, classId, schoolYearId, status, accountSt
   let from;
   let columns;
   let orderBy;
-  if (unassigned) {
+  if (mode === 'UNASSIGNED') {
     // Students with an account but no enrollment in the year. business-rules §3: SA creates accounts first and
     // SM imports classes afterwards (UC-27 needs the accounts to exist), so there is always a period when
     // students have an account but no class; SM uses this list to see who has not been imported yet.
@@ -149,6 +157,21 @@ export async function listStudents({ q, classId, schoolYearId, status, accountSt
             NULL::bigint AS "classId", NULL::text AS "className", NULL::text AS "gradeLevelName",
             NULL::text AS "trackName", NULL::text AS "enrollmentStatus", u.status AS "accountStatus", ${PARENT_COUNT}`;
     orderBy = `${vietnameseNameOrder('u.full_name')}, s.student_id`;
+  } else if (mode === 'ALL') {
+    // Every student: the current enrollment of the year when there is one (one row per student, see
+    // enrollmentsOfYear), else no class. Students without a class come first: they are the School Manager's
+    // to-do (put them into a class), then the classes in order.
+    from = `students s
+     JOIN users u ON u.user_id = s.user_id
+     LEFT JOIN ${enrollmentsOfYear(params)} ON e.student_id = s.student_id
+     LEFT JOIN classes c ON c.class_id = e.class_id
+     LEFT JOIN grade_levels gl ON gl.grade_level_id = c.grade_level_id
+     LEFT JOIN class_tracks t ON t.track_id = c.track_id
+     WHERE TRUE`;
+    columns = `${STUDENT_COLUMNS},
+            c.class_id AS "classId", c.class_name AS "className", gl.grade_level_name AS "gradeLevelName",
+            t.track_name AS "trackName", e.status AS "enrollmentStatus", u.status AS "accountStatus", ${PARENT_COUNT}`;
+    orderBy = `(c.class_id IS NOT NULL), c.class_name, ${vietnameseNameOrder('u.full_name')}, s.student_id`;
   } else {
     // class_tracks.deleted_at is not filtered: a class keeps showing the type it was created with.
     from = `${enrollmentsOfYear(params, { status })}
