@@ -47,6 +47,12 @@ reactions, attachments) is merged into one place after both are on `develop`.
   | 26/11 17:00 – end of day | Quoc fills 5.0 II.3 from the Test Statistics sheets; reports submitted |
   | Weeks 13–14 | Only revising and finishing Reports 6 and 7; no code or test changes |
 
+- **FE-04 SCR-70 periods message (26/11/2026, Khanh, on `feature/fe-05-group-feed`, not merged):** a wrong
+  "Số tiết/tuần" now shows its reason under the box (empty / not a whole number / 0 / above 10; an empty box only
+  after leaving it or a save attempt), the column header shows "(1–10)", saving with wrong values names the subjects
+  ("Còn n môn …") and focuses the first one, the footer total notes the rows it skips. Client only; the server rule
+  (`MSG_TRACK_PERIODS_RANGE`, 1–10) is unchanged.
+
 - **FE-10 School Manager settings + FE-07 fix merged into `develop` (24/11/2026, Quoc; client `npm run build` and
   server `npm test` (21/21) pass):**
   - `fix/fe-07-registration-list` (Dung, PR #16, merge `a9a5324`): UC-56 / UC-57 registration list and export no
