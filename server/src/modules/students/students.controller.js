@@ -57,14 +57,17 @@ export async function list(req, res) {
     schoolYearId: optionalInt(query, 'schoolYearId'),
     status: optionalEnum(query, 'status', ENROLLMENT_STATUSES),
     accountStatus: optionalEnum(query, 'accountStatus', ACCOUNT_STATUSES),
-    // unassigned=true: students with no enrollment in the school year (see listStudents).
+    // placement = ASSIGNED | UNASSIGNED (default: every student, see listStudents). unassigned=true is the older
+    // spelling of placement=UNASSIGNED and still accepted.
+    placement: optionalEnum(query, 'placement', ['ASSIGNED', 'UNASSIGNED']),
     unassigned: optionalBoolean(query, 'unassigned'),
     page: optionalInt(query, 'page', { fallback: 1 }),
     pageSize: optionalInt(query, 'pageSize', { max: MAX_PAGE_SIZE, fallback: DEFAULT_PAGE_SIZE }),
   };
   // Students without a class have neither a class nor an enrollment status to filter on.
-  if (filters.unassigned && filters.classId) throw invalid('classId');
-  if (filters.unassigned && filters.status) throw invalid('status');
+  if (filters.unassigned) filters.placement = 'UNASSIGNED';
+  if (filters.placement === 'UNASSIGNED' && filters.classId) throw invalid('classId');
+  if (filters.placement === 'UNASSIGNED' && filters.status) throw invalid('status');
   res.json(await studentsService.listStudents(filters));
 }
 
