@@ -20,15 +20,20 @@ export async function resolveStudents(req, res) {
   res.json(await classService.resolveStudents({ schoolYearId, codes }));
 }
 
+// confirmOverWarning: true once the School Manager confirmed going above the recommended class size (classSize.js).
 export async function addStudents(req, res) {
-  res.status(201).json(await classService.addStudents(req.params.id, { studentIds: req.body?.studentIds }, req.user.userId));
+  const { studentIds, confirmOverWarning } = req.body ?? {};
+  res.status(201).json(await classService.addStudents(req.params.id, { studentIds, confirmOverWarning }, req.user.userId));
 }
 
 export async function create(req, res) {
-  const { schoolYearId, className, gradeLevelId, trackId, studentIds } = req.body ?? {};
+  const { schoolYearId, className, gradeLevelId, trackId, studentIds, confirmOverWarning } = req.body ?? {};
   res
     .status(201)
-    .json(await classService.createClass({ schoolYearId, className, gradeLevelId, trackId, studentIds }, req.user.userId));
+    .json(await classService.createClass(
+      { schoolYearId, className, gradeLevelId, trackId, studentIds, confirmOverWarning },
+      req.user.userId,
+    ));
 }
 
 export async function importTemplate(_req, res) {
