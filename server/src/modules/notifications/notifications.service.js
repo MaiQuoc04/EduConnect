@@ -74,8 +74,13 @@ async function childrenOf(user) {
   if (user.activeRole !== 'PARENT') return [];
   const { rows } = await pool.query(
     `SELECT s.student_id AS "studentId", s.student_code AS "studentCode", u.full_name AS "fullName",
+            -- The class of the current school year (MOM-05: the latest year that has started), not a class of a year
+            -- that has not started yet (a promotion made early, UC-11); a future class only when there is nothing else.
             (SELECT c.class_name FROM class_enrollments e JOIN classes c ON c.class_id = e.class_id AND c.deleted_at IS NULL
-             WHERE e.student_id = s.student_id ORDER BY (e.status = 'STUDYING') DESC, e.enrolled_at DESC LIMIT 1) AS "className"
+             JOIN school_years sy ON sy.school_year_id = c.school_year_id
+             WHERE e.student_id = s.student_id
+             ORDER BY (e.status = 'STUDYING') DESC, (sy.start_date <= CURRENT_DATE) DESC, sy.start_date DESC, e.enrolled_at DESC
+             LIMIT 1) AS "className"
      FROM parents p JOIN student_parents sp ON sp.parent_id = p.parent_id
      JOIN students s ON s.student_id = sp.student_id JOIN users u ON u.user_id = s.user_id
      WHERE p.user_id = $1

@@ -777,7 +777,8 @@ Boundaries that are easy to get wrong:
   early; whether an absence is excused depends on the family's explanation, which reaches the homeroom teacher days
   later (there is no leave request in the system), and the excused / unexcused counts are final when the semester
   closes. The homeroom teacher never changes absent ↔ present / late.
-- **Every action is logged** in `attendance_histories`, including the first take (`old_status` NULL).
+- **Every action is logged** in `attendance_histories`, including the first take (`old_status` NULL) and the automatic
+  filling of later periods (point 3).
 - **Notifications (18/11/2026, lead):** personal (`type` / `target_type` ATTENDANCE, `is_personal` TRUE,
   `student_id` = the student) to the **student and their linked parents** (active accounts), **one per period**
   (no grouping by day). Sent when attendance is saved: first take with a status other than PRESENT, and every
@@ -793,13 +794,28 @@ Boundaries that are easy to get wrong:
   3. The sheet of the **first period taken in a session** opens with everyone PRESENT; the teacher changes the
      exceptions and saves the **whole class at once** (no partial save). Each student has an optional note
      (`attendances.note`).
-     **Prefill (lead, 23/11/2026):** a period not taken yet opens with the statuses **and notes** of the nearest
-     earlier period of the same class, same day and **same session** (morning = periods 1–5, afternoon = 6–10; the
-     afternoon never copies the morning) that is already taken – copied as they are (a late student stays late). It is
-     only a draft: the period stays "not taken" (and in the SM's list of periods not taken) until its own teacher
-     checks it and saves it (one save confirms it). A student not on the source period's list starts PRESENT.
-     Notifications are unchanged: each saved period with a status other than PRESENT notifies, also when the status
-     was prefilled (a student absent all morning → one notification per period).
+     **Automatic filling of the later periods (lead, 26/11/2026; replaces the draft prefill of 23/11/2026):** when a
+     period is saved (by its teacher, the homeroom teacher or SM), the **later periods of the same class, same day and
+     same session** (morning = periods 1–5, afternoon = 6–10; the afternoon never copies the morning) are **saved
+     automatically** from it, with no extra action:
+     - absent (excused / unexcused) stays absent **with its note**; **late becomes PRESENT** and present stays PRESENT,
+       both without the note; a student not on the source period's list is PRESENT;
+     - per student, the copy stops at the first later period where a person recorded that student (that row is never
+       overwritten); rows filled automatically are marked `attendances.auto_from_slot_id` (patch_v0.3_attendance_auto.sql);
+     - a row stays "automatic" until a person **changes** that student's status or note on its period: saving the sheet
+       unchanged keeps it automatic, so a later correction of the earlier period (e.g. the homeroom teacher's switch to
+       excused) still flows on;
+     - each automatic row is in `attendance_histories` with reason "Tự điền theo tiết N" (changed_by = who saved);
+     - the period then counts as taken (it leaves the SM's list of periods not taken); its sheet shows "Tự điền theo
+       tiết N – kiểm tra và lưu nếu có thay đổi" and its teacher changes only the exceptions (from the period start to
+       the deadline, as before).
+     **Notifications (lead, 26/11/2026):** automatic rows **send nothing**. A notification is sent only when a person
+     saves a period, for each student whose status changes there (rules above: not PRESENT on a first take; any change
+     where the old or new status is not PRESENT). A change on an automatic row is worded from that period on ("Có mặt
+     từ tiết 3", detail: what was filled from period N). So a student absent all morning → one notification (period 1);
+     back in period 3 → one more, at period 3.
+     A period not taken yet without any automatic row (e.g. its session started before this rule) still opens prefilled
+     as a draft with the same copy rule.
   4. A period not taken by the deadline: the subject teacher and the homeroom teacher can no longer enter it; only SM
      enters it, with a reason.
   5. Reason (`attendance_histories.reason`): optional for the subject teacher on the day; **required** for the

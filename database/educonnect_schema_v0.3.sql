@@ -50,6 +50,9 @@
 -- 24/11/2026: attendance.edit_deadline_time moved from system_settings to school_settings (the School Manager edits it,
 --   no longer the System Admin). Existing database: run patch_v0.3_school_settings_attendance.sql (PROPOSED – waiting
 --   for the lead's OK).
+-- 26/11/2026: + attendances.auto_from_slot_id (FE-12: later periods of a session filled automatically from the saved
+--   one, business rules §12 point 3). Existing database: run patch_v0.3_attendance_auto.sql (approved by the lead, run
+--   on the shared DB 26/11/2026).
 -- How to run: Supabase > SQL Editor > paste the whole file > Run (on an empty database).
 -- Conventions:
 --   * Soft delete everywhere (deleted_at / deleted_by). Hard delete only for: post_likes (unlike),
@@ -354,10 +357,14 @@ CREATE TABLE attendances (
   taken_by          BIGINT NOT NULL,              -- users.user_id
   taken_at          TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
   updated_at        TIMESTAMPTZ NULL,
+  -- 26/11/2026: NULL = recorded by a person; else the period this row was filled from automatically (later periods
+  -- of the same session follow the saved one until their teacher changes the student). patch_v0.3_attendance_auto.sql
+  auto_from_slot_id BIGINT NULL,
   UNIQUE (enrollment_id, timetable_slot_id),
   FOREIGN KEY (enrollment_id)     REFERENCES class_enrollments(enrollment_id),
   FOREIGN KEY (timetable_slot_id) REFERENCES timetable_slots(timetable_slot_id),
   FOREIGN KEY (taken_by)          REFERENCES users(user_id),
+  CONSTRAINT fk_attendances_auto_from_slot FOREIGN KEY (auto_from_slot_id) REFERENCES timetable_slots(timetable_slot_id),
   CHECK (status IN ('PRESENT','ABSENT_EXCUSED','ABSENT_UNEXCUSED','LATE'))
 );
 

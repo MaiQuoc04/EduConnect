@@ -165,7 +165,9 @@ async function sheetRows(db, lesson) {
     `SELECT e.enrollment_id AS "enrollmentId", e.status AS "enrollmentStatus", s.student_id AS "studentId",
             s.student_code AS "studentCode", u.full_name AS "fullName",
             a.attendance_id AS "attendanceId", a.status, a.note,
-            a.taken_at AS "takenAt", a.updated_at AS "updatedAt",
+            a.taken_at AS "takenAt", a.updated_at AS "updatedAt", a.auto_from_slot_id AS "autoFromLessonId",
+            (SELECT sl2.period_number FROM timetable_slots ts2 JOIN time_slots sl2 ON sl2.slot_id = ts2.slot_id
+             WHERE ts2.timetable_slot_id = a.auto_from_slot_id) AS "autoFromPeriod",
             (e.enrolled_at AT TIME ZONE 'Asia/Ho_Chi_Minh')::date <= $2::date
               AND (e.left_at IS NULL OR (e.left_at AT TIME ZONE 'Asia/Ho_Chi_Minh')::date > $2::date) AS "onRoll"
      FROM class_enrollments e
@@ -184,8 +186,12 @@ async function sheetRows(db, lesson) {
 
 function sheetOut(lesson, rows) {
   const { recordCount, homeroomTeacherId, schoolYearId, beforeDeadline, yearEnded, ...info } = lesson;
+  // Periods this sheet was filled from automatically (§12 point 3, 26/11/2026), e.g. [1] → "Tự điền theo tiết 1".
+  const autoFromPeriods = [...new Set(rows.filter((r) => r.autoFromPeriod).map((r) => Number(r.autoFromPeriod)))].sort(
+    (a, b) => a - b,
+  );
   return {
-    lesson: { ...info, taken: rows.some((r) => r.attendanceId) },
+    lesson: { ...info, taken: rows.some((r) => r.attendanceId), autoFromPeriods },
     mode: lesson.mode,
     blocked: lesson.blocked ?? null,
     reasonRequired: lesson.mode === MODES.HOMEROOM || lesson.mode === MODES.MANAGER,
@@ -198,6 +204,7 @@ function sheetOut(lesson, rows) {
       status: r.status ?? null,
       note: r.note ?? '',
       updatedAt: r.updatedAt ?? r.takenAt ?? null,
+      autoFromPeriod: r.autoFromPeriod ?? null, // null = recorded by a person
     })),
   };
 }
@@ -215,15 +222,25 @@ export async function getSheet(lessonId, user) {
 }
 
 /**
- * Prefill of a period not taken yet (lead, 23/11/2026, business rules §12 point 3): the statuses AND notes of the
- * nearest earlier period of the same class, same day and same session (morning 1–5 / afternoon 6–10) that is already
- * taken – copied as they are (a late student stays late, notes included). It is only a draft: nothing is stored and
- * the period stays "not taken" (and in the SM's list of periods not taken) until its teacher saves it. Students not on
- * that period's list (e.g. enrolled since) are not in `records`; the client starts them as present.
- * null when no earlier period of the session is taken (the first period of a session: everyone present, as before).
+ * What a later period of the session gets from an earlier one (lead, 26/11/2026, business rules §12 point 3):
+ * an absence stays with its note; late becomes present; present stays present; notes of present / late are dropped.
+ */
+function copiedFrom(source) {
+  if (source && ABSENCES.includes(source.status)) return { status: source.status, note: source.note ?? null };
+  return { status: 'PRESENT', note: null };
+}
+
+const sameSessionSql = (period) =>
+  period <= MORNING_LAST_PERIOD ? `sl.period_number <= ${MORNING_LAST_PERIOD}` : `sl.period_number > ${MORNING_LAST_PERIOD}`;
+
+/**
+ * Draft of a period not taken yet that has no automatic row (a session saved before the automatic filling of
+ * 26/11/2026): the nearest earlier period of the same class, day and session (morning 1–5 / afternoon 6–10) that is
+ * taken, with the copy rule of copiedFrom(). Nothing is stored; the period stays "not taken" until it is saved.
+ * Students not in `records` start as present on the client. null when no earlier period of the session is taken.
  */
 async function prefillOf(db, lesson) {
-  const sameSession = lesson.period <= MORNING_LAST_PERIOD ? `sl.period_number <= ${MORNING_LAST_PERIOD}` : `sl.period_number > ${MORNING_LAST_PERIOD}`;
+  const sameSession = sameSessionSql(lesson.period);
   const { rows: src } = await db.query(
     `SELECT ts.timetable_slot_id AS "lessonId", sl.period_number AS "period", sj.subject_name AS "subjectName",
             tu.full_name AS "teacherName"
@@ -244,7 +261,12 @@ async function prefillOf(db, lesson) {
   );
   return {
     ...src[0],
-    records: Object.fromEntries(rows.map((r) => [r.enrollmentId, { status: r.status, note: r.note ?? '' }])),
+    records: Object.fromEntries(
+      rows.map((r) => {
+        const copy = copiedFrom(r);
+        return [r.enrollmentId, { status: copy.status, note: copy.note ?? '' }];
+      }),
+    ),
   };
 }
 
@@ -306,7 +328,9 @@ function readReason(body, required) {
 const dmy = (iso) => `${iso.slice(8, 10)}/${iso.slice(5, 7)}/${iso.slice(0, 4)}`;
 
 // One personal notification to the student and their linked parents (active accounts), §9 / §12 – one per period.
-async function notifyStudent(client, { lesson, row, oldStatus, newStatus, reason, actorId }) {
+// autoFromPeriod: the old status was filled automatically from that period (never sent to the family), so the text
+// says "from period X on" instead of "changed from".
+async function notifyStudent(client, { lesson, row, oldStatus, newStatus, reason, actorId, autoFromPeriod = null }) {
   const { rows: recipients } = await client.query(
     // FE-09 (18/11/2026): the student under STUDENT, each linked parent under PARENT (notification_recipients.role_code).
     `SELECT u.user_id, 'STUDENT' AS role_code FROM students s JOIN users u ON u.user_id = s.user_id
@@ -318,6 +342,14 @@ async function notifyStudent(client, { lesson, row, oldStatus, newStatus, reason
   );
   if (!recipients.length) return 0;
   const where = `tiết ${lesson.period} – ${lesson.subjectName}, ngày ${dmy(lesson.date)}`;
+  if (oldStatus && autoFromPeriod) {
+    const title = `${row.fullName}: ${STATUS_LABELS[newStatus]} từ tiết ${lesson.period} – ${lesson.subjectName}, ngày ${dmy(lesson.date)}`;
+    const detail =
+      `Học sinh ${row.fullName} (lớp ${lesson.className}) được ghi nhận “${STATUS_LABELS[newStatus]}” từ tiết ${lesson.period} ` +
+      `(${lesson.start}–${lesson.end}); trước đó hệ thống tự điền “${STATUS_LABELS[oldStatus]}” theo tiết ${autoFromPeriod}.` +
+      `${reason ? ` Lý do: ${reason}.` : ''}${row.note ? ` Ghi chú của giáo viên: ${row.note}` : ''}`;
+    return insertNotification(client, { title, detail, row, recipients, actorId });
+  }
   const title = oldStatus
     ? `${row.fullName}: điểm danh ${where} đổi thành ${STATUS_LABELS[newStatus]}`
     : `${row.fullName}: ${STATUS_LABELS[newStatus]} ${where}`;
@@ -326,6 +358,10 @@ async function notifyStudent(client, { lesson, row, oldStatus, newStatus, reason
       `cập nhật từ “${STATUS_LABELS[oldStatus]}” thành “${STATUS_LABELS[newStatus]}”.${reason ? ` Lý do: ${reason}.` : ''}`
     : `Học sinh ${row.fullName} (lớp ${lesson.className}) được ghi nhận “${STATUS_LABELS[newStatus]}” ${where} ` +
       `(${lesson.start}–${lesson.end}).${row.note ? ` Ghi chú của giáo viên: ${row.note}` : ''}`;
+  return insertNotification(client, { title, detail, row, recipients, actorId });
+}
+
+async function insertNotification(client, { title, detail, row, recipients, actorId }) {
   const { rows } = await client.query(
     `INSERT INTO notifications (type, title, detail, is_personal, target_type, target_id, created_by)
      VALUES ('ATTENDANCE', $1, $2, TRUE, 'ATTENDANCE', $3, $4) RETURNING notification_id AS "id"`,
@@ -399,7 +435,8 @@ export async function saveSheet(lessonId, body, user) {
         );
         row.attendanceId = ins[0].id;
       } else if (oldStatus !== r.status || (row.note ?? null) !== note) {
-        await client.query('UPDATE attendances SET status = $2, note = $3 WHERE attendance_id = $1', [
+        // A person changed this student here: the row is no longer automatic and is never overwritten again (§12 p. 3).
+        await client.query('UPDATE attendances SET status = $2, note = $3, auto_from_slot_id = NULL WHERE attendance_id = $1', [
           row.attendanceId,
           r.status,
           note,
@@ -420,12 +457,94 @@ export async function saveSheet(lessonId, body, user) {
           newStatus: r.status,
           reason,
           actorId: ctx.userId,
+          autoFromPeriod: row.autoFromLessonId ? row.autoFromPeriod : null,
         });
       }
     }
-    return { lesson, changed, notified, firstTake: !taken };
+    const autoFilled = await fillLaterPeriods(client, lesson, ctx.userId);
+    return { lesson, changed, notified, firstTake: !taken, autoFilled };
   });
   const sheet = await getSheet(lessonId, user);
-  return { ...sheet, saved: { changed: result.changed, notified: result.notified, firstTake: result.firstTake } };
+  return {
+    ...sheet,
+    saved: { changed: result.changed, notified: result.notified, firstTake: result.firstTake, autoFilled: result.autoFilled },
+  };
+}
+
+/**
+ * Automatic filling of the later periods of the session (lead, 26/11/2026, business rules §12 point 3), inside the
+ * transaction of the save. From the period just saved, for each student, the later periods of the same class, day and
+ * session get copiedFrom(the student's row here) – in period order, up to the first later period where a person
+ * recorded that student (auto_from_slot_id NULL), which is left as it is. New rows and changed statuses go to the
+ * history with the reason "Tự điền theo tiết N"; nothing is sent to the family (only a person's save notifies).
+ * The later periods are locked in period order (the saved period, earlier, is already locked), so two saves of the
+ * same session cannot cross. Returns the number of rows written.
+ */
+async function fillLaterPeriods(client, lesson, actorId) {
+  const { rows: later } = await client.query(
+    `SELECT ts.timetable_slot_id AS "lessonId", sl.period_number AS "period"
+     FROM timetable_slots ts JOIN time_slots sl ON sl.slot_id = ts.slot_id
+     WHERE ts.class_id = $1 AND ts."date" = $2::date AND sl.period_number > $3 AND ${sameSessionSql(lesson.period)}
+     ORDER BY sl.period_number, ts.timetable_slot_id
+     FOR UPDATE OF ts`,
+    [lesson.classId, lesson.date, lesson.period],
+  );
+  if (!later.length) return 0;
+
+  // The roll of the day is the same for every period of the date; the source rows as they are after the save.
+  const roll = await sheetRows(client, lesson);
+  const source = new Map(roll.filter((r) => r.attendanceId).map((r) => [Number(r.enrollmentId), r]));
+  const students = roll.filter((r) => r.onRoll || r.attendanceId).map((r) => Number(r.enrollmentId));
+  const reason = `Tự điền theo tiết ${lesson.period}`;
+  const stopped = new Set(); // students recorded by a person in a later period: nothing after it is touched
+  let written = 0;
+
+  for (const target of later) {
+    const { rows: existing } = await client.query(
+      `SELECT attendance_id AS "attendanceId", enrollment_id AS "enrollmentId", status, note,
+              auto_from_slot_id AS "autoFrom"
+       FROM attendances WHERE timetable_slot_id = $1`,
+      [target.lessonId],
+    );
+    const byStudent = new Map(existing.map((r) => [Number(r.enrollmentId), r]));
+    for (const enrollmentId of students) {
+      if (stopped.has(enrollmentId)) continue;
+      const current = byStudent.get(enrollmentId);
+      if (current && current.autoFrom === null) {
+        stopped.add(enrollmentId);
+        continue;
+      }
+      const copy = copiedFrom(source.get(enrollmentId));
+      if (!current) {
+        const { rows: ins } = await client.query(
+          `INSERT INTO attendances (enrollment_id, timetable_slot_id, status, note, taken_by, taken_at, auto_from_slot_id)
+           VALUES ($1, $2, $3, $4, $5, NOW(), $6) RETURNING attendance_id AS "id"`,
+          [enrollmentId, target.lessonId, copy.status, copy.note, actorId, lesson.lessonId],
+        );
+        await client.query(
+          `INSERT INTO attendance_histories (attendance_id, old_status, new_status, reason, changed_by, changed_at)
+           VALUES ($1, NULL, $2, $3, $4, NOW())`,
+          [ins[0].id, copy.status, reason, actorId],
+        );
+        written += 1;
+        continue;
+      }
+      const sameStatus = current.status === copy.status;
+      if (sameStatus && (current.note ?? null) === copy.note && Number(current.autoFrom) === Number(lesson.lessonId)) continue;
+      await client.query(
+        'UPDATE attendances SET status = $2, note = $3, auto_from_slot_id = $4 WHERE attendance_id = $1',
+        [current.attendanceId, copy.status, copy.note, lesson.lessonId],
+      );
+      if (!sameStatus) {
+        await client.query(
+          `INSERT INTO attendance_histories (attendance_id, old_status, new_status, reason, changed_by, changed_at)
+           VALUES ($1, $2, $3, $4, $5, NOW())`,
+          [current.attendanceId, current.status, copy.status, reason, actorId],
+        );
+      }
+      written += 1;
+    }
+  }
+  return written;
 }
 
