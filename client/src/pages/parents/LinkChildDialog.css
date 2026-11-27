@@ -1,0 +1,75 @@
+/* UC-13 from the parent's side (FE-14 Anh, 27/11/2026). Same look as the SCR-13 dialog and option list. */
+.link-child-dialog {
+  width: min(480px, calc(100vw - 32px));
+  max-height: calc(100dvh - 32px);
+  overflow-y: auto;
+  padding: 24px;
+  border: 0;
+  border-radius: var(--radius-dialog);
+  background: var(--white);
+  color: var(--graphite-900);
+  box-shadow: var(--shadow-dialog);
+}
+.link-child-dialog::backdrop { background: rgba(28, 27, 25, 0.32); }
+.link-child-dialog form { display: grid; gap: 14px; }
+.link-child-head { display: flex; align-items: center; gap: 10px; margin-bottom: 2px; }
+.link-child-icon {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  background: var(--ink-50);
+  color: var(--ink-700);
+}
+.link-child-dialog .input-wrap { position: relative; }
+.link-child-input-icon { position: absolute; left: 12px; top: 50%; transform: translateY(-50%); color: var(--graphite-400); pointer-events: none; }
+.link-child-dialog .link-child-search { padding-left: 38px; }
+
+.link-child-options { display: grid; gap: 6px; margin: 4px 0 0; padding: 0; list-style: none; }
+.link-child-option {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  min-height: 52px;
+  padding: 8px 10px;
+  border: 1px solid var(--graphite-200);
+  border-radius: var(--radius-control);
+  background: var(--white);
+  text-align: left;
+  font: inherit;
+  color: inherit;
+  cursor: pointer;
+}
+.link-child-option > span:not(.avatar) { display: grid; flex: 1; min-width: 0; }
+.link-child-option > span .caption { overflow-wrap: anywhere; }
+.link-child-option > .icon { flex: none; color: var(--graphite-400); }
+.link-child-option:not(:disabled):hover { background: var(--graphite-50); }
+.link-child-option:focus-visible { outline: 2px solid var(--ink-400); outline-offset: 1px; }
+.link-child-option:disabled { opacity: 0.6; cursor: default; }
+
+.link-child-selected {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 12px 14px;
+  border-radius: var(--radius-control);
+  background: var(--ink-50);
+}
+.link-child-selected > div { flex: 1; min-width: 0; }
+.link-child-selected .btn { margin-left: auto; }
+
+.link-child-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 8px; margin-top: 6px; }
+.link-child-spin { animation: link-child-spin 0.9s linear infinite; }
+@keyframes link-child-spin { to { transform: rotate(360deg); } }
+
+@media (max-width: 640px) {
+  .link-child-dialog { padding: 20px 16px; }
+  .link-child-option { min-height: 56px; }
+  .link-child-dialog .input { min-height: 44px; }
+  .link-child-selected .btn { width: 100%; height: 44px; margin-left: 0; }
+  .link-child-actions .btn { flex: 1 1 100%; height: 44px; }
+}
