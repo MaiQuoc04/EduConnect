@@ -12,6 +12,8 @@ import { containsPattern, VI_TRANSLATE } from '../../utils/search.js';
 import * as feed from '../../utils/feedInteractions.js';
 // Comment reports shared with FE-05 (17/11/2026): data only; who may report / handle in the school feed is here.
 import * as reports from '../../utils/commentReports.js';
+// Automatic content check (moderation, 25/11/2026): the author of a hidden comment is told after COMMIT.
+import { notifyContentHidden, notifySupportRequest } from '../../utils/moderationNotify.js';
 // FE-02 (merged): the one rule for "the current school year" and "the class a student studies in this year".
 import { enrollmentsOfYear, resolveSchoolYearId } from '../students/students.service.js';
 
@@ -1034,7 +1036,13 @@ export async function listSchoolPostComments(user, schoolPostId, { page, pageSiz
   // A read: no transaction, no lock (one query after the other, DB_POOL_MAX=3 on the shared pooler).
   const post = await openSchoolPostForInteraction(pool, user, schoolPostId);
   if (post.postType !== 'ANNOUNCEMENT') return { items: [], page, pageSize, total: 0, commentCount: 0 };
-  const result = await feed.listComments(post.target, { page, pageSize, canDelete: mayDeleteComment(user) });
+  // viewerId (moderation, 25/11/2026): the reader's own hidden comments come back with isHidden; others' never do.
+  const result = await feed.listComments(post.target, {
+    page,
+    pageSize,
+    canDelete: mayDeleteComment(user),
+    viewerId: user.userId,
+  });
   // Comment likes (17/11/2026): one more query for the whole page (feed.withCommentLikes), never one per comment.
   let items = await feed.withCommentLikes(result.items, user.userId);
   // Comment reports (17/11/2026): reportedByMe on every node, one query. A School Manager does not report (they delete
@@ -1047,14 +1055,29 @@ export async function listSchoolPostComments(user, schoolPostId, { page, pageSiz
  * UC-65 Comment on School Post: a comment, or a reply when parentCommentId is given (any level, §5). The parent must
  * be a comment of THIS post (400 MSG_INVALID_PARENT_COMMENT) and not deleted (409 MSG_PARENT_COMMENT_DELETED).
  * NEWS → 400 MSG_CANNOT_COMMENT_NEWS. Returns the new comment (canDelete true: it is the user's own).
+ * Automatic content check (moderation, 25/11/2026): a comment that matches a rule is saved hidden (feed.insertComment)
+ * and comes back with isHidden true and moderation { hidden: true, category }; canDelete false (nobody deletes a
+ * hidden comment, see feed.findComment). After COMMIT its author is notified (fire and forget) and NO
+ * "schoolpost:comment" signal is sent: for everyone else the comment does not exist.
  */
 export async function createSchoolPostComment(user, schoolPostId, { content, parentCommentId }) {
-  const comment = await withTransaction(async (client) => {
+  const { comment, target } = await withTransaction(async (client) => {
     const post = await openSchoolPostForInteraction(client, user, schoolPostId, { lock: true });
     assertAnnouncement(post, 'MSG_CANNOT_COMMENT_NEWS', 'News posts cannot be commented on.');
     const row = await feed.insertComment(post.target, { authorId: user.userId, content, parentCommentId }, client);
-    return { ...row, canDelete: true };
+    return { comment: { ...row, canDelete: !row.moderation?.hidden }, target: post.target };
   });
+  if (comment.moderation?.hidden) {
+    sendSafely(`moderation notification for comment #${comment.commentId}`, () =>
+      notifyContentHidden({
+        contentType: 'SCHOOL_COMMENT',
+        authorId: comment.authorId,
+        postTarget: target,
+        category: comment.moderation.category,
+      }),
+    );
+    return comment;
+  }
   // After COMMIT; only ANNOUNCEMENT gets here (NEWS refused above). authorId lets the author's tab skip its own echo.
   sendSafely(`schoolpost:comment #${schoolPostId}`, () =>
     emitToSchoolPost(Number(schoolPostId), 'schoolpost:comment', {
@@ -1154,7 +1177,7 @@ export async function deleteSchoolPostComment(user, schoolPostId, commentId) {
  * @returns {Promise<{ commentId: number, reportedByMe: true, created: boolean }>}
  */
 export async function reportSchoolPostComment(user, schoolPostId, commentId, input) {
-  return withTransaction(async (client) => {
+  const result = await withTransaction(async (client) => {
     const post = await openSchoolPostForInteraction(client, user, schoolPostId, { lock: true });
     if (post.postType !== 'ANNOUNCEMENT') throw commentNotFound();
     const comment = await feed.findComment(post.target, commentId, { forShare: true }, client);
@@ -1162,6 +1185,15 @@ export async function reportSchoolPostComment(user, schoolPostId, commentId, inp
     const report = await reports.reportComment(comment.commentId, user.userId, input, client);
     return { commentId: comment.commentId, reportedByMe: true, created: report.created };
   });
+  // Moderation (25/11/2026): a new "Cần được hỗ trợ" report reaches every School Manager at once (notification +
+  // 'moderation:report' with the id only), after COMMIT, fire and forget. Never the content, never the reporter.
+  if (result.created && input.reason === reports.NEEDS_SUPPORT) {
+    sendSafely(`support request for comment #${result.commentId}`, () =>
+      notifySupportRequest({ kind: 'SCHOOL_COMMENT', id: result.commentId }),
+    );
+  }
+  // supportHint: the client shows the "báo ngay thầy cô hoặc gọi 111" line to the reporter.
+  return { ...result, supportHint: input.reason === reports.NEEDS_SUPPORT };
 }
 
 // The School Manager's queue reads school post comments only (business-rules §1). Never 'ALL' / 'GROUP_POST' here.
@@ -1190,11 +1222,12 @@ const reportNotFound = () => notFound('MSG_REPORT_NOT_FOUND', 'No report was fou
  * @returns {Promise<{ commentId: number, status: 'RESOLVED' | 'DISMISSED', resolvedCount: number,
  *   commentDeleted: boolean }>}
  */
-export async function resolveSchoolCommentReport(user, commentId, action) {
+export async function resolveSchoolCommentReport(user, commentId, action, { supportNote } = {}) {
   const result = await withTransaction(async (client) => {
     const comment = await reports.findReportedComment(commentId, { forUpdate: true }, client);
     if (!comment || comment.column !== SCHOOL_POST) throw reportNotFound();
-    return reports.resolveReport(commentId, user.userId, action, client);
+    // supportNote (moderation, 25/11/2026): "Kết quả hỗ trợ", required when a pending report is NEEDS_SUPPORT.
+    return reports.resolveReport(commentId, user.userId, action, client, { supportNote });
   });
   if (result.commentDeleted) {
     sendSafely(`comment-removed notification #${commentId}`, () => reports.notifyCommentRemoved(result, user.userId));

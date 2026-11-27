@@ -5,6 +5,7 @@ import Avatar from '../../components/Avatar.jsx';
 import { REPORT_REASONS } from '../../components/CommentThread.jsx';
 import { FeedEmpty, FeedError, FeedPager, FeedSkeleton, FeedTabs } from '../../components/feed/Feed.jsx';
 import Icon from '../../components/Icon.jsx';
+import { SupportBadge, SupportNoteField, SupportNoteResult, supportNoteOk } from '../../components/feed/SupportReport.jsx';
 import { useToast } from '../../context/ToastContext.jsx';
 import { feedErrorText, formatDateTime } from '../schoolfeed/schoolFeedShared.jsx';
 import { postPopupPath } from './groupFeedShared.jsx';
@@ -85,13 +86,20 @@ function DeleteDialog({ item, busy, onCancel, onConfirm }) {
   );
 }
 
+// Moderation (FE-08 Anh, 25/11/2026): a "Cần được hỗ trợ" report is labelled, needs a "Kết quả hỗ trợ" to be decided,
+// and when every report is NEEDS_SUPPORT it can only be recorded ("Ghi nhận" = DISMISS), never deleted.
 function ReportCard({ item, busy, onDelete, onDismiss }) {
   const pending = item.status === 'PENDING';
+  const [supportNote, setSupportNote] = useState('');
+  const support = pending && item.hasNeedsSupport;
+  const blocked = Boolean(busy) || (support && !supportNoteOk(supportNote));
+  const note = support ? supportNote : undefined;
   const postLink = postPopupPath(item.groupId, item.postId);
   const excerpt = item.postExcerpt?.replace(/\s+/g, ' ').trim() || 'Bài viết';
   return (
-    <article className="card card-outline cr-item" aria-label={`Bình luận của ${item.authorName}`}>
+    <article className={`card card-outline cr-item${item.hasNeedsSupport ? ' is-support' : ''}`} aria-label={`Bình luận của ${item.authorName}`}>
       <header className="cr-item-head">
+        {item.hasNeedsSupport && <SupportBadge />}
         <span className="cr-count" title={`${item.reportCount} lượt báo cáo`}>
           <Icon name="flag" size="sm" filled />
           <span className="mono">{item.reportCount.toLocaleString('vi-VN')}</span>
@@ -148,29 +156,34 @@ function ReportCard({ item, busy, onDelete, onDismiss }) {
         )}
       </div>
 
+      {support && <SupportNoteField value={supportNote} onChange={setSupportNote} disabled={Boolean(busy)} />}
+
       {pending ? (
         <footer className="cr-actions">
-          <button type="button" className="btn btn-secondary" onClick={() => onDismiss(item)} disabled={busy}>
+          <button type="button" className={`btn ${item.needsSupportOnly ? 'btn-primary' : 'btn-secondary'}`} onClick={() => onDismiss(item, note)} disabled={blocked}>
             <Icon
-              name={busy === 'DISMISS' ? 'progress_activity' : 'do_not_disturb_on'}
+              name={busy === 'DISMISS' ? 'progress_activity' : item.needsSupportOnly ? 'task_alt' : 'do_not_disturb_on'}
               size="sm"
               className={busy === 'DISMISS' ? 'cr-spin' : undefined}
             />
-            {busy === 'DISMISS' ? 'Đang bỏ qua…' : 'Bỏ qua'}
+            {busy === 'DISMISS' ? 'Đang lưu…' : item.needsSupportOnly ? 'Ghi nhận' : 'Bỏ qua'}
           </button>
-          <button type="button" className="btn btn-primary sf-btn-danger" onClick={() => onDelete(item)} disabled={busy}>
-            <Icon name="delete" size="sm" />
-            Xoá bình luận
-          </button>
+          {!item.needsSupportOnly && (
+            <button type="button" className="btn btn-primary sf-btn-danger" onClick={() => onDelete(item, note)} disabled={blocked}>
+              <Icon name="delete" size="sm" />
+              Xoá bình luận
+            </button>
+          )}
         </footer>
       ) : (
         <p className="caption muted cr-decided">
           <Icon name={item.status === 'RESOLVED' ? 'delete' : 'do_not_disturb_on'} size="sm" />
-          {item.status === 'RESOLVED' ? 'Bình luận đã bị xoá' : 'Đã bỏ qua báo cáo'}
+          {item.status === 'RESOLVED' ? 'Bình luận đã bị xoá' : item.hasNeedsSupport ? 'Đã ghi nhận' : 'Đã bỏ qua báo cáo'}
           {item.resolvedAt && ` lúc ${formatDateTime(item.resolvedAt)}`}
           {item.resolvedByName && ` · ${item.resolvedByName}`}
         </p>
       )}
+      {!pending && <SupportNoteResult note={item.supportNote} />}
     </article>
   );
 }
@@ -183,7 +196,7 @@ export default function GroupCommentReportsPage() {
   const [state, setState] = useState({ loading: true, data: null, error: '' });
   const [attempt, setAttempt] = useState(0);
   const [busy, setBusy] = useState(null); // { commentId, action }
-  const [deleting, setDeleting] = useState(null); // the item whose confirmation is open
+  const [deleting, setDeleting] = useState(null); // { item, note }: the item whose confirmation is open
 
   useEffect(() => {
     const controller = new AbortController();
@@ -206,12 +219,18 @@ export default function GroupCommentReportsPage() {
 
   const reload = useCallback(() => setAttempt((n) => n + 1), []);
 
-  async function decide(item, action) {
+  async function decide(item, action, supportNote) {
     if (busy) return;
     setBusy({ commentId: item.commentId, action });
     try {
-      await resolveGroupCommentReport(item.commentId, action);
-      toast(action === 'DELETE' ? 'Đã xoá bình luận và báo cho người viết.' : 'Đã bỏ qua báo cáo. Bình luận được giữ nguyên.');
+      await resolveGroupCommentReport(item.commentId, action, supportNote);
+      toast(
+        action === 'DELETE'
+          ? 'Đã xoá bình luận và báo cho người viết.'
+          : item.needsSupportOnly
+            ? 'Đã ghi nhận kết quả hỗ trợ.'
+            : 'Đã bỏ qua báo cáo. Bình luận được giữ nguyên.',
+      );
       setDeleting(null);
       reload();
     } catch (err) {
@@ -271,8 +290,8 @@ export default function GroupCommentReportsPage() {
                 key={item.commentId}
                 item={item}
                 busy={busyOf(item)}
-                onDelete={setDeleting}
-                onDismiss={(it) => decide(it, 'DISMISS')}
+                onDelete={(it, note) => setDeleting({ item: it, note })}
+                onDismiss={(it, note) => decide(it, 'DISMISS', note)}
               />
             ))}
             {data && !data.items.length && !state.error && (
@@ -289,10 +308,10 @@ export default function GroupCommentReportsPage() {
       )}
 
       <DeleteDialog
-        item={deleting}
+        item={deleting?.item ?? null}
         busy={busy?.action === 'DELETE'}
         onCancel={() => setDeleting(null)}
-        onConfirm={() => decide(deleting, 'DELETE')}
+        onConfirm={() => decide(deleting.item, 'DELETE', deleting.note)}
       />
     </div>
   );

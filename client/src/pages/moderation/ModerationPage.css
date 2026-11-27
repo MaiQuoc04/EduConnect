@@ -1,0 +1,76 @@
+/* "Quy chuẩn cộng đồng" (moderation phase 6, FE-08 Anh). Built on the shared classes (card, table, pill, notice, btn). */
+.moderation-page { display: grid; gap: 16px; min-width: 0; }
+.moderation-page .page-header { margin-bottom: 0; }
+.mod-body { display: grid; gap: 16px; min-width: 0; }
+.mod-body > section { display: grid; gap: 12px; min-width: 0; }
+
+.mod-filters { display: flex; flex-wrap: wrap; gap: 12px; align-items: flex-end; }
+.mod-filter { min-width: 150px; flex: 0 1 180px; }
+.mod-filter-search { flex: 1 1 220px; }
+.mod-toolbar { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px; margin: 0; }
+
+.mod-table-card { padding: 0; overflow-x: auto; }
+.mod-table td { padding-top: 8px; padding-bottom: 8px; height: auto; vertical-align: top; }
+.mod-table .num { text-align: right; }
+.mod-table .nowrap { white-space: nowrap; }
+.mod-name { font-weight: 600; text-align: left; }
+.mod-actions { display: flex; gap: 6px; justify-content: flex-end; }
+.mod-trend { display: inline-flex; align-items: center; gap: 4px; }
+.mod-trend.is-up { color: var(--red-pen); }
+.mod-trend.is-down { color: var(--green); }
+.mod-row-off td { color: var(--graphite-500); }
+.mod-pattern { font-weight: 600; overflow-wrap: anywhere; }
+.mod-warn { color: var(--amber); font-weight: 600; }
+.mod-unhide-info { margin-top: 4px; overflow-wrap: anywhere; }
+
+.mod-back { justify-self: start; }
+.mod-person { display: grid; gap: 2px; }
+
+.mod-dialog.is-wide { width: min(640px, calc(100vw - 32px)); }
+.mod-quote { margin: 0; padding: 12px 16px; border-left: 3px solid var(--ink-400); background: var(--graphite-50); border-radius: var(--radius-control); display: grid; gap: 6px; }
+.mod-quote-text { white-space: pre-wrap; overflow-wrap: anywhere; color: var(--graphite-900); }
+.mod-check { display: flex; align-items: flex-start; gap: 8px; }
+.mod-check input { margin-top: 3px; }
+
+.mod-test { display: grid; gap: 8px; padding: 16px; }
+.mod-test-row { display: flex; gap: 8px; }
+.mod-test-row .input { flex: 1; min-width: 0; }
+.mod-test-result { margin: 0; }
+
+.mod-reports { display: grid; gap: 12px; }
+.mod-report { display: grid; gap: 8px; padding: 16px; }
+.mod-report.is-support { outline: 2px solid #f3d9a8; }
+.mod-report-head { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 12px; }
+.mod-report-who { margin: 0; }
+.mod-chip-support { background: var(--amber-bg); color: var(--amber); font-weight: 600; }
+
+.mod-chat { display: grid; gap: 8px; padding: 16px; }
+.mod-chat-head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px; }
+.mod-messages { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; max-height: 60vh; overflow-y: auto; }
+.mod-msg { padding: 8px 12px; border-radius: var(--radius-control); background: var(--graphite-50); display: grid; gap: 2px; }
+.mod-msg.is-reported { background: var(--amber-bg); outline: 2px solid #f3d9a8; }
+.mod-msg-pill { margin-left: 6px; }
+.mod-msg-text { white-space: pre-wrap; overflow-wrap: anywhere; }
+.mod-msg-text.is-empty { font-style: italic; color: var(--graphite-500); }
+.mod-msg-system { text-align: center; }
+.mod-chat-note { display: flex; align-items: center; gap: 4px; margin: 0; }
+.mod-decide { display: grid; gap: 12px; padding: 16px; }
+/* Tab "Đã xử lý": "Hành vi xử lý" (27/11/2026) */
+.mod-handled { display: grid; gap: 6px; padding-top: 8px; border-top: 1px solid var(--graphite-200); min-width: 0; }
+.mod-handled-title { margin: 0; font-weight: 600; color: var(--graphite-700); }
+.mod-handled .cr-decided { display: flex; align-items: flex-start; gap: 6px; margin: 0; }
+.mod-views { display: grid; gap: 4px; }
+.mod-views > p { margin: 0; }
+.mod-view-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
+.mod-view-list li { display: grid; gap: 2px; padding: 6px 10px; border-radius: var(--radius-control); background: var(--graphite-50); min-width: 0; }
+.mod-view-reason { white-space: pre-wrap; overflow-wrap: anywhere; }
+.mod-views-none { display: flex; align-items: center; gap: 4px; margin: 0; }
+
+@media (max-width: 640px) {
+  .mod-filter, .mod-filter-search { flex: 1 1 100%; }
+  .mod-toolbar .btn, .mod-decide .btn { width: 100%; justify-content: center; }
+  .mod-test-row { flex-direction: column; }
+  .mod-test-row .btn { height: 44px; justify-content: center; }
+  .mod-report, .mod-chat, .mod-decide { padding: 12px; }
+  .mod-messages { max-height: none; }
+}

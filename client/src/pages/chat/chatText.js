@@ -1,6 +1,7 @@
 import { MEMBER_KIND_LABELS } from '../groups/groupLabels.js';
 import { RELATIONSHIP_LABELS } from '../../messages.js';
 import { memberSubline } from '../groups/memberText.js';
+import { MODERATED_PREVIEW_TEXT } from '../../utils/moderation.js';
 
 // FE-06 display helpers. Times arrive as Vietnam-time strings ("2026-11-04 08:30:12.345+07"); they are only
 // formatted here, never compared (the server compares times in SQL).
@@ -42,6 +43,8 @@ export function shortTime(sentAt) {
 export function previewText(message, myId, direct = false) {
   if (!message) return 'Chưa có tin nhắn';
   if (message.type === 'SYSTEM') return systemText(message, myId);
+  // Hidden by the automatic check (moderation): never its text here, not even the sender's own socket copy.
+  if (message.isModerated) return MODERATED_PREVIEW_TEXT;
   if (message.isDeleted) {
     if (message.senderId === myId) return 'Bạn đã xoá một tin nhắn';
     return direct ? 'Tin nhắn đã được xoá' : `${message.senderNickname || message.senderName} đã xoá một tin nhắn`;

@@ -90,6 +90,14 @@
 }
 .ct-deleted-text { font-style: italic; color: var(--graphite-500); }
 
+/* Hidden by the automatic content check (moderation, 26/11/2026): seen by its author only – a placeholder line, then
+   "Xem bình luận" (components/HiddenContent). No actions. */
+.ct-hidden { display: grid; justify-items: start; gap: 2px; padding-bottom: 6px; }
+.ct-hidden .hidden-content-placeholder { font-style: italic; color: var(--graphite-500); }
+.ct-hidden .hidden-content-toggle { min-height: 24px; }
+.ct-hidden-notice { margin-top: 8px; padding: 10px 12px; gap: 8px; }
+.ct-hidden-notice p { line-height: 20px; }
+
 .ct-empty { padding: 8px 0; }
 .ct-more { display: grid; justify-items: start; gap: 6px; padding-top: 4px; }
 .ct-load-error { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; }
@@ -119,6 +127,7 @@
   .ct-replies { margin-left: 0; padding-left: calc(var(--ct-step) - 1px); }
   .ct-reply-box { margin-left: var(--ct-step); }
   .ct-composer-avatar { display: none; }
+  .ct-hidden-notice { padding: 10px; }
   .ct-composer-buttons { width: 100%; }
   .ct-composer-buttons .btn { flex: 1 1 0; }
   .ct-more .btn { width: 100%; }

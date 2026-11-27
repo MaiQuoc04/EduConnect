@@ -8,6 +8,10 @@ import { findGroupForUser, groupScopeSql } from '../groups/groupAccess.js';
 import { byRankThenName, memberRows } from '../groups/groups.service.js';
 import { getAttachmentLimits } from '../posts/posts.service.js';
 import { directPeer } from './direct.service.js';
+// Automatic content check (moderation phase 4, FE-08 Anh, 25/11/2026, docs/moderation-plan.md).
+import { moderateText } from '../../utils/moderationRules.js';
+import { notifyContentHidden } from '../../utils/moderationNotify.js';
+import { recordAutoViolation } from '../../utils/moderationViolations.js';
 
 // FE-06 Messaging (owner: Khanh). UC-47 Chat in Group – SCR-43 Group Chat / SCR-50 Chat Room.
 // Group chats: GENERAL / STUDENT / PARENT (class groups), TEAM_CHAT (UC-35 teams) and TEACHER_SCHOOL. Who may open
@@ -138,10 +142,15 @@ export const reactionsSql = (alias = 'm') => `CASE WHEN ${alias}.deleted_for_eve
 // (business-rules §4): it comes from the sender's enrollment in the group's class, so it never appears in the teacher
 // group. deleteSecondsLeft: how long the viewer may still delete their own message for everyone (0 = no longer).
 // viewerFrom / columns: to read one message for several viewers at once (messageForViewers).
+// Moderation (25/11/2026): a message hidden by the automatic check is deleted_for_everyone_at with
+// deleted_for_everyone_by NULL (a user's own delete always sets _by) – isModerated. Only its SENDER still reads its
+// text; everyone else gets the placeholder, exactly as for a message deleted for everyone.
 const messageSelect = (viewer, viewerFrom = '', columns = '') => `
   SELECT m.message_id AS "messageId", m.group_id AS "groupId", m.sender_id AS "senderId",
-         CASE WHEN m.deleted_for_everyone_at IS NULL THEN m.content END AS content,
+         CASE WHEN m.deleted_for_everyone_at IS NULL
+                   OR (m.deleted_for_everyone_by IS NULL AND m.sender_id = ${viewer}) THEN m.content END AS content,
          m.deleted_for_everyone_at IS NOT NULL AS "isDeleted",
+         (m.deleted_for_everyone_at IS NOT NULL AND m.deleted_for_everyone_by IS NULL) AS "isModerated",
          m.sent_at AS "sentAt", u.full_name AS "senderName", u.avatar_url AS "senderAvatarUrl",
          u.status AS "senderStatus", e.nickname AS "senderNickname",
          ${replyToSql(viewer)} AS "replyTo", ${reactionsSql()} AS reactions,
@@ -444,6 +453,7 @@ export async function listConversations(user) {
   const { rows } = await pool.query(
     `SELECT g.group_id AS "groupId", g.group_type AS "groupType",
             lm.message_id AS "messageId", lm.is_deleted AS "isDeleted", lm.message_type AS "type",
+            lm.is_moderated AS "isModerated",
             lm.system_event AS "event", lt.full_name AS "targetName",
             CASE WHEN lm.is_deleted THEN NULL ELSE lm.content END AS content,
             lm.sent_at AS "sentAt", lm.activity_at AS "activityAt",
@@ -458,6 +468,8 @@ export async function listConversations(user) {
      ${membershipJoin(withHidden)}
      LEFT JOIN LATERAL (SELECT m.message_id, m.content, m.sent_at, m.sender_id, m.message_type, m.system_event,
                                m.target_user_id, m.deleted_for_everyone_at IS NOT NULL AS is_deleted,
+                               -- moderation: hidden by the automatic check (no content here, not even for the sender)
+                               (m.deleted_for_everyone_at IS NOT NULL AND m.deleted_for_everyone_by IS NULL) AS is_moderated,
                                COALESCE(m.deleted_for_everyone_at, m.sent_at) AS activity_at
                         FROM messages m
                         WHERE m.group_id = g.group_id AND m.deleted_at IS NULL AND m.sent_at >= gm.joined_at
@@ -491,6 +503,7 @@ export async function listConversations(user) {
       ? {
           messageId: r.messageId,
           isDeleted: r.isDeleted,
+          isModerated: r.isModerated, // moderation: "Tin nhắn đã bị ẩn" instead of "đã thu hồi"
           type: r.type,
           event: r.event,
           targetName: r.targetName,
@@ -556,6 +569,9 @@ export async function sendMessage(user, groupId, body) {
     }
     replyTo = original.messageId;
   }
+  // Moderation (25/11/2026): the text is checked before the transaction (never waits for the database, never throws;
+  // a broken filter lets the message through). Files only (content NULL): nothing to check.
+  const check = content ? await moderateText(content) : { hidden: false };
 
   const messageId = await withTransaction(async (client) => {
     // Two copies of the same send arriving together: the unique index lets one in, the other gets nothing back.
@@ -570,6 +586,19 @@ export async function sendMessage(user, groupId, body) {
       clientId ? [group.groupId, user.userId, content, replyTo, clientId] : [group.groupId, user.userId, content, replyTo],
     );
     if (!rows.length) return null;
+    // Moderation: hidden in the same transaction as the INSERT, so no copy with its text ever leaves the server –
+    // message:new below reads it back through messageForViewers, which gives its text to the sender only.
+    // deleted_for_everyone_by stays NULL: that is what marks it "hidden by the automatic check" (isModerated).
+    if (check.hidden) {
+      await client.query('UPDATE messages SET deleted_for_everyone_at = NOW() WHERE message_id = $1', [rows[0].message_id]);
+      await recordAutoViolation(client, {
+        contentType: 'MESSAGE',
+        messageId: rows[0].message_id,
+        authorId: user.userId,
+        category: check.category,
+        ruleIds: check.ruleIds,
+      });
+    }
     await files.insertAttachments(
       { column: FILES, id: rows[0].message_id },
       fileRows.map((r) => ({ ...r, uploadedBy: user.userId })),
@@ -595,7 +624,16 @@ export async function sendMessage(user, groupId, body) {
     lastReadMessageId: messageId,
   });
   const { viewerId: _viewerId, ...mine } = copies.find((c) => c.viewerId === user.userId);
-  return mine;
+  // Moderation: tell the sender after COMMIT (fire and forget), and say why in the answer.
+  if (check.hidden) {
+    notifyContentHidden({
+      contentType: 'MESSAGE',
+      authorId: user.userId,
+      postTarget: { column: 'group_id', id: group.groupId },
+      category: check.category,
+    }).catch((err) => console.error(`[conversations] moderation notification for message #${messageId} not sent:`, err?.message));
+  }
+  return { ...mine, moderation: check.hidden ? { hidden: true, category: check.category } : null };
 }
 
 /**

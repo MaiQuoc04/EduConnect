@@ -23,6 +23,7 @@ import schoolEventRoutes from './modules/calendar/schoolEvents.routes.js';
 import gradeRoutes from './modules/grades/grades.routes.js';
 import schoolPostRoutes from './modules/schoolposts/schoolposts.routes.js';
 import commentReportRoutes from './modules/schoolposts/commentReports.routes.js';
+import moderationRoutes from './modules/moderation/moderation.routes.js';
 import uploadRoutes from './modules/uploads/uploads.routes.js';
 import parentRoutes from './modules/parents/parents.routes.js';
 import extracurricularRoutes from './modules/extracurricular/extracurricular.routes.js';
@@ -71,6 +72,7 @@ router.use('/school-events', schoolEventRoutes); // FE-10 school calendar (Dung)
 router.use('/grades', gradeRoutes);
 router.use('/school-posts', schoolPostRoutes);
 router.use('/comment-reports', commentReportRoutes); // FE-08: School Manager's queue of reported school post comments
+router.use('/moderation', moderationRoutes); // FE-08 moderation (Anh): message reports, School Manager's queue and reads
 router.use('/parents', parentRoutes);
 router.use('/extracurricular-events', extracurricularRoutes); // FE-07 (Dung, It3)
 router.use('/attendances', attendanceRoutes); // FE-12 (Quoc, It3)

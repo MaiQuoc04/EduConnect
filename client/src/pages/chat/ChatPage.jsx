@@ -178,6 +178,7 @@ export default function ChatPage() {
     // A message deleted for everyone counts as new activity (preview, one unread for the others, the chat goes up):
     // the server recounts.
     socket.on('message:deleted', loadSummaries);
+    socket.on('message:restored', loadSummaries); // moderation: a hidden message shown again (preview)
     socket.on('message:hidden', loadSummaries);
     socket.on('chat:access-changed', loadSummaries);
     socket.on('connect', loadSummaries); // first connection, every reconnection, a role switch: what was missed
@@ -207,6 +208,7 @@ export default function ChatPage() {
       socket.off('message:new', onNew);
       socket.off('message:read', onRead);
       socket.off('message:deleted', loadSummaries);
+      socket.off('message:restored', loadSummaries);
       socket.off('message:hidden', loadSummaries);
       socket.off('chat:access-changed', loadSummaries);
       socket.off('connect', loadSummaries);

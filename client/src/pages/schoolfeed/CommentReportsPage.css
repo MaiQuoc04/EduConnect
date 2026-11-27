@@ -57,8 +57,19 @@ a.cr-post-title:hover { text-decoration: underline; }
 .cr-spin { animation: cr-spin 0.9s linear infinite; }
 @keyframes cr-spin { to { transform: rotate(360deg); } }
 
+/* Moderation (25/11/2026): "Cần được hỗ trợ" – first in the queue, labelled, a required "Kết quả hỗ trợ". */
+.cr-item.is-support { outline: 2px solid #f3d9a8; }
+.cr-support-badge { gap: 4px; font-weight: 600; }
+.cr-support-badge::before { display: none; }
+.cr-support-note { display: grid; gap: 4px; }
+.cr-support-note label { font-weight: 500; color: var(--graphite-900); }
+.cr-over { color: var(--red-pen); }
+.cr-support-result { display: flex; align-items: flex-start; gap: 6px; margin: 0; color: var(--graphite-700); overflow-wrap: anywhere; }
+.cr-support-result .icon { color: var(--amber); flex: none; }
+
 @media (max-width: 640px) {
   .comment-reports .page-header { flex-direction: column; }
   .cr-item { padding: 16px; }
   .cr-actions .btn { flex: 1 1 0; height: 44px; justify-content: center; }
+  .cr-support-note textarea { font-size: 16px; } /* no zoom on focus (iOS) */
 }

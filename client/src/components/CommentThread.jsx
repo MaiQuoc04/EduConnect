@@ -3,6 +3,8 @@ import { useAuth } from '../context/AuthContext.jsx';
 import { useToast } from '../context/ToastContext.jsx';
 import { errorText } from '../messages.js';
 import { formatDate } from '../utils/format.js';
+import { hiddenCommentNotice, MODERATED_COMMENT_TEXT, REPORT_REASONS, SUPPORT_HINT, SUPPORT_REASON } from '../utils/moderation.js';
+import HiddenContent from './HiddenContent.jsx';
 import Avatar from './Avatar.jsx';
 import Icon from './Icon.jsx';
 import './CommentThread.css';
@@ -23,6 +25,11 @@ import './CommentThread.css';
  *     answered (the server answers 409 MSG_PARENT_COMMENT_DELETED).
  *   - create returns the new node (replies: [], canDelete: true), without commentCount.
  *   - remove returns { commentCount } (soft delete; replies stay).
+ *   - automatic content check (moderation, 25/11/2026): a comment that matches a rule is saved HIDDEN. create then
+ *     returns it with isHidden true and moderation { hidden: true, category }; the list returns the reader's OWN hidden
+ *     comments with isHidden true (others never get them) and commentCount never counts them. A hidden comment is
+ *     shown faded with "Đã bị ẩn", without Thích / Trả lời / Báo cáo / Xoá, and a notice says why under the box it was
+ *     sent from.
  *
  * Real time (optional, `live` + `refreshKey`): signals only, never content. On a signal the component reads the
  * comments again and merges them into what is shown ("sync"): same `key` per comment, so React keeps every node, the
@@ -54,15 +61,11 @@ const COMMENT_MESSAGES = {
 
 /**
  * Reasons of a comment report (17/11/2026), same codes as comment_reports_reason_check and the server's
- * utils/commentReports.js REPORT_REASONS. Also read by the School Manager's report queue.
+ * utils/commentReports.js REPORT_REASONS. Also read by the School Manager's report queue. Since moderation phase 5
+ * (25/11/2026) the list lives in utils/moderation.js (shared with the chat's report dialog) and includes
+ * "Cần được hỗ trợ" (NEEDS_SUPPORT); re-exported here so the queue pages keep their import.
  */
-export const REPORT_REASONS = [
-  { code: 'INAPPROPRIATE_LANGUAGE', label: 'Ngôn từ không phù hợp' },
-  { code: 'HARASSMENT', label: 'Quấy rối, xúc phạm hoặc bắt nạt' },
-  { code: 'SPAM', label: 'Spam, quảng cáo hoặc nội dung lặp lại' },
-  { code: 'FALSE_INFORMATION', label: 'Thông tin sai sự thật' },
-  { code: 'OTHER', label: 'Lý do khác' },
-];
+export { REPORT_REASONS };
 export const MAX_REPORT_NOTE_LENGTH = 500; // comment_reports.note VARCHAR(500)
 const REPLY_TARGET_GONE = 'Bình luận này đã bị xoá. Nội dung bạn đang gõ đã được chuyển vào ô bình luận ở đầu danh sách.';
 
@@ -152,11 +155,22 @@ function mergeWindow(shown, fetched, full) {
 
 // --- Pieces ----------------------------------------------------------------------------------------------------
 
+// The comment just sent was hidden by the automatic check: one calm line saying why (moderation, 25/11/2026).
+function HiddenNotice({ text }) {
+  return (
+    <div className="notice amber ct-hidden-notice" role="status">
+      <Icon name="visibility_off" size="sm" />
+      <p>{text}</p>
+    </div>
+  );
+}
+
 /**
  * Text box + Send. The text is owned by the thread (drafts survive syncs and a deleted reply target), so it is
  * controlled: text / setText. onSubmit(content) resolves { ok: true } or { error: 'Vietnamese text' }; never rejects.
+ * notice: the "your comment was hidden" line of the last comment sent from THIS box (shown under it), or empty.
  */
-function Composer({ text, setText, onSubmit, placeholder, replyingTo, onCancel, autoFocus, user, enterToSend }) {
+function Composer({ text, setText, onSubmit, placeholder, replyingTo, onCancel, autoFocus, user, enterToSend, notice }) {
   const id = useId();
   const [error, setError] = useState('');
   const [sending, setSending] = useState(false);
@@ -251,6 +265,7 @@ function Composer({ text, setText, onSubmit, placeholder, replyingTo, onCancel, 
               {error}
             </p>
           )}
+          {notice && <HiddenNotice text={notice} />}
         </div>
       </div>
     </form>
@@ -318,11 +333,16 @@ function CommentLike({ node, like }) {
   );
 }
 
-function CommentNode({ node, depth, parentName, reply, like, report, onDelete }) {
+function CommentNode({ node, depth, parentName, reply, like, report, onDelete, notice }) {
   const deleted = node.isDeleted;
+  // Hidden by the automatic check (moderation): only its author ever receives it. No action at all on it – the server
+  // answers 404 to like / reply / report / delete of a hidden comment.
+  const hidden = !deleted && Boolean(node.isHidden);
   const edited = Boolean(node.updatedAt) && node.updatedAt !== node.createdAt;
   const flat = depth >= MAX_INDENT_DEPTH; // the replies of this node are not indented any further
-  const replying = !deleted && reply.to === node.commentId;
+  const replying = !deleted && !hidden && reply.to === node.commentId;
+  // A reply sent from this node's reply box was hidden: the notice stays where that box was.
+  const replyNotice = !replying && notice?.parentId === node.commentId ? notice.text : '';
   return (
     <li className="ct-node">
       {deleted ? (
@@ -333,7 +353,11 @@ function CommentNode({ node, depth, parentName, reply, like, report, onDelete })
           <p className="ct-deleted-text">Bình luận đã bị xoá</p>
         </div>
       ) : (
-        <article className="ct-comment" data-comment-id={node.commentId} aria-label={`Bình luận của ${node.authorName}`}>
+        <article
+          className="ct-comment"
+          data-comment-id={node.commentId}
+          aria-label={`${hidden ? 'Bình luận đã bị ẩn' : 'Bình luận'} của ${node.authorName}`}
+        >
           <span className="ct-avatar">
             <Avatar src={node.authorAvatarUrl} name={node.authorName ?? ''} size={32} />
           </span>
@@ -355,6 +379,18 @@ function CommentNode({ node, depth, parentName, reply, like, report, onDelete })
                 </span>
               )}
             </div>
+            {/* Hidden (moderation, 26/11/2026): the placeholder, then "Xem bình luận" to read it in place – the author
+                only, who is the only one receiving it. No action. */}
+            {hidden ? (
+              <HiddenContent
+                placeholder={MODERATED_COMMENT_TEXT}
+                showLabel="Xem bình luận"
+                content={node.content}
+                textClassName="ct-content"
+                className="ct-hidden"
+              />
+            ) : (
+            <>
             <p className="ct-content">{node.content}</p>
             <div className="ct-actions">
               {like && <CommentLike node={node} like={like} />}
@@ -390,8 +426,16 @@ function CommentNode({ node, depth, parentName, reply, like, report, onDelete })
                 </button>
               )}
             </div>
+            </>
+            )}
           </div>
         </article>
+      )}
+
+      {replyNotice && (
+        <div className={`ct-reply-box${flat ? ' is-flat' : ''}`}>
+          <HiddenNotice text={replyNotice} />
+        </div>
       )}
 
       {replying && (
@@ -421,6 +465,7 @@ function CommentNode({ node, depth, parentName, reply, like, report, onDelete })
               like={like}
               report={report}
               onDelete={onDelete}
+              notice={notice}
             />
           ))}
         </ul>
@@ -582,6 +627,12 @@ function ReportDialog({ comment, onCancel, onSubmit }) {
             {noteLength.toLocaleString('vi-VN')} / {MAX_REPORT_NOTE_LENGTH.toLocaleString('vi-VN')}
           </span>
         </div>
+        {reason === SUPPORT_REASON && (
+          <div className="notice amber" role="status">
+            <Icon name="support" size="sm" />
+            <p>{SUPPORT_HINT}</p>
+          </div>
+        )}
         <div className="notice">
           <Icon name="shield_person" size="sm" />
           <p>Người viết bình luận sẽ không biết ai đã báo cáo. Bình luận vẫn hiển thị cho đến khi được xem xét.</p>
@@ -661,6 +712,8 @@ export default function CommentThread({
   const [replyTo, setReplyTo] = useState(null);
   const [replyText, setReplyText] = useState('');
   const [mainText, setMainText] = useState('');
+  // { parentId, text }: the last comment sent was hidden by the automatic check; parentId null = the main box.
+  const [hiddenNotice, setHiddenNotice] = useState(null);
   const [deleting, setDeleting] = useState(null); // { comment, busy }
   const [reporting, setReporting] = useState(null); // the comment whose report dialog is open
   const [reportedIds, setReportedIds] = useState(() => new Set()); // reported from this tab
@@ -929,7 +982,10 @@ export default function CommentThread({
   // UC-65: the answer is the new node; it is put in place without reading the tree again. A new top-level comment
   // goes FIRST (newest first), a reply to the END of its thread. The count goes up by one (no commentCount in the
   // answer). Own comments are always brought into view.
+  // Hidden by the automatic check (moderation): it is shown to its author only and never counted, so the count does
+  // not move; a notice says why, under the box it was sent from.
   async function submit(content, parentCommentId = null) {
+    setHiddenNotice(null);
     const request = apiRef.current.create(parentCommentId ? { content, parentCommentId } : { content });
     inflight.current = request;
     try {
@@ -938,6 +994,8 @@ export default function CommentThread({
       if (!mounted.current) return { ok: true };
       scrollTo.current = comment.commentId;
       if (parentCommentId) setReplyTo(null);
+      const hidden = Boolean(comment.moderation?.hidden);
+      if (hidden) setHiddenNotice({ parentId: parentCommentId, text: hiddenCommentNotice(comment.moderation.category) });
       // A sync for someone else's comment may already have brought this one: then it is in place and counted.
       if (findNode(state.current.roots, comment.commentId)) {
         setRoots((list) => [...list]); // re-render so the scroll to it still happens
@@ -947,9 +1005,9 @@ export default function CommentThread({
         setRoots((list) => insertReply(list, parentCommentId, comment));
       } else {
         setRoots((list) => (findNode(list, comment.commentId) ? list : [comment, ...list]));
-        setTotal((n) => n + 1);
+        setTotal((n) => n + 1); // the author's own list counts their hidden thread too (the server does the same)
       }
-      setCount((n) => n + 1);
+      if (!hidden) setCount((n) => n + 1);
       return { ok: true };
     } catch (err) {
       if (err?.code === 'MSG_PARENT_COMMENT_DELETED' && parentCommentId) {
@@ -1022,11 +1080,13 @@ export default function CommentThread({
     const target = reporting;
     if (!target) return { ok: true };
     try {
-      await apiRef.current.report(target.commentId, input);
+      const answer = await apiRef.current.report(target.commentId, input);
       if (!mounted.current) return { ok: true };
       setReportedIds((ids) => new Set(ids).add(target.commentId));
       setReporting(null);
-      toast('Đã gửi báo cáo. Cảm ơn bạn đã góp phần giữ bảng tin lành mạnh.');
+      // "Cần được hỗ trợ": the reporter is reminded where to get help right now (supportHint from the server).
+      if (answer?.supportHint || input.reason === SUPPORT_REASON) toast(`Đã gửi báo cáo. ${SUPPORT_HINT}`);
+      else toast('Đã gửi báo cáo. Cảm ơn bạn đã góp phần giữ bảng tin lành mạnh.');
       return { ok: true };
     } catch (err) {
       if (!mounted.current) return { ok: true };
@@ -1048,6 +1108,7 @@ export default function CommentThread({
     text: replyText,
     setText: setReplyText,
     toggle: (id) => {
+      setHiddenNotice(null);
       setReplyText((text) => (replyTo === id ? text : ''));
       setReplyTo((current) => (current === id ? null : id));
     },
@@ -1073,6 +1134,7 @@ export default function CommentThread({
           placeholder="Viết bình luận…"
           user={user}
           enterToSend={enterToSend}
+          notice={hiddenNotice && hiddenNotice.parentId == null ? hiddenNotice.text : ''}
         />
       )}
 
@@ -1107,7 +1169,7 @@ export default function CommentThread({
       {status === 'ready' && roots.length > 0 && (
         <ul className="ct-list" ref={listRef}>
           {roots.map((node) => (
-            <CommentNode key={node.commentId} node={node} depth={0} parentName={null} reply={reply} like={like} report={report} onDelete={(c) => setDeleting({ comment: c, busy: false })} />
+            <CommentNode key={node.commentId} node={node} depth={0} parentName={null} reply={reply} like={like} report={report} onDelete={(c) => setDeleting({ comment: c, busy: false })} notice={hiddenNotice} />
           ))}
         </ul>
       )}

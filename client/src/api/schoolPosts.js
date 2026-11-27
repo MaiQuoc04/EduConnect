@@ -140,7 +140,9 @@ export async function listCommentReports(params, { signal } = {}) {
 
 // PATCH /comment-reports/:commentId { action: 'DELETE' | 'DISMISS' } -> { commentId, status, resolvedCount,
 // commentDeleted }. Already decided by another School Manager -> 409 MSG_REPORT_ALREADY_HANDLED.
-export async function resolveCommentReport(commentId, action) {
-  const { data } = await api.patch(`/comment-reports/${encodeURIComponent(commentId)}`, { action });
+// supportNote (moderation, 25/11/2026): "Kết quả hỗ trợ", sent only when the item has a "Cần được hỗ trợ" report.
+export async function resolveCommentReport(commentId, action, supportNote) {
+  const body = supportNote === undefined ? { action } : { action, supportNote };
+  const { data } = await api.patch(`/comment-reports/${encodeURIComponent(commentId)}`, body);
   return data;
 }

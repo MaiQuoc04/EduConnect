@@ -3,6 +3,8 @@ import { AppError, forbidden, notFound } from '../../utils/AppError.js';
 import * as files from '../../utils/attachments.js';
 import * as feed from '../../utils/feedInteractions.js';
 import * as reports from '../../utils/commentReports.js';
+import { notifyContentHidden } from '../../utils/moderationNotify.js'; // moderation (FE-08 Anh, 25/11/2026)
+import { moderateText, moderationTermsOf } from '../../utils/moderationRules.js'; // moderation (FE-08 Anh, 27/11/2026)
 import { getNumberSetting } from '../../utils/settings.js';
 import { emitToUsers } from '../../sockets/index.js';
 import { activeMemberIds } from '../conversations/conversations.service.js';
@@ -65,6 +67,11 @@ function assertModerator(group) {
 }
 
 const isLive = (post) => post.approvalStatus === 'APPROVED' && !post.isHidden;
+// moderation (FE-08 Anh, 27/11/2026): a post the automatic check stopped when it was posted or edited ("Chưa đăng – vi
+// phạm"). Seen by its author only (not by the moderator, not in any queue); the author edits or deletes it. Not a
+// violation: nothing in moderation_violations, no statistics, no unhide (business-rules §5, §17).
+const BLOCKED = 'BLOCKED';
+const isBlocked = (post) => post.approvalStatus === BLOCKED;
 
 
 // A post as the API returns it (alias p = posts). The nickname (UC-34) comes from the author's enrollment in the
@@ -107,10 +114,17 @@ async function decorate(posts, user, group, db = pool) {
     files.summarizeAttachments(FILES, ids, db),
     activitiesOfPosts(ids, db), // FE-07 (Dung): a post that carries an extracurricular activity
   ]);
+  // moderation (FE-08 Anh, 27/11/2026): the author of a BLOCKED post is told what to change, checked again now with the
+  // rules in memory (no query, nothing stored). Nobody else ever gets a BLOCKED post.
+  const blockedTerms = new Map();
+  for (const post of posts) {
+    if (isBlocked(post) && post.authorId === user.userId) blockedTerms.set(post.postId, await moderationTermsOf(post.content));
+  }
   return posts.map((post) => {
     const activity = activities.get(String(post.postId)) ?? null;
     const can = permissionsOf(post, user, group);
     return {
+      ...(blockedTerms.has(post.postId) ? { moderation: blockedTerms.get(post.postId) } : {}),
       ...post,
       likeCount: likes.get(post.postId)?.likeCount ?? 0,
       likedByMe: likes.get(post.postId)?.likedByMe ?? false,
@@ -144,6 +158,7 @@ async function openPost(db, user, postId, { lock } = {}) {
     throw err;
   }
   if (!isLive(post) && post.authorId !== user.userId && !group.isModerator) throw postNotFound();
+  if (isBlocked(post) && post.authorId !== user.userId) throw postNotFound(); // moderation (FE-08 Anh, 27/11/2026): author only
   return { post, group, target: { column: POST, id: post.postId } };
 }
 
@@ -201,7 +216,7 @@ const postChanged = (group, post, change, wasLive) =>
 /**
  * One page of the feed of a group. view:
  *   feed     live posts (APPROVED, not hidden): pinned first, then newest first – every member
- *   mine     the viewer's own posts that are not live (pending, rejected, hidden), newest first
+ *   mine     the viewer's own posts that are not live (pending, rejected, hidden, blocked – moderation 27/11/2026), newest first
  *   pending  posts waiting for approval, first sent first (UC-46 queue; an edited post counts from when it was sent again) – moderator only
  *   hidden   hidden posts, last hidden first (unhide, §5) – moderator only
  * The group block tells the client what to show around the list: approval on, read only, moderator, the "no homeroom
@@ -229,7 +244,9 @@ export async function listPosts(user, groupId, { view, page, pageSize }) {
       where: `p.approval_status = 'PENDING'`,
       order: 'COALESCE(p.updated_at, p.created_at) ASC, p.post_id ASC',
     }),
-    hidden: () => ({ where: `p.is_hidden`, order: 'p.hidden_at DESC' }),
+    // moderation (FE-08 Anh, 27/11/2026): a hidden post its author edited into BLOCKED keeps is_hidden, but leaves this
+    // queue (the author alone sees it, under "mine").
+    hidden: () => ({ where: `p.is_hidden AND p.approval_status <> 'BLOCKED'`, order: 'p.hidden_at DESC' }),
   };
   const { where, order } = views[view]();
   const filter = `WHERE p.group_id = $1 AND p.deleted_at IS NULL AND ${where}`;
@@ -252,7 +269,7 @@ export async function listPosts(user, groupId, { view, page, pageSize }) {
   // Tab counters and the homeroom banner in one query.
   const { rows: summary } = await pool.query(
     `SELECT COUNT(*) FILTER (WHERE p.approval_status = 'PENDING') AS "pendingCount",
-            COUNT(*) FILTER (WHERE p.is_hidden) AS "hiddenCount",
+            COUNT(*) FILTER (WHERE p.is_hidden AND p.approval_status <> 'BLOCKED') AS "hiddenCount", -- moderation (FE-08 Anh, 27/11/2026)
             COUNT(*) FILTER (WHERE p.author_id = $2 AND (p.approval_status <> 'APPROVED' OR p.is_hidden)) AS "mineCount",
             COUNT(*) FILTER (WHERE p.is_pinned AND p.approval_status = 'APPROVED' AND NOT p.is_hidden) AS "pinnedCount",
             ($3::bigint IS NOT NULL AND NOT EXISTS (
@@ -336,10 +353,14 @@ export async function getAttachmentLimits(maxFiles = MAX_ATTACHMENTS) {
  */
 export async function createPost(user, groupId, { content, attachments = [] }) {
   const fileRows = await files.readUploadedFiles(attachments);
+  // moderation (FE-08 Anh, 27/11/2026): the text is checked before the transaction (in memory, never waits for the
+  // database, never throws). Only content, never the files. Not applied to the moderator's own post.
+  const check = await moderateText(content);
   const { group, post } = await withTransaction(async (client) => {
     const g = await openFeed(client, user, groupId);
     assertWritable(g);
-    const status = g.isModerator || !g.requireApproval ? 'APPROVED' : 'PENDING';
+    const blocked = check.hidden && !g.isModerator; // moderation (FE-08 Anh, 27/11/2026)
+    const status = blocked ? BLOCKED : g.isModerator || !g.requireApproval ? 'APPROVED' : 'PENDING';
     const { rows } = await client.query(
       `INSERT INTO posts (group_id, author_id, content, approval_status, created_at)
        VALUES ($1, $2, $3, $4, NOW()) RETURNING post_id AS "postId"`,
@@ -347,11 +368,14 @@ export async function createPost(user, groupId, { content, attachments = [] }) {
     );
     await files.insertAttachments(filesOf(rows[0].postId), fileRows.map((r) => ({ ...r, uploadedBy: user.userId })), client);
     // FE-09 (lead 18/11/2026): a live post notifies the other members (bell); a pending one tells the moderator.
+    // moderation (FE-08 Anh, 27/11/2026): a BLOCKED post tells nobody (not even its author: they see it on screen).
     if (status === 'APPROVED') await notifyGroupPost(client, { postId: rows[0].postId });
-    else await notifyPostPending(client, { postId: rows[0].postId });
+    else if (status === 'PENDING') await notifyPostPending(client, { postId: rows[0].postId });
     return { group: g, post: await readPost(client, user, g, rows[0].postId) };
   });
-  postChanged(group, post, 'created', false);
+  // moderation (FE-08 Anh, 27/11/2026): a BLOCKED post is signalled to its author only (their other tabs).
+  if (isBlocked(post)) emitToUsers([post.authorId], 'post:changed', { groupId: group.groupId, postId: post.postId, change: 'created' });
+  else postChanged(group, post, 'created', false);
   return post;
 }
 
@@ -370,6 +394,8 @@ export async function createPost(user, groupId, { content, attachments = [] }) {
  */
 export async function updatePost(user, postId, { content, attachments = [], removeAttachmentIds = [] }) {
   const addRows = await files.readUploadedFiles(attachments); // storage is read before the lock
+  // moderation (FE-08 Anh, 27/11/2026): the new text is checked before the transaction, as in createPost.
+  const check = await moderateText(content);
   const result = await withTransaction(async (client) => {
     const { post, group } = await openPost(client, user, postId, { lock: 'update' });
     assertWritable(group);
@@ -380,28 +406,51 @@ export async function updatePost(user, postId, { content, attachments = [], remo
       { add: addRows, removeIds: removeAttachmentIds, uploadedBy: user.userId, max: MAX_ATTACHMENTS },
       client,
     );
-    if (post.content === content && !filesChanged) {
+    // moderation (FE-08 Anh, 27/11/2026): new text that breaks a rule → BLOCKED (leaves the feed / queue, unpinned; the
+    // hidden mark is kept, so a hidden post edited clean later still goes to the moderator). A BLOCKED post edited clean
+    // is "released" with the usual state below and counts as a NEW post: posted now, no "edited" mark.
+    // ASSUMPTION: every saved edit is checked (also a change of files only), so a BLOCKED post is never released with
+    // its old text unchecked.
+    const blocked = check.hidden && !group.isModerator;
+    // moderation (FE-08 Anh, 27/11/2026): a BLOCKED post saved unchanged is checked again (the rules may have changed):
+    // clean → released below; still breaking a rule → stays BLOCKED, nothing written.
+    if (post.content === content && !filesChanged && (!isBlocked(post) || blocked)) {
       return { group, before: post, changed: false, post: (await decorate([post], user, group, client))[0] };
     }
-    const status =
-      group.isModerator || (!group.requireApproval && !post.isHidden) ? 'APPROVED' : 'PENDING';
+    const released = isBlocked(post) && !blocked;
+    const status = blocked
+      ? BLOCKED
+      : group.isModerator || (!group.requireApproval && !post.isHidden) ? 'APPROVED' : 'PENDING';
     await client.query(
       `UPDATE posts
-       SET content = $2, updated_at = NOW(), approval_status = $3::varchar,
+       SET content = $2, approval_status = $3::varchar,
+           updated_at = CASE WHEN $4::boolean THEN NULL ELSE NOW() END,
+           created_at = CASE WHEN $4::boolean THEN NOW() ELSE created_at END,
            reviewed_by = CASE WHEN approval_status = $3::varchar THEN reviewed_by END,
            reviewed_at = CASE WHEN approval_status = $3::varchar THEN reviewed_at END,
            is_pinned = is_pinned AND $3::varchar = 'APPROVED',
-           is_hidden = FALSE, hidden_by = NULL, hidden_at = NULL
+           is_hidden = CASE WHEN $3::varchar = 'BLOCKED' THEN is_hidden ELSE FALSE END,
+           hidden_by = CASE WHEN $3::varchar = 'BLOCKED' THEN hidden_by END,
+           hidden_at = CASE WHEN $3::varchar = 'BLOCKED' THEN hidden_at END
        WHERE post_id = $1`,
-      [post.postId, content, status],
+      [post.postId, content, status, released],
     );
     // FE-09 (lead 18/11/2026): back to waiting → tell the moderator; a post that was not on the feed and now is
     // (approval off, or the moderator's own post) → tell the members, as a new post.
     if (status === 'PENDING' && post.approvalStatus !== 'PENDING') await notifyPostPending(client, { postId: post.postId });
+    // BLOCKED: neither (moderation, FE-08 Anh, 27/11/2026); released: one of them, as a new post.
     if (status === 'APPROVED' && !isLive(post)) await notifyGroupPost(client, { postId: post.postId });
     return { group, before: post, changed: true, post: await readPost(client, user, group, post.postId) };
   });
-  if (result.changed) postChanged(result.group, result.post, 'updated', isLive(result.before));
+  if (!result.changed) return result.post;
+  // moderation (FE-08 Anh, 27/11/2026): ids only, as before. BLOCKED → BLOCKED concerns the author alone; a post that
+  // leaves the feed / queue for BLOCKED goes the usual way ("updated", the readers reload and it is gone); a released
+  // post is "created".
+  if (isBlocked(result.before) && isBlocked(result.post)) {
+    emitToUsers([result.post.authorId], 'post:changed', { groupId: result.group.groupId, postId: result.post.postId, change: 'updated' });
+  } else {
+    postChanged(result.group, result.post, isBlocked(result.before) ? 'created' : 'updated', isLive(result.before));
+  }
   return result.post;
 }
 
@@ -463,7 +512,8 @@ const commentCountOf = async (postId, db = pool) => (await feed.countComments(PO
 // The comment tree of a post anyone allowed to see it can read (also a hidden one: author and moderator).
 export async function listComments(user, postId, { page, pageSize }) {
   const { post, group, target } = await openPost(pool, user, postId);
-  const result = await feed.listComments(target, { page, pageSize, canDelete: mayDeleteComment(user, post, group) });
+  const result = await feed.listComments(target, { page, pageSize, canDelete: mayDeleteComment(user, post, group),
+    viewerId: user.userId }); // moderation (25/11/2026): the reader's own hidden comments come back with isHidden
   // 19/11/2026 (as FE-08): each comment's likes (likeCount, likedByMe) and whether the reader reported it; canReport
   // false on the comments of the group's moderator (their reports would land in their own queue, §5).
   const liked = await reports.withReportedByMe(await feed.withCommentLikes(result.items, user.userId), user.userId);
@@ -480,8 +530,14 @@ export async function createComment(user, postId, { content, parentCommentId }) 
     assertWritable(opened.group);
     assertLive(opened.post);
     const row = await feed.insertComment(opened.target, { authorId: user.userId, content, parentCommentId }, client);
-    return { ...opened, comment: { ...row, canDelete: true } };
+    return { ...opened, comment: { ...row, canDelete: !row.isHidden } };
   });
+  // Moderation (FE-08 Anh, 25/11/2026): a hidden comment is seen by its author only – tell them, send no signal.
+  if (comment.moderation?.hidden) {
+    notifyContentHidden({ contentType: 'GROUP_COMMENT', authorId: comment.authorId, postTarget: { column: 'post_id', id: post.postId }, category: comment.moderation.category })
+      .catch((err) => console.error(`[posts] moderation notification for comment #${comment.commentId} not sent:`, err?.message));
+    return comment;
+  }
   signal(group, 'post:comment', {
     postId: post.postId,
     commentId: comment.commentId,
@@ -606,14 +662,14 @@ export async function listGroupCommentReports(user, { status, page, pageSize }) 
  * post, or without a report → 404 MSG_REPORT_NOT_FOUND (nothing is revealed). After COMMIT, DELETE only: the author's
  * notification naming nobody (reports.notifyCommentRemoved) and "post:comment-deleted" so open threads update.
  */
-export async function resolveGroupCommentReport(user, commentId, action) {
+export async function resolveGroupCommentReport(user, commentId, action, { supportNote } = {}) {
   const result = await withTransaction(async (client) => {
     const comment = await reports.findReportedComment(commentId, { forUpdate: true }, client);
     const groupIds = await moderatedFeedIds(client, user);
     if (!comment || comment.column !== POST || !groupIds.includes(comment.groupId)) {
       throw notFound('MSG_REPORT_NOT_FOUND', 'No report was found for this comment.');
     }
-    return { ...(await reports.resolveReport(commentId, user.userId, action, client)), groupId: comment.groupId };
+    return { ...(await reports.resolveReport(commentId, user.userId, action, client, { supportNote })), groupId: comment.groupId };
   });
   if (result.commentDeleted) {
     reports
@@ -634,6 +690,9 @@ async function moderate(user, postId, changeName, change) {
     const opened = await openPost(client, user, postId, { lock: 'update' });
     assertWritable(opened.group);
     assertModerator(opened.group);
+    // moderation (FE-08 Anh, 27/11/2026): a BLOCKED post is not the moderator's to act on (review, pin, hide) – as if it
+    // did not exist, also in the odd case where the moderator wrote it before they moderated the group.
+    if (isBlocked(opened.post)) throw postNotFound();
     const wrote = await change(client, opened.post, opened.group);
     const after = wrote
       ? await readPost(client, user, opened.group, opened.post.postId)

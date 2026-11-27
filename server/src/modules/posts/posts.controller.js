@@ -132,9 +132,9 @@ export async function listCommentReports(req, res) {
 
 // PATCH /group-comment-reports/:commentId { action: 'DELETE' | 'DISMISS' }
 export async function resolveCommentReport(req, res) {
-  const body = jsonBody(req, ['action']);
+  const body = jsonBody(req, ['action', 'supportNote']); // supportNote: moderation (FE-08 Anh, 25/11/2026)
   if (!reportsCore.REPORT_ACTIONS.includes(body.action)) throw invalid('action');
-  res.json(await service.resolveGroupCommentReport(req.user, commentIdOf(req), body.action));
+  res.json(await service.resolveGroupCommentReport(req.user, commentIdOf(req), body.action, { supportNote: body.supportNote }));
 }
 
 // UC-44 Pin / Unpin Post
