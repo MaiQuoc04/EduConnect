@@ -29,6 +29,19 @@ reactions, attachments) is merged into one place after both are on `develop`.
 
 ## Current status (read first; update after every merge, schema patch or new decision)
 
+- **FE-04 SCR-23 "Loại lớp áp dụng" as a summary + pop-up (27/11/2026, Khanh, client only, on
+  `feature/fe-05-group-feed` `af73107`, with docs `75ae9df` – parent chat label per child, SCR-26 / SCR-35 wording;
+  merged into `develop` 27/11/2026 by the lead, merge hash: see the next docs commit; UC-22):** with one class type
+  per grade (20/11) a subject could show 12 chips
+  in its row. The cell now reads "12 loại lớp (Khối 10–12) · Xem chi tiết" (grades in number order; "Khối 10, 12" when
+  they do not follow each other; still "Chưa thiết lập cho năm học này" when the subject has no type that year).
+  "Xem chi tiết" opens a pop-up (`subjects/SubjectScopePopover.jsx`) with the types grouped by grade and their
+  periods per week, the filtered type in bold, and a link to SCR-70 for the same year; it does not open SCR-24, and
+  closes on outside click, Esc, ✕, scroll, or when the year / filters change. Other columns, row click and filters
+  unchanged. **No API or schema change.** Client `npm run build` passes (also on the merge result, lead check);
+  not yet clicked through in a browser. Nit: a type with no grade goes under "Khác" in the pop-up and is left out of
+  the grades in the summary.
+
 - **FE-11 academic level needs every subject the class studies (27/11/2026, Linh, `feature/fe-11-grade-management`
   `681dcbc`, with `f0f1e63` / `e84d094` – comment subjects say "lần đánh giá" / "kết quả", not "điểm"; merged into
   `develop` 27/11/2026 by the lead, merge `73f7bef`; UC-85, UC-88):** before, a subject of the class type with no grade structure was
@@ -681,7 +694,9 @@ It2: Anh FE-08 + FE-14, Khanh FE-05 + FE-06).
     (same look; their CSS keeps only search, pin colour, news padding and the audience line) – checked by Anh 18/11:
     true until 17/11, then the long-post rules copied `.gf-more`; cleaned up 18/11 (see the 18/11 entry above).
     FE-05 rebuilt on it: cards with a kind line (Bài viết / Đã ghim / Chờ duyệt / Đã bị từ chối / Đã ẩn + left bar),
-    pager (10 per page), "Có nội dung mới — Tải lại" pill, right column "Bài đã ghim" + "Duyệt bài"; SCR-37 as the
+    pager (10 per page), "Có nội dung mới — Tải lại" pill, right column "Bài đã ghim" + "Duyệt bài" (15/11: the
+    "Bài đã ghim" panel was dropped – pinned posts already lead the feed with the "Đã ghim" kind line – so the right
+    column keeps only "Duyệt bài"); SCR-37 as the
     school reading canvas with the actions at the top; SCR-36/38 in the school form shell (`SchoolPostForm.css`
     `.spf-*`) with a live preview; confirm dialogs in the `.sf-dialog` style.
   - **14/11 (Khanh, not committed yet): FE-05 pop-up and long posts.** A click on a card opens the post in a pop-up

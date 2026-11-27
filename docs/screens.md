@@ -35,10 +35,10 @@ business rules §17). Tables and filters only, no dashboard.
 | 20 | Group List | FE-04 | Displays class groups available to the User according to their permissions. |
 | 21 | Group Detail | FE-04 | Displays detailed information about a selected class group. |
 | 22 | Group Member List | FE-04 | Displays members of a selected class group. |
-| 23 | Subject List | FE-04 | Displays the list of subjects used for academic and grading management. |
+| 23 | Subject List | FE-04 | Displays the list of subjects used for academic and grading management. Since 27/11/2026 the class types of a subject show as one line ("12 loại lớp (Khối 10–12)"); "Xem chi tiết" opens a pop-up with each type and its periods per week, grouped by grade. |
 | 24 | Subject Detail | FE-04 | Displays detailed information about a selected subject. |
 | 25 | Grade Configuration | FE-11 | Allows School Manager to configure the grading structure for a subject or class. |
-| 26 | Create / Update Subject | FE-04 | Allows School Manager to update information of an existing subject. |
+| 26 | Create / Update Subject | FE-04 | Allows School Manager to create a subject or update information of an existing subject. Since 17/11/2026 a pop-up opened from the subject list ("Thêm môn học") or the subject detail ("Sửa thông tin môn"); the old create / edit addresses open the same pop-up (UC-24, UC-25). |
 | 27 | Timetable Management | FE-10 | Allows School Manager to manage school timetable information. |
 | 28 | Create Time Table | FE-10 | Allows School Manager to create new timetable information. |
 | 29 | Time Table View | FE-10 | Displays timetable information managed by School Manager . |
