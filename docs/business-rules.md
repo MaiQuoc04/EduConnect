@@ -390,8 +390,9 @@ Boundaries that are easy to get wrong:
     it no longer shows "Đã chỉnh sửa"; its likes and comments stay. A first approval, unhiding without an edit and an
     edit with approval off keep the post's time and place. The pending queue is first sent, first shown (an edited
     post counts from when it was sent again).
-  - **Pin:** at most **5 pinned posts per group**; pinning a 6th is refused ("Đã đạt giới hạn 5 bài ghim. Vui lòng
-    bỏ ghim bài cũ trước khi ghim bài mới."). Hiding a post unpins it; unhiding does not pin it again.
+  - **Pin:** at most **3 pinned posts per group** (5 → 3 on 17/11/2026, agreed by Khanh and Anh; `MAX_PINNED` in
+    `posts.service.js`); pinning a 4th is refused (`MSG_PIN_LIMIT`: "Đã đạt giới hạn 3 bài ghim. Vui lòng bỏ ghim bài cũ
+    trước khi ghim bài mới."). Hiding a post unpins it; unhiding does not pin it again.
   - **Turning approval on / off** (`groups.require_approval`): the homeroom teacher for the class general group, the
     School Manager for the teacher group, with a switch on the group detail screen (SCR-21); no new screen. The School
     Manager still does not see class feeds (§2).
@@ -841,8 +842,11 @@ Boundaries that are easy to get wrong:
   system; SM **unlocks** (UC-86, optional reason ≤ 255 characters in the log, the teacher is not notified); the
   teacher edits and finalizes again. A grade book is OPEN (never finalized), LOCKED (finalized) or UNLOCKED (unlocked
   by SM). SM views a book read only with tabs Học kỳ 1 / Học kỳ 2 / Cả năm.
-- Every grade entry and change is logged in `grade_histories` (first entry has `old_score` NULL). Grade rows are never
-  deleted; clearing a score = `score` NULL.
+- Every change of an existing score or result (edit or clear) is logged in `grade_histories` (`old_score` /
+  `new_score`, or `old_result` / `new_result` for a comment structure), in the same transaction as the grades
+  (`gradebook.service.js` `applyChanges`). Typing into an empty cell is an entry, not a change, and is not logged
+  (aligned with the code 28/11/2026; this line used to say every entry was logged). Grade rows are never deleted;
+  clearing a score = `score` NULL.
 - Viewing: students / parents only their own / child's; teachers see all grades of classes they teach; SM sees the
   whole school (read only). Students / parents see only their own results.
 - **Students and parents see only finalized grade books (14/11/2026).** A book never finalized is "not published":

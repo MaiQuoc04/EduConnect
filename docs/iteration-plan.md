@@ -29,6 +29,22 @@ reactions, attachments) is merged into one place after both are on `develop`.
 
 ## Current status (read first; update after every merge, schema patch or new decision)
 
+- **business-rules.md aligned with the code (28/11/2026, lead, docs only):** §5 pin limit 5 → **3** pinned posts per
+  group (code `MAX_PINNED = 3` since 17/11, agreed by Khanh and Anh; `MSG_PIN_LIMIT` says 3); §11 `grade_histories` keeps
+  only changes of an existing score / result (edit or clear), not first entries (`gradebook.service.js` `applyChanges`).
+  Found while checking R3 v2 I.3.3 / V.1 against the repo; R3 BR-37 / GBR-13 and 7 other rows get replacement text
+  (local `docs/final/drafts/R3_v2_paste_BusinessRules_28-11.html`).
+
+- **Schema file: `notification_recipients.role_code` folded in (28/11/2026, lead, not committed yet):**
+  `patch_v0.3_notification_roles.sql` (FE-09, run on the shared DB 18/11) was never copied into
+  `educonnect_schema_v0.3.sql`, so a database built from the schema file alone had no `role_code` and no real-time
+  trigger. The schema file now has the column (NOT NULL, FK `roles.role_code`), the primary key
+  (notification_id, user_id, role_code), index `idx_notification_recipients_user_role_read`, the function
+  `notify_new_notification_recipients()` and trigger `trg_notification_recipients_notify`; the patch header says it is
+  only for databases created before; `server/scripts/dev-local-db.js` no longer runs the patch. Shared DB untouched.
+  **Not yet tested on a fresh database:** `dev-local-db.js` cannot start on this machine because the repo path has
+  non-ASCII characters ("Đồ án" breaks initdb of embedded-postgres) – to test from an ASCII path.
+
 - **FE-11 sub-feature renamed "Academic Results" (28/11/2026, lead decision, docs only):** ranking is gone (UC-89 /
   SCR-48 removed 23/11), so the sub-feature of UC-88, UC-89 (removed) and UC-128 in `docs/use-cases.md` is now
   "Academic Results" instead of "Results & Ranking" (Linh's proposal in `docs/report-fixes-fe11-linh.md` item 5).
