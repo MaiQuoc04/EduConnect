@@ -47,7 +47,8 @@ reactions, attachments) is merged into one place after both are on `develop`.
   **To run on the shared DB by Dung** (Supabase SQL Editor, once); the lead then checks it read-only. Status: NOT
   run yet. The moderation notice: the chat box already shows one line (`CHAT_MODERATION_NOTE`, `utils/moderation.js`,
   Anh) – "Tin nhắn được kiểm tự động … Ban giám hiệu có thể xem nội dung hội thoại liên quan."; comments and group
-  posts show none before something is hidden or blocked. Whether to add one there is for the lead to decide.
+  posts show none before something is hidden or blocked. **Decided by the lead 27/11/2026: kept as it is** – the
+  line stays on the chat box only; no such line under comments or the post form.
 
 - **FE-02 enrollment status labels after a promotion (27/11/2026, Anh, `fix/fe-02-enrollment-status-label`;
   merged into `develop` 27/11/2026 by Anh on GitHub, PR #26, merge `12f65a9` – reviewed by the lead before the merge:
