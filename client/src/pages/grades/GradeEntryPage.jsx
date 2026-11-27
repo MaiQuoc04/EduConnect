@@ -303,7 +303,7 @@ export default function GradeEntryPage() {
                   <ul style={{ margin: '6px 0 0', paddingLeft: 18 }}>
                     {finalizeError.details?.students.map((s) => (
                       <li key={s.studentCode}>
-                        {s.fullName} ({s.studentCode}): thiếu {s.missing} điểm
+                        {s.fullName} ({s.studentCode}): thiếu {s.missing} {comment ? 'lần đánh giá' : 'điểm'}
                       </li>
                     ))}
                     {finalizeError.details?.count > (finalizeError.details?.students.length ?? 0) && <li>…</li>}
