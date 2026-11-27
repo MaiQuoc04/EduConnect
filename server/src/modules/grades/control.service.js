@@ -106,7 +106,7 @@ export async function unlockBook(params, body, user, ip) {
   return { status: 'UNLOCKED' };
 }
 
-// UC-87 View Grade Change History: changes to an existing score (or Đ / CĐ result of a comment subject) only (edit or clear; first entries are hidden, also
+// UC-87 View Grade Change History: changes to an existing score (or Đạt / Chưa đạt result of a comment subject) only (edit or clear; first entries are hidden, also
 // rows logged before 12/11), newest first, 50 per page. Filters: semester (required), class, subject,
 // student (name or code, accents ignored – business-rules §16).
 export async function listHistory(query) {
