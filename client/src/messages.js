@@ -453,7 +453,8 @@ const ERROR_MESSAGES = {
   MSG_GRADES_STUDENT_LEFT: 'Học sinh đã rời lớp, điểm chỉ được xem.',
   MSG_SCORE_INVALID: 'Điểm phải từ 0 đến 10, tối đa 2 chữ số thập phân.',
   MSG_RESULT_INVALID: 'Kết quả phải là Đạt hoặc Chưa đạt.',
-  MSG_GRADES_INCOMPLETE: ({ count } = {}) => `Chưa chốt được: ${count ?? 'một số'} học sinh đang học còn thiếu điểm.`,
+  MSG_GRADES_INCOMPLETE: ({ count, assessmentType } = {}) =>
+    `Chưa chốt được: ${count ?? 'một số'} học sinh đang học còn thiếu ${assessmentType === 'COMMENT' ? 'lần đánh giá' : 'điểm'}.`,
   MSG_IMPORT_HAS_ERRORS: 'File còn dòng bị lỗi. Sửa file rồi thử lại; chưa có điểm nào được lưu.',
   // FE-09 Notifications
   MSG_NOTIFICATION_NOT_FOUND: 'Không tìm thấy thông báo.',

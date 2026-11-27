@@ -61,6 +61,30 @@ reactions, attachments) is merged into one place after both are on `develop`.
     `META` are shown and sent; `moderation.enabled` / `moderation.context_window` added to `NOT_ON_PAGE` (not listed,
     `PATCH` refuses them with `MSG_SETTINGS_INVALID` / `UNKNOWN`); values in the DB unchanged. **Linh:** touches
     `SystemSettingsPage.jsx` and `settings.service.js` (FE-13).
+- **FE-04 SCR-23 "Loại lớp áp dụng" as a summary + pop-up (27/11/2026, Khanh, client only, on
+  `feature/fe-05-group-feed` `af73107`, with docs `75ae9df` – parent chat label per child, SCR-26 / SCR-35 wording;
+  merged into `develop` 27/11/2026 by the lead, merge `e6ddb70`; UC-22):** with one class type
+  per grade (20/11) a subject could show 12 chips
+  in its row. The cell now reads "12 loại lớp (Khối 10–12) · Xem chi tiết" (grades in number order; "Khối 10, 12" when
+  they do not follow each other; still "Chưa thiết lập cho năm học này" when the subject has no type that year).
+  "Xem chi tiết" opens a pop-up (`subjects/SubjectScopePopover.jsx`) with the types grouped by grade and their
+  periods per week, the filtered type in bold, and a link to SCR-70 for the same year; it does not open SCR-24, and
+  closes on outside click, Esc, ✕, scroll, or when the year / filters change. Other columns, row click and filters
+  unchanged. **No API or schema change.** Client `npm run build` passes (also on the merge result, lead check);
+  not yet clicked through in a browser. Nit: a type with no grade goes under "Khác" in the pop-up and is left out of
+  the grades in the summary.
+
+- **FE-11 academic level needs every subject the class studies (27/11/2026, Linh, `feature/fe-11-grade-management`
+  `681dcbc`, with `f0f1e63` / `e84d094` – comment subjects say "lần đánh giá" / "kết quả", not "điểm"; merged into
+  `develop` 27/11/2026 by the lead, merge `73f7bef`; UC-85, UC-88):** before, a subject of the class type with no grade structure was
+  skipped, so a class studying 11 subjects with only 2 configured already got a level. Now the subject list is every
+  subject of the class type for the year (`track_subjects`); one without a structure shows "–" and leaves the level
+  empty. A class type with no subjects set keeps the old rule. business-rules §11. No schema change, server only.
+  Rule change after the R5 submission – **approved by the lead 27/11/2026, with Linh's plan below**.
+  Tested on the local DB: `npm test` 87/87, level scenario 11/11, student result screen checked. Lead check of the
+  merge result: server `npm test` 87/87, client `npm run build` passes; on the shared DB every subject of a class type
+  already has a grade structure (14 subjects, read-only check), so no level disappears on the current data.
+  Owed (Linh): R3 academic level wording; R5.3 SYS-BF11-017/-018/-022/-023 preconditions, then run them again.
 
 - **FE-09 links for the moderation notifications (27/11/2026, Quoc; owed from PR #24; committed to `develop`
   `f3cb5c0`):** `notifications.service.js`
@@ -161,7 +185,8 @@ reactions, attachments) is merged into one place after both are on `develop`.
     rules, 2 settings, RLS on the 3 tables, `comments.hidden_at`, `comment_reports.support_note`, both CHECKs).
     Both are safe to run twice (tested). Order on deploy: patch, then seed, **then** pull / restart (the code reads
     `comments.hidden_at` on every comment read). `educonnect_schema_v0.3.sql` already has the definitions.
-  - **Touches other features (additions only; to be reviewed by their owners):** FE-05 `posts.service.js` / `posts.controller.js`
+  - **Touches other features (additions only; FE-05 / FE-06 parts reviewed and accepted by Khanh, told the lead
+    27/11/2026):** FE-05 `posts.service.js` / `posts.controller.js`
     (viewerId, hidden comment, supportNote), FE-06 `conversations.service.js` (check in `sendMessage`, `isModerated`,
     sender reads own hidden message) and chat client (hidden bubble, report dialog, `message:restored`), shared
     `utils/feedInteractions.js`, `utils/commentReports.js`, `components/CommentThread.jsx`, `AppLayout.jsx` (menu badge).
@@ -170,10 +195,6 @@ reactions, attachments) is merged into one place after both are on `develop`.
     - FE-09 (Quoc): links for the new notification target types `CHAT` (hidden / shown again message → the chat),
       `MESSAGE_REPORT` and `COMMENT_REPORT` (support request → the School Manager's queues); today clicking them opens
       nothing (`notifications.service.js` LINK_SQL).
-    - FE-05 (Khanh): notify the homeroom teacher at once when a group comment gets a "Cần được hỗ trợ" report (today it
-      only goes first in "Báo cáo bình luận nhóm").
-    - FE-06 (Khanh): refuse "delete for everyone" of a message with a pending report (today covered by
-      `recalledAfterReport`: the School Manager still reads the reported message recalled after its first report).
     - `server/scripts/check-db.js` still prints "expected 47 tables"; it is 59 with the moderation patch.
     - `utils/moderationRules.js` loads the rules when imported (importing `routes.js` sends one SELECT to the DB in
       `.env`); to fix: a `startModeration()` called from `server.js`.
@@ -186,7 +207,7 @@ reactions, attachments) is merged into one place after both are on `develop`.
     { category, terms }`), no notification, not a violation; edited clean it is posted as a new post (business rules
     §5, §17; UC-38 / UC-39; `docs/moderation-plan.md` "Bài đăng nhóm"). DB: step 6 of `patch_v0.3_moderation.sql`
     (CHECK of `posts.approval_status` + `BLOCKED`, now named `posts_approval_status_check`; tested twice on the local
-    DB from an unnamed CHECK). Code: additions in FE-05 `posts.service.js` (Khanh to review: `createPost`,
+    DB from an unnamed CHECK). Code: additions in FE-05 `posts.service.js` (accepted by Khanh 27/11: `createPost`,
     `updatePost`, `openPost`, `decorate`, `listPosts` hidden view / counter, `moderate`), `utils/moderationRules.js`
     (`moderationTermsOf`), `utils/commentReports.js` (no excerpt of a BLOCKED post in the report queue), client
     `GroupPostFormPage.jsx`, `groupFeedShared.jsx`, `GroupFeed.css`, `utils/moderation.js`. Tested on the local
@@ -212,7 +233,9 @@ reactions, attachments) is merged into one place after both are on `develop`.
     run 27/11). Anh's documents for it stay as written and are now the agreed rules: business rules §17 (+ §1, §5,
     §13), CLAUDE.md (School Manager reads chat content only through a report / violation), permissions 26–30,
     UC-134..UC-139, SCR-87..SCR-93, `docs/moderation-plan.md`. Owed: Change Log rows and R3 / R4 / R5 parts for
-    UC-134..UC-139 (Anh), FE-09 links for the new notification types (Quoc), FE-05 / FE-06 follow-ups above (Khanh).
+    UC-134..UC-139 (Anh), FE-09 links for the new notification types (Quoc, done `f3cb5c0`). Anh's two proposals for
+    Khanh (notify the homeroom teacher of a group comment "Cần được hỗ trợ" report; refuse recalling a reported
+    message) are **dropped by the lead 27/11/2026** – business rules §17 stay as written.
   - PR #22 (`chore/deploy-config`, Anh, merge `5c9b5ab`, by Anh on GitHub 27/11): `DEPLOY.md` only (+74 lines, no
     secret in it – `JWT_SECRET=<…>` placeholder).
 
@@ -703,7 +726,9 @@ It2: Anh FE-08 + FE-14, Khanh FE-05 + FE-06).
     (same look; their CSS keeps only search, pin colour, news padding and the audience line) – checked by Anh 18/11:
     true until 17/11, then the long-post rules copied `.gf-more`; cleaned up 18/11 (see the 18/11 entry above).
     FE-05 rebuilt on it: cards with a kind line (Bài viết / Đã ghim / Chờ duyệt / Đã bị từ chối / Đã ẩn + left bar),
-    pager (10 per page), "Có nội dung mới — Tải lại" pill, right column "Bài đã ghim" + "Duyệt bài"; SCR-37 as the
+    pager (10 per page), "Có nội dung mới — Tải lại" pill, right column "Bài đã ghim" + "Duyệt bài" (15/11: the
+    "Bài đã ghim" panel was dropped – pinned posts already lead the feed with the "Đã ghim" kind line – so the right
+    column keeps only "Duyệt bài"); SCR-37 as the
     school reading canvas with the actions at the top; SCR-36/38 in the school form shell (`SchoolPostForm.css`
     `.spf-*`) with a live preview; confirm dialogs in the `.sf-dialog` style.
   - **14/11 (Khanh, not committed yet): FE-05 pop-up and long posts.** A click on a card opens the post in a pop-up

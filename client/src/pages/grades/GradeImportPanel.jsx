@@ -20,6 +20,7 @@ export default function GradeImportPanel({ book, onClose, onApply }) {
   const { classId } = book.class;
   const { subjectId } = book.subject;
   const { semesterId } = book.semester;
+  const unit = book.assessmentType === 'COMMENT' ? 'kết quả đánh giá' : 'điểm';
   const [file, setFile] = useState(null);
   const [preview, setPreview] = useState(null);
   const [busy, setBusy] = useState(false);
@@ -70,12 +71,12 @@ export default function GradeImportPanel({ book, onClose, onApply }) {
     >
       <div className="import-box">
         <p>
-          1. Tải file mẫu: sổ điểm {book.subject.subjectName} lớp {book.class.className} kèm điểm hiện có.{' '}
+          1. Tải file mẫu: sổ điểm {book.subject.subjectName} lớp {book.class.className} kèm {unit} hiện có.{' '}
           <button type="button" className="link-button" onClick={() => run('template')} disabled={busy}>
             <Icon name="download" size="sm" /> Tải file mẫu
           </button>
         </p>
-        <p>2. Điền điểm (ô trống = giữ nguyên điểm cũ), lưu file rồi chọn file để kiểm tra.</p>
+        <p>2. Điền {unit} (ô trống = giữ nguyên {unit} cũ), lưu file rồi chọn file để kiểm tra.</p>
         <input
           type="file"
           accept=".xlsx"
@@ -91,8 +92,8 @@ export default function GradeImportPanel({ book, onClose, onApply }) {
               {preview.errorCount
                 ? `${preview.errorCount} dòng có lỗi. Sửa file rồi chọn lại.`
                 : preview.changeCount
-                  ? 'File hợp lệ. Bấm Nhập điểm để đưa điểm vào bảng, kiểm tra rồi bấm Lưu điểm.'
-                  : 'File không thay đổi điểm nào.'}
+                  ? `File hợp lệ. Bấm Nhập điểm để đưa ${unit} vào bảng, kiểm tra rồi bấm Lưu điểm.`
+                  : `File không thay đổi ${unit} nào.`}
             </p>
             {errorRows.length > 0 && (
               <div className="import-preview">

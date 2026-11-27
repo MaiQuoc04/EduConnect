@@ -1,12 +1,13 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { api } from '../../api/client.js';
 import Icon from '../../components/Icon.jsx';
 import { errorText } from '../../messages.js';
 import { yearLabel } from '../school-years/schoolYearLabels.js';
-import { fold, periodsText } from './subjectText.js';
+import { fold, periodsText, scopeText } from './subjectText.js';
 import { trackLabel } from '../class-tracks/trackLabel.js';
 import SubjectFormDialog from './SubjectFormDialog.jsx';
+import SubjectScopePopover from './SubjectScopePopover.jsx';
 
 // SCR-23 Subject List – UC-22 View Subject List (School Manager). Figures (class types, periods, classes) are for
 // the chosen school year; search and filters run here because a school has only ~15 subjects, so no paging.
@@ -21,6 +22,8 @@ export default function SubjectListPage() {
   const [onlyUnset, setOnlyUnset] = useState(false); // subjects with no class type in the chosen year
   const [adding, setAdding] = useState(() => params.has('new')); // UC-24 pop-up (?new: the old /subjects/new link)
   const [reloadKey, setReloadKey] = useState(0);
+  const [scope, setScope] = useState(null); // { subjectId, anchor } – the "Xem chi tiết" pop-up that is open
+  const closeScope = useCallback(() => setScope(null), []);
 
   useEffect(() => {
     api
@@ -40,6 +43,9 @@ export default function SubjectListPage() {
       alive = false;
     };
   }, [yearId, reloadKey]);
+
+  // A new list or other filters: the open pop-up's link may be gone, so close it.
+  useEffect(() => setScope(null), [yearId, reloadKey, query, trackId, onlyUnset]);
 
   function closeAdd() {
     setAdding(false);
@@ -67,6 +73,9 @@ export default function SubjectListPage() {
         (!onlyUnset || !s.tracks.length),
     );
   }, [subjects, query, trackId, onlyUnset]);
+
+  // The subject whose class types pop-up is open; it closes when the list reloads or the subject is filtered out.
+  const scopeSubject = scope && !state.loading ? shown.find((s) => s.subjectId === scope.subjectId) : null;
 
   const schoolYear = state.data?.schoolYear;
   // UC-23: the detail page opens on the same school year.
@@ -183,13 +192,23 @@ export default function SubjectListPage() {
                     </td>
                     <td>
                       {s.tracks.length ? (
-                        <span className="chips">
-                          {s.tracks.map((t) => (
-                            <span key={t.trackId} className="chip subject-track">
-                              {trackLabel(t)}
-                              <span className="subject-track-periods">{t.periodsPerWeek} tiết</span>
-                            </span>
-                          ))}
+                        // 27/11/2026: one summary line, the types themselves in a pop-up (12 chips made rows too tall).
+                        <span className="subject-scope">
+                          {scopeText(s.tracks)}
+                          {' · '}
+                          <button
+                            type="button"
+                            className="link-button subject-scope-open"
+                            aria-haspopup="dialog"
+                            aria-expanded={scope?.subjectId === s.subjectId}
+                            onClick={(e) => {
+                              e.stopPropagation(); // the row opens SCR-24
+                              const anchor = e.currentTarget;
+                              setScope((cur) => (cur?.subjectId === s.subjectId ? null : { subjectId: s.subjectId, anchor }));
+                            }}
+                          >
+                            Xem chi tiết
+                          </button>
                         </span>
                       ) : (
                         <span className="class-warn">Chưa thiết lập cho năm học này</span>
@@ -233,6 +252,16 @@ export default function SubjectListPage() {
             )}
           </p>
         </div>
+      )}
+
+      {scopeSubject && (
+        <SubjectScopePopover
+          anchor={scope.anchor}
+          subject={scopeSubject}
+          schoolYear={schoolYear}
+          highlightTrackId={trackId}
+          onClose={closeScope}
+        />
       )}
 
       {adding && (
