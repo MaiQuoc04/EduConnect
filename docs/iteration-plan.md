@@ -44,8 +44,9 @@ reactions, attachments) is merged into one place after both are on `develop`.
 - **Attendance deadline patch approved (27/11/2026, lead):** `patch_v0.3_school_settings_attendance.sql` (Dung, 24/11)
   is approved: it moves `attendance.edit_deadline_time` from `system_settings` to `school_settings` (value kept,
   default 23:59; the School Manager may set 12:00–23:59 on SCR-86). App behaviour is the same before and after it.
-  **To run on the shared DB by Dung** (Supabase SQL Editor, once); the lead then checks it read-only. Status: NOT
-  run yet. The moderation notice: the chat box already shows one line (`CHAT_MODERATION_NOTE`, `utils/moderation.js`,
+  **RUN on the shared DB 27/11/2026 by the lead for Dung:** before – `system_settings` 23:59, no `school_settings`
+  row; after – `system_settings` row gone, `school_settings` `attendance.edit_deadline_time` = 23:59 (FE-12
+  `deadlineTime()` reads it from there). The moderation notice: the chat box already shows one line (`CHAT_MODERATION_NOTE`, `utils/moderation.js`,
   Anh) – "Tin nhắn được kiểm tự động … Ban giám hiệu có thể xem nội dung hội thoại liên quan."; comments and group
   posts show none before something is hidden or blocked. **Decided by the lead 27/11/2026: kept as it is** – the
   line stays on the chat box only; no such line under comments or the post form.
@@ -511,7 +512,8 @@ reactions, attachments) is merged into one place after both are on `develop`.
   instead of the System Admin. FE-12 `deadlineTime()` (`attendance.scope.js`, Quoc's module – one function changed)
   reads `school_settings` first, then the old `system_settings` row, then 23:59, so nothing changes before the patch.
   **DB: `patch_v0.3_school_settings_attendance.sql` (copies the value into `school_settings`, deletes the
-  `system_settings` row so the SA screen stops showing it) – NOT run, waiting for the lead.** Schema file updated.
+  `system_settings` row so the SA screen stops showing it) – approved and run 27/11/2026, see the top entry.** Schema
+  file updated.
   Open: the earliest time 12:00 is an assumption; the SA page label for the key (Linh, `SystemSettingsPage.jsx`) can be
   removed after the patch.
 - **FE-10 automatic scheduling: draft edited by hand before "Áp dụng" (21/11/2026, Dung, same branch, not merged
