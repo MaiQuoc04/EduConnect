@@ -1,4 +1,4 @@
-# Screen list (SCR-1..SCR-86, SCR-48 removed)
+# Screen list (SCR-1..SCR-93, SCR-48 removed)
 
 Source: Report 3 section 5.1 (draft v1.3). Screen numbers here are Report 3's; the numbering in `Screen_List_Report3_v1.2` (ordered by FE) differs. Besides desktop, 8 screens also need a mobile layout (decided 18/10): Login Page, Group Feed, Group Post Detail, Chat Room, School Feed, Timetable View, Academic Results, Child Attendance. No dashboard screen.
 
@@ -7,6 +7,9 @@ numbers are never changed (code comments refer to them). Screens marked "(planne
 built in Iteration 3. SCR-84 (added 20/11/2026): the group comment report queue merged on 19/11/2026 (FE-05).
 SCR-85 (added 23/11/2026, FE-13, already in Report 3): contact details of an account changed by the School Manager.
 SCR-86 (added 24/11/2026 by the lead): the School Manager settings page merged on 24/11/2026 (FE-10, UC-133).
+SCR-87..SCR-93 (added 25/11/2026, FE-08 Anh): community standards – the School Manager's page “Quy chuẩn cộng đồng” and its
+tabs, one person's violation history, the review of a reported message and the report dialog in the chat (UC-135..UC-139,
+business rules §17). Tables and filters only, no dashboard.
 
 | # | Screen | Feature | Description |
 |---|---|---|---|
@@ -44,10 +47,10 @@ SCR-86 (added 24/11/2026 by the lead): the School Manager settings page merged o
 | 32 | Forgot Password | FE-01 | Allows User to start the password recovery process by email OTP, or to send a password reset request (sign-in name + full name, checked against the account); the system then resets the password and emails it, or shows it to System Admin / School Manager when the account has no email. |
 | 33 | Edit Profile | FE-01 | Allows User to update permitted personal profile information (avatar, address and, for a parent, occupation). |
 | 34 | Change Password | FE-01 | Allows authenticated User to change the current password. |
-| 35 | Group Feed | FE-05 | Displays posts and community content within a selected class group. |
-| 36 | Create Group Post | FE-05 | Allows an authorized User to create a new post in a class group. |
+| 35 | Group Feed | FE-05 | Displays posts and community content within a selected class group. "Bài của tôi" also lists the author's posts stopped by the community standards check ("Chưa đăng – vi phạm quy chuẩn cộng đồng", words to change, Sửa / Xoá; 27/11/2026). |
+| 36 | Create Group Post | FE-05 | Allows an authorized User to create a new post in a class group. A post stopped by the community standards check (27/11/2026) keeps the form open, now editing that post, with the category and the words to change. |
 | 37 | Group Post Detail | FE-05 | Displays detailed content and interactions of a selected group post. |
-| 38 | Update Group Post | FE-05 | Allows an authorized User to update an existing group post. |
+| 38 | Update Group Post | FE-05 | Allows an authorized User to update an existing group post. Same notice for a post stopped by the community standards check; saving it clean posts it as a new post (27/11/2026). |
 | 39 | Class Calendar | FE-10 | Displays scheduled events and activities of a class. |
 | 40 | Create Calendar Event | FE-10 | Allows an authorized Teacher to create a new class calendar event. |
 | 41 | Calendar Event Detail | FE-10 | Displays detailed information about a selected calendar event. |
@@ -78,7 +81,7 @@ SCR-86 (added 24/11/2026 by the lead): the School Manager settings page merged o
 | 66 | Create / Update Event | FE-07 | Allows Homeroom Teacher to post an extracurricular event in the class feed with a registration deadline, or to update an existing event. |
 | 67 | Registration List | FE-07 | Allows Homeroom Teacher to view the students registered for an event and to export the list to Excel. |
 | 68 | Grade Control | FE-11 | Allows School Manager to unlock finalized grades of a class, subject and semester, view a grade book read only (tabs Học kỳ 1 / Học kỳ 2 / Cả năm), export it to Excel and view who changed which grade and when. |
-| 69 | Parent List | FE-14 | Allows School Manager to search and filter parents. |
+| 69 | Parent List | FE-14 | Allows School Manager to search and filter parents (search box: name, phone, username, email, or a linked child's name / student code – UC-104). |
 | 70 | Class Types & Subject Weights | FE-04 | Allows School Manager to define class types (each for one grade) and set their subjects and periods per week for a school year (shown as "Loại lớp & số tiết"; every weight is 1). |
 | 71 | Password Reset Requests | FE-13 | Lists the automatic resets from password reset requests (tab waiting for sign-in / used): "sent by email" or "to hand over" with the temporary password; System Admin sees all, School Manager student, parent and teacher accounts (added 01/11/2026). |
 | 72 | Departments | FE-03 | Allows School Manager to create, rename and delete departments (tổ chuyên môn) and choose the subjects of each (UC-114, added 07/11/2026). |
@@ -96,3 +99,10 @@ SCR-86 (added 24/11/2026 by the lead): the School Manager settings page merged o
 | 84 | Group Comment Reports | FE-05 | Allows the homeroom teacher (class groups) and the School Manager (teacher group) to review reported group feed comments and delete the comment or dismiss the reports; tabs waiting, deleted, dismissed (UC-131). |
 | 85 | Update Contact Information | FE-13 | Allows School Manager to change the email and phone number of a student, teacher or parent account, opened from “Tài khoản đăng nhập” on the detail page (UC-99). |
 | 86 | School Settings | FE-10 | Allows School Manager to set the school-wide values used by other features: the teaching load of automatic scheduling and the time until which a subject teacher can edit the attendance of the day (UC-133). Page title “Cài đặt hệ thống”, route /school-settings. |
+| 87 | Community Standards – Violators | FE-08 | Page “Quy chuẩn cộng đồng” (route /moderation, School Manager only), tab “Người vi phạm”: filters (period, grade, class, role, category, comment / message, automatic / from reports, name) and a table of people with violations – totals by category, source and way found, last time, trend against the previous period; “Xuất Excel”. No content (UC-137). |
+| 88 | Violation History | FE-08 | One person's violations from SCR-87: time, category, comment or message, where it happened, way found, status (hidden / unhidden, who and why); “Xem” opens exactly one piece of content (logged), “Gỡ ẩn” with a required reason for violations found automatically (UC-137, UC-138). |
+| 89 | Community Standards – By Class | FE-08 | Tab “Theo lớp” of the page: per class (at the time of each violation), the number of violations, of students with one, and the category seen most (UC-137). |
+| 90 | Community Standards – Rules | FE-08 | Tab “Quy tắc”: the words and phrases of the automatic check with match type, accent-free matching, category, matches and unhides in the period, status; add, edit, turn off, delete; “Thử một câu” shows which rules a sentence matches (UC-139). |
+| 91 | Community Standards – Message Reports | FE-08 | Tab “Báo cáo tin nhắn”: the queue of reported chat messages, waiting / handled, “Cần được hỗ trợ” first and highlighted; a handled report shows its “Hành vi xử lý”: the decision, who and when, the “Kết quả hỗ trợ” if any, and every “Xem hội thoại xung quanh” (who, when, reason) or “Không xem hội thoại xung quanh”; the menu entry shows how many wait, highlighted when one is “Cần được hỗ trợ” (UC-136). |
+| 92 | Review Message Report | FE-08 | Opened from SCR-91: only the reported message (content, sender, time, file names); “Xem hội thoại xung quanh” after giving a reason shows a read-only window of 6 messages before and after it, the reported one highlighted, and is logged with the reason. No view of the whole chat (27/11/2026). Decision “Ẩn tin nhắn” / “Giữ nguyên”, or only “Ghi nhận”, with a required “Kết quả hỗ trợ” for “Cần được hỗ trợ” (UC-136). |
+| 93 | Report Message | FE-08 | Dialog opened from a message of someone else in the Chat Room (SCR-50): a reason, an optional note (required for “Lý do khác”); choosing “Cần được hỗ trợ” shows where to get help at once (UC-135). Needs a mobile layout (Chat Room). |

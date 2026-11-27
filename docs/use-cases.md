@@ -1,10 +1,12 @@
-# Use cases (UC-01..UC-133, UC-89 removed) – numbering after the 20/10/2026 database review
+# Use cases (UC-01..UC-139, UC-89 removed) – numbering after the 20/10/2026 database review
 
 UC-117..UC-128 (added 18/11/2026 by the lead): features already built in the code that had no use case yet; each is
 listed under its feature below. UC-129..UC-131 (added 20/11/2026 by the lead): the group feed comment likes and
 reports merged on 19/11/2026 (FE-05, Khanh; business rules §5). UC-132 (proposed by Khanh, approved by the lead 20/11/2026):
 hide a 1-1 chat or a team from one's own conversation list (FE-06; business rules §6). UC-133 (added 24/11/2026 by the
-lead): the School Manager settings page merged on 24/11/2026 (FE-10, Dung; screen SCR-86).
+lead): the School Manager settings page merged on 24/11/2026 (FE-10, Dung; screen SCR-86). UC-134..UC-139 (added
+25/11/2026, FE-08 Anh): community standards – automatic content check, message reports, violation statistics, unhide
+and rules (business rules §17; screens SCR-87..SCR-93); listed under FE-08 with the sub-feature "Community Standards".
 
 Source: Report 3 section 4.2 (draft v1.3). Actor "User" = any signed-in account. "Homeroom Teacher" is not a role: it is a Teacher who is `classes.homeroom_teacher_id` of that class.
 
@@ -76,8 +78,8 @@ Source: Report 3 section 4.2 (draft v1.3). Actor "User" = any signed-in account.
 |---|---|---|---|---|
 | UC-36 | View Group Feed | Teacher, Student, Parent, School Manager (teacher group) | Posting & Interaction | View the feed of a class general group or the teacher group. |
 | UC-37 | View Post Detail | Teacher, Student, Parent, School Manager (teacher group) | Posting & Interaction | View a post with its comments and reactions. |
-| UC-38 | Create Post | Teacher, Student, Parent, School Manager (teacher group) | Posting & Interaction | Create a post; it waits for approval when approval applies. |
-| UC-39 | Edit Own Post | Teacher, Student, Parent, School Manager (teacher group) | Posting & Interaction | Edit one's own post. |
+| UC-38 | Create Post | Teacher, Student, Parent, School Manager (teacher group) | Posting & Interaction | Create a post; it waits for approval when approval applies. Its text is checked against the community standards (moderator's posts excepted): a match is saved as BLOCKED, seen by the author only (business-rules §5, §17; 27/11/2026). |
+| UC-39 | Edit Own Post | Teacher, Student, Parent, School Manager (teacher group) | Posting & Interaction | Edit one's own post. Every saved edit is checked too: a match makes it BLOCKED; a BLOCKED post edited clean is posted as a new post (business-rules §5, §17; 27/11/2026). |
 | UC-40 | Delete Own Post | Teacher, Student, Parent, School Manager (teacher group) | Posting & Interaction | Delete one's own post. |
 | UC-41 | Comment on Post | Teacher, Student, Parent, School Manager (teacher group) | Posting & Interaction | Comment on a post. |
 | UC-42 | Delete Comment | Teacher, Student, Parent, School Manager | Posting & Interaction | Delete one's own comment, or any comment on one's own post (group posts and school announcements). |
@@ -87,8 +89,8 @@ Source: Report 3 section 4.2 (draft v1.3). Actor "User" = any signed-in account.
 | UC-46 | Approve / Reject Post | Homeroom Teacher (class), School Manager (teacher group) | Moderation | Approve or reject pending posts. |
 | UC-118 | Turn Post Approval On / Off | Homeroom Teacher (class), School Manager (teacher group) | Moderation | Turn post approval on or off for the group feed from the group detail screen; approval is on by default (added 18/11/2026). |
 | UC-129 | Like Group Post Comment | Teacher, Student, Parent, School Manager (teacher group) | Posting & Interaction | Like or unlike a comment on a live post of the group feed (one like per person, no notification). |
-| UC-130 | Report Group Post Comment | Teacher, Student, Parent, School Manager (teacher group) | Posting & Interaction | Report another member's comment with a reason (note required for "other"); not the group moderator, not the moderator's own comments, once per person; the reporter stays anonymous. |
-| UC-131 | Handle Group Comment Reports | Homeroom Teacher (class), School Manager (teacher group) | Moderation | Review the reported comments of one's groups ("Báo cáo bình luận nhóm") and delete the comment (its author is notified) or dismiss the reports. |
+| UC-130 | Report Group Post Comment | Teacher, Student, Parent, School Manager (teacher group) | Posting & Interaction | Report another member's comment with a reason (note required for "other"; since 25/11/2026 also "Cần được hỗ trợ", with the help line shown to the reporter, business rules §17); not the group moderator, not the moderator's own comments, once per person; the reporter stays anonymous. |
+| UC-131 | Handle Group Comment Reports | Homeroom Teacher (class), School Manager (teacher group) | Moderation | Review the reported comments of one's groups ("Báo cáo bình luận nhóm") and delete the comment (its author is notified) or dismiss the reports. Since 25/11/2026: "Cần được hỗ trợ" reports come first and need a "Kết quả hỗ trợ"; when every report is one, only "Ghi nhận" (keep) is possible; a deletion is counted as a violation (business rules §17). |
 
 ## FE-06 Messaging
 
@@ -129,9 +131,15 @@ Source: Report 3 section 4.2 (draft v1.3). Actor "User" = any signed-in account.
 | UC-64 | React to School Post | Teacher, Student, Parent, School Manager | Feed Interaction | React to a school announcement (news posts are view only). |
 | UC-65 | Comment on School Post | Teacher, Student, Parent, School Manager | Feed Interaction | Comment on a school announcement (news posts are view only). |
 | UC-66 | Delete School Post Comment | School Manager | School Announcements | Delete an inappropriate comment on a school announcement. |
-| UC-119 | Report School Post Comment | Teacher, Student, Parent | Feed Interaction | Report someone else's comment on a school announcement with a reason (inappropriate language, harassment, spam, false information, other with a note); one report per person per comment; the author never learns who reported (added 18/11/2026). |
-| UC-120 | Handle Comment Reports | School Manager | School Announcements | Review the queue of reported comments (pending / handled) and either delete the comment (its author is notified) or dismiss the reports (the comment stays); one decision closes every report of that comment (added 18/11/2026). |
+| UC-119 | Report School Post Comment | Teacher, Student, Parent | Feed Interaction | Report someone else's comment on a school announcement with a reason (inappropriate language, harassment, spam, false information, other with a note, and since 25/11/2026 "Cần được hỗ trợ" – the reporter is shown where to get help at once and every School Manager is notified at once, business rules §17); one report per person per comment; the author never learns who reported (added 18/11/2026). |
+| UC-120 | Handle Comment Reports | School Manager | School Announcements | Review the queue of reported comments (pending / handled) and either delete the comment (its author is notified) or dismiss the reports (the comment stays); one decision closes every report of that comment (added 18/11/2026). Since 25/11/2026: "Cần được hỗ trợ" reports come first and need a "Kết quả hỗ trợ"; when every report is one, only "Ghi nhận" (keep) is possible; a deletion is counted as a violation (business rules §17). |
 | UC-121 | Like School Post Comment | Teacher, Student, Parent, School Manager | Feed Interaction | Like or unlike a comment on a school announcement (added 18/11/2026). |
+| UC-134 | Check Content When Sent | System | Community Standards | Every comment and chat message is checked against the School Manager's rules when it is sent; a match is saved hidden at once (only its author still sees it), recorded as a violation and its author is notified with the category, never the content. Self-harm content has no rule (added 25/11/2026, business rules §17). |
+| UC-135 | Report Chat Message | Teacher, Student, Parent, School Manager | Community Standards | An active member of a chat reports someone else's message with a reason (inappropriate language, harassment, spam, false information, "Cần được hỗ trợ", other with a note); not one's own, a system line, a deleted or hidden message; once per person; the sender never learns who reported (added 25/11/2026). |
+| UC-136 | Handle Message Reports | School Manager | Community Standards | Review the queue of reported messages ("Cần được hỗ trợ" first), read the reported message alone and, after giving a reason, the 6 messages before and after it – never more (each such view logged; changed 27/11/2026), then hide the message or keep it; handled reports show the decision and every view of the messages around it; a "Kết quả hỗ trợ" is required for "Cần được hỗ trợ" reports (added 25/11/2026). |
+| UC-137 | View Violation Statistics | School Manager | Community Standards | Filter and list the people with violations (totals by category, source, way found, trend against the previous period), export them to Excel, view violations by class and the history of one person, and open exactly one piece of content of a violation (logged); no content in the lists (added 25/11/2026). |
+| UC-138 | Unhide Content | School Manager | Community Standards | Show again a comment or message hidden by the automatic check, with a required reason; the violation stops counting and its rules count one wrong hit; the author is notified; violations decided from reports cannot be unhidden (added 25/11/2026). |
+| UC-139 | Manage Moderation Rules | School Manager | Community Standards | Add, edit, turn off and delete the words and phrases of the automatic check, see how often each matched and was unhidden, and try a sentence; changes apply at once and are logged (added 25/11/2026). |
 
 ## FE-09 Notifications
 
@@ -207,6 +215,6 @@ Source: Report 3 section 4.2 (draft v1.3). Actor "User" = any signed-in account.
 
 | ID | Use case | Actor | Sub-feature | Description |
 |---|---|---|---|---|
-| UC-104 | View Parent List | School Manager | Parent Records | Search and filter parents. |
+| UC-104 | View Parent List | School Manager | Parent Records | Search and filter parents. Search: a phone number (or part of one) matches the phone only; any other text matches the parent's name, username or email, or the name or student code of a linked child ("contains", business-rules §16; Anh, 27/11/2026). |
 | UC-105 | View Parent Detail | School Manager | Parent Records | View a parent and their linked children; link / unlink uses UC-13. |
 | UC-106 | Update Parent Information | School Manager | Parent Records | Update a parent's profile (not login identifiers). |

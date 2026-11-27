@@ -34,7 +34,7 @@ Source: Report 3 section 4.4 (draft v1.3). Full = all records; Restricted (n) = 
 | Team | Add / remove members (team leader only, 17/11/2026) | No | No | Restricted (4) | Restricted (4) | Restricted (4) | Restricted (4) |
 | Group feed post | View / create / comment / react | No | Restricted (6) | Restricted (4) | Restricted (4) | Restricted (4) | Restricted (4) |
 | Group feed post | Edit / delete own | No | Restricted (6) | Restricted (4) | Restricted (4) | Restricted (4) | Restricted (4) |
-| Group feed post | Pin / hide / unhide / approve / reject | No | Restricted (6) | Restricted (5) | No | No | No |
+| Group feed post | Pin / hide / unhide / approve / reject (never a post stopped by the community standards check – `BLOCKED` posts are seen by their author only, 27/11/2026) | No | Restricted (6) | Restricted (5) | No | No | No |
 | Group feed | Turn post approval on / off | No | Restricted (6) | Restricted (5) | No | No | No |
 | Group feed comment | Delete | No | Restricted (6) | Restricted (16) | Restricted (16) | Restricted (16) | Restricted (16) |
 | Group feed comment | Like (UC-129, 19/11/2026) | No | Restricted (6) | Restricted (4) | Restricted (4) | Restricted (4) | Restricted (4) |
@@ -56,6 +56,13 @@ Source: Report 3 section 4.4 (draft v1.3). Full = all records; Restricted (n) = 
 | School post comment | Like (UC-121) | No | Full | Restricted (15) | Restricted (15) | Restricted (15) | Restricted (15) |
 | School post comment | Report (UC-119) | No | No | Restricted (22) | Restricted (22) | Restricted (22) | Restricted (22) |
 | Reported comment | View queue, delete comment, dismiss reports (UC-120) | No | Full | No | No | No | No |
+| Chat message | Report (UC-135, 25/11/2026) | No | Restricted (26) | Restricted (26) | Restricted (26) | Restricted (26) | Restricted (26) |
+| Reported chat message | View queue, read the chat around it, hide / keep (UC-136, 25/11/2026) | No | Restricted (27) | No | No | No | No |
+| Moderation violation | View statistics, history of a person, by class; export (UC-137, 25/11/2026) | No | Full | No | No | No | No |
+| Moderation violation | View one piece of its content (UC-137) | No | Restricted (28) | No | No | No | No |
+| Hidden comment / message | Unhide (UC-138, 25/11/2026) | No | Restricted (29) | No | No | No | No |
+| Moderation rule | Add / edit / turn off / delete / try a sentence (UC-139, 25/11/2026) | No | Full | No | No | No | No |
+| Activity log of content reads (moderation) | View, in the database (no screen) | Restricted (30) | No | No | No | No | No |
 | Class timetable | Create / import / update | No | Full | No | No | No | No |
 | Class timetable | View | No | Full | Restricted (4) | Restricted (4) | Restricted (7) | Restricted (7) |
 | Period times | Configure (UC-122) | No | Full | No | No | No | No |
@@ -84,7 +91,8 @@ Notes:
 
 1. Student, parent and teacher accounts only (not System Admin or School Manager accounts).
 2. Name and class only, inside groups they belong to; phone number and email visible to teachers and School Manager only.
-3. Lists and members only; School Manager does not see class feeds or chats.
+3. Lists and members only; School Manager does not see class feeds or chats (one deliberate exception through a report or
+   a violation: notes 27 and 28, business rules §17).
 4. Only the classes, groups and teams the user belongs to.
 5. Only the class they are homeroom teacher of. (Until 17/11/2026 the homeroom teacher could also add and remove members of the class groups; since then nobody removes anyone from them and only the School Manager adds missing people of the class.)
 6. School-wide teacher group only.
@@ -117,3 +125,18 @@ Notes:
 25. Teacher or Parent only, added to a teacher or parent account that does not have the School Manager role
     (24/11/2026, business rules §1). System Admin also adds School Manager. Student and System Admin accounts take no
     other role; roles are never removed.
+26. Someone else's message in a chat the user is an active member of (notes 4 and 6); not a system line, a message
+    deleted for everyone or hidden; once per person; the sender never learns who reported (business rules §17).
+27. Every message report. Reads the reported message alone (not logged), and the 6 messages before and after it only
+    after giving a reason (logged, `CHAT_CONTEXT_VIEW` with the reason) – never more of the chat (27/11/2026); both
+    only while the message has a pending report and only that chat. Every School Manager sees, on a handled report,
+    the decision and every view of the messages around it (who, when, reason). No other chat API is opened to the
+    School Manager. A "Cần được hỗ trợ" report needs a
+    "Kết quả hỗ trợ" (business rules §17).
+28. One piece, logged (`MODERATION_ITEM_VIEW`): any violation found by the automatic check; a violation decided from
+    reports only when the School Manager handles those reports (school post comments, chat messages, comments of the
+    teacher group) – not comments of class, student or parent groups (decided by the homeroom teacher).
+29. Violations found by the automatic check (`AUTO`) that are still active, with a required reason; never a violation
+    decided from reports.
+30. The System Admin reads the log of these reads (who, when, which report or violation, the reason given) but never
+    the content (business rules §13, §17).
