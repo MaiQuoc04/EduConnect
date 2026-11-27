@@ -128,7 +128,8 @@ reactions, attachments) is merged into one place after both are on `develop`.
     rules, 2 settings, RLS on the 3 tables, `comments.hidden_at`, `comment_reports.support_note`, both CHECKs).
     Both are safe to run twice (tested). Order on deploy: patch, then seed, **then** pull / restart (the code reads
     `comments.hidden_at` on every comment read). `educonnect_schema_v0.3.sql` already has the definitions.
-  - **Touches other features (additions only; to be reviewed by their owners):** FE-05 `posts.service.js` / `posts.controller.js`
+  - **Touches other features (additions only; FE-05 / FE-06 parts reviewed and accepted by Khanh, told the lead
+    27/11/2026):** FE-05 `posts.service.js` / `posts.controller.js`
     (viewerId, hidden comment, supportNote), FE-06 `conversations.service.js` (check in `sendMessage`, `isModerated`,
     sender reads own hidden message) and chat client (hidden bubble, report dialog, `message:restored`), shared
     `utils/feedInteractions.js`, `utils/commentReports.js`, `components/CommentThread.jsx`, `AppLayout.jsx` (menu badge).
@@ -137,10 +138,6 @@ reactions, attachments) is merged into one place after both are on `develop`.
     - FE-09 (Quoc): links for the new notification target types `CHAT` (hidden / shown again message → the chat),
       `MESSAGE_REPORT` and `COMMENT_REPORT` (support request → the School Manager's queues); today clicking them opens
       nothing (`notifications.service.js` LINK_SQL).
-    - FE-05 (Khanh): notify the homeroom teacher at once when a group comment gets a "Cần được hỗ trợ" report (today it
-      only goes first in "Báo cáo bình luận nhóm").
-    - FE-06 (Khanh): refuse "delete for everyone" of a message with a pending report (today covered by
-      `recalledAfterReport`: the School Manager still reads the reported message recalled after its first report).
     - `server/scripts/check-db.js` still prints "expected 47 tables"; it is 59 with the moderation patch.
     - `utils/moderationRules.js` loads the rules when imported (importing `routes.js` sends one SELECT to the DB in
       `.env`); to fix: a `startModeration()` called from `server.js`.
@@ -153,7 +150,7 @@ reactions, attachments) is merged into one place after both are on `develop`.
     { category, terms }`), no notification, not a violation; edited clean it is posted as a new post (business rules
     §5, §17; UC-38 / UC-39; `docs/moderation-plan.md` "Bài đăng nhóm"). DB: step 6 of `patch_v0.3_moderation.sql`
     (CHECK of `posts.approval_status` + `BLOCKED`, now named `posts_approval_status_check`; tested twice on the local
-    DB from an unnamed CHECK). Code: additions in FE-05 `posts.service.js` (Khanh to review: `createPost`,
+    DB from an unnamed CHECK). Code: additions in FE-05 `posts.service.js` (accepted by Khanh 27/11: `createPost`,
     `updatePost`, `openPost`, `decorate`, `listPosts` hidden view / counter, `moderate`), `utils/moderationRules.js`
     (`moderationTermsOf`), `utils/commentReports.js` (no excerpt of a BLOCKED post in the report queue), client
     `GroupPostFormPage.jsx`, `groupFeedShared.jsx`, `GroupFeed.css`, `utils/moderation.js`. Tested on the local
@@ -179,7 +176,9 @@ reactions, attachments) is merged into one place after both are on `develop`.
     run 27/11). Anh's documents for it stay as written and are now the agreed rules: business rules §17 (+ §1, §5,
     §13), CLAUDE.md (School Manager reads chat content only through a report / violation), permissions 26–30,
     UC-134..UC-139, SCR-87..SCR-93, `docs/moderation-plan.md`. Owed: Change Log rows and R3 / R4 / R5 parts for
-    UC-134..UC-139 (Anh), FE-09 links for the new notification types (Quoc), FE-05 / FE-06 follow-ups above (Khanh).
+    UC-134..UC-139 (Anh), FE-09 links for the new notification types (Quoc, done `f3cb5c0`). Anh's two proposals for
+    Khanh (notify the homeroom teacher of a group comment "Cần được hỗ trợ" report; refuse recalling a reported
+    message) are **dropped by the lead 27/11/2026** – business rules §17 stay as written.
   - PR #22 (`chore/deploy-config`, Anh, merge `5c9b5ab`, by Anh on GitHub 27/11): `DEPLOY.md` only (+74 lines, no
     secret in it – `JWT_SECRET=<…>` placeholder).
 
