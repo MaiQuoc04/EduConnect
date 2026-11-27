@@ -58,6 +58,7 @@
 .score-input:focus { outline: 0; border-color: var(--ink-600); background: var(--white); }
 .score-input.changed { background: var(--ink-50); border-color: var(--ink-200, #cfc8ec); }
 .score-input.invalid { border-color: var(--red-pen); background: var(--red-bg); }
+select.score-input { width: 96px; padding: 0 2px; cursor: pointer; text-align-last: center; } /* Đạt / Chưa đạt of a comment subject */
 .score-value { font-variant-numeric: tabular-nums; }
 .missing-dot { color: var(--amber); font-size: 12px; }
 .book-footer { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; margin-top: 16px; }

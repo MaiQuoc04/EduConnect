@@ -1,6 +1,14 @@
 import { pool } from '../../config/db.js';
 import { badRequest, notFound } from '../../utils/AppError.js';
-import { academicLevel, roundScore, semesterAverage, toNumber, yearAverage } from './grades.calc.js';
+import {
+  academicLevel,
+  roundScore,
+  semesterAverage,
+  semesterResult,
+  toNumber,
+  yearAverage,
+  yearResult,
+} from './grades.calc.js';
 import {
   assertCanViewClass,
   assertCanViewStudent,
@@ -94,7 +102,7 @@ export async function computeClass(db, cls, { finalizedOnly = false } = {}) {
   const semesterIds = semesters.map((s) => s.semesterId);
   const { rows: components } = await db.query(
     `SELECT gc.component_id AS "componentId", gc.subject_id AS "subjectId", gc.semester_id AS "semesterId",
-            gc.component_name AS name, gc.weight, gc.score_count AS "scoreCount"
+            gc.component_name AS name, gc.weight, gc.score_count AS "scoreCount", gc.assessment_type AS "assessmentType"
      FROM grade_components gc
      WHERE gc.grade_level_id = $1 AND gc.semester_id = ANY($2::bigint[])
      ORDER BY gc.component_id`,
@@ -114,6 +122,11 @@ export async function computeClass(db, cls, { finalizedOnly = false } = {}) {
         [subjectIds],
       )
     : { rows: [] };
+  // SCORE or COMMENT (assessed by comments, 27/11/2026); the same in every semester of the year (structure.service.js).
+  for (const sub of subjects) {
+    const commented = usable.some((c) => String(c.subjectId) === String(sub.subjectId) && c.assessmentType === 'COMMENT');
+    sub.assessmentType = commented ? 'COMMENT' : 'SCORE';
+  }
 
   const { rows: locks } = await db.query(
     `SELECT subject_id AS "subjectId", semester_id AS "semesterId", status, unlocked_at AS "unlockedAt"
@@ -136,7 +149,8 @@ export async function computeClass(db, cls, { finalizedOnly = false } = {}) {
     studentIds.length && componentIds.length
       ? await db.query(
           `SELECT g.grade_id AS "gradeId", e.student_id AS "studentId", e.class_id AS "classId",
-                  g.component_id AS "componentId", g.attempt_no AS "attemptNo", g.score, g.entered_at AS "enteredAt"
+                  g.component_id AS "componentId", g.attempt_no AS "attemptNo", g.score, g.result,
+                  g.entered_at AS "enteredAt"
            FROM grades g
            JOIN class_enrollments e ON e.enrollment_id = g.enrollment_id
            JOIN classes c ON c.class_id = e.class_id
@@ -150,7 +164,7 @@ export async function computeClass(db, cls, { finalizedOnly = false } = {}) {
     const lock = comp && lockOf(comp.subjectId, comp.semesterId);
     return lock?.status === 'UNLOCKED' && lock.unlockedAt ? lock : null;
   };
-  const shownRows = (await finalizedScores(db, gradeRows, reviewLock)).filter((g) => g.score !== null);
+  const shownRows = (await finalizedScores(db, gradeRows, reviewLock)).filter((g) => g.score !== null || g.result !== null);
 
   // Scores per student and slot; this class wins over another class of the year.
   const slots = new Map(); // studentId -> Map("componentId:attempt" -> { score, here })
@@ -171,9 +185,11 @@ export async function computeClass(db, cls, { finalizedOnly = false } = {}) {
   const students = enrollments.map((e) => {
     const mine = [...(slots.get(String(e.studentId))?.values() ?? [])];
     const perSubject = subjects.map((sub) => {
+      const comment = sub.assessmentType === 'COMMENT';
       const bySemester = semesters.map((se) => {
         const comps = componentsOf(sub.subjectId, se.semesterId);
         const scores = mine.filter((m) => comps.some((c) => String(c.componentId) === String(m.componentId)));
+        const slotValue = (hit) => (comment ? (hit?.result ?? null) : (hit?.score ?? null));
         return {
           semesterId: se.semesterId,
           // false: configured but not finalized yet (students / parents only) – shown as "not published".
@@ -183,30 +199,48 @@ export async function computeClass(db, cls, { finalizedOnly = false } = {}) {
             name: c.name,
             weight: Number(c.weight),
             scoreCount: c.scoreCount,
-            scores: Array.from({ length: c.scoreCount }, (_, i) => {
-              const hit = scores.find((s) => String(s.componentId) === String(c.componentId) && s.attemptNo === i + 1);
-              return hit ? hit.score : null;
-            }),
+            // COMMENT subject: 'PASS' / 'FAIL' per assessment instead of a score.
+            scores: Array.from({ length: c.scoreCount }, (_, i) =>
+              slotValue(scores.find((s) => String(s.componentId) === String(c.componentId) && s.attemptNo === i + 1)),
+            ),
           })),
-          average: comps.length ? roundScore(semesterAverage(comps, scores)) : null, // rounded (Circular 22)
+          average: comps.length && !comment ? roundScore(semesterAverage(comps, scores)) : null, // rounded (Circular 22)
+          result: comment ? semesterResult(comps, scores) : null, // Đạt / Chưa đạt of a COMMENT subject
         };
       });
       const s1 = bySemester.find((b) => semesters.find((se) => se.semesterId === b.semesterId)?.semesterNo === 1);
       const s2 = bySemester.find((b) => semesters.find((se) => se.semesterId === b.semesterId)?.semesterNo === 2);
+      // COMMENT subject: the year result is the semester 2 result (Circular 22).
+      if (comment) return { subjectId: sub.subjectId, comment, bySemester, year: null, yearResult: yearResult(s2?.result ?? null) };
       // Year average from the rounded semester averages, then rounded itself (Circular 22).
-      return { subjectId: sub.subjectId, bySemester, year: roundScore(yearAverage(s1?.average ?? null, s2?.average ?? null)) };
+      return {
+        subjectId: sub.subjectId,
+        comment,
+        bySemester,
+        year: roundScore(yearAverage(s1?.average ?? null, s2?.average ?? null)),
+        yearResult: null,
+      };
     });
-    // Academic level per period over the subjects with a grade structure in that period (the year: in a semester).
+    // Academic level per period (Circular 22, Article 9): it needs the result of EVERY subject of the year – the
+    // subjects with a grade structure in any semester of the year (`subjects`) – so every period uses the same list
+    // (FE-11 owner, 27/11/2026). A subject without an average in the period – no structure in that semester yet, a
+    // missing score, or (students / parents) a book not published yet – leaves the level empty ("–"). Before, each
+    // semester only counted its own configured / published subjects, so a semester 2 with only Toán and Vật lí
+    // configured got a level from those two subjects.
+    // Subjects assessed by comments count with their Đạt / Chưa đạt result (27/11/2026).
+    const scored = perSubject.filter((p) => !p.comment);
+    const commented = perSubject.filter((p) => p.comment);
+    const inSemester = (p, se) => p.bySemester.find((b) => b.semesterId === se.semesterId);
     const level = {};
     for (const se of semesters) {
       level[se.semesterId] = academicLevel(
-        perSubject
-          .filter((p) => componentsOf(p.subjectId, se.semesterId).length)
-          .map((p) => p.bySemester.find((b) => b.semesterId === se.semesterId)?.average ?? null),
+        scored.map((p) => inSemester(p, se)?.average ?? null),
+        commented.map((p) => inSemester(p, se)?.result ?? null),
       );
     }
     level.YEAR = academicLevel(
-      perSubject.filter((p) => semesters.some((se) => componentsOf(p.subjectId, se.semesterId).length)).map((p) => p.year),
+      scored.map((p) => p.year),
+      commented.map((p) => p.yearResult),
     );
     return { ...e, perSubject, level };
   });
@@ -235,7 +269,7 @@ async function finalizedScores(db, rows, reviewLock) {
   if (!affected.length) return rows;
   const since = new Date(Math.min(...affected.map((g) => new Date(reviewLock(g).unlockedAt).getTime())));
   const { rows: changes } = await db.query(
-    `SELECT grade_id AS "gradeId", old_score AS "oldScore", changed_at AS "changedAt"
+    `SELECT grade_id AS "gradeId", old_score AS "oldScore", old_result AS "oldResult", changed_at AS "changedAt"
      FROM grade_histories WHERE grade_id = ANY($1::bigint[]) AND changed_at >= $2
      ORDER BY changed_at, history_id`,
     [affected.map((g) => g.gradeId), since],
@@ -246,7 +280,7 @@ async function finalizedScores(db, rows, reviewLock) {
     const unlockedAt = new Date(lock.unlockedAt).getTime();
     if (new Date(g.enteredAt).getTime() >= unlockedAt) return []; // entered during the review: not finalized yet
     const first = changes.find((h) => String(h.gradeId) === String(g.gradeId) && new Date(h.changedAt).getTime() >= unlockedAt);
-    return [first ? { ...g, score: first.oldScore } : g];
+    return [first ? { ...g, score: first.oldScore, result: first.oldResult } : g];
   });
 }
 
@@ -283,6 +317,15 @@ export async function classResults(classIdParam, query, user) {
           p.subjectId,
           roundScore(period === 'YEAR' ? p.year : p.bySemester.find((b) => b.semesterId === period)?.average ?? null),
         ]),
+      ),
+      // Subjects assessed by comments (subjects[].assessmentType COMMENT): 'PASS' / 'FAIL' / null instead of an average.
+      results: Object.fromEntries(
+        s.perSubject
+          .filter((p) => p.comment)
+          .map((p) => [
+            p.subjectId,
+            period === 'YEAR' ? p.yearResult : (p.bySemester.find((b) => b.semesterId === period)?.result ?? null),
+          ]),
       ),
       level: s.level[period],
     })),
@@ -339,6 +382,7 @@ export async function studentResults(studentIdParam, query, user) {
         ...sub,
         semesters: (p?.bySemester ?? []).map((b) => ({ ...b, average: roundScore(b.average) })),
         year: roundScore(p?.year ?? null),
+        yearResult: p?.yearResult ?? null, // COMMENT subject: Đạt / Chưa đạt of the year (= semester 2)
       };
     }),
   };

@@ -63,22 +63,71 @@ export const LEVELS = ['GOOD', 'FAIR', 'PASS', 'FAIL']; // Tốt, Khá, Đạt, 
  *   FAIR (Khá):      every subject ≥ 5.0 and at least 6 subjects ≥ 6.5
  *   PASS (Đạt):      at least 6 subjects ≥ 5.0 and no subject below 3.5
  *   FAIL (Chưa đạt): otherwise
- * ASSUMPTION (FE-11 owner, 23/11/2026): every subject of the class type is a scored subject – the schema does not mark
- * the subjects assessed by comments (Đạt / Chưa đạt) yet; when they are, they add "every comment subject Đạt" (Tốt,
- * Khá) and "at most one Chưa đạt" (Đạt). ASSUMPTION: with fewer than 6 subjects, "at least 6" means "all of them".
- * @param {(number|string|null)[]} subjectAverages rounded averages of every subject the student studies in the period
- * @returns {'GOOD'|'FAIR'|'PASS'|'FAIL'|null} null while a subject has no average yet (or there is no subject)
+ * Subjects assessed by comments (27/11/2026) add: Tốt and Khá need every comment subject Đạt; Đạt allows at most one
+ * comment subject Chưa đạt. "At least 6 subjects" counts the scored subjects.
+ * ASSUMPTION (FE-11 owner, 23/11/2026): with fewer than 6 scored subjects, "at least 6" means "all of them".
+ * @param {(number|string|null)[]} subjectAverages rounded averages of every scored subject of the period
+ * @param {('PASS'|'FAIL'|null)[]} commentResults result of every subject assessed by comments in the period
+ * @returns {'GOOD'|'FAIR'|'PASS'|'FAIL'|null} null while a subject has no average / result yet (or there is no subject)
  */
-export function academicLevel(subjectAverages) {
+export function academicLevel(subjectAverages, commentResults = []) {
   const values = subjectAverages.map(toNumber);
-  if (!values.length || values.some((v) => v === null)) return null;
+  const results = commentResults.map((r) => (RESULTS.includes(r) ? r : null));
+  if (!values.length && !results.length) return null;
+  if (values.some((v) => v === null) || results.some((r) => r === null)) return null;
+  const failed = results.filter((r) => r === 'FAIL').length;
   const need = Math.min(6, values.length);
   const atLeast = (min) => values.filter((v) => v >= min).length;
   const all = (min) => values.every((v) => v >= min);
-  if (all(6.5) && atLeast(8) >= need) return 'GOOD';
-  if (all(5) && atLeast(6.5) >= need) return 'FAIR';
-  if (atLeast(5) >= need && all(3.5)) return 'PASS';
+  if (!failed && all(6.5) && atLeast(8) >= need) return 'GOOD';
+  if (!failed && all(5) && atLeast(6.5) >= need) return 'FAIR';
+  if (failed <= 1 && atLeast(5) >= need && all(3.5)) return 'PASS';
   return 'FAIL';
+}
+
+// --- Subjects assessed by comments (môn đánh giá bằng nhận xét, Circular 22/2021; FE-11 owner, 27/11/2026) ----------
+// A structure (subject × grade level × semester) is SCORE (0–10, as above) or COMMENT: each assessment is Đạt (PASS)
+// or Chưa đạt (FAIL), stored in grades.result. Shown as "Đ" / "CĐ" like the school's paper grade book.
+export const ASSESSMENT_TYPES = ['SCORE', 'COMMENT'];
+export const RESULTS = ['PASS', 'FAIL'];
+
+/**
+ * Semester result of a comment subject (Circular 22): Đạt = every assessment of the structure is present and Đạt;
+ * Chưa đạt otherwise. While assessments are still missing: FAIL as soon as one is Chưa đạt (it cannot become Đạt any
+ * more), else null (not decided yet).
+ * @param {{componentId, scoreCount}[]} components
+ * @param {{componentId, attemptNo, result:'PASS'|'FAIL'|null}[]} entries one student's results
+ * @returns {'PASS'|'FAIL'|null}
+ */
+export function semesterResult(components, entries) {
+  if (!components.length) return null;
+  const ids = new Set(components.map((c) => String(c.componentId)));
+  const mine = entries.filter((e) => ids.has(String(e.componentId)) && RESULTS.includes(e.result));
+  if (mine.some((e) => e.result === 'FAIL')) return 'FAIL';
+  return missingSlots(components, mine).length ? null : 'PASS';
+}
+
+/** Year result of a comment subject = its semester 2 result (Circular 22). */
+export const yearResult = (semester2) => (RESULTS.includes(semester2) ? semester2 : null);
+
+/**
+ * Reads a result typed by a user or read from a file: "Đ", "Đạt", "CĐ", "Chưa đạt" (any case, with or without
+ * accents) or the API values PASS / FAIL.
+ * @returns {{ok:true, value:'PASS'|'FAIL'|null} | {ok:false}} value null = empty (clear in UC-83, keep in UC-84)
+ */
+export function parseResult(input) {
+  if (input === null || input === undefined) return { ok: true, value: null };
+  const text = String(input)
+    .normalize('NFD')
+    .replace(/[̀-ͯ]/g, '')
+    .replace(/[đĐ]/g, 'd')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .toLowerCase();
+  if (text === '') return { ok: true, value: null };
+  if (['d', 'dat', 'pass'].includes(text)) return { ok: true, value: 'PASS' };
+  if (['cd', 'chua dat', 'fail'].includes(text)) return { ok: true, value: 'FAIL' };
+  return { ok: false };
 }
 
 /**
@@ -87,9 +136,12 @@ export function academicLevel(subjectAverages) {
  * (e.g. 4 regular tests, 1 mid-term and 1 final are all needed).
  * @returns {{componentId, attemptNo}[]}
  */
+// A slot is present when it has a score (SCORE structure) or a result (COMMENT structure).
 export function missingSlots(components, scores) {
   const present = new Set(
-    scores.filter((s) => toNumber(s.score) !== null).map((s) => `${s.componentId}:${s.attemptNo}`),
+    scores
+      .filter((s) => toNumber(s.score) !== null || (s.result !== null && s.result !== undefined))
+      .map((s) => `${s.componentId}:${s.attemptNo}`),
   );
   const missing = [];
   for (const c of components) {

@@ -855,12 +855,17 @@ CREATE TABLE grade_components (
   component_name VARCHAR(100) NOT NULL,
   weight         DECIMAL(5,2) NOT NULL,
   score_count    INT NOT NULL DEFAULT 1,
+  -- SCORE = scored 0–10; COMMENT = assessed by comments, each assessment Đạt / Chưa đạt (Circular 22/2021). One type
+  -- per structure and per subject × grade level in a school year (code); a COMMENT component's weight is stored as 1.
+  -- Added by patch_v0.3_grade_comment_subjects.sql (27/11/2026).
+  assessment_type VARCHAR(10) NOT NULL DEFAULT 'SCORE',
   UNIQUE (subject_id, grade_level_id, semester_id, component_name),
   FOREIGN KEY (subject_id)     REFERENCES subjects(subject_id),
   FOREIGN KEY (grade_level_id) REFERENCES grade_levels(grade_level_id),
   FOREIGN KEY (semester_id)    REFERENCES semesters(semester_id),
   CHECK (score_count >= 1),
-  CHECK (weight > 0)
+  CHECK (weight > 0),
+  CONSTRAINT grade_components_assessment_type_check CHECK (assessment_type IN ('SCORE', 'COMMENT'))
 );
 
 -- One row per individual score (TX1, TX2…). Rows are never deleted; clearing a score = score NULL.
@@ -871,6 +876,7 @@ CREATE TABLE grades (
   component_id  BIGINT NOT NULL,
   attempt_no    INT NOT NULL DEFAULT 1,
   score         DECIMAL(4,2) NULL,
+  result        VARCHAR(10) NULL,                 -- PASS (Đạt) / FAIL (Chưa đạt) of a COMMENT component, else NULL
   entered_by    BIGINT NOT NULL,                  -- teachers.teacher_id
   entered_at    TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
   updated_at    TIMESTAMPTZ NULL,
@@ -879,7 +885,8 @@ CREATE TABLE grades (
   FOREIGN KEY (component_id)  REFERENCES grade_components(component_id),
   FOREIGN KEY (entered_by)    REFERENCES teachers(teacher_id),
   CHECK (score IS NULL OR (score >= 0 AND score <= 10)),
-  CHECK (attempt_no >= 1)
+  CHECK (attempt_no >= 1),
+  CONSTRAINT grades_result_check CHECK (result IS NULL OR (result IN ('PASS', 'FAIL') AND score IS NULL))
 );
 
 -- Grade book = class x subject x semester. Teacher finalizes (UC-82); blocked if any studying student
@@ -909,10 +916,14 @@ CREATE TABLE grade_histories (
   grade_id   BIGINT NOT NULL,
   old_score  DECIMAL(4,2) NULL,
   new_score  DECIMAL(4,2) NULL,
+  old_result VARCHAR(10) NULL,                    -- the same for the result of a COMMENT component
+  new_result VARCHAR(10) NULL,
   changed_by BIGINT NOT NULL,
   changed_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
   FOREIGN KEY (grade_id)   REFERENCES grades(grade_id),
-  FOREIGN KEY (changed_by) REFERENCES users(user_id)
+  FOREIGN KEY (changed_by) REFERENCES users(user_id),
+  CONSTRAINT grade_histories_result_check
+    CHECK ((old_result IS NULL OR old_result IN ('PASS', 'FAIL')) AND (new_result IS NULL OR new_result IN ('PASS', 'FAIL')))
 );
 
 -- 13. SYSTEM ADMINISTRATION (7e–7h) --------------------------------------------

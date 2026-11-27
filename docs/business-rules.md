@@ -783,14 +783,30 @@ Boundaries that are easy to get wrong:
   subject semester average = weighted average of the scores present; subject year average = (S1 + 2 × S2) / 3.
   Subjects counted = those with a grade structure for the class's grade that year (only the class type's subjects
   when set); a subject without a structure is not counted.
+- **Subjects assessed by comments (môn đánh giá bằng nhận xét, Circular 22/2021; 27/11/2026, Linh):** a structure is
+  either **scored** (SCORE, 0–10, as above) or **assessed by comments** (COMMENT: Giáo dục thể chất, Nghệ thuật, Hoạt
+  động trải nghiệm, Giáo dục địa phương…), chosen by SM when configuring it (`grade_components.assessment_type`).
+  - A COMMENT structure has components and a number of assessments but no weights (stored as 1). Every assessment is
+    **Đạt / Chưa đạt**, written **Đạt / Chưa đạt** in full in the grade book and the import file (`grades.result` PASS / FAIL; a row has
+    a score or a result, never both). Changes are logged in `grade_histories.old_result / new_result`.
+  - Semester result: **Đạt** when every assessment of the structure is present and Đạt, else **Chưa đạt**. While
+    assessments are missing it shows Chưa đạt as soon as one is CĐ, otherwise nothing yet. **Year result = semester 2
+    result.** It replaces the average in the grade book, the results and the export.
+  - The structures of one subject × grade level in a school year all have the same type (a semester of another type
+    is refused, `MSG_STRUCTURE_TYPE_MISMATCH`); a copy keeps the type of the copied structure.
+  - Entry, import, finalize ("missing" = an empty assessment), unlock and the finalized view for students / parents
+    work as for scores. DB patch: `patch_v0.3_grade_comment_subjects.sql`.
 - **No overall average and no ranking (23/11/2026, Linh, supervisor's request; Circular 22/2021/TT-BGDĐT):** the
   Circular has no average of all subjects and says students are not compared with each other (Article 4.4), as in the
   e-contact-book products (vnEdu, SMAS, eNetViet). Instead each student gets an **academic level** per semester and for
   the year (Article 9), from the rounded subject averages of the period: **Tốt** = every subject ≥ 6.5 and at least 6
   subjects ≥ 8.0; **Khá** = every subject ≥ 5.0 and at least 6 subjects ≥ 6.5; **Đạt** = at least 6 subjects ≥ 5.0
-  and none below 3.5; **Chưa đạt** = otherwise; no level while a subject has no average yet. ASSUMPTION: every
-  subject with a grade structure is a scored subject (subjects assessed by comments – Đạt / Chưa đạt – are not in the
-  schema yet); with fewer than 6 subjects "at least 6" means all of them. Conduct (rèn luyện) and the titles Học sinh
+  and none below 3.5; **Chưa đạt** = otherwise; no level while a subject has no average yet. Every period uses the
+  **same list of subjects: those with a grade structure in any semester of the year** (27/11/2026): a subject not yet
+  configured for a semester, not yet scored, or (students / parents) not yet finalized leaves that period without a
+  level, so a level is never decided on part of the subjects. Subjects assessed by comments (below) add: **Tốt** and
+  **Khá** need every comment subject Đạt; **Đạt** allows at most one comment subject Chưa đạt; "at least 6 subjects"
+  counts the scored subjects. ASSUMPTION: with fewer than 6 scored subjects "at least 6" means all of them. Conduct (rèn luyện) and the titles Học sinh
   Giỏi / Xuất sắc are not handled yet. UC-89 / SCR-48 Class Ranking removed (`/grades/ranking` goes to the results).
 - **Rounding (Circular 22/2021, 14/11/2026):** every average is rounded to 1 decimal, half up (7.94 → 7.9,
   7.95 → 8.0). Each step uses the **rounded** result of the step before: subject semester average → subject year

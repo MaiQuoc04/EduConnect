@@ -2,8 +2,14 @@ import ExcelJS from 'exceljs';
 import { badRequest, forbidden } from '../../utils/AppError.js';
 import { conflict } from './grades.scope.js';
 import { assertXlsx, readSheet } from '../../utils/excel.js';
-import { parseScore } from './grades.calc.js';
+import { parseResult, parseScore } from './grades.calc.js';
 import { applyChanges, getBook } from './gradebook.service.js';
+
+// Subjects assessed by comments (27/11/2026): a COMMENT book has Đạt / Chưa đạt in its cells instead of scores.
+const RESULT_LONG = { PASS: 'Đạt', FAIL: 'Chưa đạt' };
+const isComment = (book) => book.assessmentType === 'COMMENT';
+// The value of one cell as written in the file: the score, or Đạt / Chưa đạt.
+const cellValue = (entry) => (entry.result ? RESULT_LONG[entry.result] : entry.score);
 
 // FE-11 (owner: Linh) – UC-84 Import Grades: the teacher downloads the grade book of a class × subject × semester as
 // Excel (filled with the current scores), edits it and uploads it. Preview first; the import is all or nothing.
@@ -64,19 +70,46 @@ export async function buildTemplate(params, user) {
     .filter((s) => s.status === 'STUDYING')
     .forEach((s, i) => {
       const row = { no: i + 1, code: s.studentCode, name: s.fullName };
-      for (const sc of s.scores) if (sc.score !== null) row[`s_${sc.componentId}_${sc.attemptNo}`] = sc.score;
+      for (const sc of s.scores) {
+        if (sc.score !== null || sc.result) row[`s_${sc.componentId}_${sc.attemptNo}`] = cellValue(sc);
+      }
       sheet.addRow(row);
     });
+  // COMMENT book: a drop-down Đạt / Chưa đạt in every result cell of the students' rows.
+  if (isComment(book)) {
+    const lastRow = sheet.rowCount;
+    columns.forEach((_, i) => {
+      for (let r = 2; r <= lastRow; r += 1) {
+        sheet.getCell(r, 4 + i).dataValidation = {
+          type: 'list',
+          allowBlank: true,
+          formulae: ['"Đạt,Chưa đạt"'],
+          showErrorMessage: true,
+          errorTitle: 'Kết quả không hợp lệ',
+          error: 'Chọn Đạt hoặc Chưa đạt.',
+        };
+      }
+    });
+  }
 
   const help = workbook.addWorksheet('Huong dan');
   help.getColumn(1).width = 110;
   [
     `Sổ điểm ${book.subject.subjectName} – lớp ${book.class.className} – học kỳ ${book.semester.semesterNo}, năm học ${book.semester.yearName}`,
     'Không đổi tên, thứ tự hay xoá các cột tiêu đề. Có thể xoá các cột STT, Họ và tên.',
-    'Điểm từ 0 đến 10, tối đa 2 chữ số thập phân (dấu chấm hoặc dấu phẩy), ví dụ 8 hoặc 7,5.',
-    'Ô để trống: giữ nguyên điểm đang có. Muốn xoá một điểm, hãy xoá trên màn hình Nhập điểm.',
-    'Chỉ học sinh đang học trong lớp mới được nhập; mã học sinh phải đúng với danh sách lớp.',
-    `Các cột điểm: ${book.components.map((c) => `${c.name} (hệ số ${c.weight}, ${c.scoreCount} lần)`).join('; ')}.`,
+    ...(isComment(book)
+      ? [
+          'Môn đánh giá bằng nhận xét: mỗi ô chọn hoặc ghi Đạt hoặc Chưa đạt.',
+          'Ô để trống: giữ nguyên kết quả đang có. Muốn xoá một kết quả, hãy xoá trên màn hình Nhập điểm.',
+          'Chỉ học sinh đang học trong lớp mới được nhập; mã học sinh phải đúng với danh sách lớp.',
+          `Các cột đánh giá: ${book.components.map((c) => `${c.name} (${c.scoreCount} lần)`).join('; ')}.`,
+        ]
+      : [
+          'Điểm từ 0 đến 10, tối đa 2 chữ số thập phân (dấu chấm hoặc dấu phẩy), ví dụ 8 hoặc 7,5.',
+          'Ô để trống: giữ nguyên điểm đang có. Muốn xoá một điểm, hãy xoá trên màn hình Nhập điểm.',
+          'Chỉ học sinh đang học trong lớp mới được nhập; mã học sinh phải đúng với danh sách lớp.',
+          `Các cột điểm: ${book.components.map((c) => `${c.name} (hệ số ${c.weight}, ${c.scoreCount} lần)`).join('; ')}.`,
+        ]),
   ].forEach((line, i) => {
     help.addRow([line]).font = i === 0 ? { bold: true, size: 13 } : {};
   });
@@ -113,13 +146,24 @@ export async function buildExport(params, user) {
   sheet.addRow([`Sổ điểm ${book.subject.subjectName} – Lớp ${book.class.className} – Học kỳ ${book.semester.semesterNo}, năm học ${book.semester.yearName}`]);
   sheet.getRow(1).font = { bold: true, size: 14 };
   sheet.addRow([`Trạng thái: ${BOOK_STATUS_TEXT[book.lock.status] ?? book.lock.status} · Xuất lúc ${now.text}`]);
-  sheet.addRow([`Cấu trúc: ${book.components.map((c) => `${c.name} hệ số ${c.weight} (${c.scoreCount} lần)`).join('; ')}`]);
+  sheet.addRow([
+    isComment(book)
+      ? `Đánh giá bằng nhận xét (Đ = Đạt, CĐ = Chưa đạt): ${book.components.map((c) => `${c.name} (${c.scoreCount} lần)`).join('; ')}`
+      : `Cấu trúc: ${book.components.map((c) => `${c.name} hệ số ${c.weight} (${c.scoreCount} lần)`).join('; ')}`,
+  ]);
   sheet.getRow(2).font = { color: { argb: 'FF5F5E5A' } };
   sheet.getRow(3).font = { color: { argb: 'FF5F5E5A' } };
   for (const n of [1, 2, 3]) sheet.mergeCells(n, 1, n, lastCol);
   sheet.addRow([]);
 
-  const header = sheet.addRow(['STT', 'Mã học sinh', 'Họ và tên', ...columns.map((c) => c.header), 'ĐTB học kỳ', 'Ghi chú']);
+  const header = sheet.addRow([
+    'STT',
+    'Mã học sinh',
+    'Họ và tên',
+    ...columns.map((c) => c.header),
+    isComment(book) ? 'Kết quả học kỳ' : 'ĐTB học kỳ',
+    'Ghi chú',
+  ]);
   header.font = { bold: true };
   header.alignment = { vertical: 'middle', horizontal: 'center', wrapText: true };
   header.getCell(3).alignment = { vertical: 'middle', horizontal: 'left' };
@@ -128,14 +172,15 @@ export async function buildExport(params, user) {
   });
 
   book.students.forEach((s, i) => {
-    const byKey = new Map(s.scores.map((sc) => [`s_${sc.componentId}_${sc.attemptNo}`, sc.score]));
-    const note = s.status !== 'STUDYING' ? 'Đã rời lớp' : s.missing ? `Thiếu ${s.missing} điểm` : '';
+    const byKey = new Map(s.scores.map((sc) => [`s_${sc.componentId}_${sc.attemptNo}`, cellValue(sc)]));
+    const missingText = isComment(book) ? `Thiếu ${s.missing} lần đánh giá` : `Thiếu ${s.missing} điểm`;
+    const note = s.status !== 'STUDYING' ? 'Đã rời lớp' : s.missing ? missingText : '';
     const row = sheet.addRow([
       i + 1,
       s.studentCode,
       s.fullName,
       ...columns.map((c) => byKey.get(c.key) ?? null),
-      s.average ?? null,
+      isComment(book) ? (RESULT_LONG[s.result] ?? null) : (s.average ?? null),
       note,
     ]);
     for (let col = 4; col <= 3 + columns.length + 1; col += 1) row.getCell(col).alignment = { horizontal: 'center' };
@@ -154,10 +199,17 @@ export async function buildExport(params, user) {
 }
 
 // Reads the uploaded file against the grade book as it is now. Returns one entry per data row.
+// COMMENT book: the cells hold Đạt / Chưa đạt, compared with grades.result.
 function analyse(rows, { components, enrollments, scores }) {
   const columns = scoreColumns(components);
+  const comment = components[0]?.assessmentType === 'COMMENT';
   const studying = new Map(enrollments.filter((e) => e.status === 'STUDYING').map((e) => [e.studentCode.toUpperCase(), e]));
-  const current = new Map(scores.map((s) => [`${s.enrollmentId}:${s.componentId}:${s.attemptNo}`, s.score]));
+  const current = new Map(
+    scores.map((s) => [
+      `${s.enrollmentId}:${s.componentId}:${s.attemptNo}`,
+      comment ? (s.result ?? null) : s.score === null || s.score === undefined ? null : Number(s.score),
+    ]),
+  );
   const seen = new Set();
   return rows.map(({ row, values }) => {
     const code = values.code.trim().toUpperCase();
@@ -170,19 +222,18 @@ function analyse(rows, { components, enrollments, scores }) {
     if (code) seen.add(code);
     for (const col of columns) {
       const text = values[col.key];
-      const parsed = parseScore(text);
+      const parsed = comment ? parseResult(text) : parseScore(text);
       if (!parsed.ok) {
-        errors.push({ code: 'SCORE_INVALID', column: col.header, value: text });
+        errors.push({ code: comment ? 'RESULT_INVALID' : 'SCORE_INVALID', column: col.header, value: text });
         continue;
       }
       if (parsed.value === null || !enrollment) continue; // empty cell = keep
-      const old = current.get(`${enrollment.enrollmentId}:${col.componentId}:${col.attemptNo}`);
-      const oldValue = old === null || old === undefined ? null : Number(old);
+      const oldValue = current.get(`${enrollment.enrollmentId}:${col.componentId}:${col.attemptNo}`) ?? null;
       if (oldValue !== parsed.value) {
         changes.push({
           column: col.header,
           old: oldValue,
-          score: parsed.value,
+          ...(comment ? { result: parsed.value } : { score: parsed.value }),
           enrollmentId: enrollment.enrollmentId,
           componentId: col.componentId,
           attemptNo: col.attemptNo,
@@ -207,8 +258,9 @@ const summary = (analysed) => ({
     fullName,
     errors,
     // The cell of each change, so the grade entry screen can put the scores into the grid (unsaved) – UC-84.
-    changes: changes.map(({ column, old, score, enrollmentId, componentId, attemptNo }) => ({
-      column, old, score, enrollmentId, componentId, attemptNo,
+    // COMMENT book: `result` (PASS / FAIL) instead of `score`; `old` is the old score or result.
+    changes: changes.map(({ column, old, score, result, enrollmentId, componentId, attemptNo }) => ({
+      column, old, score, result, enrollmentId, componentId, attemptNo,
     })),
   })),
   errorCount: analysed.filter((r) => r.errors.length).length,

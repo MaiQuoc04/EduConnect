@@ -9,7 +9,17 @@ import '../admin/admin.css';
 import GradeBookTable from './GradeBookTable.jsx';
 import ExportButton from './ExportButton.jsx';
 import GradeImportPanel from './GradeImportPanel.jsx';
-import { BOOK_STATUS, fmtScore, formatDateTime, toApiScore, validScore } from './gradeFormat.js';
+import {
+  BOOK_STATUS,
+  fmtResult,
+  fmtScore,
+  formatDateTime,
+  isCommentBook,
+  toApiResult,
+  toApiScore,
+  validResult,
+  validScore,
+} from './gradeFormat.js';
 import { cellKey } from './GradeBookTable.jsx';
 import SemesterSelect from './SemesterSelect.jsx';
 import useGradeOptions from './useGradeOptions.js';
@@ -78,8 +88,9 @@ export default function GradeEntryPage() {
   useEffect(loadBook, [loadBook]);
 
   const changedKeys = Object.keys(edits);
-  const invalid = changedKeys.some((k) => !validScore(edits[k]));
   const data = book.data;
+  const comment = isCommentBook(data); // subject assessed by comments: Đạt / Chưa đạt instead of scores (27/11/2026)
+  const invalid = changedKeys.some((k) => !(comment ? validResult : validScore)(edits[k]));
   const status = BOOK_STATUS[data?.lock.status ?? 'OPEN'];
 
   // Leaving with unsaved scores: ask first (browser close / reload).
@@ -112,12 +123,15 @@ export default function GradeEntryPage() {
     try {
       const changes = changedKeys.map((k) => {
         const [enrollmentId, componentId, attemptNo] = k.split(':').map(Number);
-        return { enrollmentId, componentId, attemptNo, score: toApiScore(edits[k]) };
+        return comment
+          ? { enrollmentId, componentId, attemptNo, result: toApiResult(edits[k]) }
+          : { enrollmentId, componentId, attemptNo, score: toApiScore(edits[k]) };
       });
       const result = await saveGrades(classId, subjectId, semesterId, changes);
       setBook({ loading: false, data: result.book, error: '' });
       setEdits({});
-      toast(result.changed ? `Đã lưu ${result.changed} điểm.` : 'Không có điểm nào thay đổi.');
+      const unit = comment ? 'kết quả đánh giá' : 'điểm';
+      toast(result.changed ? `Đã lưu ${result.changed} ${unit}.` : `Không có ${unit} nào thay đổi.`);
     } catch (err) {
       toast(errorText(err), { type: 'error' });
       if (['MSG_GRADES_FINALIZED', 'MSG_STRUCTURE_EMPTY'].includes(err.code)) loadBook();
@@ -243,7 +257,9 @@ export default function GradeEntryPage() {
                   <span className="left">
                     {changedKeys.length
                       ? `${changedKeys.length} ô đã sửa, chưa lưu.${invalid ? ' Có ô không hợp lệ (tô đỏ).' : ''}`
-                      : 'Xoá trắng một ô rồi lưu để xoá điểm đó.'}
+                      : comment
+                        ? ''
+                        : 'Xoá trắng một ô rồi lưu để xoá điểm đó.'}
                   </span>
                   <button type="button" className="btn btn-secondary" onClick={() => setEdits({})} disabled={!changedKeys.length || saving}>
                     Bỏ thay đổi
@@ -307,11 +323,13 @@ export default function GradeEntryPage() {
             // Imported scores become unsaved edits (on top of any typed ones): checked, then saved with "Lưu điểm".
             setEdits((prev) => {
               const next = { ...prev };
-              for (const c of changes) next[cellKey(c.enrollmentId, c.componentId, c.attemptNo)] = fmtScore(c.score);
+              for (const c of changes) {
+                next[cellKey(c.enrollmentId, c.componentId, c.attemptNo)] = comment ? fmtResult(c.result) : fmtScore(c.score);
+              }
               return next;
             });
             setDialog(null);
-            toast(`Đã đưa ${changes.length} điểm vào bảng. Kiểm tra rồi bấm Lưu điểm để lưu.`);
+            toast(`Đã đưa ${changes.length} ${comment ? 'kết quả đánh giá' : 'điểm'} vào bảng. Kiểm tra rồi bấm Lưu điểm để lưu.`);
           }}
         />
       )}

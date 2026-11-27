@@ -13,6 +13,7 @@ const ROW_ERROR = {
   CODE_UNKNOWN: (e) => `Mã ${e.value} không phải học sinh đang học của lớp.`,
   CODE_DUPLICATE: (e) => `Mã ${e.value} bị lặp trong file.`,
   SCORE_INVALID: (e) => `Cột ${e.column}: "${e.value}" không phải điểm hợp lệ (0–10, tối đa 2 chữ số thập phân).`,
+  RESULT_INVALID: (e) => `Cột ${e.column}: "${e.value}" không hợp lệ, hãy ghi Đạt hoặc Chưa đạt.`,
 };
 
 export default function GradeImportPanel({ book, onClose, onApply }) {

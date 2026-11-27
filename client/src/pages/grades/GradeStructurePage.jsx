@@ -18,6 +18,14 @@ const DEFAULT_COMPONENTS = [
   { name: 'Giữa kỳ', weight: '2', scoreCount: '1' },
   { name: 'Cuối kỳ', weight: '3', scoreCount: '1' },
 ];
+// Subjects assessed by comments (Circular 22/2021, 27/11/2026): each assessment is Đạt / Chưa đạt, no weights.
+const DEFAULT_COMMENT_COMPONENTS = [
+  { name: 'Thường xuyên', weight: '1', scoreCount: '2' },
+  { name: 'Giữa kỳ', weight: '1', scoreCount: '1' },
+  { name: 'Cuối kỳ', weight: '1', scoreCount: '1' },
+];
+const defaultsOf = (type) => (type === 'COMMENT' ? DEFAULT_COMMENT_COMPONENTS : DEFAULT_COMPONENTS);
+const TYPE_LABEL = { SCORE: 'Điểm số (0–10)', COMMENT: 'Nhận xét (Đạt / Chưa đạt)' };
 const ROW_TEXT = {
   REQUIRED: 'Nhập tên thành phần.',
   TOO_LONG: 'Tên tối đa 100 ký tự.',
@@ -37,6 +45,7 @@ export default function GradeStructurePage() {
   const [subjectId, setSubjectId] = useState('');
   const [detail, setDetail] = useState(null); // { components, locked, subject }
   const [rows, setRows] = useState([]);
+  const [type, setType] = useState('SCORE'); // SCORE | COMMENT
   const [rowErrors, setRowErrors] = useState([]);
   const [saving, setSaving] = useState(false);
   const [copyOpen, setCopyOpen] = useState(false);
@@ -70,7 +79,9 @@ export default function GradeStructurePage() {
       .then((d) => {
         if (!alive) return;
         setDetail(d);
-        setRows(d.components.length ? toForm(d.components) : DEFAULT_COMPONENTS);
+        const savedType = d.assessmentType ?? 'SCORE';
+        setType(savedType);
+        setRows(d.components.length ? toForm(d.components) : defaultsOf(savedType));
         setRowErrors([]);
       })
       .catch((err) => alive && toast(errorText(err), { type: 'error' }));
@@ -85,10 +96,21 @@ export default function GradeStructurePage() {
   const locked = Boolean(detail?.locked);
   const ended = Boolean(detail?.semester?.yearEnded);
   const readOnly = locked || ended;
+  const comment = type === 'COMMENT';
   const dirty = useMemo(
-    () => detail && JSON.stringify(rows) !== JSON.stringify(detail.components.length ? toForm(detail.components) : []),
-    [rows, detail],
+    () =>
+      detail &&
+      (JSON.stringify(rows) !== JSON.stringify(detail.components.length ? toForm(detail.components) : []) ||
+        type !== (detail.assessmentType ?? 'SCORE')),
+    [rows, type, detail],
   );
+
+  // Switching the type of a structure still on its default components switches to the other defaults.
+  function changeType(next) {
+    setRows((rs) => (JSON.stringify(rs) === JSON.stringify(defaultsOf(type)) ? defaultsOf(next) : rs));
+    setType(next);
+    setRowErrors([]);
+  }
 
   const setRow = (i, key) => (e) => {
     const value = e.target.value;
@@ -104,9 +126,11 @@ export default function GradeStructurePage() {
         semesterId,
         gradeLevelId,
         subjectId,
-        rows.map((r) => ({ name: r.name, weight: r.weight.replace(',', '.'), scoreCount: Number(r.scoreCount) })),
+        rows.map((r) => ({ name: r.name, weight: comment ? '1' : r.weight.replace(',', '.'), scoreCount: Number(r.scoreCount) })),
+        type,
       );
       setDetail(d);
+      setType(d.assessmentType ?? 'SCORE');
       setRows(toForm(d.components));
       setRowErrors([]);
       toast('Đã lưu cấu trúc điểm.');
@@ -166,6 +190,7 @@ export default function GradeStructurePage() {
                 <span className="meta">
                   {' '}
                   {s.componentCount ? `· ${s.componentCount} thành phần` : '· chưa cấu hình'}
+                  {s.assessmentType === 'COMMENT' && ' · nhận xét'}
                   {!s.taught && ' · không học ở khối này'}
                 </span>
               </span>
@@ -200,13 +225,34 @@ export default function GradeStructurePage() {
 
               {ended && !locked && <p className="notice" style={{ marginBottom: 16 }}>Năm học đã kết thúc, cấu trúc chỉ để xem.</p>}
 
+              <div className="field" style={{ marginBottom: 12 }}>
+                <span className="field-label">Cách đánh giá</span>
+                {readOnly ? (
+                  <span>{TYPE_LABEL[type]}</span>
+                ) : (
+                  <div className="tabs" role="radiogroup" aria-label="Cách đánh giá">
+                    {['SCORE', 'COMMENT'].map((t) => (
+                      <button key={t} type="button" role="radio" aria-selected={type === t} aria-checked={type === t} onClick={() => changeType(t)}>
+                        {TYPE_LABEL[t]}
+                      </button>
+                    ))}
+                  </div>
+                )}
+                {comment && (
+                  <span className="caption muted">
+                    Theo Thông tư 22/2021: mỗi lần đánh giá chọn Đạt hoặc Chưa đạt. Học kỳ Đạt khi đủ số lần và tất cả các lần đều
+                    Đạt; cả năm lấy theo học kỳ 2. Các học kỳ trong năm của một môn phải cùng một cách đánh giá.
+                  </span>
+                )}
+              </div>
+
               <div className="table-scroll" style={{ border: 0 }}>
                 <table className="table component-table">
                   <thead>
                     <tr>
                       <th>Thành phần</th>
-                      <th className="num">Hệ số</th>
-                      <th className="num">Số lần điểm</th>
+                      {!comment && <th className="num">Hệ số</th>}
+                      <th className="num">{comment ? 'Số lần đánh giá' : 'Số lần điểm'}</th>
                       {!readOnly && <th aria-label="Xoá" />}
                     </tr>
                   </thead>
@@ -230,22 +276,24 @@ export default function GradeStructurePage() {
                             </>
                           )}
                         </td>
-                        <td className="num">
-                          {readOnly ? (
-                            r.weight
-                          ) : (
-                            <>
-                              <input
-                                className="input"
-                                value={r.weight}
-                                onChange={setRow(i, 'weight')}
-                                inputMode="decimal"
-                                aria-label={`Hệ số thành phần ${i + 1}`}
-                              />
-                              {errorOf(i, 'weight') && <span className="field-error">Lớn hơn 0, tối đa 100.</span>}
-                            </>
-                          )}
-                        </td>
+                        {!comment && (
+                          <td className="num">
+                            {readOnly ? (
+                              r.weight
+                            ) : (
+                              <>
+                                <input
+                                  className="input"
+                                  value={r.weight}
+                                  onChange={setRow(i, 'weight')}
+                                  inputMode="decimal"
+                                  aria-label={`Hệ số thành phần ${i + 1}`}
+                                />
+                                {errorOf(i, 'weight') && <span className="field-error">Lớn hơn 0, tối đa 100.</span>}
+                              </>
+                            )}
+                          </td>
+                        )}
                         <td className="num">
                           {readOnly ? (
                             r.scoreCount

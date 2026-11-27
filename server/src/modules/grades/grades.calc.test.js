@@ -5,10 +5,13 @@ import { describe, it } from 'node:test';
 import {
   academicLevel,
   missingSlots,
+  parseResult,
   parseScore,
   roundScore,
   semesterAverage,
+  semesterResult,
   yearAverage,
+  yearResult,
 } from './grades.calc.js';
 
 // Circular 22 structure: regular tests ×1 (4 scores), mid-term ×2, final ×3. Weights arrive as NUMERIC strings.
@@ -149,4 +152,68 @@ it('Circular 22: the level uses the rounded subject averages', () => {
   assert.equal(academicLevel([physics, 8, 8, 8, 8, 8, 7, 7]), 'GOOD');
   // Year: (HK1 6.5 + 2 × HK2 7.3) / 3 = 7.033… → 7.0
   assert.equal(roundScore(yearAverage(6.5, 7.3)), 7);
+});
+
+// Subjects assessed by comments (Circular 22/2021; FE-11 owner, 27/11/2026).
+describe('comment subjects (Đạt / Chưa đạt)', () => {
+  // GDTC-like structure: 2 regular assessments, mid-term, final – each Đạt / Chưa đạt.
+  const COMMENT = [
+    { componentId: 11, scoreCount: 2 },
+    { componentId: 12, scoreCount: 1 },
+    { componentId: 13, scoreCount: 1 },
+  ];
+  const r = (componentId, attemptNo, result) => ({ componentId, attemptNo, result });
+  const allPass = [r(11, 1, 'PASS'), r(11, 2, 'PASS'), r(12, 1, 'PASS'), r(13, 1, 'PASS')];
+
+  it('semester result: Đạt only when every assessment is present and Đạt', () => {
+    assert.equal(semesterResult(COMMENT, allPass), 'PASS');
+    assert.equal(semesterResult(COMMENT, allPass.slice(0, 3)), null); // final still missing: not decided
+    assert.equal(semesterResult(COMMENT, [r(11, 1, 'FAIL')]), 'FAIL'); // one Chưa đạt: cannot become Đạt
+    assert.equal(semesterResult(COMMENT, [...allPass.slice(0, 3), r(13, 1, 'FAIL')]), 'FAIL');
+    assert.equal(semesterResult(COMMENT, [...allPass, r(99, 1, 'FAIL')]), 'PASS'); // another structure is ignored
+    assert.equal(semesterResult([], allPass), null);
+  });
+
+  it('year result = semester 2 result', () => {
+    assert.equal(yearResult('PASS'), 'PASS');
+    assert.equal(yearResult('FAIL'), 'FAIL');
+    assert.equal(yearResult(null), null);
+  });
+
+  it('missing slots count results too', () => {
+    assert.equal(missingSlots(COMMENT, allPass).length, 0);
+    assert.deepEqual(missingSlots(COMMENT, [r(11, 1, 'PASS'), r(12, 1, null)]), [
+      { componentId: 11, attemptNo: 2 },
+      { componentId: 12, attemptNo: 1 },
+      { componentId: 13, attemptNo: 1 },
+    ]);
+  });
+
+  it('parses Đ / CĐ in any spelling', () => {
+    for (const t of ['Đ', 'đ', 'Đạt', 'dat', ' DAT ', 'PASS']) assert.deepEqual(parseResult(t), { ok: true, value: 'PASS' });
+    for (const t of ['CĐ', 'cđ', 'Chưa đạt', 'chua  dat', 'CD', 'FAIL']) assert.deepEqual(parseResult(t), { ok: true, value: 'FAIL' });
+    for (const t of ['', '  ', null, undefined]) assert.deepEqual(parseResult(t), { ok: true, value: null });
+    for (const t of ['8', 'Tốt', 'x', 'Đạt rồi']) assert.deepEqual(parseResult(t), { ok: false });
+  });
+
+  it('academic level: Tốt / Khá need every comment subject Đạt', () => {
+    const good = [8, 8, 8, 8, 8, 8, 7];
+    assert.equal(academicLevel(good, ['PASS', 'PASS']), 'GOOD');
+    assert.equal(academicLevel(good, ['PASS', 'FAIL']), 'PASS'); // one Chưa đạt: at most Đạt
+    assert.equal(academicLevel([7, 7, 7, 7, 7, 7, 5], ['PASS']), 'FAIR');
+    assert.equal(academicLevel([7, 7, 7, 7, 7, 7, 5], ['FAIL']), 'PASS');
+  });
+
+  it('academic level: Đạt allows at most one comment subject Chưa đạt', () => {
+    assert.equal(academicLevel([6, 6, 6, 6, 6, 6], ['FAIL', 'PASS']), 'PASS');
+    assert.equal(academicLevel([6, 6, 6, 6, 6, 6], ['FAIL', 'FAIL']), 'FAIL');
+    assert.equal(academicLevel([9, 9, 9, 9, 9, 9], ['FAIL', 'FAIL']), 'FAIL');
+  });
+
+  it('academic level waits for every comment subject result', () => {
+    assert.equal(academicLevel([8, 8, 8, 8, 8, 8], ['PASS', null]), null);
+    assert.equal(academicLevel([8, 8, 8, 8, 8, null], ['PASS']), null);
+    assert.equal(academicLevel([], []), null);
+    assert.equal(academicLevel([], ['PASS']), 'GOOD'); // only comment subjects (edge case)
+  });
 });

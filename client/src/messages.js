@@ -440,6 +440,8 @@ const ERROR_MESSAGES = {
   MSG_STRUCTURE_INVALID: 'Một số thành phần điểm chưa hợp lệ. Vui lòng kiểm tra lại.',
   MSG_STRUCTURE_LOCKED: 'Cấu trúc điểm này đã có điểm nên không thể sửa.',
   MSG_STRUCTURE_EMPTY: 'Môn này chưa có cấu trúc điểm.',
+  MSG_STRUCTURE_TYPE_MISMATCH: ({ semesterNo, assessmentType } = {}) =>
+    `Học kỳ ${semesterNo ?? 'khác'} của môn này đang ${assessmentType === 'COMMENT' ? 'đánh giá bằng nhận xét' : 'chấm điểm số'}. Các học kỳ trong một năm học phải cùng một cách đánh giá.`,
   MSG_COPY_SAME: 'Hãy chọn học kỳ, khối hoặc môn khác với bản gốc.',
   MSG_COPY_TARGETS: 'Hãy chọn ít nhất một môn để sao chép sang (tối đa 50 môn).',
   MSG_GRADES_NOT_ASSIGNED: 'Bạn không được phân công dạy môn này ở lớp này.',
@@ -450,6 +452,7 @@ const ERROR_MESSAGES = {
   MSG_GRADES_CELL_INVALID: 'Có ô điểm không thuộc sổ điểm này. Vui lòng tải lại trang.',
   MSG_GRADES_STUDENT_LEFT: 'Học sinh đã rời lớp, điểm chỉ được xem.',
   MSG_SCORE_INVALID: 'Điểm phải từ 0 đến 10, tối đa 2 chữ số thập phân.',
+  MSG_RESULT_INVALID: 'Kết quả phải là Đạt hoặc Chưa đạt.',
   MSG_GRADES_INCOMPLETE: ({ count } = {}) => `Chưa chốt được: ${count ?? 'một số'} học sinh đang học còn thiếu điểm.`,
   MSG_IMPORT_HAS_ERRORS: 'File còn dòng bị lỗi. Sửa file rồi thử lại; chưa có điểm nào được lưu.',
   // FE-09 Notifications

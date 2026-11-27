@@ -8,7 +8,7 @@ import Dialog from '../admin/Dialog.jsx';
 import '../admin/admin.css';
 import ExportButton from './ExportButton.jsx';
 import GradeBookTable from './GradeBookTable.jsx';
-import { BOOK_STATUS, fmtScore, formatDateTime, yearAverage } from './gradeFormat.js';
+import { BOOK_STATUS, fmtScore, formatDateTime, isCommentBook, RESULT_LONG, yearAverage } from './gradeFormat.js';
 import SemesterSelect from './SemesterSelect.jsx';
 import useGradeOptions from './useGradeOptions.js';
 import './grades.css';
@@ -325,7 +325,12 @@ function YearTable({ semesters, books }) {
   if (!loaded) return <p className="muted">Đang tải…</p>;
   const [s1, s2] = semesters.map((se) => books[se.semesterId]?.data ?? null);
   const students = (s1 ?? s2)?.students ?? [];
-  const averageOf = (bk, enrollmentId) => bk?.students.find((x) => String(x.enrollmentId) === String(enrollmentId))?.average ?? null;
+  // Subject assessed by comments (27/11/2026): semester results Đạt / Chưa đạt, year result = semester 2 result.
+  const comment = isCommentBook(s1) || isCommentBook(s2);
+  const rowOf = (bk, enrollmentId) => bk?.students.find((x) => String(x.enrollmentId) === String(enrollmentId));
+  const averageOf = (bk, enrollmentId) => rowOf(bk, enrollmentId)?.average ?? null;
+  const resultOf = (bk, enrollmentId) => RESULT_LONG[rowOf(bk, enrollmentId)?.result] ?? '';
+  const prefix = comment ? 'Kết quả' : 'ĐTB';
   return (
     <div className="table-scroll">
         <table className="table report-table">
@@ -333,16 +338,19 @@ function YearTable({ semesters, books }) {
             <tr>
               <th>Học sinh</th>
               {semesters.map((se) => (
-                <th key={se.semesterId}>ĐTB HK{se.semesterNo}</th>
+                <th key={se.semesterId}>{prefix} HK{se.semesterNo}</th>
               ))}
-              <th>ĐTB cả năm</th>
+              <th>{prefix} cả năm</th>
             </tr>
           </thead>
           <tbody>
             {students.map((st) => {
-              const a1 = averageOf(s1, st.enrollmentId);
-              const a2 = averageOf(s2, st.enrollmentId);
-              const year = semesters.length === 2 ? yearAverage(a1, a2) : null;
+              const a1 = comment ? resultOf(s1, st.enrollmentId) : fmtScore(averageOf(s1, st.enrollmentId));
+              const a2 = comment ? resultOf(s2, st.enrollmentId) : fmtScore(averageOf(s2, st.enrollmentId));
+              let year = '';
+              if (semesters.length === 2) {
+                year = comment ? a2 : fmtScore(yearAverage(averageOf(s1, st.enrollmentId), averageOf(s2, st.enrollmentId)));
+              }
               return (
                 <tr key={st.enrollmentId} className={st.status !== 'STUDYING' ? 'muted' : undefined}>
                   <td>
@@ -352,10 +360,10 @@ function YearTable({ semesters, books }) {
                       {st.status !== 'STUDYING' && ' · đã rời lớp'}
                     </div>
                   </td>
-                  <td>{fmtScore(a1) || <span className="muted">–</span>}</td>
-                  {semesters.length === 2 && <td>{fmtScore(a2) || <span className="muted">–</span>}</td>}
+                  <td>{a1 || <span className="muted">–</span>}</td>
+                  {semesters.length === 2 && <td>{a2 || <span className="muted">–</span>}</td>}
                   <td>
-                    <strong>{fmtScore(year) || <span className="muted">–</span>}</strong>
+                    <strong>{year || <span className="muted">–</span>}</strong>
                   </td>
                 </tr>
               );
