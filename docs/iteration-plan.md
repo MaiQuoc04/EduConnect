@@ -29,6 +29,15 @@ reactions, attachments) is merged into one place after both are on `develop`.
 
 ## Current status (read first; update after every merge, schema patch or new decision)
 
+- **FE-01 sign-in lands on the role's home page after "Đăng xuất" (27/11/2026, Quoc, client only; UC-01, UC-03,
+  UC-117):** before, signing out left the open page in the router state (`ProtectedRoute` `from`), so the next
+  sign-in – possibly another person on the same browser – reopened that page. Now `signOut()` marks the session as
+  signed out by the user and `ProtectedRoute` does not remember the page: sign-in goes to `HOME_BY_ROLE` (SA
+  `/admin/students`, every other role SCR-02 `/school-feed`, unchanged). A link opened while signed out or an expired
+  session still opens that page after sign-in (path + query now); a page not for the active role goes to the home
+  page (existing `roles` check). Home pages and the active role at sign-in (`roles[0]`) are unchanged. Change after the
+  R5 submission – **decided by the lead 27/11/2026**; client `npm run build` passes.
+
 - **Parent linking fixes (27/11/2026, Anh, FE-02 / FE-14; defect fixes from testing; branch `fix/fe-02-parent-link`,
   commit 9060e4b, merged into `develop` 27/11/2026 by Quoc (PR #23, merge 259669a) – the same change is 16e5c7f on
   `feature/report-auto`):** SCR-08 parent card links to SCR-13 (0 parents "Liên kết phụ huynh", 1 parent "Liên kết

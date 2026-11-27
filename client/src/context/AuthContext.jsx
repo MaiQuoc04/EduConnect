@@ -52,10 +52,12 @@ export function AuthProvider({ children }) {
   }
 
   // UC-03 Sign Out: the JWT is stateless, dropping it ends the session.
+  // `signedOut` tells ProtectedRoute not to remember the open page: the next sign-in (maybe another person on the
+  // same browser) lands on the home page of its active role (HOME_BY_ROLE), not on the page left open.
   function signOut() {
     temporaryPassword.forget();
     tokenStore.clear();
-    setState(SIGNED_OUT);
+    setState({ ...SIGNED_OUT, signedOut: true });
   }
 
   return (
