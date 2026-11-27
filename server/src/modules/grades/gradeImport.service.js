@@ -99,7 +99,7 @@ export async function buildTemplate(params, user) {
     'Không đổi tên, thứ tự hay xoá các cột tiêu đề. Có thể xoá các cột STT, Họ và tên.',
     ...(isComment(book)
       ? [
-          'Môn đánh giá bằng nhận xét: mỗi ô ghi Đ (Đạt) hoặc CĐ (Chưa đạt); cũng nhận "Đạt", "Chưa đạt".',
+          'Môn đánh giá bằng nhận xét: mỗi ô chọn hoặc ghi Đạt hoặc Chưa đạt.',
           'Ô để trống: giữ nguyên kết quả đang có. Muốn xoá một kết quả, hãy xoá trên màn hình Nhập điểm.',
           'Chỉ học sinh đang học trong lớp mới được nhập; mã học sinh phải đúng với danh sách lớp.',
           `Các cột đánh giá: ${book.components.map((c) => `${c.name} (${c.scoreCount} lần)`).join('; ')}.`,
@@ -199,7 +199,7 @@ export async function buildExport(params, user) {
 }
 
 // Reads the uploaded file against the grade book as it is now. Returns one entry per data row.
-// COMMENT book: the cells hold Đ / CĐ, compared with grades.result.
+// COMMENT book: the cells hold Đạt / Chưa đạt, compared with grades.result.
 function analyse(rows, { components, enrollments, scores }) {
   const columns = scoreColumns(components);
   const comment = components[0]?.assessmentType === 'COMMENT';
