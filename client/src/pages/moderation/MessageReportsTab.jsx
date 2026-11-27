@@ -142,16 +142,19 @@ export default function MessageReportsTab() {
 
 // "Hành vi xử lý" of a handled report (27/11/2026): the decision, who and when, the support result, and every view of
 // the messages around it – the same for every School Manager.
+// 27/11/2026: a message its sender recalled after the report was judged "violation or not" – said so here.
 function HandledActions({ item }) {
   const hidden = (item.decision ?? (item.status === 'RESOLVED' ? 'HIDE' : 'KEEP')) === 'HIDE';
+  const recalled = Boolean(item.recalledAfterReport);
+  const keepLabel = item.needsSupportOnly ? 'Ghi nhận' : recalled ? 'Không vi phạm' : 'Giữ nguyên';
   const views = item.contextViews ?? [];
   return (
     <div className="mod-handled">
       <p className="mod-handled-title caption">Hành vi xử lý</p>
       <p className="cr-decided">
-        <Icon name={hidden ? 'visibility_off' : 'check'} size="sm" />
+        <Icon name={hidden ? (recalled ? 'gavel' : 'visibility_off') : 'check'} size="sm" />
         <span>
-          <strong>{hidden ? 'Ẩn tin nhắn' : item.needsSupportOnly ? 'Ghi nhận' : 'Giữ nguyên'}</strong>
+          <strong>{hidden ? (recalled ? 'Xác nhận vi phạm' : 'Ẩn tin nhắn') : keepLabel}</strong>
           <span className="caption muted">
             {item.resolvedByName && ` · ${item.resolvedByName}`}
             {item.resolvedAt && ` · ${formatWhen(item.resolvedAt)}`}
@@ -193,6 +196,10 @@ function ReportDetail({ item, onBack }) {
   const [busy, setBusy] = useState(null); // 'HIDE' | 'KEEP'
   const [error, setError] = useState('');
   const support = item.hasNeedsSupport;
+  // 27/11/2026 (business-rules §17): recalled by its sender after the report – the decision is "violation or not";
+  // the message stays recalled either way (HIDE = "Xác nhận vi phạm", KEEP = "Không vi phạm").
+  const recalled = Boolean(item.recalledAfterReport);
+  const verdict = recalled && !item.needsSupportOnly;
 
   useEffect(() => {
     getReportedMessage(item.messageId)
@@ -211,7 +218,17 @@ function ReportDetail({ item, onBack }) {
     setError('');
     try {
       await resolveMessageReport(item.messageId, action, support ? supportNote.trim() : undefined);
-      toast(action === 'HIDE' ? 'Đã ẩn tin nhắn và báo cho người gửi.' : support && item.needsSupportOnly ? 'Đã ghi nhận kết quả hỗ trợ.' : 'Đã giữ nguyên tin nhắn.');
+      toast(
+        action === 'HIDE'
+          ? recalled
+            ? 'Đã xác nhận vi phạm và báo cho người gửi.'
+            : 'Đã ẩn tin nhắn và báo cho người gửi.'
+          : support && item.needsSupportOnly
+            ? 'Đã ghi nhận kết quả hỗ trợ.'
+            : recalled
+              ? 'Đã ghi nhận tin nhắn không vi phạm.'
+              : 'Đã giữ nguyên tin nhắn.',
+      );
       onBack(true);
     } catch (err) {
       setError(errorText(err));
@@ -275,17 +292,26 @@ function ReportDetail({ item, onBack }) {
       </div>
 
       <div className="card card-outline mod-decide">
+        {recalled && (
+          <div className="notice cr-removed-note">
+            <Icon name="info" size="sm" />
+            <p>
+              Người gửi đã thu hồi tin này sau khi bị báo cáo, không còn ai nhìn thấy.{' '}
+              {item.needsSupportOnly ? 'Hãy ghi nhận kết quả hỗ trợ.' : 'Hãy xác nhận tin có vi phạm hay không.'}
+            </p>
+          </div>
+        )}
         {support && <SupportNoteField value={supportNote} onChange={setSupportNote} disabled={Boolean(busy)} writer="Người gửi tin" />}
         {error && <p className="form-error" role="alert">{error}</p>}
         <div className="cr-actions">
           <button type="button" className={`btn ${item.needsSupportOnly ? 'btn-primary' : 'btn-secondary'}`} onClick={() => decide('KEEP')} disabled={blocked}>
             <Icon name={busy === 'KEEP' ? 'progress_activity' : item.needsSupportOnly ? 'task_alt' : 'check'} size="sm" />
-            {busy === 'KEEP' ? 'Đang lưu…' : item.needsSupportOnly ? 'Ghi nhận' : 'Giữ nguyên'}
+            {busy === 'KEEP' ? 'Đang lưu…' : item.needsSupportOnly ? 'Ghi nhận' : verdict ? 'Không vi phạm' : 'Giữ nguyên'}
           </button>
           {!item.needsSupportOnly && (
             <button type="button" className="btn btn-primary sf-btn-danger" onClick={() => decide('HIDE')} disabled={blocked}>
-              <Icon name={busy === 'HIDE' ? 'progress_activity' : 'visibility_off'} size="sm" />
-              {busy === 'HIDE' ? 'Đang ẩn…' : 'Ẩn tin nhắn'}
+              <Icon name={busy === 'HIDE' ? 'progress_activity' : verdict ? 'gavel' : 'visibility_off'} size="sm" />
+              {busy === 'HIDE' ? (verdict ? 'Đang lưu…' : 'Đang ẩn…') : verdict ? 'Xác nhận vi phạm' : 'Ẩn tin nhắn'}
             </button>
           )}
         </div>

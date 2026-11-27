@@ -2,9 +2,9 @@ import { useId } from 'react';
 import Icon from '../Icon.jsx';
 import { MAX_SUPPORT_NOTE_LENGTH } from '../../utils/moderation.js';
 
-// "Cần được hỗ trợ" in the comment report queues (moderation phase 5, FE-08 Anh, 25/11/2026), shared by the School
-// Manager's queue (pages/schoolfeed/CommentReportsPage) and the group moderators' queue (pages/groupfeed/
-// GroupCommentReportsPage). Server rules (utils/commentReports.js resolveReport): a pending NEEDS_SUPPORT report needs a
+// "Cần được hỗ trợ" in the report queues (moderation phase 5, FE-08 Anh, 25/11/2026), shared by the comment report card
+// (pages/schoolfeed/CommentReportCard: the School Manager's tab "Báo cáo bình luận" of "Quy chuẩn cộng đồng" since
+// 27/11/2026, and the homeroom teachers' pages/groupfeed/GroupCommentReportsPage) and the message reports tab. Server rules (utils/commentReports.js resolveReport): a pending NEEDS_SUPPORT report needs a
 // "Kết quả hỗ trợ" to decide; when every report is NEEDS_SUPPORT only "Ghi nhận" (DISMISS) is possible.
 
 const lengthOf = (text) => [...text.normalize('NFC').trim()].length;

@@ -29,6 +29,39 @@ reactions, attachments) is merged into one place after both are on `develop`.
 
 ## Current status (read first; update after every merge, schema patch or new decision)
 
+- **FE-08 comment reports in "Quy chuẩn cộng đồng" (27/11/2026, Anh, `feature/fe-08-moderation-comment-reports`,
+  NOT merged):** client only – no server, API or schema change. School Manager: one moderation item in the menu ("Báo
+  cáo bình luận" and "Báo cáo bình luận nhóm" removed); `/moderation` gets tab 5 "Báo cáo bình luận"
+  (`?tab=comments&source=school|teacher`) with school post comments (`/comment-reports`) and teacher group comments
+  (`/group-comment-reports`), exact merged paging under "Tất cả"; menu badge = message + comment reports waiting,
+  highlighted on any "Cần được hỗ trợ" (existing APIs, `pageSize=1`). `/comment-reports` and, for the School Manager,
+  `/group-comment-reports` redirect to the tab. `pages/schoolfeed/CommentReportsPage.jsx` removed (its card and dialog
+  are now `pages/schoolfeed/CommentReportCard.jsx`). Docs: screens.md SCR-83/84/91, permissions.md note 31,
+  business-rules §5 / §17, moderation-plan.md tab 5. Tested on the local throw-away DB.
+  - **Khanh:** `GroupCommentReportsPage.jsx` (FE-05) only had its card and delete dialog moved into the shared
+    `CommentReportCard.jsx` (same markup, ids `gcr-*`, same texts); behaviour for homeroom teachers unchanged.
+  - **Quoc (FE-09):** the `COMMENT_REPORT` notification link should now be `/moderation?tab=comments` (today
+    `/comment-reports`, which still works through the client redirect).
+  - **Recalled / deleted by the author after a report (27/11/2026, same branch, NOT merged; server + client, no schema
+    change, no new endpoint):** business-rules §17. A message recalled by its sender after a report: "Xác nhận vi phạm"
+    (action HIDE) writes the REPORT violation without touching the message, tells the sender (new text,
+    `moderationNotify.notifyContentHidden` `alreadyRemoved`), log detail `alreadyRemoved: true`; "Không vi phạm" (KEEP)
+    dismisses. A comment its author deletes keeps its pending reports; queue item flag `deletedByAuthorAfterReport`;
+    DELETE = "Xác nhận vi phạm" (violation + notice, no second delete), DISMISS = "Không vi phạm". Files:
+    `modules/moderation/moderation.service.js`, `utils/commentReports.js` (shared with FE-05: `findReportedComment`,
+    `STILL_THERE`, `listReports`, `resolvePendingReports`, `resolveReport`), `utils/moderationNotify.js`,
+    `schoolposts.service.js`, client `MessageReportsTab.jsx`, `CommentReportCard.jsx`, both comment report pages.
+    Tested on the local throw-away DB; `npm test` 87/87.
+    - **Khanh:** `posts.service.js` – `deleteComment` unchanged (only a comment line: `resolvePendingReports` itself now
+      skips a comment deleted by its author), `resolveGroupCommentReport` sends the new notice when
+      `violationConfirmed` and returns that flag. `GroupCommentReportsPage.jsx`: the toast comes from the shared
+      `decisionToast`; the card shows the pill and the two buttons for such a comment. Homeroom teachers now see, in
+      their queue, class comments the author deleted after a report.
+  - **System Admin settings page (27/11/2026, same branch, NOT merged):** the "Khác" group is gone – only the keys in
+    `META` are shown and sent; `moderation.enabled` / `moderation.context_window` added to `NOT_ON_PAGE` (not listed,
+    `PATCH` refuses them with `MSG_SETTINGS_INVALID` / `UNKNOWN`); values in the DB unchanged. **Linh:** touches
+    `SystemSettingsPage.jsx` and `settings.service.js` (FE-13).
+
 - **FE-09 links for the moderation notifications (27/11/2026, Quoc; owed from PR #24; committed to `develop`
   `f3cb5c0`):** `notifications.service.js`
   `LINK_SQL` + `CHAT` → `/chat/<groupId>` (author's "message hidden / shown again"), `MESSAGE_REPORT` →

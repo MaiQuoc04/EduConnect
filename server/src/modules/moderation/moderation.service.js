@@ -188,6 +188,8 @@ export async function listMessageReports(user, { status, page, pageSize }) {
             m.sent_at AS "sentAt",
             m.deleted_for_everyone_at IS NOT NULL AS "isDeleted",
             (m.deleted_for_everyone_at IS NOT NULL AND m.deleted_for_everyone_by IS NULL) AS "isModerated",
+            -- 27/11/2026: recalled by its sender after being reported – the decision is "violation or not"
+            (m.deleted_for_everyone_by = m.sender_id AND m.deleted_for_everyone_at > g.first_reported_at) AS "recalledAfterReport",
             (m.deleted_for_everyone_by IS NOT NULL) AS "isRecalled",
             g.report_count AS "reportCount", g.first_reported_at AS "firstReportedAt",
             g.last_reported_at AS "lastReportedAt",
@@ -365,7 +367,12 @@ export async function readReportContext(user, messageId, { reason } = {}) {
  *     'message:deleted' – the event FE-06 sends when a message is deleted for everyone – with isModerated: true.
  *     A message already deleted for everyone meanwhile is not changed: no violation, no notification, no event.
  *   - KEEP: reports → DISMISSED; nothing else changes, nobody is told.
- * Logged: MESSAGE_REPORT_RESOLVE { messageId, action, hasSupportNote }.
+ * Recalled by its sender after the report (27/11/2026, business-rules §17: recalling must not erase the evidence):
+ * the decision is "violation or not". HIDE = "Xác nhận vi phạm": the message is NOT touched (it stays recalled, its
+ * deleted_for_everyone_* unchanged, nobody sees it again), the REPORT violation is written, reports → RESOLVED, and the
+ * sender is told after COMMIT (notifyContentHidden alreadyRemoved; no 'message:deleted' – nothing changes in the
+ * chat). KEEP = "Không vi phạm": reports → DISMISSED, as above. The NEEDS_SUPPORT rules are the same.
+ * Logged: MESSAGE_REPORT_RESOLVE { messageId, action, hasSupportNote, alreadyRemoved? (true when recalled) }.
  */
 export async function resolveMessageReport(user, messageId, { action, supportNote }) {
   assertManager(user);
@@ -373,7 +380,8 @@ export async function resolveMessageReport(user, messageId, { action, supportNot
   const result = await withTransaction(async (client) => {
     const { rows: found } = await client.query(
       `SELECT message_id AS "messageId", group_id AS "groupId", sender_id AS "senderId",
-              deleted_for_everyone_at IS NOT NULL AS "isDeleted"
+              deleted_for_everyone_at IS NOT NULL AS "isDeleted",
+              COALESCE(deleted_for_everyone_by = sender_id, FALSE) AS "recalled"
        FROM messages WHERE message_id = $1 AND deleted_at IS NULL FOR UPDATE`,
       [messageId],
     );
@@ -410,7 +418,11 @@ export async function resolveMessageReport(user, messageId, { action, supportNot
       );
     }
     let hidden = false;
-    if (action === 'HIDE') {
+    let confirmed = false; // a violation confirmed on a message its sender recalled after the report
+    if (action === 'HIDE' && message.recalled) {
+      await recordReportViolation(client, { contentType: 'MESSAGE', messageId, authorId: message.senderId, category });
+      confirmed = true;
+    } else if (action === 'HIDE') {
       const { rowCount } = await client.query(
         'UPDATE messages SET deleted_for_everyone_at = NOW() WHERE message_id = $1 AND deleted_for_everyone_at IS NULL',
         [messageId],
@@ -426,7 +438,10 @@ export async function resolveMessageReport(user, messageId, { action, supportNot
        WHERE message_id = $1 AND status = 'PENDING' AND deleted_at IS NULL`,
       [messageId, user.userId, status],
     );
-    return { messageId, groupId: message.groupId, senderId: message.senderId, action, status, resolvedCount, hidden, category, hasSupportNote: Boolean(note) };
+    return {
+      messageId, groupId: message.groupId, senderId: message.senderId, action, status, resolvedCount, hidden, confirmed,
+      alreadyRemoved: message.recalled, category, hasSupportNote: Boolean(note),
+    };
   });
 
   await logActivity({
@@ -434,8 +449,18 @@ export async function resolveMessageReport(user, messageId, { action, supportNot
     action: 'MESSAGE_REPORT_RESOLVE',
     targetType: 'MESSAGE',
     targetId: messageId,
-    detail: { messageId, action, hasSupportNote: result.hasSupportNote },
+    detail: { messageId, action, hasSupportNote: result.hasSupportNote, ...(result.alreadyRemoved && { alreadyRemoved: true }) },
   });
+  if (result.confirmed) {
+    notifyContentHidden({
+      contentType: 'MESSAGE',
+      authorId: result.senderId,
+      postTarget: { column: 'group_id', id: result.groupId },
+      category: result.category,
+      source: 'REPORT',
+      alreadyRemoved: true,
+    }).catch((err) => console.error(`[moderation] confirmed-violation notification #${messageId} not sent:`, err?.message));
+  }
   if (result.hidden) {
     notifyContentHidden({
       contentType: 'MESSAGE',
@@ -454,8 +479,8 @@ export async function resolveMessageReport(user, messageId, { action, supportNot
       });
     })().catch((err) => console.error(`[moderation] message:deleted #${messageId} not sent:`, err?.message));
   }
-  const { messageId: id, status, resolvedCount, hidden, action: decided } = result;
-  return { messageId: id, action: decided, status, resolvedCount, hidden };
+  const { messageId: id, status, resolvedCount, hidden, action: decided, alreadyRemoved } = result;
+  return { messageId: id, action: decided, status, resolvedCount, hidden, alreadyRemoved };
 }
 
 /**

@@ -43,6 +43,7 @@ const KINDS = Object.freeze({
   SCHOOL_COMMENT: {
     column: FEED_COLUMNS.SCHOOL_POST,
     noun: 'Bình luận',
+    removed: 'đã xoá', // alreadyRemoved (27/11/2026): what the author did to it before the decision
     advice: 'Vui lòng giữ lời lẽ phù hợp khi bình luận.',
     type: 'SCHOOL_POST',
     targetType: 'SCHOOL_POST',
@@ -54,6 +55,7 @@ const KINDS = Object.freeze({
   GROUP_COMMENT: {
     column: FEED_COLUMNS.GROUP_POST,
     noun: 'Bình luận',
+    removed: 'đã xoá',
     advice: 'Vui lòng giữ lời lẽ phù hợp khi bình luận.',
     type: 'GROUP_POST',
     targetType: 'POST',
@@ -75,6 +77,7 @@ const KINDS = Object.freeze({
   MESSAGE: {
     column: 'group_id',
     noun: 'Tin nhắn',
+    removed: 'đã thu hồi',
     advice: 'Vui lòng giữ lời lẽ phù hợp khi nhắn tin.',
     type: 'CHAT',
     targetType: 'CHAT',
@@ -109,9 +112,15 @@ const inTransaction = (db, fn) => (db === pool ? withTransaction(fn) : fn(db));
  *   ({ column: 'group_id', id })
  *   source (phase 5): 'REPORT' when a School Manager hid it after reports – the text then says so instead of "the
  *   system hid it". It never mentions a "Cần được hỗ trợ" report or who reported.
+ *   alreadyRemoved (27/11/2026): the author recalled the message / deleted the comment AFTER it was reported and the
+ *   moderator confirmed the violation – nothing was hidden, so the text says it was confirmed instead ("Tin nhắn bạn
+ *   đã thu hồi … được xác nhận vi phạm quy chuẩn cộng đồng (<loại>)."). The other texts are unchanged.
  * @returns {Promise<number>} the notification id
  */
-export async function notifyContentHidden({ contentType, authorId, postTarget, category, source = 'AUTO' }, db = pool) {
+export async function notifyContentHidden(
+  { contentType, authorId, postTarget, category, source = 'AUTO', alreadyRemoved = false },
+  db = pool,
+) {
   const kind = KINDS[contentType];
   if (!kind) throw new Error(`moderationNotify: unknown content type ${contentType}`); // programming error
   if (postTarget?.column !== kind.column) throw new Error(`moderationNotify: ${contentType} needs a ${kind.column} target`);
@@ -119,9 +128,11 @@ export async function notifyContentHidden({ contentType, authorId, postTarget, c
   if (!label) throw new Error(`moderationNotify: unknown category ${category}`);
   return inTransaction(db, async (client) => {
     const where = await kind.place(client, postTarget.id, authorId);
-    const title = `${kind.noun} của bạn đã bị ẩn`;
     const how = source === 'REPORT' ? 'đã bị ẩn sau khi được báo cáo và xem xét' : 'đã được hệ thống tự động ẩn';
-    const detail = `${kind.noun} của bạn ${where} ${how} vì vi phạm quy chuẩn cộng đồng: ${label}. ${kind.advice}`;
+    const title = alreadyRemoved ? `${kind.noun} của bạn được xác nhận vi phạm` : `${kind.noun} của bạn đã bị ẩn`;
+    const detail = alreadyRemoved
+      ? `${kind.noun} bạn ${kind.removed} ${where} được xác nhận vi phạm quy chuẩn cộng đồng (${label}). ${kind.advice}`
+      : `${kind.noun} của bạn ${where} ${how} vì vi phạm quy chuẩn cộng đồng: ${label}. ${kind.advice}`;
     const { rows } = await client.query(
       `INSERT INTO notifications (type, title, detail, is_personal, target_type, target_id, created_by, created_at)
        VALUES ($1, $2, $3, TRUE, $4, $5, NULL, NOW())

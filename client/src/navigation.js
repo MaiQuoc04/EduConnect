@@ -9,9 +9,9 @@ export const NAV_SECTIONS = [
       // FE-08 School Feed (SCR-02, UC-58). System Admin sees no content (business-rules §1).
       { to: '/school-feed', label: 'Bảng tin trường', icon: 'campaign', roles: ['SCHOOL_MANAGER', 'TEACHER', 'STUDENT', 'PARENT'] },
       { to: '/school-events', label: 'Lịch của trường', icon: 'event_upcoming', roles: ['SCHOOL_MANAGER', 'TEACHER', 'STUDENT', 'PARENT'] }, // FE-10 school calendar (Dung)
-      // FE-08 reported comments of the school feed (17/11/2026). School Manager only.
-      { to: '/comment-reports', label: 'Báo cáo bình luận', icon: 'flag', roles: ['SCHOOL_MANAGER'] },
-      // FE-08 moderation (25/11/2026): violations, rules, message reports. School Manager only; badge = message reports waiting.
+      // FE-08 moderation (25/11/2026): violations, rules, message reports. School Manager only. 27/11/2026: also the
+      // comment reports (school feed + teacher group), so this is the School Manager's only moderation item; badge =
+      // message + comment reports waiting. The old pages /comment-reports, /group-comment-reports lead here (App.jsx).
       { to: '/moderation', label: 'Quy chuẩn cộng đồng', icon: 'shield', roles: ['SCHOOL_MANAGER'] },
     ],
   },
@@ -42,9 +42,10 @@ export const NAV_SECTIONS = [
     label: 'Cộng đồng',
     items: [
       { to: '/groups', label: 'Nhóm của tôi', icon: 'groups', roles: ['TEACHER', 'STUDENT', 'PARENT'] }, // FE-04 UC-29
-      // FE-05 reported comments of the group feeds (19/11/2026): homeroom teachers (their class feed), the School Manager
-      // (teacher group). A teacher who moderates no feed sees an empty page that says so.
-      { to: '/group-comment-reports', label: 'Báo cáo bình luận nhóm', icon: 'flag', roles: ['TEACHER', 'SCHOOL_MANAGER'] },
+      // FE-05 reported comments of the group feeds (19/11/2026): homeroom teachers (their class feed). A teacher who
+      // moderates no feed sees an empty page that says so. FE-08 Anh 27/11/2026: the School Manager handles the teacher
+      // group's reports in "Quy chuẩn cộng đồng" (tab "Báo cáo bình luận"), so the item is for teachers only.
+      { to: '/group-comment-reports', label: 'Báo cáo bình luận nhóm', icon: 'flag', roles: ['TEACHER'] },
       { to: '/extracurricular', label: 'Ngoại khoá', icon: 'hiking', roles: ['TEACHER', 'STUDENT', 'PARENT'] }, // FE-07 UC-50..57
       { to: '/chat', label: 'Trò chuyện', icon: 'forum', roles: ['SCHOOL_MANAGER', 'TEACHER', 'STUDENT', 'PARENT'] }, // FE-06 UC-47 (SM: teacher group)
     ],

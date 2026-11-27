@@ -1145,7 +1145,8 @@ export async function deleteSchoolPostComment(user, schoolPostId, commentId) {
     }
     await feed.softDeleteComment(post.target, commentId, user.userId, client);
     // Comment reports (17/11/2026): a comment gone has nothing left to decide – its pending reports are closed
-    // (RESOLVED, by whoever deleted it) so the School Manager's queue never keeps them.
+    // (RESOLVED, by whoever deleted it) so the School Manager's queue never keeps them. 27/11/2026: not when its author
+    // deleted it – the reports stay for the School Manager to decide "violation or not" (resolvePendingReports).
     await reports.resolvePendingReports(commentId, user.userId, client);
     return { commentId, isDeleted: true, commentCount: await commentCountOf(post.schoolPostId, client) };
   });
@@ -1235,6 +1236,14 @@ export async function resolveSchoolCommentReport(user, commentId, action, { supp
       emitToSchoolPost(result.target.id, 'schoolpost:comment-deleted', { schoolPostId: result.target.id, commentId }),
     );
   }
-  const { commentDeleted, resolvedCount, status } = result;
-  return { commentId, status, resolvedCount, commentDeleted };
+  // 27/11/2026 (business-rules §17): the author had deleted it after the report and the violation is confirmed – the
+  // author is told (no content); nothing changes in the thread, so no real-time event.
+  if (result.violationConfirmed) {
+    sendSafely(`confirmed-violation notification #${commentId}`, () =>
+      notifyContentHidden({ contentType: result.contentType, authorId: result.authorId, postTarget: result.target,
+        category: result.reason, source: 'REPORT', alreadyRemoved: true }),
+    );
+  }
+  const { commentDeleted, resolvedCount, status, violationConfirmed } = result;
+  return { commentId, status, resolvedCount, commentDeleted, violationConfirmed };
 }

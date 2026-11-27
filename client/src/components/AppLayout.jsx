@@ -20,11 +20,12 @@ export default function AppLayout() {
   const sections = navFor(activeRole);
   // FE-06 (20/11/2026): unread chat messages on "Trò chuyện", for the roles that have it in the menu.
   const chatUnread = useChatUnreadTotal(sections.some((s) => s.items.some((i) => i.to === '/chat')));
-  // FE-08 moderation (25/11/2026): message reports waiting on "Quy chuẩn cộng đồng", highlighted when one is "Cần được hỗ trợ".
+  // FE-08 moderation (25/11/2026): reports waiting on "Quy chuẩn cộng đồng" (messages, and since 27/11/2026 comments of
+  // the school feed and the teacher group), highlighted when one is "Cần được hỗ trợ".
   const moderation = useModerationBadge(sections.some((s) => s.items.some((i) => i.to === '/moderation')));
   const BADGES = { '/chat': chatUnread, '/moderation': moderation.pendingCount };
-  const BADGE_TEXT = { '/moderation': 'báo cáo tin nhắn đang chờ' }; // default: unread messages (FE-06)
-  const HIGHLIGHT = { '/moderation': moderation.supportCount > 0 };
+  const BADGE_TEXT = { '/moderation': 'báo cáo đang chờ xử lý' }; // default: unread messages (FE-06)
+  const HIGHLIGHT = { '/moderation': moderation.hasSupport };
 
   useEffect(() => setNavOpen(false), [location.pathname]);
 
