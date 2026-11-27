@@ -338,10 +338,11 @@ export async function listCommentReports(req, res) {
   );
 }
 
-// PATCH /comment-reports/:commentId { action: 'DELETE' | 'DISMISS' } (School Manager).
+// PATCH /comment-reports/:commentId { action: 'DELETE' | 'DISMISS', supportNote? } (School Manager). supportNote
+// ("Kết quả hỗ trợ", moderation 25/11/2026) is required when a pending report is NEEDS_SUPPORT (checked in the core).
 export async function resolveCommentReport(req, res) {
   const commentId = parseId(req.params.commentId, 'commentId');
-  const body = jsonBody(req, ['action']);
+  const body = jsonBody(req, ['action', 'supportNote']);
   if (!reportsCore.REPORT_ACTIONS.includes(body.action)) throw invalid('action');
-  res.json(await service.resolveSchoolCommentReport(req.user, commentId, body.action));
+  res.json(await service.resolveSchoolCommentReport(req.user, commentId, body.action, { supportNote: body.supportNote }));
 }

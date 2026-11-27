@@ -86,8 +86,10 @@ export async function listGroupCommentReports(params, { signal } = {}) {
   return (await api.get('/group-comment-reports', { params, signal })).data;
 }
 
-export async function resolveGroupCommentReport(commentId, action) {
-  return (await api.patch(`/group-comment-reports/${encodeURIComponent(commentId)}`, { action })).data;
+// supportNote (moderation, 25/11/2026): "Kết quả hỗ trợ", sent only when the item has a "Cần được hỗ trợ" report.
+export async function resolveGroupCommentReport(commentId, action, supportNote) {
+  const body = supportNote === undefined ? { action } : { action, supportNote };
+  return (await api.patch(`/group-comment-reports/${encodeURIComponent(commentId)}`, body)).data;
 }
 
 // UC-44 / UC-45 / UC-46 (moderator) -> the post as it is now

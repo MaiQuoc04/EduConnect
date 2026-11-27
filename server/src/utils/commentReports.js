@@ -1,6 +1,7 @@
 import { pool, withTransaction } from '../config/db.js';
 import { AppError, badRequest, notFound } from './AppError.js';
 import { FEED_COLUMNS, softDeleteComment } from './feedInteractions.js';
+import { recordReportViolation, reportCategory } from './moderationViolations.js';
 
 // Reports of feed comments (comment_reports, patch_v0.3_comment_reports.sql, 17/11/2026) – the data layer shared by
 // FE-08 School Feed (owner Anh, first user) and FE-05 Group Feed (owner Khanh). Same contract as feedInteractions.js:
@@ -37,14 +38,30 @@ import { FEED_COLUMNS, softDeleteComment } from './feedInteractions.js';
 //   comments   withReportedByMe(tree, userId) after feed.listComments adds reportedByMe to each node (opt-in).
 //   UC-66-like deletes (author / moderator deletes from the thread): call resolvePendingReports(commentId, userId,
 //              client) after feed.softDeleteComment, so the queue never keeps reports of a comment already gone.
+//
+// Moderation phase 5 (25/11/2026, docs/moderation-plan.md "Luồng báo cáo"): reason NEEDS_SUPPORT ("Cần được hỗ trợ":
+// someone may need help – self-harm, bullying, abuse, a crisis). It is not a violation:
+//   - it goes first in the queue (listReports: hasNeedsSupport);
+//   - deciding a comment with a pending NEEDS_SUPPORT report needs a supportNote (what was done to help), written on
+//     those reports; when EVERY pending report is NEEDS_SUPPORT only DISMISS ("Ghi nhận") is allowed, never DELETE;
+//   - the author is never told about it, and it never counts as a violation (the category of a DELETE comes from the
+//     other reasons: moderationViolations.reportCategory).
+// A DELETE decided from reports also writes a moderation_violations row (source REPORT).
+// Who is told about a new NEEDS_SUPPORT report: school post comments – every School Manager at once
+// (schoolposts.service reportSchoolPostComment → moderationNotify.notifySupportRequest).
+// ASSUMPTION: group post comments (FE-05) only go first in the moderator's queue (UC-131), with no notification: telling
+// the homeroom teacher at once would need a change in FE-05's module (Khanh), which is not part of this phase.
 
 export const REPORT_REASONS = Object.freeze([
   'INAPPROPRIATE_LANGUAGE',
   'HARASSMENT',
   'SPAM',
   'FALSE_INFORMATION',
+  'NEEDS_SUPPORT',
   'OTHER',
-]); // comment_reports_reason_check
+]); // comment_reports_reason_check (NEEDS_SUPPORT: patch_v0.3_moderation.sql)
+export const NEEDS_SUPPORT = 'NEEDS_SUPPORT';
+export const MAX_SUPPORT_NOTE_LENGTH = 1000; // comment_reports.support_note VARCHAR(1000)
 export const REPORT_STATUSES = Object.freeze(['PENDING', 'RESOLVED', 'DISMISSED']); // comment_reports_status_check
 export const REPORT_ACTIONS = Object.freeze(['DELETE', 'DISMISS']);
 export const REPORT_SOURCES = Object.freeze({ SCHOOL_POST: 'SCHOOL_POST', GROUP_POST: 'GROUP_POST', ALL: 'ALL' });
@@ -59,7 +76,26 @@ const REASON_LABELS = {
   SPAM: 'Spam, quảng cáo hoặc nội dung lặp lại',
   FALSE_INFORMATION: 'Thông tin sai sự thật',
   OTHER: 'Lý do khác',
+  // never used in a notification (the author is never told about it); here so the table is complete
+  NEEDS_SUPPORT: 'Cần được hỗ trợ',
 };
+
+/**
+ * The "Kết quả hỗ trợ" of a decision on content with a pending NEEDS_SUPPORT report (comments here, messages in
+ * modules/moderation): required then – 400 MSG_SUPPORT_NOTE_REQUIRED { field: 'supportNote' } when missing or blank;
+ * text, NFC, trimmed, at most 1000 characters (400 MSG_INVALID_PARAM). Without such a report it is ignored (null).
+ * @returns {string | null}
+ */
+export function parseSupportNote(value, required) {
+  if (!required) return null;
+  if (value !== undefined && value !== null && typeof value !== 'string') throw invalid('supportNote');
+  const note = (value ?? '').normalize('NFC').trim();
+  if (!note) {
+    throw badRequest('MSG_SUPPORT_NOTE_REQUIRED', 'Please write what was done to help.', { field: 'supportNote' });
+  }
+  if ([...note].length > MAX_SUPPORT_NOTE_LENGTH) throw invalid('supportNote');
+  return note;
+}
 
 const invalid = (field) => badRequest('MSG_INVALID_PARAM', `Invalid value for "${field}".`, { field });
 const commentNotFound = () => notFound('MSG_COMMENT_NOT_FOUND', 'The comment was not found.');
@@ -201,14 +237,19 @@ function sourceSql({ source, groupIds }, params) {
 
 // A pending report of a comment or a post already deleted has nothing left to decide: it is not shown in the queue
 // and not counted (FE-08 closes them when the comment is deleted; this also covers a post deleted meanwhile).
-const STILL_THERE = `c.deleted_at IS NULL AND sp.deleted_at IS NULL AND p.deleted_at IS NULL`;
+// Moderation (25/11/2026): except a NEEDS_SUPPORT report – the person who may need help still does when the comment is
+// gone, so it stays in the queue until someone records what was done (resolvePendingReports leaves it pending).
+const STILL_THERE = `(r.reason = 'NEEDS_SUPPORT' OR (c.deleted_at IS NULL AND sp.deleted_at IS NULL AND p.deleted_at IS NULL))`;
 
 // The reported comments of one feed in one status, one row per comment (alias g).
 function groupedSql(filter, params) {
   params.push(filter.status);
   const status = `$${params.length}`;
   return `SELECT r.comment_id, COUNT(*) AS report_count, MIN(r.created_at) AS first_reported_at,
-                 MAX(r.created_at) AS last_reported_at, MAX(r.resolved_at) AS resolved_at
+                 MAX(r.created_at) AS last_reported_at, MAX(r.resolved_at) AS resolved_at,
+                 BOOL_OR(r.reason = 'NEEDS_SUPPORT') AS has_needs_support,
+                 BOOL_AND(r.reason = 'NEEDS_SUPPORT') AS needs_support_only,
+                 MAX(r.support_note) AS support_note
           FROM comment_reports r
           JOIN comments c ON c.comment_id = r.comment_id
           LEFT JOIN school_posts sp ON sp.school_post_id = c.school_post_id
@@ -226,7 +267,9 @@ function groupedSql(filter, params) {
  *   FE-08 (School Manager): { source: 'SCHOOL_POST' } – group comments never come back (§1).
  *   FE-05 (moderator):      { source: 'GROUP_POST', groupIds: [the groups they moderate] }.
  * Order: PENDING oldest first report first (a queue: nothing waits forever); RESOLVED / DISMISSED newest decision first.
- * PENDING leaves out comments (or posts) already deleted: nothing is left to decide.
+ * Moderation (25/11/2026): in PENDING a comment with a NEEDS_SUPPORT report always comes first. Each item also has
+ * hasNeedsSupport, needsSupportOnly (then only DISMISS – "Ghi nhận" – is allowed) and supportNote (once decided).
+ * PENDING leaves out comments (or posts) already deleted: nothing is left to decide (except NEEDS_SUPPORT reports).
  * @returns {Promise<{ items: object[], page: number, pageSize: number, total: number }>} each item:
  *   { commentId, content, commentCreatedAt, isDeleted, authorId, authorName, authorAvatarUrl,
  *     source: 'SCHOOL_POST' | 'GROUP_POST', postId, postTitle (school post) | null, postExcerpt (group post) | null,
@@ -248,7 +291,7 @@ export async function listReports(filter, db = pool) {
   const grouped = groupedSql(filter, params);
   params.push(pageSize, (page - 1) * pageSize);
   const order = status === 'PENDING'
-    ? 'g.first_reported_at, g.comment_id'
+    ? 'g.has_needs_support DESC, g.first_reported_at, g.comment_id'
     : 'g.resolved_at DESC NULLS LAST, g.comment_id DESC';
   const { rows } = await db.query(
     `WITH g AS (${grouped})
@@ -257,11 +300,14 @@ export async function listReports(filter, db = pool) {
             c.author_id AS "authorId", au.full_name AS "authorName", au.avatar_url AS "authorAvatarUrl",
             CASE WHEN c.school_post_id IS NOT NULL THEN 'SCHOOL_POST' ELSE 'GROUP_POST' END AS "source",
             COALESCE(c.school_post_id, c.post_id) AS "postId", sp.title AS "postTitle",
-            LEFT(p.content, 120) AS "postExcerpt", p.group_id AS "groupId", gr.group_name AS "groupName",
+            -- moderation (27/11/2026): the text of a group post its author edited into BLOCKED is theirs alone
+            CASE WHEN p.approval_status = 'BLOCKED' THEN NULL ELSE LEFT(p.content, 120) END AS "postExcerpt", p.group_id AS "groupId", gr.group_name AS "groupName",
             COALESCE(sp.deleted_at, p.deleted_at) IS NOT NULL AS "postDeleted",
             $1::varchar AS status, -- groupedSql pushes the status first: it is always $1
             g.report_count AS "reportCount", g.first_reported_at AS "firstReportedAt",
             g.last_reported_at AS "lastReportedAt", g.resolved_at AS "resolvedAt", rb.full_name AS "resolvedByName",
+            g.has_needs_support AS "hasNeedsSupport", g.needs_support_only AS "needsSupportOnly",
+            g.support_note AS "supportNote",
             (SELECT COALESCE(json_agg(json_build_object('reason', x.reason, 'count', x.n) ORDER BY x.n DESC, x.reason),
                              '[]'::json)
              FROM (SELECT r.reason, COUNT(*) AS n FROM comment_reports r
@@ -307,12 +353,15 @@ export async function countPendingReports(filter, db = pool) {
 /**
  * Marks every PENDING report of a comment RESOLVED (resolved_by, resolved_at = NOW()). For a comment deleted another
  * way (FE-08 UC-66, FE-05 delete from the thread): call it in the same transaction, right after softDeleteComment.
+ * ASSUMPTION (moderation, 25/11/2026): a NEEDS_SUPPORT report is NOT closed this way – deleting the comment does not
+ * help the person who may need help, and closing it needs a "Kết quả hỗ trợ". It stays PENDING (still listed, see
+ * STILL_THERE) until a moderator records one with resolveReport.
  * @returns {Promise<number>} how many reports were closed
  */
 export async function resolvePendingReports(commentId, resolvedBy, db = pool) {
   const { rowCount } = await db.query(
     `UPDATE comment_reports SET status = 'RESOLVED', resolved_by = $2, resolved_at = NOW()
-     WHERE comment_id = $1 AND status = 'PENDING' AND deleted_at IS NULL`,
+     WHERE comment_id = $1 AND status = 'PENDING' AND deleted_at IS NULL AND reason <> 'NEEDS_SUPPORT'`,
     [commentId, resolvedBy],
   );
   return rowCount;
@@ -329,24 +378,35 @@ export async function resolvePendingReports(commentId, resolvedBy, db = pool) {
  * (commentDeleted false: no second notification).
  * The notification is NOT sent here: the caller sends it AFTER COMMIT with notifyCommentRemoved (fire and forget).
  * FE-05 calls it exactly the same way.
+ * Moderation (25/11/2026), options.supportNote ("Kết quả hỗ trợ"):
+ *   - a pending NEEDS_SUPPORT report → supportNote required (400 MSG_SUPPORT_NOTE_REQUIRED), written on those reports;
+ *   - EVERY pending report NEEDS_SUPPORT → only DISMISS ("Ghi nhận"); DELETE → 400 MSG_REPORT_SUPPORT_ONLY;
+ *   - DELETE writes a moderation_violations row (source REPORT, category = reportCategory of the other reasons).
  * @param {number} commentId
  * @param {number} resolvedBy the moderator's user id
  * @param {'DELETE' | 'DISMISS'} action
+ * @param {import('pg').PoolClient | import('pg').Pool} [db]
+ * @param {{ supportNote?: string }} [options]
  * @returns {Promise<{ commentId: number, action: string, status: 'RESOLVED' | 'DISMISSED', resolvedCount: number,
- *   commentDeleted: boolean, authorId: number, target: { column: string, id: number }, reason: string }>}
- *   reason = the most frequent reason of the closed reports (for the notification).
+ *   commentDeleted: boolean, authorId: number, target: { column: string, id: number }, reason: string | null }>}
+ *   reason = the most frequent reason of the closed reports OTHER than NEEDS_SUPPORT (for the notification, which
+ *   never mentions a "Cần được hỗ trợ" report); null when every report was NEEDS_SUPPORT.
  */
-export async function resolveReport(commentId, resolvedBy, action, db = pool) {
+export async function resolveReport(commentId, resolvedBy, action, db = pool, { supportNote } = {}) {
   if (!REPORT_ACTIONS.includes(action)) throw new Error(`commentReports: unknown action ${action}`);
   return inTransaction(db, async (client) => {
     const comment = await findReportedComment(commentId, { forUpdate: true }, client);
     if (!comment) throw notFound('MSG_REPORT_NOT_FOUND', 'No report was found for this comment.');
-    const { rows: pending } = await client.query(
-      `SELECT reason, COUNT(*) AS n FROM comment_reports
+    // Locked: two moderators deciding together cannot both close the same reports.
+    const { rows: pendingRows } = await client.query(
+      `SELECT report_id, reason FROM comment_reports
        WHERE comment_id = $1 AND status = 'PENDING' AND deleted_at IS NULL
-       GROUP BY reason ORDER BY n DESC, reason`,
+       FOR UPDATE`,
       [commentId],
     );
+    const counts = new Map();
+    for (const r of pendingRows) counts.set(r.reason, (counts.get(r.reason) ?? 0) + 1);
+    const pending = [...counts].map(([reason, n]) => ({ reason, n })).sort((a, b) => b.n - a.n || a.reason.localeCompare(b.reason));
     if (!pending.length) {
       const { rows } = await client.query(
         'SELECT 1 FROM comment_reports WHERE comment_id = $1 AND deleted_at IS NULL LIMIT 1',
@@ -357,23 +417,42 @@ export async function resolveReport(commentId, resolvedBy, action, db = pool) {
       }
       throw notFound('MSG_REPORT_NOT_FOUND', 'No report was found for this comment.');
     }
+    const hasSupport = counts.has(NEEDS_SUPPORT);
+    const category = reportCategory(pending.map((p) => ({ reason: p.reason, count: p.n })));
+    const note = parseSupportNote(supportNote, hasSupport);
+    if (action === 'DELETE' && !category) {
+      throw badRequest('MSG_REPORT_SUPPORT_ONLY', 'Reports that only ask for support are recorded, not deleted.', {
+        field: 'action',
+      });
+    }
+    // "Kết quả hỗ trợ" on the NEEDS_SUPPORT reports first: they are closed together with the others below.
+    if (note) {
+      await client.query(
+        `UPDATE comment_reports SET support_note = $2
+         WHERE comment_id = $1 AND status = 'PENDING' AND deleted_at IS NULL AND reason = 'NEEDS_SUPPORT'`,
+        [commentId, note],
+      );
+    }
     const target = { column: comment.column, id: comment.postId };
     let commentDeleted = false;
-    let resolvedCount;
-    let status;
     if (action === 'DELETE') {
       commentDeleted = comment.isDeleted ? false : await softDeleteComment(target, commentId, resolvedBy, client);
-      resolvedCount = await resolvePendingReports(commentId, resolvedBy, client);
-      status = 'RESOLVED';
-    } else {
-      const { rowCount } = await client.query(
-        `UPDATE comment_reports SET status = 'DISMISSED', resolved_by = $2, resolved_at = NOW()
-         WHERE comment_id = $1 AND status = 'PENDING' AND deleted_at IS NULL`,
-        [commentId, resolvedBy],
-      );
-      resolvedCount = rowCount;
-      status = 'DISMISSED';
+      if (commentDeleted) {
+        await recordReportViolation(client, {
+          contentType: comment.column === FEED_COLUMNS.SCHOOL_POST ? 'SCHOOL_COMMENT' : 'GROUP_COMMENT',
+          commentId,
+          authorId: comment.authorId,
+          category,
+        });
+      }
     }
+    const status = action === 'DELETE' ? 'RESOLVED' : 'DISMISSED';
+    // Every pending report of the comment, NEEDS_SUPPORT included (resolvePendingReports leaves those alone).
+    const { rowCount: resolvedCount } = await client.query(
+      `UPDATE comment_reports SET status = $3, resolved_by = $2, resolved_at = NOW()
+       WHERE comment_id = $1 AND status = 'PENDING' AND deleted_at IS NULL`,
+      [commentId, resolvedBy, status],
+    );
     return {
       commentId,
       action,
@@ -382,7 +461,7 @@ export async function resolveReport(commentId, resolvedBy, action, db = pool) {
       commentDeleted,
       authorId: comment.authorId,
       target,
-      reason: pending[0].reason,
+      reason: category,
     };
   });
 }

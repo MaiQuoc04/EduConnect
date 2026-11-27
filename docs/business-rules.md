@@ -10,7 +10,7 @@ The app serves **one high school** (grades 10–12). Users never self-register.
 | Role code | Who | Scope |
 |---|---|---|
 | `SYSTEM_ADMIN` | IT admin | Accounts and system only: create / import / export accounts, change login identifiers, reset passwords and lock / unlock **any** account, system settings, maintenance. **Cannot see any content** (feeds, chats, grades, school posts), is in no group, cannot create teams. |
-| `SCHOOL_MANAGER` | Principal / office staff (several, equal rights) | All school business. Views and updates student / parent / teacher profiles (cannot create or delete them, except importing teacher accounts, UC-116, §4). Resets passwords and locks / unlocks student, parent and teacher accounts. Manages the **school-wide teacher group** (pin / hide / approve) and the school feed. **Does not see class feeds or class chats.** Private messages only with people in the teacher group. Views grades and academic levels of the whole school (read only), unlocks grades, views grade history, corrects attendance after the day, sees school-wide attendance statistics. |
+| `SCHOOL_MANAGER` | Principal / office staff (several, equal rights) | All school business. Views and updates student / parent / teacher profiles (cannot create or delete them, except importing teacher accounts, UC-116, §4). Resets passwords and locks / unlocks student, parent and teacher accounts. Manages the **school-wide teacher group** (pin / hide / approve) and the school feed. **Does not see class feeds or class chats** – one deliberate exception: content reached through a report or a violation, §17 (25/11/2026). Private messages only with people in the teacher group. Views grades and academic levels of the whole school (read only), unlocks grades, views grade history, corrects attendance after the day, sees school-wide attendance statistics. |
 | `TEACHER` | Teachers | Teaches assigned classes / subjects. A teacher becomes **Homeroom Teacher** of a class when `classes.homeroom_teacher_id` points to them – this is **not a separate role**. |
 | `STUDENT` | Students | Own data, own classes and groups. |
 | `PARENT` | Parents / guardians | Their children's data; picks a child first on child-specific screens. |
@@ -322,25 +322,28 @@ Boundaries that are easy to get wrong:
   switched off per group (`groups.require_approval`). Posts by the homeroom teacher are auto-approved.
 - Moderators: homeroom teacher for class groups, SM for the teacher group. They pin, **hide posts**, approve /
   reject posts and **delete any comment** in the group.
-- Comments are **deleted (soft), never hidden**. Who can delete a comment: its author, the author of the post, or
-  the group moderator.
+- Comments are **deleted (soft)** by people. Who can delete a comment: its author, the author of the post, or the
+  group moderator. A comment that matches a moderation rule is **hidden automatically** when it is sent – only its
+  author still sees it – and nobody deletes it while it is hidden; only the School Manager unhides it (§17,
+  25/11/2026).
 - Comments support **multi-level replies** (`parent_comment_id`).
 - Only **Like** (no other reactions). One like per user per post; unlike removes the row.
 - **Comment likes and reports** (Khanh's decision 19/11/2026, the same as the school feed, §8 / FE-08 17/11/2026):
   - A comment can be **liked** (one per person, again = unlike) by whoever may interact with the post (a live post of
     an open school year); not on a hidden, pending or last year's post. No notification.
   - A comment can be **reported** (reason: inappropriate language, harassment, spam, false information, other – a
-    note is required for "other", ≤ 500 characters) by whoever may interact with the post, **except the group's
+    note is required for "other", ≤ 500 characters; + "Cần được hỗ trợ" `NEEDS_SUPPORT`, §17, 25/11/2026) by whoever may interact with the post, **except the group's
     moderator**, who deletes comments directly. **The moderator's own comments cannot be reported** (option A, Khanh
     19/11/2026: the report would land in their own queue; a complaint about the homeroom teacher, or a School Manager in
     the teacher group, goes to the school directly). Not one's own comment; once per person (again changes nothing). A
-    report hides nothing (comments are deleted, never hidden). **Nobody learns who reported**, the moderator neither.
+    report hides nothing (the moderator decides: delete or keep). **Nobody learns who reported**, the moderator neither.
   - **"Báo cáo bình luận nhóm"** (menu, `/group-comment-reports`): the moderator's queue – the homeroom teacher sees
     the comments reported in their class's feed, the School Manager those of the teacher group (never a school post:
     that queue is FE-08's "Báo cáo bình luận"). One card per comment with the number of reports, the reasons and
     notes, the group and the post. **Xoá bình luận** deletes it (soft) and closes its reports; its author gets a
     personal notification that names nobody. **Bỏ qua** keeps it and closes the reports. A comment deleted from the
-    thread (author, post author, moderator) closes its pending reports too. Tabs: waiting, deleted, dismissed. No
+    thread (author, post author, moderator) closes its pending reports too – except "Cần được hỗ trợ" reports, which
+    stay open (§17). Tabs: waiting, deleted, dismissed. No
     notification to the moderator when a report arrives (as the school feed today).
 - Images, files and videos can be attached to posts and messages: images / files ≤ 10 MB, video ≤ 50 MB.
   Files live in cloud storage; the DB stores the URL (`attachments`).
@@ -354,10 +357,24 @@ Boundaries that are easy to get wrong:
     `APPROVED` and shows "Đã chỉnh sửa" (`updated_at`).
   - **Hidden** (`is_hidden`): the author still sees it, labelled "Bài viết đã bị ẩn bởi người kiểm duyệt"; other
     members do not. The moderator sees the list of hidden posts and can **unhide** one (it comes back as a normal
-    post). Only posts are hidden; comments are still only deleted.
+    post). Moderators hide posts only; a comment is hidden only by
+    the automatic check (§17).
     The author may **edit a hidden post** (agreed by the lead 12/11/2026): saving unhides it and sends it to `PENDING`
     **even when the group has approval off**, so it comes back to the feed only when the moderator approves it (a
     moderator editing their own hidden post: approved at once). Saving without any change keeps it hidden.
+  - **Not posted – community standards** (`BLOCKED`, Anh 27/11/2026, §17): a post whose text matches a moderation
+    rule when it is created or edited is **saved but not posted**, labelled "Chưa đăng – vi phạm quy chuẩn cộng
+    đồng". Only its **author** sees it (under "Bài của tôi", and in the form, with the category and the words to
+    change); the moderator does not (no queue, no hidden list, no detail), nor any other member. Nobody is notified,
+    not even the author (they see it on screen). The author may **edit** or **delete** it; it cannot be liked,
+    commented on, pinned, hidden, approved or rejected. Editing it with a clean text **posts it as a new post**: the
+    usual state (`APPROVED` with approval off and not hidden, else `PENDING`), the usual notification (members, or the
+    moderator), posting time = now, no "Đã chỉnh sửa". Editing any post (approved, pending, rejected, hidden) into a
+    text that breaks a rule makes it `BLOCKED` (it leaves the feed / queue and is unpinned; a hidden post keeps its
+    hidden mark, so once clean it still goes to the moderator). Saving a `BLOCKED` post without a change checks it
+    again: still matching → it stays `BLOCKED` and nothing is written; clean (the rule was changed or removed
+    meanwhile) → posted as a new post, as above. When no matched rule remains, the author sees "Quy chuẩn đã được cập
+    nhật…" instead of the words to change, and the save button stays enabled. The moderator's own posts and FE-07 activity posts are never checked; files are never checked.
   - **Feed order** (Khanh, 12/11/2026): pinned posts first, then newest first by posting time. A post **edited and
     sent again** (hidden, rejected, or approved then edited while approval is on) that the moderator approves again
     **counts as a new post**: its posting time becomes the time of that approval (top of the feed, today's time) and
@@ -902,7 +919,10 @@ Boundaries that are easy to get wrong:
   settings page; the row stays in `system_settings` and FE-12 keeps reading it. Dung moves its editing to the School
   Manager's settings page.
 - `activity_logs` (never deleted) records only important actions: sign-in success / failure, account create /
-  import / lock / unlock, password reset, role change, setting change, grade unlock. **The log is only kept in the
+  import / lock / unlock, password reset, role change, setting change, grade unlock. Moderation (25/11/2026, §17): `CHAT_CONTEXT_VIEW` (the School Manager reads the
+  messages around a reported one, with the reason given; 27/11/2026: `CHAT_FULL_VIEW` removed with the whole-chat
+  view), `MODERATION_ITEM_VIEW` (one piece of hidden content), `MODERATION_UNHIDE`, `MESSAGE_REPORT_RESOLVE`,
+  `MODERATION_RULE_CHANGE`; their detail never holds content (the School Manager's own reason is not content). **The log is only kept in the
   database – there is no screen to view it** (UC "View Activity Log" and its screen removed 01/11/2026 on the
   supervisor's advice).
 
@@ -927,5 +947,108 @@ Boundaries that are easy to get wrong:
 - Search boxes on list screens match **"contains"**, ignoring case and Vietnamese accents ("bao" finds "Phạm Gia
   Bảo"). Every module uses the shared `server/src/utils/search.js` (SQL `translate()`, no Postgres extension, works
   on every database); `%` and `_` typed by a user are matched literally.
+- Parent List (UC-104, Anh 27/11/2026): text that looks like a phone number is matched on the phone only; any other
+  text finds a parent whose name, username or email contains it, or who is linked to a child whose name or student
+  code contains it (each parent listed once).
 - Lists of people are sorted the Vietnamese way: by the given name (last word), then the rest (collation
   `vi-VN-x-icu`, `server/src/utils/nameSort.js` from FE-02).
+
+## 17. Community standards – content moderation (FE-08 Anh, 25/11/2026)
+Applies to **comments** (school feed and group feeds) and **chat messages** (every chat, 1-1 included), and since
+27/11/2026 to the text of **group feed posts** (FE-05, see below). School posts, FE-07 activity posts, files, images
+and videos are not checked.
+
+- **Group posts are stopped before they are posted** (Anh, 27/11/2026): the text of a group post is checked with the
+  same rules when it is created and every time an edit is saved (approval on or off), except the group moderator's
+  own posts. A match saves the post as `BLOCKED` ("Chưa đăng – vi phạm quy chuẩn cộng đồng", §5): only its author
+  sees it, with the category and the words to change (the patterns of the matched rules, worked out again when the
+  post is read – nothing is stored). It is **not a violation**: no `moderation_violations` row, not in the
+  statistics, nothing for the School Manager, no unhide; nobody is notified. The author edits it (clean → posted as
+  a new post) or deletes it. A post that gets past the rules follows the usual §5 flow (the moderator rejects or
+  hides it, no reason, not counted). Design and reasons: `docs/moderation-plan.md`; tables
+`moderation_rules`, `moderation_violations`, `message_reports` (`patch_v0.3_moderation.sql`).
+
+- **Checked when sent, hidden at once.** The text is checked against the School Manager's rules inside the send;
+  a match is saved **hidden** in the same transaction, so nobody else ever sees it:
+  - a comment gets `hidden_at` (separate from `deleted_at`, so it can be unhidden): only its author still sees it,
+    faded with "Đã bị ẩn"; it is not counted, and it cannot be liked, answered, reported or deleted;
+  - a message gets `deleted_for_everyone_at` with `deleted_for_everyone_by` **empty** (a user's own "delete for
+    everyone" always fills it): the other members see "Tin nhắn đã bị ẩn do vi phạm quy chuẩn cộng đồng", the
+    sender still reads it faded with "Đã bị ẩn"; the conversation list says "Tin nhắn đã bị ẩn"; it cannot be answered
+    or reacted to. A message with files only is not checked; team system lines are never checked.
+  - The author gets a line under the box ("…đã bị ẩn vì vi phạm quy chuẩn cộng đồng: <loại>.") and a personal
+    notification naming the place and the category, **never the content**.
+  - Matching is by whole word or exact phrase after normalising Vietnamese (accents, letters spread out, repeated
+    letters, digits used as letters); never by substring. Accent-free matching only for rules that ask for it.
+  - The check never blocks sending: an error in it, or rules not loaded yet, lets the content through (logged).
+    `system_settings` `moderation.enabled` turns the whole check off.
+- **Checked when sent only** (Anh, 27/11/2026): comments, messages and group posts are checked when they are sent or
+  saved. Adding, changing or switching a rule back on never re-checks content already sent; older content is handled
+  by reports and by the moderator (§5). Reasons: a wrong rule cannot hide old content in bulk, posts already approved are
+  not overturned, and there is no full re-scan load.
+- **Five categories, most severe first:** `VIOLENCE` (bạo lực, đe doạ), `SEXUAL` (nội dung tình dục),
+  `DISCRIMINATION` (kỳ thị), `HARASSMENT` (xúc phạm, quấy rối), `INAPPROPRIATE_LANGUAGE` (ngôn từ thô tục). Content
+  matching several rules keeps all of them (`rule_ids`) and shows the most severe category. A violation decided from
+  reports may also be `SPAM`, `FALSE_INFORMATION` or `OTHER`.
+- **No automatic rule for self-harm content, ever.** "Không muốn sống nữa" is someone asking for help, not a
+  violation: it only goes through a "Cần được hỗ trợ" report. The rules' categories cannot express it
+  (`moderation_rules_category_check`).
+- **The author cannot delete or recall content the system hid**: a hidden comment cannot be deleted, a hidden
+  message cannot be deleted for everyone. Recalling would fill `deleted_for_everyone_by`, defeat the unhide, and let
+  the author erase the evidence. Only the School Manager acts on it.
+- **Unhide** – the only safety net when the check is wrong: **School Manager only**, **only a violation of source
+  `AUTO`** that is still `ACTIVE`, **a reason is required**. The content shows again (a message only when its sender
+  did not recall it), the violation becomes `UNHIDDEN` and stops counting, its rules count one wrong hit, and the
+  author is told "…đã được hiển thị lại sau khi xem xét". A violation of source `REPORT` is a moderator's decision and
+  has no unhide. A comment shown again appears at the next load of the thread; a message comes back at once in open
+  chats.
+- **Hidden again after an unhide:** one content has one violation row. If unhidden content is later removed again
+  (e.g. reported and hidden), its `UNHIDDEN` row comes back to `ACTIVE` (unhide fields cleared) and keeps its source,
+  category and rules: the earlier unhide was the mistake.
+- **Message reports** (new, same shape as comment reports, §5 / §8): an active member of the chat reports someone
+  else's message – not their own, not a system line, not a message deleted for everyone or hidden. Reasons:
+  inappropriate language, harassment, spam, false information, other (note required, ≤ 500 characters), and
+  **"Cần được hỗ trợ"** (`NEEDS_SUPPORT`: self-harm, bullying, abuse, a crisis). Once per person per message (again
+  changes nothing); **nobody learns who reported**. The School Manager handles every message report ("Quy chuẩn cộng
+  đồng" › Báo cáo tin nhắn): one decision per message closes all its pending reports – **Ẩn tin nhắn** (hidden like
+  an automatic hide, a `REPORT` violation, the sender is told the category) or **Giữ nguyên** (nothing changes,
+  nobody is told).
+- **"Cần được hỗ trợ" (`NEEDS_SUPPORT`)**, for messages and comments alike – three rules:
+  1. Content with a pending `NEEDS_SUPPORT` report needs a **"Kết quả hỗ trợ"** (≤ 1000 characters: told the
+     homeroom teacher, called the parents, not serious…) to be decided, whatever the decision.
+  2. When **every** pending report is `NEEDS_SUPPORT`, the only decision is **Ghi nhận** (keep + support outcome);
+     hiding / deleting needs at least one report with another reason, and the category comes from those other reasons
+     (the most chosen; a tie goes in the order inappropriate language, harassment, spam, false information, other).
+  3. It **always goes first** in its queue; the author is **never** told about it (not even in the notification of a
+     hide), and it is **never** a violation. For a message or a school post comment, every School Manager gets a
+     notification at once (no content, no reporter) and a real-time signal; for a group comment it only goes first in
+     the moderator's queue (§5).
+  A `NEEDS_SUPPORT` report **stays open when the content is deleted** another way (author, moderator): deleting does
+  not help the person, so it waits for a "Kết quả hỗ trợ".
+- **Counting violations** – only `moderation_violations` with status `ACTIVE`: hidden automatically = 1; removed by a
+  moderator after reports = 1; reports kept = 0; hidden then unhidden = 0 (one wrong hit of the rules);
+  `NEEDS_SUPPORT` = never. The class of a violation is the student's class **at that time**.
+- **What the School Manager may read – a deliberate EXCEPTION to "the School Manager does not see class feeds or class
+  chats" (§1)**, only to handle a report or a violation, and every read is logged:
+  - **the reported message alone** (content, sender, time, file names) when a report is opened – no message around
+    it; this read is not logged (27/11/2026);
+  - **"Xem hội thoại xung quanh": 6 messages before and 6 after** the reported one (`moderation.context_window`,
+    default 6, kept within 0-20), from every member, only in the chat of that message, only after giving a **reason**
+    (required, ≤ 500 characters); every view is logged (`CHAT_CONTEXT_VIEW` with the reason). **6 + 6 is the most
+    the School Manager can ever read of a chat: there is no "whole conversation" view** (removed 27/11/2026);
+  - both only while the message has a **pending** report: once the reports are handled, the content is never returned
+    again;
+  - every School Manager sees, for each handled message report, its "Hành vi xử lý": the decision (hide / keep), who
+    decided and when, the support result if any, and every view of the messages around it (who, when, the reason) –
+    "Không xem hội thoại xung quanh" when there was none;
+  - in both reads, messages recalled by their sender stay empty – except the **reported message itself recalled after its
+    first report**: its content stays readable, marked `recalledAfterReport`, so recalling cannot erase the evidence;
+    a message hidden by moderation shows its content (that is the evidence); files show their names only;
+  - **one piece** of content of a violation (never the thread around it): for source `AUTO` always; for source
+    `REPORT` only content whose reports the School Manager handles – school post comments, chat messages, comments of
+    the teacher group. A `REPORT` violation of a class / student / parent group comment was decided by the homeroom
+    teacher: its content is not shown (403);
+  - statistics screens never show content; members of a chat are not told when the School Manager reads it.
+  - The System Admin reads the log of these reads (activity_logs) but **never the content**.
+- **Who decides what:** the School Manager – rules (add, edit, turn off, delete; in force at once), statistics,
+  unhide, message reports, school post comment reports; group feed moderators – group comment reports (§5).

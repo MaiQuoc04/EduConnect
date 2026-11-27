@@ -6,6 +6,7 @@ import { navFor } from '../navigation.js';
 import MaintenanceBanner from '../pages/admin/MaintenanceBanner.jsx'; // FE-13 UC-103
 import { unreadLabel } from '../pages/chat/chatText.js';
 import { useChatUnreadTotal } from '../pages/chat/useChatUnread.js'; // FE-06 menu badge
+import { useModerationBadge } from '../pages/moderation/useModerationBadge.js'; // FE-08 moderation menu badge
 import Avatar from './Avatar.jsx';
 import Icon from './Icon.jsx';
 import NotificationBell from './NotificationBell.jsx'; // FE-09 UC-67
@@ -19,7 +20,11 @@ export default function AppLayout() {
   const sections = navFor(activeRole);
   // FE-06 (20/11/2026): unread chat messages on "Trò chuyện", for the roles that have it in the menu.
   const chatUnread = useChatUnreadTotal(sections.some((s) => s.items.some((i) => i.to === '/chat')));
-  const BADGES = { '/chat': chatUnread };
+  // FE-08 moderation (25/11/2026): message reports waiting on "Quy chuẩn cộng đồng", highlighted when one is "Cần được hỗ trợ".
+  const moderation = useModerationBadge(sections.some((s) => s.items.some((i) => i.to === '/moderation')));
+  const BADGES = { '/chat': chatUnread, '/moderation': moderation.pendingCount };
+  const BADGE_TEXT = { '/moderation': 'báo cáo tin nhắn đang chờ' }; // default: unread messages (FE-06)
+  const HIGHLIGHT = { '/moderation': moderation.supportCount > 0 };
 
   useEffect(() => setNavOpen(false), [location.pathname]);
 
@@ -57,12 +62,12 @@ export default function AppLayout() {
                     key={item.to}
                     to={item.to}
                     className="nav-item"
-                    aria-label={badge ? `${item.label}, ${badge} tin nhắn chưa đọc` : undefined}
+                    aria-label={badge ? `${item.label}, ${badge} ${BADGE_TEXT[item.to] ?? 'tin nhắn chưa đọc'}` : undefined}
                   >
                     <Icon name={item.icon} />
                     {item.label}
                     {badge > 0 && (
-                      <span className="nav-badge" aria-hidden="true">
+                      <span className={`nav-badge${HIGHLIGHT[item.to] ? ' is-urgent' : ''}`} aria-hidden="true">
                         {unreadLabel(badge)}
                       </span>
                     )}

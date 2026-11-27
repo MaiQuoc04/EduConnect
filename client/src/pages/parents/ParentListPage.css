@@ -28,6 +28,8 @@
   pointer-events: none;
 }
 .parent-list-search .input { width: 100%; padding-left: 32px; }
+/* Its own row under the controls (UC-104 search kinds, 27/11/2026). */
+.parent-list .parent-list-search-help { flex-basis: 100%; margin: -8px 0 0; }
 .parent-list-total { display: flex; align-items: center; gap: 8px; }
 .parent-list-count {
   padding: 2px 10px;

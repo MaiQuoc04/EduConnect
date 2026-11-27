@@ -18,6 +18,7 @@ import { LeaveDialog, useLeaveGuard } from '../schoolfeed/leaveGuard.jsx';
 // forms look the same (14/11/2026). The page is wrapped in .school-post-form for the rules scoped to it.
 import '../schoolfeed/SchoolPostForm.css';
 import {
+  BlockedNotice,
   FeedConfirmDialog,
   feedPath,
   MAX_POST_LENGTH,
@@ -75,15 +76,20 @@ const COUNTER_FROM = 4500; // the "characters left" counter shows when this clos
 export default function GroupPostFormPage() {
   const g = useOutletContext();
   const { postId } = useParams();
-  const editing = Boolean(postId);
+  // Moderation (FE-08 Anh, 27/11/2026): a new post the server stopped (BLOCKED) keeps the form open, now editing that
+  // post (blockedId): the next save is a PATCH of it. editRoute = opened as SCR-38 from the address.
+  const editRoute = Boolean(postId);
+  const [blockedId, setBlockedId] = useState(null);
+  const editId = postId ?? blockedId;
+  const editing = editRoute || blockedId !== null;
   const navigate = useNavigate();
   const location = useLocation();
   const toast = useToast();
   const { user } = useAuth();
   const fieldId = useId();
   // The draft found when the form opened (create only), read once.
-  const [restored] = useState(() => (editing ? null : readDraft(user?.id, g.groupId)));
-  const [original, setOriginal] = useState(editing ? null : '');
+  const [restored] = useState(() => (editRoute ? null : readDraft(user?.id, g.groupId)));
+  const [original, setOriginal] = useState(editRoute ? null : '');
   const [post, setPost] = useState(null);
   const [moderator, setModerator] = useState(false);
   const [text, setText] = useState(restored?.text ?? '');
@@ -121,24 +127,24 @@ export default function GroupPostFormPage() {
     return () => clearTimeout(timer);
   }, [draftJson, saveDraft]);
   useEffect(() => {
-    if (editing) return undefined;
+    if (editRoute) return undefined;
     window.addEventListener('pagehide', saveDraft);
     return () => {
       window.removeEventListener('pagehide', saveDraft);
       saveDraft(); // leaving the form inside the app
     };
-  }, [editing, saveDraft]);
+  }, [editRoute, saveDraft]);
 
   // Where "Huỷ" and saving lead: the SCR-37 page when edited from it, the feed with the post's pop-up open when edited
   // from the pop-up, else the feed.
-  const from = editing ? location.state?.from : null;
+  const from = editRoute ? location.state?.from : null;
   const back =
     from === 'detail' ? postPath(g.groupId, postId) : from === 'popup' ? postPopupPath(g.groupId, postId) : feedPath(g.groupId);
 
   // Edit: the post as it is now. Create: whether the viewer moderates (their post is approved at once).
   useEffect(() => {
     const controller = new AbortController();
-    if (editing) {
+    if (editRoute) {
       getGroupPost(postId, { signal: controller.signal })
         .then((p) => {
           if (!p.can.edit) {
@@ -158,7 +164,7 @@ export default function GroupPostFormPage() {
         .catch(() => {}); // only the hint depends on it
     }
     return () => controller.abort();
-  }, [editing, postId, g.groupId]);
+  }, [editRoute, postId, g.groupId]);
 
   // Stays true while saving: leave() then removes the guard's extra history entry itself before navigating.
   // Edit: any unsaved change. Create: the draft keeps text and uploaded files, so only a file still uploading is at risk.
@@ -173,11 +179,38 @@ export default function GroupPostFormPage() {
   const tooLong = length > MAX_POST_LENGTH;
   const empty = length === 0;
   const unchanged =
-    editing && original !== null && text.normalize('NFC').trim() === original && !uploads.uploaded.length && !removedIds.size;
+    // moderation (FE-08 Anh, 27/11/2026): a BLOCKED post can always be sent again (checked again with the current rules)
+    editing && post?.approvalStatus !== 'BLOCKED' && original !== null && text.normalize('NFC').trim() === original && !uploads.uploaded.length && !removedIds.size;
   // A hidden post always goes back to the moderator when edited, even with approval off (§5, 12/11/2026).
   const willWait = !moderator && (g.requireApproval || Boolean(post?.isHidden));
   const resend = editing && (post?.isHidden || post?.approvalStatus === 'REJECTED');
   const who = moderatorName(g.groupType);
+  const blocked = post?.approvalStatus === 'BLOCKED'; // moderation (FE-08 Anh, 27/11/2026): saving it = posting it
+
+  // Moderation (FE-08 Anh, 27/11/2026): the post was saved but not posted (BLOCKED). The form stays and now edits it:
+  // its files as the server has them (the uploads are on the post now, so they must not be sent again), its text as
+  // the original, and post.moderation for the notice.
+  async function showBlocked(saved) {
+    if (!editRoute) setBlockedId(saved.postId);
+    let fresh = saved;
+    try {
+      fresh = await getGroupPost(saved.postId);
+    } catch {
+      // ASSUMPTION: the post was just saved; if reading it back fails, the answer of the save is enough to go on.
+    }
+    setPost(fresh);
+    setModerator(Boolean(fresh.group?.isModerator ?? moderator));
+    setOriginal(fresh.content);
+    setText(fresh.content);
+    setExistingFiles(fresh.attachments ?? []);
+    setRemovedIds(new Set());
+    setDraftFiles([]);
+    uploads.items.forEach((item) => uploads.remove(item.id));
+    setShowRestored(false);
+    setSavedAt(null);
+    sending.current = false;
+    setSaving(false);
+  }
 
   async function submit(e) {
     e.preventDefault();
@@ -189,17 +222,21 @@ export default function GroupPostFormPage() {
     try {
       // Files that failed to upload are left out (the picker shows them with their error).
       const saved = editing
-        ? await updateGroupPost(postId, content, { attachments: uploads.uploaded, removeAttachmentIds: [...removedIds] })
+        ? await updateGroupPost(editId, content, { attachments: uploads.uploaded, removeAttachmentIds: [...removedIds] })
         : await createGroupPost(g.groupId, content, [...draftFiles, ...uploads.uploaded]);
       if (!editing) {
         finished.current = true;
         clearDraft(user?.id, g.groupId);
       }
+      if (saved.approvalStatus === 'BLOCKED') {
+        await showBlocked(saved); // moderation (FE-08 Anh, 27/11/2026)
+        return;
+      }
       const pending = saved.approvalStatus === 'PENDING';
       toast(
         pending
           ? `Đã gửi bài. Bài sẽ hiện trên bảng tin sau khi ${who} duyệt.`
-          : editing
+          : editing && !blocked // a BLOCKED post edited clean is posted now, as a new one
             ? 'Đã lưu bài viết.'
             : 'Đã đăng bài viết.',
       );
@@ -295,6 +332,8 @@ export default function GroupPostFormPage() {
     ? null
     : !editing
       ? `Nhóm đang bật duyệt bài: bài của bạn sẽ hiện trên bảng tin sau khi ${who} duyệt.`
+      : blocked
+        ? `Sau khi sửa, bài sẽ được gửi để ${who} duyệt trước khi hiện trên bảng tin.`
       : post?.isHidden
         ? `Bài đang bị ẩn. Sau khi lưu, bài sẽ được gửi để ${who} duyệt lại và chỉ hiện lại trên bảng tin khi được duyệt.`
         : post?.approvalStatus === 'REJECTED'
@@ -302,15 +341,16 @@ export default function GroupPostFormPage() {
           : post?.approvalStatus === 'APPROVED'
             ? `Sau khi lưu, bài sẽ tạm rời bảng tin cho đến khi ${who} duyệt lại.`
             : null;
-  const submitLabel = saving
-    ? 'Đang lưu…'
-    : editing
+  // The button's name when idle; the BLOCKED notice names it too (moderation, FE-08 Anh, 27/11/2026).
+  const actionLabel =
+    editing && !blocked
       ? resend && willWait
         ? 'Gửi duyệt lại'
         : 'Lưu thay đổi'
       : willWait
         ? 'Gửi duyệt'
         : 'Đăng bài';
+  const submitLabel = saving ? 'Đang lưu…' : actionLabel;
   // What the post will carry, for the preview: kept files of the post / draft, then the new uploads.
   const previewFiles = [
     ...(editing ? existingFiles.filter((f) => !removedIds.has(f.attachmentId)).map((f) => ({ mimeType: f.mimeType, previewUrl: f.url })) : draftFiles),
@@ -342,6 +382,7 @@ export default function GroupPostFormPage() {
                 </button>
               </div>
             )}
+            {blocked && <BlockedNotice moderation={post.moderation} buttonLabel={actionLabel} />}
             {notice && (
               <div className="notice amber">
                 <Icon name="verified" />

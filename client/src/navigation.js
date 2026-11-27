@@ -11,6 +11,8 @@ export const NAV_SECTIONS = [
       { to: '/school-events', label: 'Lịch của trường', icon: 'event_upcoming', roles: ['SCHOOL_MANAGER', 'TEACHER', 'STUDENT', 'PARENT'] }, // FE-10 school calendar (Dung)
       // FE-08 reported comments of the school feed (17/11/2026). School Manager only.
       { to: '/comment-reports', label: 'Báo cáo bình luận', icon: 'flag', roles: ['SCHOOL_MANAGER'] },
+      // FE-08 moderation (25/11/2026): violations, rules, message reports. School Manager only; badge = message reports waiting.
+      { to: '/moderation', label: 'Quy chuẩn cộng đồng', icon: 'shield', roles: ['SCHOOL_MANAGER'] },
     ],
   },
   {

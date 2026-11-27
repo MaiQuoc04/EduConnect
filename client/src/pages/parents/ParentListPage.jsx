@@ -189,8 +189,9 @@ export default function ParentListPage() {
               value={qInput}
               maxLength={100}
               onChange={(e) => setQInput(e.target.value)}
-              placeholder="Tìm theo tên hoặc số điện thoại…"
-              aria-label="Tìm theo tên hoặc số điện thoại"
+              placeholder="Tìm theo tên, số điện thoại, email, con…"
+              aria-label="Tìm phụ huynh"
+              aria-describedby="parent-list-search-help"
             />
           </div>
           <select
@@ -224,6 +225,10 @@ export default function ParentListPage() {
           <span className="caption muted">Tổng cộng:</span>
           <span className="parent-list-count mono">{loading && !result ? '…' : `${number(total)} phụ huynh`}</span>
         </div>
+        {/* The full sentence does not fit the box (340px, or a phone screen): the placeholder is the short form. */}
+        <p id="parent-list-search-help" className="field-help parent-list-search-help">
+          Tìm theo tên, số điện thoại, tên đăng nhập, email hoặc tên / mã học sinh của con…
+        </p>
       </section>
 
       {error ? (

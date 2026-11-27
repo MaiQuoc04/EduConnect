@@ -339,6 +339,7 @@ textarea.input { height: auto; min-height: 88px; padding: 10px 14px; resize: ver
 .nav-item:hover { background: var(--graphite-100); text-decoration: none; }
 /* FE-06 (20/11/2026): unread chat messages on "Trò chuyện"; a dot on the menu button when the rail is a drawer */
 .nav-badge { margin-left: auto; min-width: 20px; height: 20px; padding: 0 6px; border-radius: 999px; background: var(--ink-600); color: #fff; font: 600 11px/20px var(--font-ui); text-align: center; }
+.nav-badge.is-urgent { background: var(--amber); } /* FE-08 moderation: a "Cần được hỗ trợ" report is waiting */
 .topbar .menu-button { position: relative; }
 .menu-dot { position: absolute; top: 6px; right: 6px; width: 8px; height: 8px; border-radius: 50%; background: var(--ink-600); box-shadow: 0 0 0 2px var(--paper); }
 .nav-item.active { background: var(--ink-50); color: var(--ink-700); font-weight: 500; }
@@ -1216,6 +1217,29 @@ a.mc-head:hover { text-decoration: none; }
 .msg-bubble.is-deleted { background: transparent; }
 .msg.mine .msg-bubble.is-deleted { background: transparent; outline-color: var(--graphite-200); }
 .msg-bubble.is-deleted .msg-text { font-style: italic; color: var(--graphite-500); }
+/* Moderation (26/11/2026): my own hidden message – the same placeholder as the others see, then "Xem tin nhắn" shows
+   the text in place (components/HiddenContent). */
+.msg-bubble .hidden-content { display: grid; justify-items: start; gap: 2px; min-width: 0; }
+.msg.mine .msg-bubble .hidden-content { justify-items: end; }
+.msg-bubble.is-deleted .hidden-content-text { font-style: normal; color: var(--graphite-900); }
+.msg-bubble .hidden-content-toggle { margin-top: 2px; min-height: 24px; text-align: inherit; overflow-wrap: anywhere; }
+.msg-bubble .hidden-content-note { margin: 0; font-size: 11px; }
+.chat-hidden-notice { align-items: center; gap: 8px; margin: 8px 16px 0; padding: 8px 8px 8px 12px; }
+.chat-hidden-notice p { flex: 1; min-width: 0; line-height: 20px; }
+.chat-hidden-notice .btn-icon { flex: none; color: inherit; }
+.chat-moderation-note { display: flex; align-items: center; gap: 4px; margin: 0; padding: 0 16px 8px; }
+/* Moderation phase 5: report a message (ReportMessageDialog.jsx). */
+.msg-tool.is-reported { color: var(--amber); cursor: default; }
+.msg-tool.is-reported:hover { background: transparent; color: var(--amber); }
+.chat-report-dialog form { display: grid; gap: 12px; }
+.chat-report-quote { display: -webkit-box; -webkit-line-clamp: 4; -webkit-box-orient: vertical; overflow: hidden; margin: 0; padding-left: 12px; border-left: 2px solid var(--ink-200); white-space: pre-wrap; overflow-wrap: anywhere; color: var(--graphite-700); }
+.chat-report-reasons { display: grid; gap: 4px; margin: 0; padding: 0; border: 0; }
+.chat-report-legend { font-weight: 500; color: var(--graphite-900); margin-bottom: 4px; }
+.chat-report-reason { display: flex; align-items: center; gap: 8px; min-height: 40px; padding: 0 10px; border-radius: var(--radius-control); cursor: pointer; }
+.chat-report-reason:hover { background: var(--graphite-50); }
+.chat-report-reason.is-checked { background: var(--ink-50); color: var(--ink-800); }
+.chat-report-count { justify-self: end; }
+.chat-report-count.over { color: var(--red-pen); }
 .msg-quote { display: grid; width: 100%; gap: 1px; margin-bottom: 6px; padding: 4px 8px; border: 0; border-left: 3px solid var(--ink-400); border-radius: 4px; background: var(--graphite-50); font: inherit; font-size: 12px; line-height: 16px; text-align: left; color: var(--graphite-700); cursor: pointer; }
 .msg-quote[aria-disabled='true'] { cursor: default; font-style: italic; border-left-color: var(--graphite-300); }
 .msg-quote span { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; overflow-wrap: anywhere; }
@@ -1307,6 +1331,10 @@ textarea.input.chat-input { display: block; height: 36px; min-height: 36px; max-
   .msg { max-width: 90%; }
   .msg-list { padding: 8px 10px; }
   .chat-composer { padding: 8px 10px; }
+  .chat-hidden-notice { margin: 6px 10px 0; }
+  .chat-moderation-note { padding: 0 10px 6px; font-size: 11px; }
+  .chat-report-reason { min-height: 44px; }
+  .chat-report-dialog .card-footer .btn { flex: 1 1 0; }
 }
 
 /* ---------- FE-08 School Feed (SCR-02, SCR-05): Like button and counts shared by both screens ---------- */

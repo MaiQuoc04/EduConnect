@@ -163,3 +163,24 @@
   .gf-post-dialog .feed-article-actions > .btn:not(.gf-post-dialog-close) { order: 2; flex: 1 1 auto; min-height: 44px; }
   .gf-post-dialog .feed-article-actions .gf-dialog-menu.btn { flex: none; }
 }
+
+/* Moderation (FE-08 Anh, 27/11/2026): a post stopped by the automatic check ("Chưa đăng – vi phạm"), author only */
+.feed-card.is-blocked { box-shadow: inset 3px 0 0 var(--red-pen); }
+.feed-kind.is-blocked { color: var(--red-pen); }
+.gf-blocked-notice {
+  background: var(--red-bg);
+  color: var(--red-pen);
+  outline: 1px solid #f4c7c2;
+  border-radius: var(--radius-control);
+  padding: 10px 14px;
+  font-size: 13px;
+  line-height: 18px;
+}
+.gf-blocked-notice .icon { color: var(--red-pen); }
+.gf-blocked-notice > div { display: grid; gap: 4px; min-width: 0; }
+.gf-blocked-terms { font-weight: 500; overflow-wrap: anywhere; }
+.gf-blocked-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 4px; }
+@media (max-width: 640px) {
+  .feed-kind.is-blocked { white-space: normal; }
+  .gf-blocked-actions .btn { flex: 1 1 auto; justify-content: center; }
+}

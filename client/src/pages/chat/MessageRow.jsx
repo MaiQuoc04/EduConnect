@@ -1,5 +1,7 @@
 import Avatar from '../../components/Avatar.jsx';
+import HiddenContent from '../../components/HiddenContent.jsx';
 import Icon from '../../components/Icon.jsx';
+import { MODERATED_MESSAGE_TEXT } from '../../utils/moderation.js';
 import { dayLabel, dayOf, filesText, REACTIONS, REACTION_EMOJI, systemText, timeOf } from './chatText.js';
 import MessageFiles from './MessageFiles.jsx';
 
@@ -7,6 +9,9 @@ import MessageFiles from './MessageFiles.jsx';
 // reactions and the actions (react, reply, delete). The thread (ChatThread.jsx) holds the state and calls the server.
 // A message deleted for everyone shows only a placeholder ("Bạn đã xoá một tin nhắn" / "Tin nhắn đã được xoá") with no
 // action at all: it is already gone for everybody, so it cannot be deleted again (15/11/2026, business-rules §6).
+// A message hidden by the automatic content check (isModerated, moderation 25/11/2026) is a kind of deleted message:
+// everyone sees "Tin nhắn đã bị ẩn do vi phạm quy chuẩn cộng đồng"; its sender also gets "Xem tin nhắn" to read it
+// in place (components/HiddenContent, 26/11/2026). No action on it either (the server refuses them all).
 function replyText(reply, me) {
   if (reply.state === 'BEFORE_JOIN') return { who: '', text: 'Tin nhắn trước khi bạn vào nhóm' };
   if (reply.state === 'DELETED') return { who: '', text: 'Tin nhắn đã được xoá' };
@@ -40,6 +45,8 @@ export default function MessageRow({
   onDelete,
   onJump,
   onFilesExpired,
+  onReport, // moderation (25/11/2026): report someone else's message; reported = already reported from this tab
+  reported = false,
 }) {
   // A team's system line (15/11/2026): centred, no bubble, no action.
   if (m.type === 'SYSTEM') {
@@ -60,6 +67,8 @@ export default function MessageRow({
     );
   }
   const mine = m.senderId === me;
+  const moderated = Boolean(m.isModerated); // always with isDeleted
+  const ownModerated = moderated && mine; // the sender still reads it
   const name = m.senderNickname ? `${m.senderNickname} (${m.senderName})` : m.senderName;
   const reply = !m.isDeleted && m.replyTo ? replyText(m.replyTo, me) : null;
   const canJump = !m.isDeleted && m.replyTo?.state === 'OK';
@@ -131,9 +140,22 @@ export default function MessageRow({
                 </button>
               )}
               {!m.isDeleted && <MessageFiles files={m.attachments} onExpired={() => onFilesExpired?.(m.messageId)} />}
-              {(m.isDeleted || m.content) && (
+              {ownModerated ? (
+                <HiddenContent
+                  placeholder={MODERATED_MESSAGE_TEXT}
+                  showLabel="Xem tin nhắn"
+                  content={m.content}
+                  textClassName="msg-text"
+                />
+              ) : (m.isDeleted || m.content) && (
                 <p className="msg-text">
-                  {m.isDeleted ? (mine ? 'Bạn đã xoá một tin nhắn' : 'Tin nhắn đã được xoá') : m.content}
+                  {moderated
+                    ? MODERATED_MESSAGE_TEXT
+                    : m.isDeleted
+                      ? mine
+                        ? 'Bạn đã xoá một tin nhắn'
+                        : 'Tin nhắn đã được xoá'
+                      : m.content}
                 </p>
               )}
               <time className="msg-time" dateTime={m.sentAt}>
@@ -155,6 +177,19 @@ export default function MessageRow({
                 <button type="button" className="msg-tool" onClick={() => onDelete(m)} aria-label="Xoá tin nhắn" title="Xoá tin nhắn">
                   <Icon name="delete" size="sm" />
                 </button>
+              )}
+              {/* Report (moderation): someone else's message that is still there – never my own, a system line (no
+                  row here), a deleted or a hidden one (both isDeleted). */}
+              {!m.isDeleted && !mine && onReport && (
+                reported ? (
+                  <span className="msg-tool is-reported" title="Đã báo cáo" aria-label="Đã báo cáo tin nhắn này">
+                    <Icon name="flag" size="sm" filled />
+                  </span>
+                ) : (
+                  <button type="button" className="msg-tool" onClick={() => onReport(m)} aria-label="Báo cáo tin nhắn" title="Báo cáo">
+                    <Icon name="flag" size="sm" />
+                  </button>
+                )
               )}
               {open === 'react' && (
                 <div className="msg-react-bar" role="menu" aria-label="Chọn cảm xúc">

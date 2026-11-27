@@ -57,7 +57,10 @@ server/src/
 - **Permissions use the active role** (`req.user.activeRole`), plus data scope: "homeroom teacher" = the teacher in
   `classes.homeroom_teacher_id`; teachers only see classes in their `teaching_assignments`; parents only their linked
   children (`student_parents`); students only themselves. `ProtectedRoute` on the client is only for navigation.
-- System Admin never sees content (feeds, chats, grades, school posts). School Manager never sees class feeds/chats.
+- System Admin never sees content (feeds, chats, grades, school posts). School Manager never sees class feeds/chats –
+  except, deliberately, through a report or a violation (the reported message alone; 6 + 6 messages around it only
+  with a reason, logged – never more; one piece of hidden content, logged): business-rules §17 (moderation,
+  `modules/moderation`).
 - Class events (FE-10) and extracurricular activities (FE-07) are different things and different tables.
 - Grades: one row per score (`attempt_no`), averages computed not stored, finalized grade books are read only until
   SM unlocks, every change goes to `grade_histories`.

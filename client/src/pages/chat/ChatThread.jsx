@@ -7,6 +7,7 @@ import { useAuth } from '../../context/AuthContext.jsx';
 import { useSocket, useSocketStatus } from '../../context/SocketContext.jsx';
 import { useToast } from '../../context/ToastContext.jsx';
 import { errorText } from '../../messages.js';
+import { CHAT_MODERATION_NOTE, hiddenMessageNotice, SUPPORT_HINT } from '../../utils/moderation.js';
 import { MEMBER_KIND_LABELS } from '../groups/groupLabels.js';
 import { memberSubline } from '../groups/memberText.js';
 import { readChatDraft, writeChatDraft } from './chatDraft.js';
@@ -14,6 +15,7 @@ import { dayOf, filesText } from './chatText.js';
 import DeleteMessageDialog from './DeleteMessageDialog.jsx';
 import EmojiPicker from './EmojiPicker.jsx';
 import MessageRow, { OutboxRow } from './MessageRow.jsx';
+import ReportMessageDialog from './ReportMessageDialog.jsx';
 
 // UC-47 Chat in Group (FE-06, Khanh) – SCR-43 Group Chat / SCR-50 Chat Room: the messages of one group and the
 // composer. The server decides who may read or send (active role, data scope, read-only year) and sends only the
@@ -156,9 +158,14 @@ export default function ChatThread({ groupId, onPeer }) {
   const [replyTo, setReplyTo] = useState(restored?.replyTo ?? null); // the message being answered
   const [draftFiles, setDraftFiles] = useState(restored?.files ?? []); // uploaded before, kept by the draft
   const [outbox, setOutbox] = useState(restored?.outbox ?? []); // my messages not confirmed by the server yet
+  // Moderation (25/11/2026): "Tin nhắn của bạn đã bị ẩn vì …" after a message of mine was hidden; cleared at the next send.
+  const [hiddenNotice, setHiddenNotice] = useState('');
   const [menu, setMenu] = useState(null); // { id, kind: 'react' | 'who' } popup of one message
   const [emojiOpen, setEmojiOpen] = useState(false);
   const [deleting, setDeleting] = useState(null); // { message, forEveryone, expired }
+  // Moderation (25/11/2026): the message whose report dialog is open, and the ones reported from this tab.
+  const [reporting, setReporting] = useState(null);
+  const [reportedIds, setReportedIds] = useState(() => new Set());
   const [fileLimits, setFileLimits] = useState(null);
   const [unseen, setUnseen] = useState(0); // new messages below while reading older ones
   const [syncError, setSyncError] = useState(false); // catching up failed; trying again
@@ -375,16 +382,21 @@ export default function ChatThread({ groupId, onPeer }) {
   }, [url, me, nearBottom, applyHeader, dropSaved, markRead]);
 
   // A message deleted for everyone: only the placeholder is left, and quotes of it no longer show its text.
-  const markDeleted = useCallback((messageId) => {
+  // isModerated (moderation, 25/11/2026): hidden by the School Manager after reports – "Tin nhắn đã bị ẩn …". My own
+  // message keeps the text already in memory (shown faded with "Đã bị ẩn", as after a reload): the event carries none.
+  const markDeleted = useCallback((messageId, isModerated = false) => {
     setMessages((list) =>
       list.map((m) => {
-        if (m.messageId === messageId) return { ...m, isDeleted: true, content: null, reactions: [], replyTo: null };
+        if (m.messageId === messageId) {
+          const keep = isModerated && m.senderId === me;
+          return { ...m, isDeleted: true, isModerated, content: keep ? m.content : null, reactions: [], replyTo: null };
+        }
         if (m.replyTo?.messageId === messageId) return { ...m, replyTo: { state: 'DELETED', messageId } };
         return m;
       }),
     );
     setReplyTo((r) => (r?.messageId === messageId ? null : r));
-  }, []);
+  }, [me]);
 
   // A message deleted for me: gone from this view, in quotes too.
   const removeFromView = useCallback((messageId) => {
@@ -417,13 +429,25 @@ export default function ChatThread({ groupId, onPeer }) {
       if (gid !== id) return;
       setMessages((list) => list.map((m) => (m.messageId === messageId ? { ...m, reactions } : m)));
     };
-    const onDeleted = ({ groupId: gid, messageId }) => {
+    const onDeleted = ({ groupId: gid, messageId, isModerated }) => {
       if (gid !== id) return;
-      markDeleted(messageId);
+      markDeleted(messageId, Boolean(isModerated));
       markRead(); // seen here, as a new message would be: it does not stay unread in the list
     };
     const onHidden = ({ groupId: gid, messageId }) => {
       if (gid === id) removeFromView(messageId);
+    };
+    // Moderation (25/11/2026): a hidden message shown again by the School Manager – read it back (as I may see it) and
+    // put it in place. Only a message already on screen: an older one comes with the next page as usual.
+    const onRestored = ({ groupId: gid, messageId }) => {
+      if (gid !== id) return;
+      api
+        .get(url, { params: { after: messageId - 1, limit: 1 }, timeout: LOAD_TIMEOUT_MS })
+        .then(({ data }) => {
+          const [message] = (data.messages ?? []).filter((m) => m.messageId === messageId);
+          if (message) setMessages((list) => (list.some((m) => m.messageId === messageId) ? mergeMessages(list, [stamp(message)]) : list));
+        })
+        .catch(() => {}); // the next load shows it anyway
     };
     const onRead = ({ groupId: gid, userId, lastReadMessageId }) => {
       if (gid !== id) return;
@@ -431,6 +455,7 @@ export default function ChatThread({ groupId, onPeer }) {
     };
     const onAccess = ({ groupId: gid }) => gid === id && catchUp();
     socket.on('message:new', onNew);
+    socket.on('message:restored', onRestored);
     socket.on('message:read', onRead);
     socket.on('message:reaction', onReaction);
     socket.on('message:deleted', onDeleted);
@@ -439,6 +464,7 @@ export default function ChatThread({ groupId, onPeer }) {
     socket.on('connect', catchUp);
     return () => {
       socket.off('message:new', onNew);
+      socket.off('message:restored', onRestored);
       socket.off('message:read', onRead);
       socket.off('message:reaction', onReaction);
       socket.off('message:deleted', onDeleted);
@@ -560,6 +586,21 @@ export default function ChatThread({ groupId, onPeer }) {
     toast(scope === 'everyone' ? 'Đã xoá tin nhắn ở phía mọi người.' : 'Đã xoá tin nhắn ở phía bạn.');
   }
 
+  // Moderation: report someone else's message. Reporting again is accepted by the server and changes nothing.
+  function startReport(message) {
+    setMenu(null);
+    if (message.isDeleted || message.senderId === me || message.type === 'SYSTEM') return;
+    setReporting(message);
+  }
+
+  async function confirmReport(input) {
+    const { messageId } = reporting;
+    const { data } = await api.post('/moderation/message-reports', { messageId, ...input }, { timeout: SEND_TIMEOUT_MS });
+    setReportedIds((ids) => new Set(ids).add(messageId));
+    setReporting(null);
+    toast(data?.supportHint ? `Đã gửi báo cáo. ${SUPPORT_HINT}` : 'Đã gửi báo cáo. Ban giám hiệu sẽ xem xét tin nhắn này.');
+  }
+
   // UC-112: put the emoji where the cursor is.
   function insertEmoji(emoji) {
     const box = inputRef.current;
@@ -606,8 +647,12 @@ export default function ChatThread({ groupId, onPeer }) {
       );
       if (!alive.current) return; // the draft keeps it as "maybe sent"; the next load clears it (dropSaved)
       stickToBottom.current = true;
-      setMessages((list) => mergeMessages(list, [stamp(message)]));
+      // Hidden by the automatic check: the saved copy (isModerated) replaces the outbox copy, and a notice says why.
+      // A send repeated with the same clientMessageId answers the saved message without `moderation`: isModerated.
+      const { moderation, ...saved } = message;
+      setMessages((list) => mergeMessages(list, [stamp(saved)]));
       setOutbox((box) => box.filter((m) => m.clientMessageId !== item.clientMessageId));
+      if (moderation?.hidden || saved.isModerated) setHiddenNotice(hiddenMessageNotice(moderation?.category));
     } catch (err) {
       if (!alive.current) return;
       const failure = sendFailure(err);
@@ -646,6 +691,7 @@ export default function ChatThread({ groupId, onPeer }) {
       sendLock.current = false;
     }, 0);
     const item = { clientMessageId: newClientId(), content, files, replyTo, status: 'sending' };
+    setHiddenNotice('');
     setOutbox((box) => [...box, item]);
     setText('');
     setReplyTo(null);
@@ -781,6 +827,8 @@ export default function ChatThread({ groupId, onPeer }) {
                     onDelete={startDelete}
                     onJump={jump}
                     onFilesExpired={refreshFiles}
+                    onReport={startReport}
+                    reported={reportedIds.has(m.messageId)}
                   />
                 );
               })}
@@ -865,6 +913,15 @@ export default function ChatThread({ groupId, onPeer }) {
           ))}
         </ul>
       )}
+      {hiddenNotice && (
+        <div className="notice amber chat-hidden-notice" role="status">
+          <Icon name="visibility_off" size="sm" />
+          <p>{hiddenNotice}</p>
+          <button type="button" className="btn btn-icon" onClick={() => setHiddenNotice('')} aria-label="Đóng thông báo" title="Đóng">
+            <Icon name="close" size="sm" />
+          </button>
+        </div>
+      )}
       <form
         className="chat-composer"
         onSubmit={(e) => {
@@ -943,6 +1000,13 @@ export default function ChatThread({ groupId, onPeer }) {
           Gửi
         </button>
       </form>
+      <p className="caption muted chat-moderation-note">
+        <Icon name="shield" size="sm" />
+        {CHAT_MODERATION_NOTE}
+      </p>
+      {reporting && (
+        <ReportMessageDialog message={reporting} onSubmit={confirmReport} onCancel={() => setReporting(null)} />
+      )}
       {deleting && (
         <DeleteMessageDialog
           forEveryone={deleting.forEveryone}

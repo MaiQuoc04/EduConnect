@@ -15,6 +15,7 @@ import { errorText } from '../../messages.js';
 import { CommentCount, formatDateTime, isEdited, LikeButton, useLike } from '../schoolfeed/schoolFeedShared.jsx';
 import './GroupFeed.css';
 import ActivityFeedCard from '../extracurricular/ActivityFeedCard.jsx';
+import { BLOCKED_POST_LABEL, blockedPostNotice, blockedPostRecheck, blockedPostTerms } from '../../utils/moderation.js'; // moderation (FE-08 Anh, 27/11/2026)
 
 // FE-05 Group Feed (owner: Khanh): pieces shared by SCR-35 Group Feed, SCR-37 Group Post Detail and the form
 // (SCR-36 / SCR-38). Since 14/11/2026 the feed looks like the school feed: cards, tabs, pager, states and the reading
@@ -58,6 +59,8 @@ export const authorLabel = (post) =>
  * state also names the card's left bar (feed.css .feed-card.is-pending / is-rejected / is-hidden).
  */
 export function postKind(post) {
+  // Moderation (FE-08 Anh, 27/11/2026): first – a hidden post edited into BLOCKED keeps its hidden mark on the server.
+  if (post.approvalStatus === 'BLOCKED') return { state: 'blocked', icon: 'gpp_maybe', label: BLOCKED_POST_LABEL };
   if (post.isHidden) return { state: 'hidden', icon: 'visibility_off', label: 'Đã ẩn' };
   if (post.approvalStatus === 'REJECTED') return { state: 'rejected', icon: 'block', label: 'Đã bị từ chối' };
   if (post.approvalStatus === 'PENDING') return { state: 'pending', icon: 'hourglass_top', label: 'Chờ duyệt' };
@@ -103,6 +106,7 @@ export function PostMeta({ post, avatarSize = 20, timeTo, timeState, className =
 /** What the post's state means for the reader – on SCR-37 only (the card says it with its kind line and bar). */
 export function StatusNotice({ post, groupType }) {
   const who = moderatorName(groupType);
+  if (post.approvalStatus === 'BLOCKED') return <BlockedNotice moderation={post.moderation} className="gf-status-notice" />;
   if (post.isHidden) {
     return (
       <div className="notice gf-status-notice">
@@ -131,6 +135,26 @@ export function StatusNotice({ post, groupType }) {
     );
   }
   return null;
+}
+
+/**
+ * Moderation (FE-08 Anh, 27/11/2026): why a post of the author's is not posted (BLOCKED) and which words to change –
+ * on the "Bài của tôi" card, on SCR-37 and on the form (SCR-36 / SCR-38). moderation = post.moderation from the server.
+ */
+// No word matches any more (terms empty, the rules changed) → ask to send it again, it is checked again: in the form
+// with the save button's label (buttonLabel), elsewhere through "Sửa".
+export function BlockedNotice({ moderation, buttonLabel, className = '', children }) {
+  const terms = blockedPostTerms(moderation?.terms);
+  return (
+    <div className={`notice red gf-blocked-notice ${className}`.trim()} role="status">
+      <Icon name="gpp_maybe" />
+      <div>
+        <p>{terms ? blockedPostNotice(moderation?.category) : blockedPostRecheck(buttonLabel)}</p>
+        {terms && <p className="gf-blocked-terms">{terms}</p>}
+        {children}
+      </div>
+    </div>
+  );
 }
 
 /** Like + comment count (UC-43), as the school feed. */
@@ -189,6 +213,27 @@ export function PostCard({ post, groupId, onAction, onOpen }) {
               </button>
             )}
           </div>
+          {/* Moderation (FE-08 Anh, 27/11/2026): "Bài của tôi" – why it is not posted, with Sửa / Xoá in sight. */}
+          {post.approvalStatus === 'BLOCKED' && (
+            <BlockedNotice moderation={post.moderation}>
+              {(can.edit || can.delete) && (
+                <div className="gf-blocked-actions">
+                  {can.edit && (
+                    <Link to={`${detail}/edit`} state={{ from: 'feed' }} className="btn btn-secondary btn-sm">
+                      <Icon name="edit" size="sm" />
+                      Sửa bài
+                    </Link>
+                  )}
+                  {can.delete && (
+                    <button type="button" className="btn btn-danger btn-sm" onClick={() => onAction('delete', post)}>
+                      <Icon name="delete" size="sm" />
+                      Xoá bài
+                    </button>
+                  )}
+                </div>
+              )}
+            </BlockedNotice>
+          )}
           {/* FE-07 (Dung): a post that carries an extracurricular activity shows its card (title, time, registration). */}
           {post.activity && <ActivityFeedCard activity={post.activity} />}
           <PostMeta post={post} timeTo={postPopupPath(groupId, post.postId)} timeState={POPUP_STATE} />

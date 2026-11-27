@@ -25,6 +25,7 @@ import ActivityListPage from './pages/extracurricular/ActivityListPage.jsx';
 import RegistrationListPage from './pages/extracurricular/RegistrationListPage.jsx';
 import CommentReportsPage from './pages/schoolfeed/CommentReportsPage.jsx';
 import GroupCommentReportsPage from './pages/groupfeed/GroupCommentReportsPage.jsx';
+import ModerationPage from './pages/moderation/ModerationPage.jsx'; // FE-08 moderation (Anh)
 import CreateSchoolPostPage from './pages/schoolfeed/CreateSchoolPostPage.jsx';
 import SchoolFeedPage from './pages/schoolfeed/SchoolFeedPage.jsx';
 import { SCHOOL_FEED_ROLES } from './pages/schoolfeed/schoolFeedShared.jsx';
@@ -156,6 +157,16 @@ export default function App() {
           element={
             <ProtectedRoute roles={['SCHOOL_MANAGER']}>
               <CommentReportsPage />
+            </ProtectedRoute>
+          }
+        />
+        {/* FE-08 moderation (25/11/2026): "Quy chuẩn cộng đồng" – violations, rules, message reports. School Manager
+            only; the server checks every call too. */}
+        <Route
+          path="moderation"
+          element={
+            <ProtectedRoute roles={['SCHOOL_MANAGER']}>
+              <ModerationPage />
             </ProtectedRoute>
           }
         />
