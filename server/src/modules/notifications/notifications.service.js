@@ -62,7 +62,7 @@ const LINK_SQL = `CASE n.target_type
     -- chat (target_id = group id); a "Cần được hỗ trợ" report → the School Manager's queue of that kind.
     WHEN 'CHAT' THEN '/chat/' || n.target_id
     WHEN 'MESSAGE_REPORT' THEN '/moderation?tab=reports'
-    WHEN 'COMMENT_REPORT' THEN '/comment-reports'
+    WHEN 'COMMENT_REPORT' THEN '/moderation?tab=comments&source=school'
     ELSE NULL
   END`;
 

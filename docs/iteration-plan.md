@@ -29,6 +29,12 @@ reactions, attachments) is merged into one place after both are on `develop`.
 
 ## Current status (read first; update after every merge, schema patch or new decision)
 
+- **FE-09 `COMMENT_REPORT` link goes straight to the moderation tab (27/11/2026, Quoc, on `develop`, server only, no
+  schema change):** after PR #25 the "Cần được hỗ trợ" notification on a school post comment opens
+  `/moderation?tab=comments&source=school` (`notifications.service.js` `LINK_SQL`) instead of the old
+  `/comment-reports`, which only redirected there. Tested on the local throw-away DB: a NEEDS_SUPPORT report on a
+  school post comment gives the School Manager that link.
+
 - **FE-10 class week limit: default 38 kept – approved by the lead 27/11/2026 (decision only, no logic change):** the
   most periods a class has a week (SCR-86, UC-133, `teaching.class_max_week`) stays **38 by default** (5 days × 7 +
   3; Công văn 4567 sets no weekly cap). The School Manager may set it up to 7 × 6 = **42** (already enforced by
@@ -77,7 +83,7 @@ reactions, attachments) is merged into one place after both are on `develop`.
     still refuse HIDE / DELETE; `listReports` `$1` is the status as the code says; the System Admin page now matches the
     rule that moderation settings stay fixed in the DB (no one edits them in the app). No blocker. Notes: (1) a new
     `system_settings` key now only shows on the System Admin page after it gets a `META` entry (Linh, FE-13);
-    (2) FE-09 link for `COMMENT_REPORT` still `/comment-reports` (works through the redirect) – owed by Quoc;
+    (2) FE-09 link for `COMMENT_REPORT` – done 27/11/2026 by the lead, see the FE-09 entry at the top;
     (3) not clicked through in a browser by the lead. Owed by Anh: Change Log and R3/R4/R5 for tab 5 and the
     "violation or not" decision.
 
