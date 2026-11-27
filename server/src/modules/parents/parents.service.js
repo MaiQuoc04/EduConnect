@@ -34,19 +34,32 @@ function buildParentFilter({ q, hasChildren, accountStatus }, params) {
   };
   const conditions = [HAS_PARENT_ROLE];
   if (q) {
-    // ASSUMPTION: q is either a phone number or a name, never both. A phone is how a parent is identified
+    // ASSUMPTION: q is either a phone number or a text search, never both. A phone is how a parent is identified
     // (business-rules §3), so text made only of digits / spaces / dots / dashes with an optional leading + is
     // normalised with utils/phone.js and matched as "contains" on users.phone (a full number finds exactly one
-    // parent; part of a number such as "000003" works too). Anything else is a name search, "contains", ignoring
-    // case and accents, % and _ literal (business-rules §16, utils/search.js). Names never contain digits, so a
-    // name search on digits would find nothing anyway.
-    if (PHONE_LIKE_RE.test(q) && /\d/.test(q)) { // "-" or "." alone is not a phone: name search
+    // parent; part of a number such as "000003" works too). SCR-13's phone lookup always lands here.
+    // Anything else (Anh, 27/11/2026) matches when ONE of these "contains" q, ignoring case, % and _ literal
+    // (business-rules §16, utils/search.js): the parent's name (accents ignored), username, email (NULL skipped),
+    // or the name (accents ignored) / student code of a child linked through student_parents. A child counts
+    // whatever their account status or enrollment (locked, transferred, dropped out): the link still exists.
+    // students has no deleted_at in schema v0.3, so there is nothing to exclude. EXISTS keeps one row per parent,
+    // so a parent with two matching children is listed (and counted) once. One folded pattern serves every column:
+    // usernames, emails and student codes have no accents, lower() is enough for them.
+    if (PHONE_LIKE_RE.test(q) && /\d/.test(q)) { // "-" or "." alone is not a phone: text search
       conditions.push(`u.phone LIKE ${add(`%${escapeLike(normalizePhone(q))}%`)}`);
     } else {
       const p = add(containsPattern(q));
       const from = add(VI_TRANSLATE.from);
       const to = add(VI_TRANSLATE.to);
-      conditions.push(`lower(translate(u.full_name, ${from}, ${to})) LIKE ${p}`);
+      const fold = (column) => `lower(translate(${column}, ${from}, ${to}))`;
+      conditions.push(`(${fold('u.full_name')} LIKE ${p}
+        OR lower(u.username) LIKE ${p}
+        OR lower(u.email) LIKE ${p}
+        OR EXISTS (SELECT 1 FROM student_parents sp
+                   JOIN students s ON s.student_id = sp.student_id
+                   JOIN users su ON su.user_id = s.user_id
+                   WHERE sp.parent_id = p.parent_id
+                     AND (${fold('su.full_name')} LIKE ${p} OR lower(s.student_code) LIKE ${p})))`);
     }
   }
   const hasLink = 'EXISTS (SELECT 1 FROM student_parents sp WHERE sp.parent_id = p.parent_id)';
@@ -58,7 +71,8 @@ function buildParentFilter({ q, hasChildren, accountStatus }, params) {
 
 // --- UC-104 ----------------------------------------------------------------------------------------------------
 
-// UC-104 View Parent List (School Manager), SCR-69: search by name or phone, filter by "has linked children" and
+// UC-104 View Parent List (School Manager), SCR-69: search by phone, or by name, username, email or a linked
+// child's name / student code (buildParentFilter), filter by "has linked children" and
 // account status, sorted the Vietnamese way (business-rules §16). Paged like UC-07: { items, page, pageSize, total };
 // a page past the end gives items = []. An empty list is a normal result (the UI shows MSG01).
 // email / phone are returned because only School Manager calls this (business-rules §6, permissions note 2).
