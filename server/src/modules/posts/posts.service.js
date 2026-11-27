@@ -558,7 +558,8 @@ export async function deleteComment(user, postId, commentId) {
     }
     await feed.softDeleteComment(opened.target, commentId, user.userId, client);
     // 19/11/2026: a comment gone has nothing left to decide – its pending reports are closed (RESOLVED, by whoever
-    // deleted it), so the moderator's queue never keeps them (as FE-08).
+    // deleted it), so the moderator's queue never keeps them (as FE-08). FE-08 Anh 27/11/2026: not when its author
+    // deleted it – the moderator still decides "violation or not" (checked inside resolvePendingReports).
     await reports.resolvePendingReports(commentId, user.userId, client);
     return {
       ...opened,
@@ -677,8 +678,15 @@ export async function resolveGroupCommentReport(user, commentId, action, { suppo
       .catch((err) => console.error(`[posts] comment-removed notification #${commentId} not sent:`, err?.message));
     signal({ groupId: result.groupId }, 'post:comment-deleted', { postId: result.target.id, commentId });
   }
-  const { commentDeleted, resolvedCount, status } = result;
-  return { commentId, status, resolvedCount, commentDeleted };
+  // FE-08 Anh 27/11/2026 (business-rules §17): the author had deleted it after the report and the moderator confirmed
+  // the violation (reports.resolveReport) – the author is told (no content); nothing changes in the thread.
+  if (result.violationConfirmed) {
+    notifyContentHidden({ contentType: result.contentType, authorId: result.authorId, postTarget: result.target,
+      category: result.reason, source: 'REPORT', alreadyRemoved: true })
+      .catch((err) => console.error(`[posts] confirmed-violation notification #${commentId} not sent:`, err?.message));
+  }
+  const { commentDeleted, resolvedCount, status, violationConfirmed } = result;
+  return { commentId, status, resolvedCount, commentDeleted, violationConfirmed };
 }
 
 // --- UC-44 Pin / Unpin, UC-45 Hide / Unhide, UC-46 Approve / Reject (moderator) -------------------------------------

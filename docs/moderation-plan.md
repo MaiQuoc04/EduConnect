@@ -152,6 +152,7 @@ Báo cáo là lưới thứ hai cho nội dung lọt qua bộ lọc. Bình luậ
 - Người xử lý giữ nguyên: School Manager với bài trường (SCR-83), GVCN với nhóm lớp và School Manager với nhóm giáo viên (UC-131).
 - Thêm lý do `NEEDS_SUPPORT` với cách xử lý ở bảng trên.
 - Khi người xử lý xoá bình luận qua báo cáo, ghi thêm một dòng `moderation_violations` nguồn `REPORT`, để lần vi phạm này hiện trên màn hình thống kê.
+- **Tác giả tự xoá sau khi bị báo cáo** (27/11/2026): báo cáo không đóng nữa (mọi lý do); bình luận vẫn ở hàng chờ của người xử lý nguồn đó, kèm nhãn "Tác giả đã xoá sau khi bị báo cáo" (`deletedByAuthorAfterReport`), người xử lý vẫn đọc được nội dung. Quyết định là **Xác nhận vi phạm** (ghi vi phạm `REPORT`, báo cáo `RESOLVED`, báo tác giả "Bình luận bạn đã xoá … được xác nhận vi phạm quy chuẩn cộng đồng (<loại>)") hoặc **Không vi phạm** (`DISMISSED`). Bình luận không hiện lại. Người khác xoá (người xử lý xoá thẳng trong bài, tác giả bài viết) thì báo cáo đóng như cũ. Phân biệt bằng `comments.deleted_by = author_id`, không thêm cột.
 
 **Tin nhắn — luồng mới**
 
@@ -170,6 +171,7 @@ Báo cáo là lưới thứ hai cho nội dung lọt qua bộ lọc. Bình luậ
 4. Ra một quyết định cho cả tin, đóng mọi báo cáo đang chờ của tin đó:
    - **Ẩn tin nhắn**: tin bị ẩn với mọi người, ghi vi phạm nguồn `REPORT` với loại là lý do được chọn nhiều nhất (trừ `NEEDS_SUPPORT`), người viết nhận thông báo kèm loại đó.
    - **Giữ nguyên**: không đổi gì với tin, không ai nhận thông báo.
+   - Tin **người gửi đã thu hồi sau khi bị báo cáo** (27/11/2026): thu hồi không xoá được bằng chứng. Hai nút đổi thành **Xác nhận vi phạm** (không đụng tin, tin vẫn là thu hồi; ghi vi phạm `REPORT`, báo cáo `RESOLVED`, báo người gửi "Tin nhắn bạn đã thu hồi … được xác nhận vi phạm quy chuẩn cộng đồng (<loại>)"; nhật ký `MESSAGE_REPORT_RESOLVE` có `alreadyRemoved: true`) và **Không vi phạm** (`DISMISSED`, không ai được báo). Tab Đã xử lý ghi đúng tên quyết định này.
    - Nếu trong các báo cáo có `NEEDS_SUPPORT`: dù ẩn hay giữ, bắt buộc ghi thêm **kết quả hỗ trợ**. Phần này không bao giờ được báo cho người viết.
    - Nếu mọi báo cáo đang chờ của một nội dung đều là `NEEDS_SUPPORT` thì chỉ được **Ghi nhận** (giữ nguyên + kết quả hỗ trợ), không được Ẩn/Xoá. Ẩn/Xoá cần ít nhất một báo cáo có lý do khác, và loại vi phạm lấy từ các lý do khác đó. Luật này áp dụng cho cả tin nhắn và bình luận.
 5. Mọi quyết định ghi `logActivity`.
@@ -220,7 +222,7 @@ System Admin đọc được nhật ký này nhưng không đọc được nội
 
 ## Màn hình "Quy chuẩn cộng đồng" của School Manager
 
-Một trang, bốn tab, chỉ School Manager vào được. Toàn bộ là bảng và bộ lọc, không phải dashboard, để khớp với `screens.md`. Mục menu có số đếm báo cáo tin nhắn đang chờ, tô nổi khi có mục "Cần được hỗ trợ".
+Một trang, năm tab (tab 5 từ 27/11/2026), chỉ School Manager vào được. Toàn bộ là bảng và bộ lọc, không phải dashboard, để khớp với `screens.md`. Mục menu có số đếm báo cáo tin nhắn và báo cáo bình luận đang chờ, tô nổi khi có mục "Cần được hỗ trợ" ở bất kỳ nguồn nào.
 
 Bộ lọc dùng chung cho ba tab đầu: khoảng thời gian (tuần này, tháng này, học kỳ, năm học, tự chọn), khối, lớp, vai trò, loại vi phạm, nguồn (bình luận / tin nhắn), cách phát hiện (tự động / qua báo cáo).
 
@@ -255,7 +257,9 @@ Bấm vào một người → **lịch sử chi tiết**: mỗi dòng một lầ
 
 Nút thêm, sửa, tắt quy tắc; thay đổi có hiệu lực ngay, không cần deploy. Cột "số lần bị gỡ ẩn" cũng là nguồn con số độ chính xác cho báo cáo trước hội đồng.
 
-**Tab 4 — Báo cáo tin nhắn.** Hàng đợi ở mục Luồng báo cáo; hai bộ lọc "Đang chờ" / "Đã xử lý". Báo cáo bình luận bài trường vẫn ở SCR-83 như cũ.
+**Tab 4 — Báo cáo tin nhắn.** Hàng đợi ở mục Luồng báo cáo; hai bộ lọc "Đang chờ" / "Đã xử lý".
+
+**Tab 5 — Báo cáo bình luận** (27/11/2026, `?tab=comments`). Gom mọi báo cáo bình luận SM được xử lý: bình luận bảng tin trường (`/comment-reports`) và bình luận nhóm giáo viên (`/group-comment-reports`, server chỉ trả nhóm giáo viên cho SM). Bộ lọc nguồn Tất cả / Bảng tin trường / Nhóm giáo viên (`&source=school|teacher`) và trạng thái Chờ xử lý / Đã xoá bình luận / Đã bỏ qua. Thẻ và hộp xác nhận xoá dùng chung với trang của GVCN (`pages/schoolfeed/CommentReportCard.jsx`), mỗi thẻ có nhãn nguồn; mỗi quyết định gọi đúng API xử lý của nguồn. "Tất cả": đọc p × 20 mục đầu của mỗi nguồn, gộp theo đúng thứ tự của server (Cần được hỗ trợ trước, rồi báo cáo đầu tiên cũ nhất; đã xử lý: mới nhất trước) rồi cắt trang – phân trang đúng trên cả hai nguồn. Menu SM bỏ "Báo cáo bình luận" và "Báo cáo bình luận nhóm"; hai đường dẫn cũ chuyển về tab này. GVCN giữ trang "Báo cáo bình luận nhóm".
 
 **Đếm một lần vi phạm**
 

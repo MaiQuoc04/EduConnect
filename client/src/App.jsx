@@ -23,7 +23,6 @@ import ActivityDetailPage from './pages/extracurricular/ActivityDetailPage.jsx';
 import ActivityFormPage from './pages/extracurricular/ActivityFormPage.jsx';
 import ActivityListPage from './pages/extracurricular/ActivityListPage.jsx';
 import RegistrationListPage from './pages/extracurricular/RegistrationListPage.jsx';
-import CommentReportsPage from './pages/schoolfeed/CommentReportsPage.jsx';
 import GroupCommentReportsPage from './pages/groupfeed/GroupCommentReportsPage.jsx';
 import ModerationPage from './pages/moderation/ModerationPage.jsx'; // FE-08 moderation (Anh)
 import CreateSchoolPostPage from './pages/schoolfeed/CreateSchoolPostPage.jsx';
@@ -92,6 +91,15 @@ function SubjectEditRedirect() {
   return <Navigate to={`/subjects/${id}?edit`} replace />;
 }
 
+// FE-08 Anh 27/11/2026: the School Manager handles comment reports in "Quy chuẩn cộng đồng" (tab "Báo cáo bình luận").
+// Its old pages lead there (replace), with the source the page showed. Homeroom teachers keep /group-comment-reports.
+const SM_COMMENT_REPORTS = '/moderation?tab=comments';
+function GroupCommentReportsRoute() {
+  const { activeRole } = useAuth();
+  if (activeRole === 'SCHOOL_MANAGER') return <Navigate to={`${SM_COMMENT_REPORTS}&source=teacher`} replace />;
+  return <GroupCommentReportsPage />;
+}
+
 function RoleHome() {
   const { activeRole } = useAuth();
   return <Navigate to={HOME_BY_ROLE[activeRole] ?? '/profile'} replace />;
@@ -151,12 +159,13 @@ export default function App() {
             </ProtectedRoute>
           }
         />
-        {/* FE-08 reported comments of the school feed (17/11/2026): School Manager only; the server checks it too. */}
+        {/* FE-08 reported comments of the school feed (17/11/2026): School Manager only. Since 27/11/2026 a tab of
+            "Quy chuẩn cộng đồng": the old link leads there. */}
         <Route
           path="comment-reports"
           element={
             <ProtectedRoute roles={['SCHOOL_MANAGER']}>
-              <CommentReportsPage />
+              <Navigate to={`${SM_COMMENT_REPORTS}&source=school`} replace />
             </ProtectedRoute>
           }
         />
@@ -171,12 +180,13 @@ export default function App() {
           }
         />
         {/* FE-05 reported comments of the group feeds (19/11/2026): the feeds' moderators – homeroom teachers, the School
-            Manager for the teacher group; the server lists only the feeds the user moderates. */}
+            Manager for the teacher group; the server lists only the feeds the user moderates. FE-08 Anh 27/11/2026: the
+            School Manager is sent to the moderation page (GroupCommentReportsRoute); teachers see this page as before. */}
         <Route
           path="group-comment-reports"
           element={
             <ProtectedRoute roles={['TEACHER', 'SCHOOL_MANAGER']}>
-              <GroupCommentReportsPage />
+              <GroupCommentReportsRoute />
             </ProtectedRoute>
           }
         />

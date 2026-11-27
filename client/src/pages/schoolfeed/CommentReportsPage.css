@@ -73,3 +73,6 @@ a.cr-post-title:hover { text-decoration: underline; }
   .cr-actions .btn { flex: 1 1 0; height: 44px; justify-content: center; }
   .cr-support-note textarea { font-size: 16px; } /* no zoom on focus (iOS) */
 }
+
+/* 27/11/2026: a comment its author deleted after the report (moderator decides "violation or not") */
+.cr-removed-note { margin: 0; }

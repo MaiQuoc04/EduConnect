@@ -23,7 +23,8 @@ const META = {
   'chat.delete_for_everyone_minutes': { group: 'Tin nhắn', label: 'Thời gian được thu hồi tin nhắn với mọi người', unit: 'phút' },
 };
 // The attendance edit deadline left this page on 23/11/2026 (moves to the School Manager's settings, FE-10 / FE-12).
-const GROUPS = ['Đăng nhập', 'Tải tệp lên', 'Tin nhắn', 'Khác'];
+// FE-08 Anh 27/11/2026: only the settings listed in META are shown; there is no "Khác" group.
+const GROUPS = ['Đăng nhập', 'Tải tệp lên', 'Tin nhắn'];
 
 function errorFor(code, rule) {
   if (code === 'REQUIRED') return 'Vui lòng nhập giá trị.';
@@ -45,8 +46,10 @@ export default function SystemSettingsPage() {
   const [saving, setSaving] = useState(false);
 
   function apply(data) {
-    setItems(data.items);
-    setValues(Object.fromEntries(data.items.map((i) => [i.key, i.value])));
+    // FE-08 Anh 27/11/2026: only the settings listed in META are shown (and so only they can be changed and sent).
+    const shown = data.items.filter((i) => META[i.key]);
+    setItems(shown);
+    setValues(Object.fromEntries(shown.map((i) => [i.key, i.value])));
   }
 
   useEffect(() => {
@@ -83,7 +86,7 @@ export default function SystemSettingsPage() {
     setFormError('');
   }
 
-  const grouped = GROUPS.map((g) => ({ group: g, list: items.filter((i) => (META[i.key]?.group ?? 'Khác') === g) })).filter(
+  const grouped = GROUPS.map((g) => ({ group: g, list: items.filter((i) => META[i.key].group === g) })).filter(
     (g) => g.list.length,
   );
 
@@ -109,7 +112,7 @@ export default function SystemSettingsPage() {
                   <h2 className="label-upper">{group}</h2>
                   <div className="settings-list">
                     {list.map((s) => {
-                      const meta = META[s.key] ?? { label: s.description ?? s.key, unit: '' };
+                      const meta = META[s.key];
                       const changed = changedKeys.includes(s.key);
                       return (
                         <div key={s.key} className={`setting-row${errors[s.key] ? ' invalid' : ''}${changed ? ' changed' : ''}`}>

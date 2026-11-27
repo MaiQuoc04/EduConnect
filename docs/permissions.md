@@ -39,7 +39,7 @@ Source: Report 3 section 4.4 (draft v1.3). Full = all records; Restricted (n) = 
 | Group feed comment | Delete | No | Restricted (6) | Restricted (16) | Restricted (16) | Restricted (16) | Restricted (16) |
 | Group feed comment | Like (UC-129, 19/11/2026) | No | Restricted (6) | Restricted (4) | Restricted (4) | Restricted (4) | Restricted (4) |
 | Group feed comment | Report (UC-130, 19/11/2026; not the group moderator) | No | Restricted (6) | Restricted (4) | Restricted (4) | Restricted (4) | Restricted (4) |
-| Group feed comment | Handle reports – delete / dismiss (UC-131, 19/11/2026) | No | Restricted (6) | Restricted (5) | No | No | No |
+| Group feed comment | Handle reports – delete / dismiss (UC-131, 19/11/2026) | No | Restricted (6, 31) | Restricted (5) | No | No | No |
 | Group / team chat | Send / read | No | Restricted (6) | Restricted (4) | Restricted (4) | Restricted (4) | Restricted (4) |
 | Private message | Send / read | No | Restricted (6) | Restricted (4) | Restricted (4) | Restricted (4) | Restricted (4) |
 | Chat message | Reply / react | No | Restricted (6) | Restricted (4) | Restricted (4) | Restricted (4) | Restricted (4) |
@@ -55,7 +55,7 @@ Source: Report 3 section 4.4 (draft v1.3). Full = all records; Restricted (n) = 
 | School post comment | Delete | No | Full | Restricted (17) | Restricted (17) | Restricted (17) | Restricted (17) |
 | School post comment | Like (UC-121) | No | Full | Restricted (15) | Restricted (15) | Restricted (15) | Restricted (15) |
 | School post comment | Report (UC-119) | No | No | Restricted (22) | Restricted (22) | Restricted (22) | Restricted (22) |
-| Reported comment | View queue, delete comment, dismiss reports (UC-120) | No | Full | No | No | No | No |
+| Reported comment | View queue, delete comment, dismiss reports (UC-120) | No | Full (31) | No | No | No | No |
 | Chat message | Report (UC-135, 25/11/2026) | No | Restricted (26) | Restricted (26) | Restricted (26) | Restricted (26) | Restricted (26) |
 | Reported chat message | View queue, read the chat around it, hide / keep (UC-136, 25/11/2026) | No | Restricted (27) | No | No | No | No |
 | Moderation violation | View statistics, history of a person, by class; export (UC-137, 25/11/2026) | No | Full | No | No | No | No |
@@ -132,7 +132,10 @@ Notes:
     only while the message has a pending report and only that chat. Every School Manager sees, on a handled report,
     the decision and every view of the messages around it (who, when, reason). No other chat API is opened to the
     School Manager. A "Cần được hỗ trợ" report needs a
-    "Kết quả hỗ trợ" (business rules §17).
+    "Kết quả hỗ trợ" (business rules §17). A message its sender recalled after the report stays readable to the School
+    Manager only while its report is open, and the decision is "Xác nhận vi phạm" / "Không vi phạm" (27/11/2026); the
+    same holds for a comment its author deleted after the report, for the moderator of that comment only (notes 5, 6,
+    31) – never for a School Manager on a class group comment.
 28. One piece, logged (`MODERATION_ITEM_VIEW`): any violation found by the automatic check; a violation decided from
     reports only when the School Manager handles those reports (school post comments, chat messages, comments of the
     teacher group) – not comments of class, student or parent groups (decided by the homeroom teacher).
@@ -140,3 +143,8 @@ Notes:
     decided from reports.
 30. The System Admin reads the log of these reads (who, when, which report or violation, the reason given) but never
     the content (business rules §13, §17).
+31. Where (27/11/2026, FE-08 Anh): the School Manager handles every report it may act on from "Quy chuẩn cộng đồng" –
+    tab "Báo cáo tin nhắn" (note 27) and tab "Báo cáo bình luận" (school post comments and teacher group comments,
+    never a class, student or parent group). The School Manager's menu has no "Báo cáo bình luận" / "Báo cáo bình luận
+    nhóm" item; their old links lead to the tab. The homeroom teacher keeps "Báo cáo bình luận nhóm"
+    (/group-comment-reports) and never opens "Quy chuẩn cộng đồng". Client only: the APIs and their checks are unchanged.

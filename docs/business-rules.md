@@ -339,7 +339,8 @@ Boundaries that are easy to get wrong:
     report hides nothing (the moderator decides: delete or keep). **Nobody learns who reported**, the moderator neither.
   - **"Báo cáo bình luận nhóm"** (menu, `/group-comment-reports`): the moderator's queue – the homeroom teacher sees
     the comments reported in their class's feed, the School Manager those of the teacher group (never a school post:
-    that queue is FE-08's "Báo cáo bình luận"). One card per comment with the number of reports, the reasons and
+    that queue is FE-08's "Báo cáo bình luận"). Since 27/11/2026 the School Manager handles the teacher group's
+    reports in "Quy chuẩn cộng đồng" › Báo cáo bình luận (§17); this page is the homeroom teacher's. One card per comment with the number of reports, the reasons and
     notes, the group and the post. **Xoá bình luận** deletes it (soft) and closes its reports; its author gets a
     personal notification that names nobody. **Bỏ qua** keeps it and closes the reports. A comment deleted from the
     thread (author, post author, moderator) closes its pending reports too – except "Cần được hỗ trợ" reports, which
@@ -1001,7 +1002,9 @@ and videos are not checked.
   - Matching is by whole word or exact phrase after normalising Vietnamese (accents, letters spread out, repeated
     letters, digits used as letters); never by substring. Accent-free matching only for rules that ask for it.
   - The check never blocks sending: an error in it, or rules not loaded yet, lets the content through (logged).
-    `system_settings` `moderation.enabled` turns the whole check off.
+    `system_settings` `moderation.enabled` turns the whole check off. The moderation settings are not on the System
+    Admin settings page (27/11/2026): `moderation.enabled` and `moderation.context_window` stay in the database with
+    their values (on, 6) and the settings API refuses them.
 - **Checked when sent only** (Anh, 27/11/2026): comments, messages and group posts are checked when they are sent or
   saved. Adding, changing or switching a rule back on never re-checks content already sent; older content is handled
   by reports and by the moderator (§5). Reasons: a wrong rule cannot hide old content in bulk, posts already approved are
@@ -1029,8 +1032,10 @@ and videos are not checked.
   else's message – not their own, not a system line, not a message deleted for everyone or hidden. Reasons:
   inappropriate language, harassment, spam, false information, other (note required, ≤ 500 characters), and
   **"Cần được hỗ trợ"** (`NEEDS_SUPPORT`: self-harm, bullying, abuse, a crisis). Once per person per message (again
-  changes nothing); **nobody learns who reported**. The School Manager handles every message report ("Quy chuẩn cộng
-  đồng" › Báo cáo tin nhắn): one decision per message closes all its pending reports – **Ẩn tin nhắn** (hidden like
+  changes nothing); **nobody learns who reported**. School Manager handles every report it may act on from the
+  moderation page (27/11/2026): "Quy chuẩn cộng đồng" › Báo cáo tin nhắn, and › Báo cáo bình luận for school post
+  and teacher group comments (one queue, filter by source; never a class feed). The School Manager handles every
+  message report ("Quy chuẩn cộng đồng" › Báo cáo tin nhắn): one decision per message closes all its pending reports – **Ẩn tin nhắn** (hidden like
   an automatic hide, a `REPORT` violation, the sender is told the category) or **Giữ nguyên** (nothing changes,
   nobody is told).
 - **"Cần được hỗ trợ" (`NEEDS_SUPPORT`)**, for messages and comments alike – three rules:
@@ -1045,6 +1050,16 @@ and videos are not checked.
      the moderator's queue (§5).
   A `NEEDS_SUPPORT` report **stays open when the content is deleted** another way (author, moderator): deleting does
   not help the person, so it waits for a "Kết quả hỗ trợ".
+- **Recalled / deleted by the author after a report** (27/11/2026): a message its sender recalls, or a comment its
+  author deletes, after it was reported keeps its pending reports (any reason) – recalling or deleting must not erase
+  the evidence. The moderator of that content (School Manager for messages, school post and teacher group comments;
+  the homeroom teacher for class group comments) still reads it and decides **"violation or not"**: **Xác nhận vi
+  phạm** writes the `REPORT` violation, closes the reports (`RESOLVED`) and tells the author ("Tin nhắn bạn đã thu hồi
+  … / Bình luận bạn đã xoá … được xác nhận vi phạm quy chuẩn cộng đồng (<loại>)", no content); **Không vi phạm**
+  closes them (`DISMISSED`), nobody is told. **Nothing becomes visible again** either way. The `NEEDS_SUPPORT` rules
+  above are the same. A comment deleted by someone else (the moderator in the thread, the post's author) closes its
+  reports as before (except `NEEDS_SUPPORT`). Told apart with existing data: `comments.deleted_by = author_id`;
+  `messages.deleted_for_everyone_by = sender_id`.
 - **Counting violations** – only `moderation_violations` with status `ACTIVE`: hidden automatically = 1; removed by a
   moderator after reports = 1; reports kept = 0; hidden then unhidden = 0 (one wrong hit of the rules);
   `NEEDS_SUPPORT` = never. The class of a violation is the student's class **at that time**.

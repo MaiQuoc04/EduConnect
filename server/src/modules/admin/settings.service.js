@@ -21,7 +21,12 @@ const RULES = {
 
 // Keys still in system_settings but no longer on this page (System Admin neither sees nor edits them).
 // attendance.edit_deadline_time (23/11/2026): FE-12 keeps reading it; Dung moves it to the School Manager's settings.
-const NOT_ON_PAGE = ['attendance.edit_deadline_time'];
+const NOT_ON_PAGE = [
+  'attendance.edit_deadline_time',
+  // FE-08 Anh 27/11/2026: moderation settings are not edited by the System Admin (fixed 6 + 6, scan always on)
+  'moderation.enabled',
+  'moderation.context_window',
+];
 
 export async function listSettings() {
   const { rows } = await pool.query(

@@ -1,14 +1,12 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
-import { Link, useSearchParams } from 'react-router-dom';
+import { useCallback, useEffect, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { listGroupCommentReports, resolveGroupCommentReport } from '../../api/groupPosts.js';
-import Avatar from '../../components/Avatar.jsx';
-import { REPORT_REASONS } from '../../components/CommentThread.jsx';
 import { FeedEmpty, FeedError, FeedPager, FeedSkeleton, FeedTabs } from '../../components/feed/Feed.jsx';
 import Icon from '../../components/Icon.jsx';
-import { SupportBadge, SupportNoteField, SupportNoteResult, supportNoteOk } from '../../components/feed/SupportReport.jsx';
 import { useToast } from '../../context/ToastContext.jsx';
-import { feedErrorText, formatDateTime } from '../schoolfeed/schoolFeedShared.jsx';
-import { postPopupPath } from './groupFeedShared.jsx';
+import { feedErrorText } from '../schoolfeed/schoolFeedShared.jsx';
+// FE-08 Anh 27/11/2026: shared with the moderation page (this page's card and dialog, moved there unchanged).
+import { CommentReportCard, DeleteCommentDialog, decisionToast } from '../schoolfeed/CommentReportCard.jsx';
 import '../../components/feed/feed.css';
 import '../schoolfeed/CommentReportsPage.css';
 
@@ -25,168 +23,12 @@ const TABS = [
   { key: 'RESOLVED', label: 'Đã xoá bình luận' },
   { key: 'DISMISSED', label: 'Đã bỏ qua' },
 ];
-const REASON_LABELS = Object.fromEntries(REPORT_REASONS.map((r) => [r.code, r.label]));
 
 const REPORT_MESSAGES = {
   MSG_REPORT_ALREADY_HANDLED: 'Báo cáo này đã được xử lý.',
   MSG_REPORT_NOT_FOUND: 'Không tìm thấy báo cáo của bình luận này.',
 };
 const textOf = (err, fallback) => REPORT_MESSAGES[err?.code] ?? feedErrorText(err, fallback);
-
-// Confirmation of "Xoá bình luận" (native <dialog>, .sf-dialog styles). The safe button gets the focus.
-function DeleteDialog({ item, busy, onCancel, onConfirm }) {
-  const ref = useRef(null);
-  const open = Boolean(item);
-  useEffect(() => {
-    const dialog = ref.current;
-    if (open && !dialog.open) dialog.showModal();
-    if (!open && dialog.open) dialog.close();
-  }, [open]);
-  return (
-    <dialog
-      ref={ref}
-      className="sf-dialog"
-      aria-labelledby="gcr-delete-title"
-      aria-describedby="gcr-delete-desc"
-      onCancel={(e) => {
-        e.preventDefault();
-        if (!busy) onCancel();
-      }}
-    >
-      <div className="sf-dialog-head is-danger">
-        <Icon name="delete" />
-        <h2 id="gcr-delete-title" className="title-sm">
-          Xoá bình luận?
-        </h2>
-      </div>
-      <div id="gcr-delete-desc">
-        {item && (
-          <p className="sf-dialog-quote">
-            <strong>{item.authorName}:</strong> {item.content}
-          </p>
-        )}
-        <div className="notice amber">
-          <Icon name="warning" size="sm" />
-          <p>
-            Bình luận sẽ không còn hiển thị với các thành viên của nhóm; các trả lời bên dưới vẫn được giữ. Người viết nhận
-            được thông báo rằng bình luận đã bị xoá sau khi được báo cáo, không kèm tên người báo cáo.
-          </p>
-        </div>
-      </div>
-      <div className="sf-dialog-actions">
-        <button type="button" className="btn btn-secondary" onClick={onCancel} disabled={busy} autoFocus>
-          Giữ lại
-        </button>
-        <button type="button" className="btn btn-primary sf-btn-danger" onClick={onConfirm} disabled={busy}>
-          <Icon name={busy ? 'progress_activity' : 'delete'} size="sm" className={busy ? 'cr-spin' : undefined} />
-          {busy ? 'Đang xoá…' : 'Xoá bình luận'}
-        </button>
-      </div>
-    </dialog>
-  );
-}
-
-// Moderation (FE-08 Anh, 25/11/2026): a "Cần được hỗ trợ" report is labelled, needs a "Kết quả hỗ trợ" to be decided,
-// and when every report is NEEDS_SUPPORT it can only be recorded ("Ghi nhận" = DISMISS), never deleted.
-function ReportCard({ item, busy, onDelete, onDismiss }) {
-  const pending = item.status === 'PENDING';
-  const [supportNote, setSupportNote] = useState('');
-  const support = pending && item.hasNeedsSupport;
-  const blocked = Boolean(busy) || (support && !supportNoteOk(supportNote));
-  const note = support ? supportNote : undefined;
-  const postLink = postPopupPath(item.groupId, item.postId);
-  const excerpt = item.postExcerpt?.replace(/\s+/g, ' ').trim() || 'Bài viết';
-  return (
-    <article className={`card card-outline cr-item${item.hasNeedsSupport ? ' is-support' : ''}`} aria-label={`Bình luận của ${item.authorName}`}>
-      <header className="cr-item-head">
-        {item.hasNeedsSupport && <SupportBadge />}
-        <span className="cr-count" title={`${item.reportCount} lượt báo cáo`}>
-          <Icon name="flag" size="sm" filled />
-          <span className="mono">{item.reportCount.toLocaleString('vi-VN')}</span>
-          <span>lượt báo cáo</span>
-        </span>
-        <span className="caption muted">
-          {item.reportCount > 1
-            ? `Lần đầu ${formatDateTime(item.firstReportedAt)} · gần nhất ${formatDateTime(item.lastReportedAt)}`
-            : `Báo cáo lúc ${formatDateTime(item.firstReportedAt)}`}
-        </span>
-      </header>
-
-      <div className="cr-comment">
-        <Avatar src={item.authorAvatarUrl} name={item.authorName ?? ''} size={36} />
-        <div className="cr-comment-body">
-          <p className="cr-author">
-            {item.authorName}
-            <span className="caption muted"> · bình luận lúc {formatDateTime(item.commentCreatedAt)}</span>
-          </p>
-          <p className={`cr-content${item.isDeleted ? ' is-deleted' : ''}`}>{item.content}</p>
-          {item.isDeleted && <span className="chip">Đã bị xoá</span>}
-        </div>
-      </div>
-
-      <p className="cr-post">
-        <Icon name="forum" size="sm" />
-        <span className="caption muted">{item.groupName ? `${item.groupName} · trong bài` : 'Trong bài'}</span>
-        {item.postDeleted ? (
-          <span className="cr-post-title muted">{excerpt} (bài đã xoá)</span>
-        ) : (
-          <Link to={postLink} className="cr-post-title">
-            {excerpt}
-          </Link>
-        )}
-      </p>
-
-      <div className="cr-reasons">
-        <span className="chips">
-          {item.reasons.map((r) => (
-            <span key={r.reason} className="chip ink">
-              {REASON_LABELS[r.reason] ?? r.reason}
-              {item.reportCount > 1 && <span className="mono"> × {r.count}</span>}
-            </span>
-          ))}
-        </span>
-        {item.notes.length > 0 && (
-          <ul className="cr-notes">
-            {item.notes.map((n, i) => (
-              <li key={i}>
-                <span className="caption muted">{REASON_LABELS[n.reason] ?? n.reason}:</span> “{n.note}”
-              </li>
-            ))}
-          </ul>
-        )}
-      </div>
-
-      {support && <SupportNoteField value={supportNote} onChange={setSupportNote} disabled={Boolean(busy)} />}
-
-      {pending ? (
-        <footer className="cr-actions">
-          <button type="button" className={`btn ${item.needsSupportOnly ? 'btn-primary' : 'btn-secondary'}`} onClick={() => onDismiss(item, note)} disabled={blocked}>
-            <Icon
-              name={busy === 'DISMISS' ? 'progress_activity' : item.needsSupportOnly ? 'task_alt' : 'do_not_disturb_on'}
-              size="sm"
-              className={busy === 'DISMISS' ? 'cr-spin' : undefined}
-            />
-            {busy === 'DISMISS' ? 'Đang lưu…' : item.needsSupportOnly ? 'Ghi nhận' : 'Bỏ qua'}
-          </button>
-          {!item.needsSupportOnly && (
-            <button type="button" className="btn btn-primary sf-btn-danger" onClick={() => onDelete(item, note)} disabled={blocked}>
-              <Icon name="delete" size="sm" />
-              Xoá bình luận
-            </button>
-          )}
-        </footer>
-      ) : (
-        <p className="caption muted cr-decided">
-          <Icon name={item.status === 'RESOLVED' ? 'delete' : 'do_not_disturb_on'} size="sm" />
-          {item.status === 'RESOLVED' ? 'Bình luận đã bị xoá' : item.hasNeedsSupport ? 'Đã ghi nhận' : 'Đã bỏ qua báo cáo'}
-          {item.resolvedAt && ` lúc ${formatDateTime(item.resolvedAt)}`}
-          {item.resolvedByName && ` · ${item.resolvedByName}`}
-        </p>
-      )}
-      {!pending && <SupportNoteResult note={item.supportNote} />}
-    </article>
-  );
-}
 
 export default function GroupCommentReportsPage() {
   const toast = useToast();
@@ -224,13 +66,7 @@ export default function GroupCommentReportsPage() {
     setBusy({ commentId: item.commentId, action });
     try {
       await resolveGroupCommentReport(item.commentId, action, supportNote);
-      toast(
-        action === 'DELETE'
-          ? 'Đã xoá bình luận và báo cho người viết.'
-          : item.needsSupportOnly
-            ? 'Đã ghi nhận kết quả hỗ trợ.'
-            : 'Đã bỏ qua báo cáo. Bình luận được giữ nguyên.',
-      );
+      toast(decisionToast(item, action)); // FE-08 Anh 27/11/2026: shared with the moderation page
       setDeleting(null);
       reload();
     } catch (err) {
@@ -286,8 +122,9 @@ export default function GroupCommentReportsPage() {
             {state.loading && !data && <FeedSkeleton count={3} />}
             {state.error && <FeedError message={state.error} onRetry={reload} />}
             {data?.items.map((item) => (
-              <ReportCard
+              <CommentReportCard // FE-08 Anh 27/11/2026: shared with the moderation page
                 key={item.commentId}
+                source="GROUP_POST"
                 item={item}
                 busy={busyOf(item)}
                 onDelete={(it, note) => setDeleting({ item: it, note })}
@@ -307,7 +144,10 @@ export default function GroupCommentReportsPage() {
         </>
       )}
 
-      <DeleteDialog
+      {/* FE-08 Anh 27/11/2026: shared with the moderation page */}
+      <DeleteCommentDialog
+        idPrefix="gcr"
+        source="GROUP_POST"
         item={deleting?.item ?? null}
         busy={busy?.action === 'DELETE'}
         onCancel={() => setDeleting(null)}

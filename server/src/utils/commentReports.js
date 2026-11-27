@@ -38,6 +38,8 @@ import { recordReportViolation, reportCategory } from './moderationViolations.js
 //   comments   withReportedByMe(tree, userId) after feed.listComments adds reportedByMe to each node (opt-in).
 //   UC-66-like deletes (author / moderator deletes from the thread): call resolvePendingReports(commentId, userId,
 //              client) after feed.softDeleteComment, so the queue never keeps reports of a comment already gone.
+//              27/11/2026 (FE-08 Anh, business-rules §17): except when the AUTHOR deleted it – deleting must not
+//              erase a report; the moderator still decides "violation or not" (resolvePendingReports, resolveReport).
 //
 // Moderation phase 5 (25/11/2026, docs/moderation-plan.md "Luồng báo cáo"): reason NEEDS_SUPPORT ("Cần được hỗ trợ":
 // someone may need help – self-harm, bullying, abuse, a crisis). It is not a violation:
@@ -129,14 +131,16 @@ const inTransaction = (db, fn) => (db === pool ? withTransaction(fn) : fn(db));
  * that the user moderates it (FE-08: column 'school_post_id'; FE-05: column 'post_id' and groupId). Deleted comments
  * are returned too (isDeleted). null when the id does not exist. forUpdate locks the comment row (handling a report).
  * @returns {Promise<{ commentId: number, column: 'post_id' | 'school_post_id', postId: number, groupId: number | null,
- *   authorId: number, isDeleted: boolean } | null>}
+ *   authorId: number, isDeleted: boolean, deletedByAuthor: boolean } | null>}
+ * deletedByAuthor (27/11/2026): deleted by its own author (comments.deleted_by = author_id).
  */
 export async function findReportedComment(commentId, { forUpdate = false } = {}, db = pool) {
   const { rows } = await db.query(
     `SELECT c.comment_id AS "commentId",
             CASE WHEN c.school_post_id IS NOT NULL THEN 'school_post_id' ELSE 'post_id' END AS "column",
             COALESCE(c.school_post_id, c.post_id) AS "postId", p.group_id AS "groupId",
-            c.author_id AS "authorId", c.deleted_at IS NOT NULL AS "isDeleted"
+            c.author_id AS "authorId", c.deleted_at IS NOT NULL AS "isDeleted",
+            (c.deleted_at IS NOT NULL AND c.deleted_by = c.author_id) AS "deletedByAuthor"
      FROM comments c
      LEFT JOIN posts p ON p.post_id = c.post_id
      WHERE c.comment_id = $1
@@ -239,7 +243,11 @@ function sourceSql({ source, groupIds }, params) {
 // and not counted (FE-08 closes them when the comment is deleted; this also covers a post deleted meanwhile).
 // Moderation (25/11/2026): except a NEEDS_SUPPORT report – the person who may need help still does when the comment is
 // gone, so it stays in the queue until someone records what was done (resolvePendingReports leaves it pending).
-const STILL_THERE = `(r.reason = 'NEEDS_SUPPORT' OR (c.deleted_at IS NULL AND sp.deleted_at IS NULL AND p.deleted_at IS NULL))`;
+// 27/11/2026 (business-rules §17): a comment its AUTHOR deleted is still to decide ("violation or not": deleting must
+// not erase a report), so it stays too – unless its post was deleted, as before.
+const DELETED_BY_AUTHOR = `(c.deleted_at IS NOT NULL AND c.deleted_by = c.author_id)`;
+const STILL_THERE = `(r.reason = 'NEEDS_SUPPORT' OR (sp.deleted_at IS NULL AND p.deleted_at IS NULL
+  AND (c.deleted_at IS NULL OR ${DELETED_BY_AUTHOR})))`;
 
 // The reported comments of one feed in one status, one row per comment (alias g).
 function groupedSql(filter, params) {
@@ -269,7 +277,12 @@ function groupedSql(filter, params) {
  * Order: PENDING oldest first report first (a queue: nothing waits forever); RESOLVED / DISMISSED newest decision first.
  * Moderation (25/11/2026): in PENDING a comment with a NEEDS_SUPPORT report always comes first. Each item also has
  * hasNeedsSupport, needsSupportOnly (then only DISMISS – "Ghi nhận" – is allowed) and supportNote (once decided).
- * PENDING leaves out comments (or posts) already deleted: nothing is left to decide (except NEEDS_SUPPORT reports).
+ * PENDING leaves out comments (or posts) already deleted: nothing is left to decide (except NEEDS_SUPPORT reports, and
+ * comments their author deleted after the report – 27/11/2026).
+ * deletedByAuthorAfterReport (27/11/2026): the author deleted the comment after it was reported and, for a decided
+ * item, a moderator decided after that ("Xác nhận vi phạm" / "Không vi phạm"); the content is still returned to the
+ * moderator of this feed, who must judge it. A report closed by the old rule (the author's delete closed it at once,
+ * resolved_at = deleted_at) is not one.
  * @returns {Promise<{ items: object[], page: number, pageSize: number, total: number }>} each item:
  *   { commentId, content, commentCreatedAt, isDeleted, authorId, authorName, authorAvatarUrl,
  *     source: 'SCHOOL_POST' | 'GROUP_POST', postId, postTitle (school post) | null, postExcerpt (group post) | null,
@@ -308,6 +321,8 @@ export async function listReports(filter, db = pool) {
             g.last_reported_at AS "lastReportedAt", g.resolved_at AS "resolvedAt", rb.full_name AS "resolvedByName",
             g.has_needs_support AS "hasNeedsSupport", g.needs_support_only AS "needsSupportOnly",
             g.support_note AS "supportNote",
+            (${DELETED_BY_AUTHOR} AND c.deleted_at > g.first_reported_at
+             AND ($1::varchar = 'PENDING' OR g.resolved_at > c.deleted_at)) AS "deletedByAuthorAfterReport",
             (SELECT COALESCE(json_agg(json_build_object('reason', x.reason, 'count', x.n) ORDER BY x.n DESC, x.reason),
                              '[]'::json)
              FROM (SELECT r.reason, COUNT(*) AS n FROM comment_reports r
@@ -356,12 +371,16 @@ export async function countPendingReports(filter, db = pool) {
  * ASSUMPTION (moderation, 25/11/2026): a NEEDS_SUPPORT report is NOT closed this way – deleting the comment does not
  * help the person who may need help, and closing it needs a "Kết quả hỗ trợ". It stays PENDING (still listed, see
  * STILL_THERE) until a moderator records one with resolveReport.
+ * 27/11/2026 (FE-08 Anh, business-rules §17): nothing is closed when the comment was deleted by its AUTHOR (deleted_by
+ * = author_id, read here so the callers in FE-05 / FE-08 stay as they are): its reports stay pending and the moderator
+ * decides "violation or not" (resolveReport). Deleted by someone else (moderator, the post's author): as before.
  * @returns {Promise<number>} how many reports were closed
  */
 export async function resolvePendingReports(commentId, resolvedBy, db = pool) {
   const { rowCount } = await db.query(
-    `UPDATE comment_reports SET status = 'RESOLVED', resolved_by = $2, resolved_at = NOW()
-     WHERE comment_id = $1 AND status = 'PENDING' AND deleted_at IS NULL AND reason <> 'NEEDS_SUPPORT'`,
+    `UPDATE comment_reports r SET status = 'RESOLVED', resolved_by = $2, resolved_at = NOW()
+     WHERE r.comment_id = $1 AND r.status = 'PENDING' AND r.deleted_at IS NULL AND r.reason <> 'NEEDS_SUPPORT'
+       AND NOT EXISTS (SELECT 1 FROM comments c WHERE c.comment_id = r.comment_id AND ${DELETED_BY_AUTHOR})`,
     [commentId, resolvedBy],
   );
   return rowCount;
@@ -382,13 +401,18 @@ export async function resolvePendingReports(commentId, resolvedBy, db = pool) {
  *   - a pending NEEDS_SUPPORT report → supportNote required (400 MSG_SUPPORT_NOTE_REQUIRED), written on those reports;
  *   - EVERY pending report NEEDS_SUPPORT → only DISMISS ("Ghi nhận"); DELETE → 400 MSG_REPORT_SUPPORT_ONLY;
  *   - DELETE writes a moderation_violations row (source REPORT, category = reportCategory of the other reasons).
+ * Deleted by its author after the report (27/11/2026, business-rules §17): DELETE = "Xác nhận vi phạm" – the comment is
+ * not deleted again (commentDeleted false), the violation is written, the reports → RESOLVED, violationConfirmed true:
+ * the caller tells the author after COMMIT (moderationNotify.notifyContentHidden alreadyRemoved). DISMISS = "Không vi
+ * phạm" → DISMISSED. Nothing becomes visible again.
  * @param {number} commentId
  * @param {number} resolvedBy the moderator's user id
  * @param {'DELETE' | 'DISMISS'} action
  * @param {import('pg').PoolClient | import('pg').Pool} [db]
  * @param {{ supportNote?: string }} [options]
  * @returns {Promise<{ commentId: number, action: string, status: 'RESOLVED' | 'DISMISSED', resolvedCount: number,
- *   commentDeleted: boolean, authorId: number, target: { column: string, id: number }, reason: string | null }>}
+ *   commentDeleted: boolean, violationConfirmed: boolean, contentType: 'SCHOOL_COMMENT' | 'GROUP_COMMENT',
+ *   authorId: number, target: { column: string, id: number }, reason: string | null }>}
  *   reason = the most frequent reason of the closed reports OTHER than NEEDS_SUPPORT (for the notification, which
  *   never mentions a "Cần được hỗ trợ" report); null when every report was NEEDS_SUPPORT.
  */
@@ -434,16 +458,17 @@ export async function resolveReport(commentId, resolvedBy, action, db = pool, { 
       );
     }
     const target = { column: comment.column, id: comment.postId };
+    const contentType = comment.column === FEED_COLUMNS.SCHOOL_POST ? 'SCHOOL_COMMENT' : 'GROUP_COMMENT';
     let commentDeleted = false;
-    if (action === 'DELETE') {
+    let violationConfirmed = false;
+    if (action === 'DELETE' && comment.deletedByAuthor) {
+      // 27/11/2026: already deleted by its author – confirm the violation, touch nothing else
+      await recordReportViolation(client, { contentType, commentId, authorId: comment.authorId, category });
+      violationConfirmed = true;
+    } else if (action === 'DELETE') {
       commentDeleted = comment.isDeleted ? false : await softDeleteComment(target, commentId, resolvedBy, client);
       if (commentDeleted) {
-        await recordReportViolation(client, {
-          contentType: comment.column === FEED_COLUMNS.SCHOOL_POST ? 'SCHOOL_COMMENT' : 'GROUP_COMMENT',
-          commentId,
-          authorId: comment.authorId,
-          category,
-        });
+        await recordReportViolation(client, { contentType, commentId, authorId: comment.authorId, category });
       }
     }
     const status = action === 'DELETE' ? 'RESOLVED' : 'DISMISSED';
@@ -459,6 +484,8 @@ export async function resolveReport(commentId, resolvedBy, action, db = pool, { 
       status,
       resolvedCount,
       commentDeleted,
+      violationConfirmed,
+      contentType,
       authorId: comment.authorId,
       target,
       reason: category,

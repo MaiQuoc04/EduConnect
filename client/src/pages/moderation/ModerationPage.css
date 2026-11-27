@@ -66,6 +66,11 @@
 .mod-view-reason { white-space: pre-wrap; overflow-wrap: anywhere; }
 .mod-views-none { display: flex; align-items: center; gap: 4px; margin: 0; }
 
+/* Tab "Báo cáo bình luận" (27/11/2026): the cards of the old comment report pages (schoolfeed/CommentReportsPage.css) */
+.mod-cr-sources { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; }
+.mod-body .mod-cr-toolbar { margin-bottom: 0; }
+.mod-body .cr-list, .mod-body .feed-pager { max-width: 880px; }
+
 @media (max-width: 640px) {
   .mod-filter, .mod-filter-search { flex: 1 1 100%; }
   .mod-toolbar .btn, .mod-decide .btn { width: 100%; justify-content: center; }
@@ -73,4 +78,7 @@
   .mod-test-row .btn { height: 44px; justify-content: center; }
   .mod-report, .mod-chat, .mod-decide { padding: 12px; }
   .mod-messages { max-height: none; }
+  .mod-cr-sources { align-items: stretch; flex-direction: column; }
+  .mod-cr-sources .pill-tabs { display: grid; grid-template-columns: repeat(3, 1fr); }
+  .mod-cr-sources .pill-tabs button { min-height: 44px; padding: 6px 8px; }
 }
