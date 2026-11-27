@@ -37,8 +37,9 @@ reactions, attachments) is merged into one place after both are on `develop`.
   R5 cases 5.1–5.3 rewritten for the period limits + 1 FE-10 case + 1 subject-week case (warning only), R3 10.1.11
   "id pending" → UC-133 / SCR-86 with a screenshot, R4 table `school_settings`.
 
-- **FE-08 comment reports in "Quy chuẩn cộng đồng" (27/11/2026, Anh, `feature/fe-08-moderation-comment-reports`,
-  NOT merged):** client only – no server, API or schema change. School Manager: one moderation item in the menu ("Báo
+- **FE-08 comment reports in "Quy chuẩn cộng đồng" (27/11/2026, Anh, `feature/fe-08-moderation-comment-reports`
+  `c52dd7d`; merged into `develop` 27/11/2026 by Anh on GitHub, PR #25, merge `3ad1b46` – reviewed by the lead
+  afterwards, see "Lead review" at the end of this entry):** client only – no server, API or schema change. School Manager: one moderation item in the menu ("Báo
   cáo bình luận" and "Báo cáo bình luận nhóm" removed); `/moderation` gets tab 5 "Báo cáo bình luận"
   (`?tab=comments&source=school|teacher`) with school post comments (`/comment-reports`) and teacher group comments
   (`/group-comment-reports`), exact merged paging under "Tất cả"; menu badge = message + comment reports waiting,
@@ -50,7 +51,7 @@ reactions, attachments) is merged into one place after both are on `develop`.
     `CommentReportCard.jsx` (same markup, ids `gcr-*`, same texts); behaviour for homeroom teachers unchanged.
   - **Quoc (FE-09):** the `COMMENT_REPORT` notification link should now be `/moderation?tab=comments` (today
     `/comment-reports`, which still works through the client redirect).
-  - **Recalled / deleted by the author after a report (27/11/2026, same branch, NOT merged; server + client, no schema
+  - **Recalled / deleted by the author after a report (27/11/2026, same branch, merged with PR #25; server + client, no schema
     change, no new endpoint):** business-rules §17. A message recalled by its sender after a report: "Xác nhận vi phạm"
     (action HIDE) writes the REPORT violation without touching the message, tells the sender (new text,
     `moderationNotify.notifyContentHidden` `alreadyRemoved`), log detail `alreadyRemoved: true`; "Không vi phạm" (KEEP)
@@ -65,10 +66,20 @@ reactions, attachments) is merged into one place after both are on `develop`.
       `violationConfirmed` and returns that flag. `GroupCommentReportsPage.jsx`: the toast comes from the shared
       `decisionToast`; the card shows the pill and the two buttons for such a comment. Homeroom teachers now see, in
       their queue, class comments the author deleted after a report.
-  - **System Admin settings page (27/11/2026, same branch, NOT merged):** the "Khác" group is gone – only the keys in
+  - **System Admin settings page (27/11/2026, same branch, merged with PR #25):** the "Khác" group is gone – only the keys in
     `META` are shown and sent; `moderation.enabled` / `moderation.context_window` added to `NOT_ON_PAGE` (not listed,
     `PATCH` refuses them with `MSG_SETTINGS_INVALID` / `UNKNOWN`); values in the DB unchanged. **Linh:** touches
     `SystemSettingsPage.jsx` and `settings.service.js` (FE-13).
+  - **Lead review (27/11/2026, on `develop` `b01e99d`):** server `npm test` 87/87, client build passes. Checked:
+    a sender's recall / an author's delete no longer closes the reports (`resolvePendingReports` reads
+    `deleted_by = author_id` inside the same transaction as the delete; a moderator's delete still closes them);
+    "Xác nhận vi phạm" on such content writes one REPORT violation and touches nothing else; NEEDS_SUPPORT-only reports
+    still refuse HIDE / DELETE; `listReports` `$1` is the status as the code says; the System Admin page now matches the
+    rule that moderation settings stay fixed in the DB (no one edits them in the app). No blocker. Notes: (1) a new
+    `system_settings` key now only shows on the System Admin page after it gets a `META` entry (Linh, FE-13);
+    (2) FE-09 link for `COMMENT_REPORT` still `/comment-reports` (works through the redirect) – owed by Quoc;
+    (3) not clicked through in a browser by the lead. Owed by Anh: Change Log and R3/R4/R5 for tab 5 and the
+    "violation or not" decision.
 
 - **FE-04 SCR-23 "Loại lớp áp dụng" as a summary + pop-up (27/11/2026, Khanh, client only, on
   `feature/fe-05-group-feed` `af73107`, with docs `75ae9df` – parent chat label per child, SCR-26 / SCR-35 wording;
