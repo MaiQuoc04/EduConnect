@@ -29,6 +29,11 @@ reactions, attachments) is merged into one place after both are on `develop`.
 
 ## Current status (read first; update after every merge, schema patch or new decision)
 
+- **FE-11 sub-feature renamed "Academic Results" (28/11/2026, lead decision, docs only):** ranking is gone (UC-89 /
+  SCR-48 removed 23/11), so the sub-feature of UC-88, UC-89 (removed) and UC-128 in `docs/use-cases.md` is now
+  "Academic Results" instead of "Results & Ranking" (Linh's proposal in `docs/report-fixes-fe11-linh.md` item 5).
+  Owed (Linh): R3 III.11.3 heading and the I.4.2 rows of UC-88 / UC-128.
+
 - **All ASSUMPTIONs approved by the lead (27/11/2026, decision, no code change):** every `ASSUMPTION` up to
   `develop` `9716357` is the agreed behaviour – about 178 in `server/src` + `client/src` (list:
   `git grep -n "ASSUMPTION" 9716357 -- server/src client/src`), 22 in business-rules.md, 1 in the seed; noted at the

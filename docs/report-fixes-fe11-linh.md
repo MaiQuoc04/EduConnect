@@ -37,8 +37,8 @@ Code: `server/src/modules/grades/grades.calc.js` (`academicLevel`, unit tests in
     (UC-88, UC-89)."
   - Fix: "… Students and parents see the finalized scores, the subject averages and the academic level (UC-88)."
 - [ ] **5. III.11.3 heading**
-  - Now: "Results & Ranking". Fix: "Academic Results". (In the UC table the sub-feature of UC-88 / UC-128 should read
-    the same; `docs/use-cases.md` still says "Results & Ranking" – keep both in step.)
+  - Now: "Results & Ranking". Fix: "Academic Results". (In the UC table the sub-feature of UC-88 / UC-128 reads
+    the same; `docs/use-cases.md` changed by the lead 28/11/2026.)
 - [ ] **6. III.11.3.1 Academic Results (SCR-47) – field "Bảng kết quả lớp"**
   - Now: "… one column per subject average, ĐTB chung, Hạng …".
   - Fix: "Teacher / School Manager, read only: student (link to the student's report card), one column per subject

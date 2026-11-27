@@ -183,9 +183,9 @@ Source: Report 3 section 4.2 (draft v1.3). Actor "User" = any signed-in account.
 | UC-85 | Finalize Grades | Teacher | Grade Entry | Finalize the grades of a class, subject and semester, which locks them. |
 | UC-86 | Unlock Grades | School Manager | Grade Control | Unlock finalized grades of a class, subject and semester. |
 | UC-87 | View Grade Change History | School Manager | Grade Control | View who changed which grade and when. |
-| UC-88 | View Grades | Teacher, Student, Parent, School Manager | Results & Ranking | View grades, semester / year subject averages and the academic level (Tốt / Khá / Đạt / Chưa đạt, Circular 22, since 23/11/2026) within the role's scope (student / parent: finalized grade books only). |
-| UC-89 | View Class Ranking | Teacher, Student, Parent, School Manager | Results & Ranking | **Removed 23/11/2026** (Circular 22: no overall average, students are not compared); replaced by the academic level in UC-88. |
-| UC-128 | Export Grade Book | Teacher, School Manager | Results & Ranking | Export a grade book (class × subject × semester) to Excel, finalized or not: each score, the semester average, the book status and a note (added 18/11/2026). |
+| UC-88 | View Grades | Teacher, Student, Parent, School Manager | Academic Results | View grades, semester / year subject averages and the academic level (Tốt / Khá / Đạt / Chưa đạt, Circular 22, since 23/11/2026) within the role's scope (student / parent: finalized grade books only). |
+| UC-89 | View Class Ranking | Teacher, Student, Parent, School Manager | Academic Results | **Removed 23/11/2026** (Circular 22: no overall average, students are not compared); replaced by the academic level in UC-88. |
+| UC-128 | Export Grade Book | Teacher, School Manager | Academic Results | Export a grade book (class × subject × semester) to Excel, finalized or not: each score, the semester average, the book status and a note (added 18/11/2026). |
 
 ## FE-12 Attendance Management
 
