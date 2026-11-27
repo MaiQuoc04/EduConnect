@@ -1,4 +1,7 @@
 -- FE-09 Notifications (Quoc, 18/11/2026, approved by the lead the same day).
+-- 28/11/2026: folded into educonnect_schema_v0.3.sql (column, primary key, foreign key, index, trigger). Run this patch
+-- only on a database created from the schema file before that date; on a new database it is not needed (and would
+-- fail on the existing foreign key).
 --
 -- 1. notification_recipients.role_code: the role a notification row is for. A user sees a notification only under
 --    that ACTIVE role (business rules §9, FE-09 decisions); someone who is both teacher and parent of the same class

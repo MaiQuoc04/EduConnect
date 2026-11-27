@@ -40,6 +40,12 @@
 -- 17/11/2026: + comment_reports (52 tables; FE-08: a user reports a comment, the moderator deletes it or dismisses the
 --   report; shared with FE-05 because it points to the comment, not the post). Existing database: run
 --   patch_v0.3_comment_reports.sql.
+-- 18/11/2026: + notification_recipients.role_code (FE-09: a notification row is for one role; a user sees it only
+--   under that active role; primary key (notification_id, user_id, role_code)) and the AFTER INSERT statement trigger
+--   trg_notification_recipients_notify (pg_notify 'notification_recipients' with the new notification ids, delivered
+--   only on COMMIT; server/src/sockets/notificationListener.js listens). Existing database: run
+--   patch_v0.3_notification_roles.sql (approved by the lead 18/11/2026). Folded into this file 28/11/2026 (until then
+--   only the patch had it).
 -- 20/11/2026: + group_members.hidden_at (FE-06 UC-132: a member hides a 1-1 chat or a team from their conversation
 --   list until something new happens in it). Existing database: run patch_v0.3_conversation_hidden.sql (approved by
 --   the lead, run on the shared database 20/11/2026).
@@ -831,15 +837,20 @@ CREATE TABLE notifications (
   FOREIGN KEY (created_by) REFERENCES users(user_id)
 );
 
--- One row per recipient. Unread = read_at IS NULL (also used by "View Notification Read Status").
+-- One row per recipient and role. Unread = read_at IS NULL (also used by "View Notification Read Status").
+-- role_code (18/11/2026, FE-09): the role the row is for; a user sees it only under that active role, so someone who is
+-- both teacher and parent of the same class gets two rows, each read on its own (business rules §9). Every INSERT
+-- gives it (code). New rows are announced in real time by trg_notification_recipients_notify (section 14).
 CREATE TABLE notification_recipients (
   notification_id BIGINT NOT NULL,
   user_id         BIGINT NOT NULL,
+  role_code       VARCHAR(50) NOT NULL,           -- SYSTEM_ADMIN, SCHOOL_MANAGER, TEACHER, STUDENT, PARENT
   student_id      BIGINT NULL,                    -- child concerned, so parents can filter by child
   read_at         TIMESTAMPTZ NULL,
-  PRIMARY KEY (notification_id, user_id),
+  PRIMARY KEY (notification_id, user_id, role_code),
   FOREIGN KEY (notification_id) REFERENCES notifications(notification_id),
   FOREIGN KEY (user_id)         REFERENCES users(user_id),
+  CONSTRAINT fk_notification_recipients_role FOREIGN KEY (role_code) REFERENCES roles (role_code),
   FOREIGN KEY (student_id)      REFERENCES students(student_id)
 );
 
@@ -1014,7 +1025,7 @@ CREATE INDEX idx_group_members_group_id_user_id ON group_members (group_id, user
 CREATE INDEX idx_messages_group_id_sent_at ON messages (group_id, sent_at);
 CREATE UNIQUE INDEX uq_messages_client_message_id
   ON messages (group_id, sender_id, client_message_id) WHERE client_message_id IS NOT NULL;
-CREATE INDEX idx_notification_recipients_user_id_read_at ON notification_recipients (user_id, read_at);
+CREATE INDEX idx_notification_recipients_user_role_read ON notification_recipients (user_id, role_code, read_at);
 CREATE INDEX idx_comment_reports_status ON comment_reports (status, comment_id);
 -- Moderation (25/11/2026): one live row per pattern; one violation per comment / message (sending the same
 -- clientMessageId again never adds a second row)
@@ -1035,6 +1046,21 @@ CREATE TRIGGER trg_class_events_updated_at BEFORE UPDATE ON class_events FOR EAC
 CREATE TRIGGER trg_grades_updated_at BEFORE UPDATE ON grades FOR EACH ROW EXECUTE FUNCTION set_updated_at();
 CREATE TRIGGER trg_system_settings_updated_at BEFORE UPDATE ON system_settings FOR EACH ROW EXECUTE FUNCTION set_updated_at();
 CREATE TRIGGER trg_school_settings_updated_at BEFORE UPDATE ON school_settings FOR EACH ROW EXECUTE FUNCTION set_updated_at();
+
+-- Real-time notifications (18/11/2026, FE-09): after an INSERT statement on notification_recipients, pg_notify sends
+-- the new notification ids ('<id>,<id>…'). PostgreSQL delivers NOTIFY only on COMMIT (nothing on ROLLBACK), so the
+-- server (LISTEN, server/src/sockets/notificationListener.js) never announces a notification that does not exist.
+CREATE OR REPLACE FUNCTION notify_new_notification_recipients() RETURNS trigger LANGUAGE plpgsql AS $$
+DECLARE ids TEXT;
+BEGIN
+  SELECT string_agg(DISTINCT notification_id::text, ',') INTO ids FROM new_rows;
+  IF ids IS NOT NULL THEN
+    PERFORM pg_notify('notification_recipients', ids);
+  END IF;
+  RETURN NULL;
+END $$;
+CREATE TRIGGER trg_notification_recipients_notify AFTER INSERT ON notification_recipients
+  REFERENCING NEW TABLE AS new_rows FOR EACH STATEMENT EXECUTE FUNCTION notify_new_notification_recipients();
 
 -- 15. SUPABASE SECURITY -----------------------------------------------------------
 

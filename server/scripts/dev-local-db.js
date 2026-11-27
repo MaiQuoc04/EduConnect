@@ -302,8 +302,8 @@ await client.connect();
 await client.query(fs.readFileSync(path.join(repoDatabaseDir, 'educonnect_schema_v0.3.sql'), 'utf8'));
 await client.query(fs.readFileSync(path.join(repoDatabaseDir, 'educonnect_seed_small_v0.3.sql'), 'utf8'));
 await client.query(SUPABASE_SYNC);
-// FE-09 (18/11/2026): notification_recipients.role_code + the real-time trigger; FE-09 code needs them.
-await client.query(fs.readFileSync(path.join(repoDatabaseDir, 'patch_v0.3_notification_roles.sql'), 'utf8'));
+// FE-09 notification_recipients.role_code + the real-time trigger are in the schema file since 28/11/2026, so
+// patch_v0.3_notification_roles.sql is no longer run here (it is only for databases created before 18/11/2026).
 if (!process.argv.includes('--bare')) await client.query(FIXTURES);
 const { rows } = await client.query(
   `SELECT c.class_id AS id, c.class_name AS name, sy.year_name AS year, c.deleted_at IS NOT NULL AS deleted,
