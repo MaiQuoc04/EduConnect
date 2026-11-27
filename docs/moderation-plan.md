@@ -106,7 +106,7 @@ Nội dung khớp nhiều quy tắc: ghi đủ các quy tắc vào `rule_ids`, l
 
 **Bộ kiểm lỗi thì vẫn cho gửi.** Nếu bước kiểm ném lỗi, server ghi log và lưu nội dung bình thường; một lỗi trong bộ lọc không được làm tê liệt chat của cả trường. Khoá `moderation.enabled` trong `system_settings` tắt toàn bộ luồng này khi cần.
 
-**Chỉ kiểm lúc gửi (Anh, 27/11/2026).** Bình luận, tin nhắn và bài đăng nhóm chỉ được kiểm khi gửi / lưu. Thêm, sửa hay bật lại một quy tắc không bao giờ quét lại nội dung đã gửi; nội dung cũ do báo cáo và người duyệt xử lý (business-rules §5). Lý do: một quy tắc sai không được ẩn hàng loạt nội dung cũ cùng lúc; không để máy lật lại quyết định đã có (bài đã duyệt, báo cáo đã giữ nguyên); không phải tải lại toàn bộ dữ liệu.
+**Chỉ kiểm lúc gửi (Anh, 27/11/2026).** Bình luận, tin nhắn và bài đăng nhóm chỉ được kiểm khi gửi / lưu. Thêm, sửa hay bật lại một quy tắc không bao giờ quét lại nội dung đã gửi; nội dung cũ do báo cáo và người duyệt xử lý (business-rules §5). Lý do: một quy tắc sai không thể ẩn hàng loạt nội dung cũ; bài đã duyệt không bị lật lại; không tốn tải quét lại toàn bộ dữ liệu.
 
 ## Bài đăng nhóm (FE-05) — chặn trước khi đăng (Anh, 27/11/2026)
 

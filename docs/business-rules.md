@@ -929,9 +929,8 @@ and videos are not checked.
     `system_settings` `moderation.enabled` turns the whole check off.
 - **Checked when sent only** (Anh, 27/11/2026): comments, messages and group posts are checked when they are sent or
   saved. Adding, changing or switching a rule back on never re-checks content already sent; older content is handled
-  by reports and by the moderator (§5). Reasons: a wrong rule must not hide a mass of old content at once, a decision
-  already taken (a post approved, a report kept) is not overturned by a machine, and the whole data set is never
-  read again.
+  by reports and by the moderator (§5). Reasons: a wrong rule cannot hide old content in bulk, posts already approved are
+  not overturned, and there is no full re-scan load.
 - **Five categories, most severe first:** `VIOLENCE` (bạo lực, đe doạ), `SEXUAL` (nội dung tình dục),
   `DISCRIMINATION` (kỳ thị), `HARASSMENT` (xúc phạm, quấy rối), `INAPPROPRIATE_LANGUAGE` (ngôn từ thô tục). Content
   matching several rules keeps all of them (`rule_ids`) and shows the most severe category. A violation decided from

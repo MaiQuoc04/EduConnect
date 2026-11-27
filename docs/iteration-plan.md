@@ -85,13 +85,13 @@ reactions, attachments) is merged into one place after both are on `develop`.
   `parents.service.js` `buildParentFilter` (its one caller is `listParents`) and the SCR-69 placeholder / help line.
   No schema change, no new index. Tested on the local throw-away DB.
 
-- **Parent linking fixes (27/11/2026, Anh, FE-02 / FE-14, commit 16e5c7f, branch `feature/report-auto`, NOT merged;
-  defect fixes from testing):** SCR-08 parent card links to SCR-13 (0 parents "Liên kết phụ huynh", 1 parent "Liên
-  kết thêm phụ huynh", 2 parents the caption "Đã đủ 2 phụ huynh."); UC-13 from the parent's side on SCR-10 ("Liên kết
-  con" dialog, `LinkChildDialog.jsx`: search students with `GET /students?q=`, same `POST /students/:id/parents`,
-  server unchanged); the disabled "⋯ Bảo mật & quyền" menus removed from SCR-08 / SCR-10 (FE-13's "Tài khoản đăng
-  nhập" card already does it); SCR-13 back button label "Quay lại". Client only, no schema change, client build
-  passes.
+- **Parent linking fixes (27/11/2026, Anh, FE-02 / FE-14; defect fixes from testing; branch `fix/fe-02-parent-link`,
+  commit 9060e4b, PR into `develop`, NOT merged – the same change is 16e5c7f on `feature/report-auto`):** SCR-08
+  parent card links to SCR-13 (0 parents "Liên kết phụ huynh", 1 parent "Liên kết thêm phụ huynh", 2 parents the
+  caption "Đã đủ 2 phụ huynh."); UC-13 from the parent's side on SCR-10 ("Liên kết con" dialog, `LinkChildDialog.jsx`:
+  search students with `GET /students?q=`, same `POST /students/:id/parents`, server unchanged); the disabled
+  "⋯ Bảo mật & quyền" menus removed from SCR-08 / SCR-10 (FE-13's "Tài khoản đăng nhập" card already does it); SCR-13
+  back button label "Quay lại". Client only, no schema change, client build passes.
 
 - **Report 5 test schedule (decided 24/11/2026, lead):** reports R1–R7 are due at the **end of 26/11/2026**, so the
   last test round is run just before that and everything else is planned backwards from it. "Round" means a run of
