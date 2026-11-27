@@ -151,7 +151,7 @@ export default function GradeHistoryPage() {
                   <td>{h.scoreCount > 1 ? `${h.componentName} ${h.attemptNo}` : h.componentName}</td>
                   <td className="mono">
                     {h.assessmentType === 'COMMENT' ? (
-                      // Subject assessed by comments: Đ / CĐ (27/11/2026)
+                      // Subject assessed by comments: Đạt / Chưa đạt (27/11/2026)
                       <>
                         {h.oldResult === null ? <span className="muted">(trống)</span> : fmtResult(h.oldResult)} →{' '}
                         {h.newResult === null ? <span className="muted">(xoá)</span> : <strong>{fmtResult(h.newResult)}</strong>}

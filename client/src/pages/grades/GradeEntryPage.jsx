@@ -89,7 +89,7 @@ export default function GradeEntryPage() {
 
   const changedKeys = Object.keys(edits);
   const data = book.data;
-  const comment = isCommentBook(data); // subject assessed by comments: Đ / CĐ instead of scores (27/11/2026)
+  const comment = isCommentBook(data); // subject assessed by comments: Đạt / Chưa đạt instead of scores (27/11/2026)
   const invalid = changedKeys.some((k) => !(comment ? validResult : validScore)(edits[k]));
   const status = BOOK_STATUS[data?.lock.status ?? 'OPEN'];
 
