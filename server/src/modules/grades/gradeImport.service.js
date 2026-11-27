@@ -75,7 +75,7 @@ export async function buildTemplate(params, user) {
       }
       sheet.addRow(row);
     });
-  // COMMENT book: a drop-down Đ / CĐ in every result cell of the students' rows.
+  // COMMENT book: a drop-down Đạt / Chưa đạt in every result cell of the students' rows.
   if (isComment(book)) {
     const lastRow = sheet.rowCount;
     columns.forEach((_, i) => {
@@ -83,10 +83,10 @@ export async function buildTemplate(params, user) {
         sheet.getCell(r, 4 + i).dataValidation = {
           type: 'list',
           allowBlank: true,
-          formulae: ['"Đ,CĐ"'],
+          formulae: ['"Đạt,Chưa đạt"'],
           showErrorMessage: true,
           errorTitle: 'Kết quả không hợp lệ',
-          error: 'Chọn Đ (Đạt) hoặc CĐ (Chưa đạt).',
+          error: 'Chọn Đạt hoặc Chưa đạt.',
         };
       }
     });
