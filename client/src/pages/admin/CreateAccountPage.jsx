@@ -30,8 +30,8 @@ const EMPTY = {
   address: '',
 };
 
-// Same rule as the server (business rules §3, agreed 01/11/2026): HS / GV + 4 digits.
-const CODE_RE = { studentCode: /^HS\d{4}$/, teacherCode: /^GV\d{4}$/ };
+// Same rule as the server (business rules §3): HS / GV + 6 digits (27/11/2026; 4 digits before).
+const CODE_RE = { studentCode: /^HS\d{6}$/, teacherCode: /^GV\d{6}$/ };
 const normCode = (v) => v.replace(/\s+/g, '').toUpperCase();
 
 const today = () => new Date().toLocaleDateString('sv-SE'); // YYYY-MM-DD in local time
@@ -295,14 +295,14 @@ export default function CreateAccountPage({ kind }) {
                 Thông tin học sinh
               </h2>
               <div className="form-grid">
-                <Field id="studentCode" label="Mã học sinh" required hint="HS + 4 chữ số" error={err('studentCode')}>
+                <Field id="studentCode" label="Mã học sinh" required hint="HS + 6 chữ số" error={err('studentCode')}>
                   <input
                     id="studentCode"
                     className="input mono"
                     value={form.studentCode}
                     onChange={setCode('studentCode')}
                     maxLength={6}
-                    placeholder="HS0001"
+                    placeholder="HS000001"
                     autoComplete="off"
                   />
                 </Field>
@@ -331,14 +331,14 @@ export default function CreateAccountPage({ kind }) {
                 Thông tin giáo viên
               </h2>
               <div className="form-grid">
-                <Field id="teacherCode" label="Mã giáo viên" required hint="GV + 4 chữ số" error={err('teacherCode')}>
+                <Field id="teacherCode" label="Mã giáo viên" required hint="GV + 6 chữ số" error={err('teacherCode')}>
                   <input
                     id="teacherCode"
                     className="input mono"
                     value={form.teacherCode}
                     onChange={setCode('teacherCode')}
                     maxLength={6}
-                    placeholder="GV0001"
+                    placeholder="GV000001"
                     autoComplete="off"
                   />
                 </Field>

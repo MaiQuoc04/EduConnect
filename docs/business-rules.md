@@ -71,13 +71,15 @@ Boundaries that are easy to get wrong:
   Importing accounts (SA) is separate from importing classes (SM); a class import needs the accounts to exist.
 - **System Admin accounts are never created from the screens or the import** (01/11/2026): SA is a sensitive role;
   the few IT admins are created with `npm run seed:admin` (username typed by hand, use `sa.<name>`).
-- **Codes** (01/11/2026): student code = `HS` + 4 digits (`HS0123`), teacher code = `GV` + 4 digits (`GV0042`);
-  typed lower case is accepted and stored upper case. Parents, School Managers and System Admins have no code.
+- **Codes** (27/11/2026, was 4 digits since 01/11/2026): student code = `HS` + 6 digits (`HS000123`), teacher code
+  = `GV` + 6 digits (`GV000042`); typed lower case is accepted and stored upper case. A new or changed code needs
+  6 digits (create, import, edit, add role); the 4-digit codes already in the data (`HS2601`, `GV0001`…) stay valid
+  and are kept when the account is edited. Parents, School Managers and System Admins have no code.
 - Sign in with **email, phone number or username** + password.
 - `username` is required and **generated when the account is created** (formats agreed 01/11/2026). Name part =
   first name + initials of family name and middle name, no accents (Nguyen The Anh → `anhnt`). By role:
-  - Student: name + student code in lower case → `anhnths0123`; Teacher: name + teacher code → `anhntgv0042`
-    (unique because the codes are).
+  - Student: name + student code in lower case → `anhnths000123`; Teacher: name + teacher code → `anhntgv000042`
+    (unique because the codes are; accounts made with a 4-digit code keep names like `anhnths0123`).
   - School Manager: `sm.` + name → `sm.anhnt`; Parent: `ph.` + name → `ph.anhnt`; if taken add a number
     (`ph.anhnt1`, `ph.anhnt2`). System Admin: `sa.` + name (created by hand, see above).
   - Several roles: Student > Teacher > School Manager > Parent. Adding or removing a role later does not rename.

@@ -17,7 +17,8 @@ const USERNAME_TEXT = {
   INVALID: 'Tên đăng nhập dài 3–50 ký tự, chỉ gồm chữ thường không dấu, số, dấu chấm và gạch dưới, không toàn chữ số.',
   DUPLICATE: 'Tên đăng nhập này đã được dùng.',
 };
-const CODE_RE = { studentCode: /^HS\d{4}$/, teacherCode: /^GV\d{4}$/ };
+// HS / GV + 6 digits (business rules §3, 27/11/2026); the account's own older 4-digit code may be kept as it is.
+const CODE_RE = { studentCode: /^HS\d{6}$/, teacherCode: /^GV\d{6}$/ };
 const normCode = (v) => v.replace(/\s+/g, '').toUpperCase();
 const today = () => new Date().toLocaleDateString('sv-SE');
 // A department name that is no longer in FE-03's list: kept as it is unless another one is picked.
@@ -116,7 +117,7 @@ export default function EditAccountPage() {
     for (const [part, key] of [['student', 'studentCode'], ['teacher', 'teacherCode']]) {
       if (!account[part]) continue;
       if (!form[key].trim()) e[key] = 'REQUIRED';
-      else if (!CODE_RE[key].test(form[key])) e[key] = 'INVALID';
+      else if (!CODE_RE[key].test(normCode(form[key])) && normCode(form[key]) !== account[part].code) e[key] = 'INVALID';
     }
     return e;
   }

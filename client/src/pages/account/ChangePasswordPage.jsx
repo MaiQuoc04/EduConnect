@@ -8,6 +8,7 @@ import { useAuth } from '../../context/AuthContext.jsx';
 import { useToast } from '../../context/ToastContext.jsx';
 import { errorText } from '../../messages.js';
 import { evaluatePassword } from '../../utils/passwordRules.js';
+import { temporaryPassword } from '../../utils/temporaryPassword.js';
 
 // SCR-34 Change Password (UC-05). Also the forced change of a temporary password right after sign-in (UC-01):
 // then only the new password is asked (business rules §3, 01/11/2026).
@@ -24,7 +25,9 @@ export default function ChangePasswordPage() {
   const [saving, setSaving] = useState(false);
   const forced = user.mustChangePassword;
   const mismatch = confirm && confirm !== password;
-  const context = { username: user.username, phone: user.phone, current };
+  // Forced change: the "previous password" is the temporary one the user just signed in with (kept in memory only,
+  // utils/temporaryPassword.js). After a reload it is unknown and the server checks it on save.
+  const context = { username: user.username, phone: user.phone, current: forced ? temporaryPassword.get() ?? '' : current };
   const rulesFailing = evaluatePassword(password, context).some((r) => r.state === 'fail');
 
   async function handleSubmit(e) {
