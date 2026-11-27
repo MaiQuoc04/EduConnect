@@ -29,6 +29,13 @@ reactions, attachments) is merged into one place after both are on `develop`.
 
 ## Current status (read first; update after every merge, schema patch or new decision)
 
+- **FE-09 links for the moderation notifications (27/11/2026, Quoc; owed from PR #24):** `notifications.service.js`
+  `LINK_SQL` + `CHAT` → `/chat/<groupId>` (author's "message hidden / shown again"), `MESSAGE_REPORT` →
+  `/moderation?tab=reports` and `COMMENT_REPORT` → `/comment-reports` (School Managers' "Cần được hỗ trợ"); before,
+  these bell rows opened nothing. Server only, no schema change. Tested on the local throw-away DB: a hidden message,
+  a NEEDS_SUPPORT message report and a NEEDS_SUPPORT school comment report each return the right `link` in
+  `GET /notifications`.
+
 - **FE-11 subjects assessed by comments – Đạt / Chưa đạt (27/11/2026, Linh, `feature/fe-11-grade-management`, merged
   into `develop` 27/11/2026 by the lead, merge `2a3a48e`):** SM chooses per structure "Điểm số"
   or "Nhận xét"; a comment book has Đạt / Chưa đạt cells (entry, import with

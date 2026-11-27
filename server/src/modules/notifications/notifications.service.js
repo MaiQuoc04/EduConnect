@@ -58,6 +58,11 @@ const LINK_SQL = `CASE n.target_type
       WHERE a.attendance_id = n.target_id)
     WHEN 'PASSWORD_RESET_REQUEST' THEN '/admin/password-reset-requests'
     WHEN 'USER' THEN '/teaching-assignments'
+    -- Moderation (FE-08, 27/11/2026, utils/moderationNotify.js): the author's "message hidden / shown again" → the
+    -- chat (target_id = group id); a "Cần được hỗ trợ" report → the School Manager's queue of that kind.
+    WHEN 'CHAT' THEN '/chat/' || n.target_id
+    WHEN 'MESSAGE_REPORT' THEN '/moderation?tab=reports'
+    WHEN 'COMMENT_REPORT' THEN '/comment-reports'
     ELSE NULL
   END`;
 
