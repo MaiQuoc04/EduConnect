@@ -258,7 +258,7 @@ export default function GradeEntryPage() {
                     {changedKeys.length
                       ? `${changedKeys.length} ô đã sửa, chưa lưu.${invalid ? ' Có ô không hợp lệ (tô đỏ).' : ''}`
                       : comment
-                        ? 'Môn đánh giá bằng nhận xét: chọn Đ (Đạt) hoặc CĐ (Chưa đạt); chọn ô trống rồi lưu để xoá.'
+                        ? ''
                         : 'Xoá trắng một ô rồi lưu để xoá điểm đó.'}
                   </span>
                   <button type="button" className="btn btn-secondary" onClick={() => setEdits({})} disabled={!changedKeys.length || saving}>
