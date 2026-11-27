@@ -768,7 +768,7 @@ Boundaries that are easy to get wrong:
   either **scored** (SCORE, 0–10, as above) or **assessed by comments** (COMMENT: Giáo dục thể chất, Nghệ thuật, Hoạt
   động trải nghiệm, Giáo dục địa phương…), chosen by SM when configuring it (`grade_components.assessment_type`).
   - A COMMENT structure has components and a number of assessments but no weights (stored as 1). Every assessment is
-    **Đạt / Chưa đạt**, written **Đ / CĐ** in the grade book and the import file (`grades.result` PASS / FAIL; a row has
+    **Đạt / Chưa đạt**, written **Đạt / Chưa đạt** in full in the grade book and the import file (`grades.result` PASS / FAIL; a row has
     a score or a result, never both). Changes are logged in `grade_histories.old_result / new_result`.
   - Semester result: **Đạt** when every assessment of the structure is present and Đạt, else **Chưa đạt**. While
     assessments are missing it shows Chưa đạt as soon as one is CĐ, otherwise nothing yet. **Year result = semester 2

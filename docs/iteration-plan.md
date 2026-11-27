@@ -30,7 +30,7 @@ reactions, attachments) is merged into one place after both are on `develop`.
 ## Current status (read first; update after every merge, schema patch or new decision)
 
 - **FE-11 subjects assessed by comments – Đạt / Chưa đạt (27/11/2026, Linh, `feature/fe-11-grade-management`, not
-  merged yet):** SM chooses per structure "Điểm số" or "Nhận xét"; a comment book has Đ / CĐ cells (entry, import with
+  merged yet):** SM chooses per structure "Điểm số" or "Nhận xét"; a comment book has Đạt / Chưa đạt cells (entry, import with
   a drop-down, export, finalize, unlock, history); semester result = every assessment Đạt, year = semester 2; the
   academic level adds "every comment subject Đạt" (Tốt, Khá) and "at most one Chưa đạt" (Đạt). Same commit line:
   every period's level uses every subject of the year (fix of 27/11). business-rules §11.
