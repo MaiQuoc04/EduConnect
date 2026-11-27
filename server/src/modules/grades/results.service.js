@@ -196,18 +196,19 @@ export async function computeClass(db, cls, { finalizedOnly = false } = {}) {
       // Year average from the rounded semester averages, then rounded itself (Circular 22).
       return { subjectId: sub.subjectId, bySemester, year: roundScore(yearAverage(s1?.average ?? null, s2?.average ?? null)) };
     });
-    // Academic level per period over the subjects with a grade structure in that period (the year: in a semester).
+    // Academic level per period (Circular 22, Article 9): it needs the result of EVERY subject of the year – the
+    // subjects with a grade structure in any semester of the year (`subjects`) – so every period uses the same list
+    // (FE-11 owner, 27/11/2026). A subject without an average in the period – no structure in that semester yet, a
+    // missing score, or (students / parents) a book not published yet – leaves the level empty ("–"). Before, each
+    // semester only counted its own configured / published subjects, so a semester 2 with only Toán and Vật lí
+    // configured got a level from those two subjects.
     const level = {};
     for (const se of semesters) {
       level[se.semesterId] = academicLevel(
-        perSubject
-          .filter((p) => componentsOf(p.subjectId, se.semesterId).length)
-          .map((p) => p.bySemester.find((b) => b.semesterId === se.semesterId)?.average ?? null),
+        perSubject.map((p) => p.bySemester.find((b) => b.semesterId === se.semesterId)?.average ?? null),
       );
     }
-    level.YEAR = academicLevel(
-      perSubject.filter((p) => semesters.some((se) => componentsOf(p.subjectId, se.semesterId).length)).map((p) => p.year),
-    );
+    level.YEAR = academicLevel(perSubject.map((p) => p.year));
     return { ...e, perSubject, level };
   });
 

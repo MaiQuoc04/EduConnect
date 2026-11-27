@@ -769,7 +769,10 @@ Boundaries that are easy to get wrong:
   e-contact-book products (vnEdu, SMAS, eNetViet). Instead each student gets an **academic level** per semester and for
   the year (Article 9), from the rounded subject averages of the period: **Tốt** = every subject ≥ 6.5 and at least 6
   subjects ≥ 8.0; **Khá** = every subject ≥ 5.0 and at least 6 subjects ≥ 6.5; **Đạt** = at least 6 subjects ≥ 5.0
-  and none below 3.5; **Chưa đạt** = otherwise; no level while a subject has no average yet. ASSUMPTION: every
+  and none below 3.5; **Chưa đạt** = otherwise; no level while a subject has no average yet. Every period uses the
+  **same list of subjects: those with a grade structure in any semester of the year** (27/11/2026): a subject not yet
+  configured for a semester, not yet scored, or (students / parents) not yet finalized leaves that period without a
+  level, so a level is never decided on part of the subjects. ASSUMPTION: every
   subject with a grade structure is a scored subject (subjects assessed by comments – Đạt / Chưa đạt – are not in the
   schema yet); with fewer than 6 subjects "at least 6" means all of them. Conduct (rèn luyện) and the titles Học sinh
   Giỏi / Xuất sắc are not handled yet. UC-89 / SCR-48 Class Ranking removed (`/grades/ranking` goes to the results).
