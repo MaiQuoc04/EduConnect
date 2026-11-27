@@ -31,6 +31,8 @@ khôi phục thủ công. Mục 7 có cách giữ cho nó thức.
 ## 1. Giai đoạn 0 — làm sớm vì có thời gian chờ
 
 - [ ] **Mua tên miền, trỏ bản ghi A về IP của VPS**, bản ghi cho frontend về Vercel. Chờ DNS lan truyền.
+      Trang DNS của Vietnix dùng **tên đầy đủ** ở cột NAME (`api.educonnect.info.vn`), không nhận `@`
+      lẫn ô trống. Vercel yêu cầu **A record** cho tên miền gốc, không cho CNAME.
       Tên miền `.vn` cần giấy tờ cá nhân và thủ tục; `.com` mua là dùng.
 - [ ] **Bật xác thực 2 bước cho Gmail**, tạo App Password tại `myaccount.google.com/apppasswords`.
       Chưa bật 2FA thì mục đó không hiện. Mã hiện ra dạng 4 nhóm 4 ký tự — **xoá hết dấu cách**.
@@ -73,6 +75,8 @@ dùng chung máy cho việc khác thì lấy 2 GB.
 - [ ] **KHÔNG chạy `do-release-upgrade`** dù Ubuntu có gợi ý. Nâng cấp bản phân phối trên máy sắp
       deploy là rủi ro thuần tuý.
 - [ ] `apt update && apt upgrade -y` rồi `reboot`.
+- [ ] Image AZVPS **không cài sẵn `ufw`**: `apt install -y ufw` trước mục 2.2. `fail2ban` chạy được
+      ngay sau `apt install`, jail `sshd` tự đọc journal của systemd, không cần `jail.local`.
 
 ### 2.2. Khoá máy chủ — làm trước khi cài gì khác
 
@@ -171,6 +175,11 @@ apt install -y nginx certbot python3-certbot-nginx
 server {
     server_name api.<ten-mien>;
 
+    # Mặc định nginx chỉ cho body 1 MB. Ảnh và file đính kèm đi QUA server rồi mới lên Supabase
+    # Storage, nên vẫn qua nginx: thiếu dòng này thì mọi lần tải tệp lên đều hỏng với 413, và lỗi
+    # nằm ở log nginx chứ không vào log ứng dụng.
+    client_max_body_size 55m;
+
     location /api/ {
         proxy_pass http://127.0.0.1:5000;
         proxy_set_header Host              $host;
@@ -189,7 +198,8 @@ server {
         proxy_read_timeout 3600s;
     }
 
-    # Chỉ cần khi STORAGE_DRIVER=local. Với supabase thì xoá khối này.
+    # Giữ lại cả khi STORAGE_DRIVER=supabase: database còn URL /uploads/... từ trước khi nhóm
+    # chuyển sang Supabase Storage (09/11/2026). Xoá đi là mất ảnh cũ.
     location /uploads/ {
         proxy_pass http://127.0.0.1:5000;
         proxy_set_header Host $host;
@@ -216,7 +226,10 @@ systemctl list-timers | grep certbot   # xác nhận tự gia hạn có chạy
 
 ### 2.7. Biến môi trường
 
-Chép `server/.env.example` thành `.env` trên VPS rồi điền. Những giá trị **khác** máy dev:
+Chép `server/.env.example` thành `.env` trên VPS rồi `chmod 600` **trước khi điền**, để file không
+bao giờ tồn tại ở trạng thái ai cũng đọc được. `TZ` **không có** trong `.env.example`, phải tự thêm.
+
+Những giá trị **khác** máy dev:
 
 ```ini
 PORT=5000
@@ -238,6 +251,43 @@ MAIL_FROM=...
 REMINDER_JOB=on
 ```
 
+Điền bí mật không qua `nano` và không để lại vết trong `.bash_history`:
+
+```bash
+setsecret() {
+  local K="$1"
+  read -rsp "$K: " VAL; echo
+  K="$K" VAL="$VAL" python3 -c 'import os, pathlib
+k = os.environ["K"]; v = os.environ["VAL"]
+p = pathlib.Path(".env"); out = []; done = False
+for l in p.read_text().splitlines():
+    if l.split("=", 1)[0] == k: out.append(k + "=" + v); done = True
+    else: out.append(l)
+if not done: out.append(k + "=" + v)
+p.write_text("\n".join(out) + "\n")'
+  unset VAL
+}
+setsecret DB_PASSWORD; setsecret SMTP_PASS; setsecret SUPABASE_SERVICE_ROLE_KEY
+```
+
+Giá trị đi qua biến môi trường chứ không qua tham số dòng lệnh, nên không hiện trong `ps`. Không
+dùng `sed` vì mật khẩu Supabase hay chứa `|`, `&`, `/`, `\` — `sed` sẽ hiểu nhầm chúng.
+
+Kiểm lại mà không lộ giá trị. **Mẫu lọc phải có cả `KEY` và `TOKEN`**: tên biến
+`SUPABASE_SERVICE_ROLE_KEY` kết thúc bằng `KEY`, một mẫu chỉ bắt `SECRET|PASSWORD` sẽ in nó ra
+nguyên văn — đã xảy ra thật khi deploy lần đầu, và khoá đó phải xoay lại.
+
+```bash
+awk -F= '/^[A-Z]/ {
+  k=$1; v=substr($0, length(k)+2);
+  if (k ~ /PASSWORD|SECRET|PASS$|KEY|TOKEN/) printf "%-28s %s\n", k, (length(v) ? "da dien (" length(v) " ky tu)" : ">>> TRONG <<<");
+  else printf "%-28s %s\n", k, (length(v) ? v : ">>> TRONG <<<");
+}' .env
+```
+
+- [ ] `CLIENT_ORIGIN` dùng `https://`, không phải `http://`. Vercel chỉ phục vụ HTTPS nên `Origin`
+      trình duyệt gửi lên luôn là `https://`; lệch một chữ `s` là CORS chặn cả REST lẫn Socket.io,
+      mà lỗi hiện ra chỉ là "Network Error".
 - [ ] `.env` có quyền `chmod 600` và thuộc user chạy pm2.
 - [ ] **`.env` không bao giờ vào git.** Kiểm lại `.gitignore` trước lần commit đầu trên server.
 
@@ -382,6 +432,28 @@ Những thứ này chỉ có ý nghĩa khi thử ở production, không phải �
 ---
 
 ## 7. Sau khi chạy được
+
+### Cập nhật code sau khi đã deploy
+
+Frontend **tự động**: Vercel build lại mỗi lần merge vào `develop`. Backend **không** — VPS giữ bản
+code lúc clone cho tới khi có người vào kéo về. Đây là đánh đổi có chủ ý: một PR hỏng merge lúc nửa
+đêm không tự làm sập API.
+
+```bash
+ssh root@<ip-vps>
+cd /opt/educonnect && git pull
+# gói mới? phải cài trước khi restart, nếu không server chết với "Cannot find module"
+git diff HEAD@{1} --name-only | grep -q 'server/package-lock.json' && (cd server && npm ci --omit=dev)
+# biến môi trường mới? .env không nằm trong git nên nó sống sót, nhưng biến bắt buộc mới thì server không lên
+git diff HEAD@{1} --name-only | grep -q 'server/.env.example' && echo "CO BIEN MOI, xem lai .env"
+pm2 restart educonnect-api
+pm2 logs educonnect-api --lines 30     # Ctrl+C để thoát, không dừng server
+curl -s localhost:5000/api/v1/health
+```
+
+- [ ] **Patch SQL không tự chạy.** `git pull` chỉ lấy code. Một patch mới trong `database/` phải do
+      team lead chạy tay trên Supabase, và chạy **trước** khi restart server. Quên bước này thì lỗi
+      chỉ hiện ra khi có người bấm đúng chức năng dùng cột mới — không phải lúc khởi động.
 
 ### Giữ Supabase khỏi ngủ
 
