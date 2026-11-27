@@ -29,6 +29,14 @@ reactions, attachments) is merged into one place after both are on `develop`.
 
 ## Current status (read first; update after every merge, schema patch or new decision)
 
+- **FE-11 academic level needs every subject the class studies (27/11/2026, Linh, `feature/fe-11-grade-management`,
+  **not merged yet – lead to approve**; UC-88):** before, a subject of the class type with no grade structure was
+  skipped, so a class studying 11 subjects with only 2 configured already got a level. Now the subject list is every
+  subject of the class type for the year (`track_subjects`); one without a structure shows "–" and leaves the level
+  empty. A class type with no subjects set keeps the old rule. business-rules §11. No schema change, server only.
+  Tested on the local DB: `npm test` 87/87, level scenario 11/11, student result screen checked.
+  Owed (Linh): R3 academic level wording; R5.3 SYS-BF11-017/-018/-022/-023 preconditions, then run them again.
+
 - **FE-11 subjects assessed by comments – Đạt / Chưa đạt (27/11/2026, Linh, `feature/fe-11-grade-management`, merged
   into `develop` 27/11/2026 by the lead, merge `2a3a48e`):** SM chooses per structure "Điểm số"
   or "Nhận xét"; a comment book has Đạt / Chưa đạt cells (entry, import with

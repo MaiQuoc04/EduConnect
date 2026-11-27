@@ -84,8 +84,9 @@ export async function myStudents(user) {
  * Everything needed to show one class's results for its school year: subjects, every studying (and former) student's
  * averages per subject and semester, year averages and the academic level per period (Circular 22, Article 9).
  * No overall average and no ranking since 23/11/2026 (Circular 22 has none and does not compare students).
- * Subjects = those with a grade structure for the class's grade in that year; when the class type has subjects set
- * for the year (FE-04), only those. A subject without a structure (e.g. one assessed pass / fail) is not counted.
+ * Subjects = every subject of the class type for the year (FE-04 track_subjects), also one that has no grade structure
+ * yet, so a level is never decided on part of the subjects the class studies (FE-11 owner, 27/11/2026). When the type
+ * has no subjects set: those with a grade structure for the class's grade in that year.
  * ASSUMPTION (FE-11 owner, 10/11/2026): scores a student got in another class of the same year (moved by UC-10
  * Transfer) count too; when both classes have the same score slot, the score of this class wins.
  */
@@ -109,12 +110,16 @@ export async function computeClass(db, cls, { finalizedOnly = false } = {}) {
     [cls.gradeLevelId, semesterIds],
   );
   const { rows: trackSubjects } = await db.query(
-    'SELECT subject_id FROM track_subjects WHERE track_id = $1 AND school_year_id = $2',
+    `SELECT ts.subject_id, s.deleted_at IS NOT NULL AS deleted
+     FROM track_subjects ts JOIN subjects s ON s.subject_id = ts.subject_id
+     WHERE ts.track_id = $1 AND ts.school_year_id = $2`,
     [cls.trackId, cls.schoolYearId],
   );
   const inTrack = new Set(trackSubjects.map((r) => String(r.subject_id)));
   const usable = components.filter((c) => !inTrack.size || inTrack.has(String(c.subjectId)));
-  const subjectIds = [...new Set(usable.map((c) => String(c.subjectId)))];
+  // A deleted subject is listed only while it still has a structure: without one it could never get a result.
+  const studied = trackSubjects.filter((r) => !r.deleted).map((r) => String(r.subject_id));
+  const subjectIds = [...new Set([...usable.map((c) => String(c.subjectId)), ...studied])];
   const { rows: subjects } = subjectIds.length
     ? await db.query(
         `SELECT subject_id AS "subjectId", subject_code AS "subjectCode", subject_name AS "subjectName"
@@ -221,12 +226,10 @@ export async function computeClass(db, cls, { finalizedOnly = false } = {}) {
         yearResult: null,
       };
     });
-    // Academic level per period (Circular 22, Article 9): it needs the result of EVERY subject of the year – the
-    // subjects with a grade structure in any semester of the year (`subjects`) – so every period uses the same list
-    // (FE-11 owner, 27/11/2026). A subject without an average in the period – no structure in that semester yet, a
-    // missing score, or (students / parents) a book not published yet – leaves the level empty ("–"). Before, each
-    // semester only counted its own configured / published subjects, so a semester 2 with only Toán and Vật lí
-    // configured got a level from those two subjects.
+    // Academic level per period (Circular 22, Article 9): it needs the result of EVERY subject the class studies that
+    // year (`subjects`), so every period uses the same list (FE-11 owner, 27/11/2026). A subject without an average in
+    // the period – no structure yet, a missing score, or (students / parents) a book not published yet – leaves the
+    // level empty ("–").
     // Subjects assessed by comments count with their Đạt / Chưa đạt result (27/11/2026).
     const scored = perSubject.filter((p) => !p.comment);
     const commented = perSubject.filter((p) => p.comment);
