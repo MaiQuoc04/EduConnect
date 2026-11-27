@@ -31,7 +31,7 @@ reactions, attachments) is merged into one place after both are on `develop`.
 
 - **FE-11 academic level needs every subject the class studies (27/11/2026, Linh, `feature/fe-11-grade-management`
   `681dcbc`, with `f0f1e63` / `e84d094` – comment subjects say "lần đánh giá" / "kết quả", not "điểm"; merged into
-  `develop` 27/11/2026 by the lead; UC-85, UC-88):** before, a subject of the class type with no grade structure was
+  `develop` 27/11/2026 by the lead, merge `73f7bef`; UC-85, UC-88):** before, a subject of the class type with no grade structure was
   skipped, so a class studying 11 subjects with only 2 configured already got a level. Now the subject list is every
   subject of the class type for the year (`track_subjects`); one without a structure shows "–" and leaves the level
   empty. A class type with no subjects set keeps the old rule. business-rules §11. No schema change, server only.
