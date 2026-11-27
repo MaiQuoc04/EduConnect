@@ -166,9 +166,11 @@ reactions, attachments) is merged into one place after both are on `develop`.
       through a report / violation) and ran a schema patch on the shared DB **without the lead's OK**; the patch
       header still says "NOT run on the shared database yet (waiting for the team lead's OK)" (Anh to update).
     - CLAUDE.md still says "53 tables" (59 now); `check-db.js` says 47.
-  - **Open (lead):** keep it in `develop` as a change after the R5 submission (patch and seed already run 27/11) or
-    revert it; until then it is not approved. If kept: Change Log rows and R3 / R4 / R5 parts for UC-134..UC-139 (Anh),
-    FE-09 links for the new notification types (Quoc), FE-05 / FE-06 follow-ups above (Khanh).
+  - **Approved by the lead 27/11/2026: kept in `develop`** as a change after the R5 submission (patch and seed already
+    run 27/11). Anh's documents for it stay as written and are now the agreed rules: business rules §17 (+ §1, §5,
+    §13), CLAUDE.md (School Manager reads chat content only through a report / violation), permissions 26–30,
+    UC-134..UC-139, SCR-87..SCR-93, `docs/moderation-plan.md`. Owed: Change Log rows and R3 / R4 / R5 parts for
+    UC-134..UC-139 (Anh), FE-09 links for the new notification types (Quoc), FE-05 / FE-06 follow-ups above (Khanh).
   - PR #22 (`chore/deploy-config`, Anh, merge `5c9b5ab`, by Anh on GitHub 27/11): `DEPLOY.md` only (+74 lines, no
     secret in it – `JWT_SECRET=<…>` placeholder).
 
