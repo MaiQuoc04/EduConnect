@@ -1,4 +1,7 @@
--- Written by Anh (FE-08), 25/11/2026. NOT run on the shared database yet (waiting for the team lead's OK).
+-- Written by Anh (FE-08), 25/11/2026. RUN on the shared Supabase database 27/11/2026 by Anh (with
+-- seed_moderation_rules.sql); approved by the lead 27/11/2026 afterwards. Checked read-only by the lead 27/11/2026:
+-- the 3 tables with RLS on, comments.hidden_at, comment_reports.support_note, comment_reports_reason_check with
+-- NEEDS_SUPPORT, posts_approval_status_check, both moderation.* settings, the rules loaded.
 -- Same definitions as in educonnect_schema_v0.3.sql.
 -- Patch for a database already created from schema v0.3: automatic content check of comments and messages
 -- (docs/moderation-plan.md "Thiết kế dữ liệu"). 3 new tables, 2 new columns, 2 changed constraints, 2 settings:

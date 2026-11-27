@@ -164,7 +164,8 @@ reactions, attachments) is merged into one place after both are on `develop`.
     94 rules, both settings. No blocking bug found. Notes:
     - It changes agreed rules (CLAUDE.md, permissions note 3, business rules: the School Manager may read chat content
       through a report / violation) and ran a schema patch on the shared DB **without the lead's OK**; the patch
-      header still says "NOT run on the shared database yet (waiting for the team lead's OK)" (Anh to update).
+      header said "NOT run on the shared database yet" – corrected by the lead 27/11 to "RUN … 27/11/2026" after a
+      read-only check (3 tables, RLS, columns, both CHECKs, 2 settings; 95 live rules, the seed has 94).
     - CLAUDE.md still says "53 tables" (59 now); `check-db.js` says 47.
   - **Approved by the lead 27/11/2026: kept in `develop`** as a change after the R5 submission (patch and seed already
     run 27/11). Anh's documents for it stay as written and are now the agreed rules: business rules §17 (+ §1, §5,
