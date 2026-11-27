@@ -5,12 +5,11 @@ import { assertXlsx, readSheet } from '../../utils/excel.js';
 import { parseResult, parseScore } from './grades.calc.js';
 import { applyChanges, getBook } from './gradebook.service.js';
 
-// Subjects assessed by comments (27/11/2026): a COMMENT book has Đ / CĐ in its cells instead of scores.
-const RESULT_SHORT = { PASS: 'Đ', FAIL: 'CĐ' };
+// Subjects assessed by comments (27/11/2026): a COMMENT book has Đạt / Chưa đạt in its cells instead of scores.
 const RESULT_LONG = { PASS: 'Đạt', FAIL: 'Chưa đạt' };
 const isComment = (book) => book.assessmentType === 'COMMENT';
-// The value of one cell as written in the file: the score, or Đ / CĐ.
-const cellValue = (entry) => (entry.result ? RESULT_SHORT[entry.result] : entry.score);
+// The value of one cell as written in the file: the score, or Đạt / Chưa đạt.
+const cellValue = (entry) => (entry.result ? RESULT_LONG[entry.result] : entry.score);
 
 // FE-11 (owner: Linh) – UC-84 Import Grades: the teacher downloads the grade book of a class × subject × semester as
 // Excel (filled with the current scores), edits it and uploads it. Preview first; the import is all or nothing.
