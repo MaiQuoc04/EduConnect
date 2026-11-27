@@ -5,13 +5,13 @@ import Avatar from '../../components/Avatar.jsx';
 import Icon from '../../components/Icon.jsx';
 import { errorText, GENDER_LABELS, RELATIONSHIP_LABELS } from '../../messages.js';
 import { formatDate } from '../../utils/format.js';
+import { enrollmentLabel } from '../students/enrollmentView.js'; // FE-02 rule, shared (27/11/2026)
 import { clearHandedOverParentDetail, peekHandedOverParentDetail } from './parentHandoff.js';
 import './ParentDetailPage.css';
 import SchoolAccountCard from '../admin/SchoolAccountCard.jsx';
 import LinkChildDialog from './LinkChildDialog.jsx';
 
 // Same labels and texts as Student Detail (SCR-08), so both detail screens read alike.
-const ENROLLMENT_LABELS = { STUDYING: 'Đang học', TRANSFERRED: 'Đã chuyển lớp', DROPPED: 'Đã nghỉ học' };
 const GENERIC_ERROR = 'Không tải được thông tin phụ huynh. Vui lòng thử lại.';
 const EMPTY_VALUE = 'Chưa cập nhật';
 const SA_ONLY = 'Chỉ Quản trị hệ thống thay đổi được.';
@@ -148,8 +148,10 @@ function ChildCard({ child }) {
           {child.classId ? (
             <dd>
               {child.className} · Khối {child.gradeLevelName}
-              {child.enrollmentStatus && child.enrollmentStatus !== 'STUDYING' && (
-                <span className="chip">{ENROLLMENT_LABELS[child.enrollmentStatus] ?? child.enrollmentStatus}</span>
+              {/* 27/11/2026 (business-rules §4, display only): a STUDYING class of a year not started yet / ended reads
+                  "Đã xếp lớp" / "Đã hoàn thành"; studying in the current year shows no chip, as before. */}
+              {child.enrollmentStatus && !enrollmentLabel(child.enrollmentStatus, child.yearState).green && (
+                <span className="chip">{enrollmentLabel(child.enrollmentStatus, child.yearState).label}</span>
               )}
             </dd>
           ) : (

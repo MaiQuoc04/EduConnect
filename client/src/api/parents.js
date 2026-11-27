@@ -22,7 +22,7 @@ export async function listParents(params, { signal } = {}) {
 // UC-105 GET /parents/:parentId -> { parent: { parentId, userId, fullName, username, avatarUrl, phone, email,
 // occupation, address, accountStatus, mustChangePassword, lockedUntil, createdAt }, children: [{ studentId,
 // studentCode, fullName, avatarUrl, dob, gender, relationshipType, linkedAt, classId, className, gradeLevelName,
-// trackName, schoolYearName, enrollmentStatus, homeroomTeacherName }] }. The class fields are null for a child with
+// trackName, schoolYearName, enrollmentStatus, yearState, homeroomTeacherName }] }. The class fields are null for a child with
 // no class this year. 404 MSG_PARENT_NOT_FOUND for a missing id or an account without the PARENT role.
 export async function getParent(parentId, { signal } = {}) {
   const { data } = await api.get(`/parents/${encodeURIComponent(parentId)}`, { signal });

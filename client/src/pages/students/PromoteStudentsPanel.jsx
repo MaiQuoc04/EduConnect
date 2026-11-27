@@ -6,6 +6,7 @@ import Icon from '../../components/Icon.jsx';
 import { useAuth } from '../../context/AuthContext.jsx';
 import { useToast } from '../../context/ToastContext.jsx';
 import { errorText, ROLE_LABELS } from '../../messages.js';
+import { enrollmentLabel } from './enrollmentView.js';
 import TargetClassPicker from './TargetClassPicker.jsx';
 import './PromoteStudentsPanel.css';
 
@@ -869,7 +870,10 @@ export default function PromoteStudentsPanel({ tabs }) {
                                         <span className="caption muted">ở năm học đích, sẽ được bỏ qua</span>
                                       </span>
                                     ) : (
-                                      <span className="pill green">Đang học</span>
+                                      // 27/11/2026 (business-rules §4): a source year already ended reads "Đã hoàn thành"
+                                      <span className={`pill${enrollmentLabel(s.enrollmentStatus, s.yearState).green ? ' green' : ''}`}>
+                                        {enrollmentLabel(s.enrollmentStatus, s.yearState).label}
+                                      </span>
                                     )}
                                   </td>
                                   <td>
