@@ -39,14 +39,16 @@ reactions, attachments) is merged into one place after both are on `develop`.
   R5 submission – **decided by the lead 27/11/2026**; client `npm run build` passes.
 
 - **Parent linking fixes (27/11/2026, Anh, FE-02 / FE-14; defect fixes from testing; branch `fix/fe-02-parent-link`,
-  commit 9060e4b, merged into `develop` 27/11/2026 by Quoc (PR #23, merge 259669a) – the same change is 16e5c7f on
+  commit 9060e4b, merged into `develop` 27/11/2026 by Anh on GitHub (PR #23, merge 259669a; checked by the lead
+  afterwards 27/11) – the same change is 16e5c7f on
   `feature/report-auto`):** SCR-08 parent card links to SCR-13 (0 parents "Liên kết phụ huynh", 1 parent "Liên kết
   thêm phụ huynh", 2 parents the caption "Đã đủ 2 phụ huynh."); UC-13 from the parent's side on SCR-10 ("Liên kết con"
   dialog, `LinkChildDialog.jsx`: search students with `GET /students?q=`, same `POST /students/:id/parents`, server
   unchanged); the disabled "⋯ Bảo mật & quyền" menus removed from SCR-08 / SCR-10 (FE-13's "Tài khoản đăng nhập" card
   already does it); SCR-13 back button label "Quay lại". Client only, no schema change, client build passes.
 
-- **Parent List search widened (27/11/2026, Anh, FE-14, branch `feature/report-auto`, NOT merged):** UC-104 /
+- **Parent List search widened (27/11/2026, Anh, FE-14, branch `feature/report-auto`, merged into `develop` 27/11
+  with PR #24, merge `71bee53`):** UC-104 /
   SCR-69 `GET /parents?q=` – a phone-like q still matches the phone only (SCR-13 lookup unchanged); any other q
   matches the parent's name, username, email, or a linked child's name / student code (business-rules §16). Only
   `parents.service.js` `buildParentFilter` (its one caller is `listParents`) and the SCR-69 placeholder / help line.
@@ -84,8 +86,10 @@ reactions, attachments) is merged into one place after both are on `develop`.
     notifications; R4 II.1.2 explanation + sequence UC-90 (fillLaterPeriods step), I.3 attendances (new column);
     R5.1 UTC-ATT cases for the automatic filling.
 
-- **Content moderation – "Quy chuẩn cộng đồng" (25/11/2026, Anh, FE-08; branch `feature/report-auto`, NOT merged;
-  server `npm test` (55/55) and client `npm run build` pass; every phase tested on the local throw-away DB):** comments
+- **Content moderation – "Quy chuẩn cộng đồng" (25/11/2026, Anh, FE-08; branch `feature/report-auto`, **merged
+  into `develop` 27/11/2026 15:24 by Anh on GitHub (PR #24, merge `71bee53`) before the lead's review**; after the
+  merge `develop` passes server `npm test` 80/80 and client `npm run build`; every phase tested on the local
+  throw-away DB):** comments
   and chat messages are checked when sent and hidden at once when they match a rule; message reports with the new
   reason "Cần được hỗ trợ" (also for comment reports, FE-08 and FE-05); the School Manager's page `/moderation`
   (violators, by class, rules, message reports) with logged reads of reported chats and of hidden content, unhide,
@@ -117,7 +121,7 @@ reactions, attachments) is merged into one place after both are on `develop`.
     - No terms-of-use page exists in the repo; `docs/moderation-plan.md` proposes a notice ("Bình luận và tin nhắn được
       kiểm tự động… Ban giám hiệu có thể xem nội dung hội thoại liên quan…") – to be decided by the lead. Today only the
       line under the chat box says the messages are checked.
-  - **Group posts blocked when posted (27/11/2026, Anh, same branch, NOT merged):** the text of a group post (FE-05)
+  - **Group posts blocked when posted (27/11/2026, Anh, same branch, merged with PR #24):** the text of a group post (FE-05)
     is checked when created and on every saved edit (not the moderator's own posts, not FE-07 activity posts, not
     files); a match is saved as `posts.approval_status = 'BLOCKED'`, seen by its author only (with `moderation:
     { category, terms }`), no notification, not a violation; edited clean it is posted as a new post (business rules
@@ -133,7 +137,22 @@ reactions, attachments) is merged into one place after both are on `develop`.
     view logged (`CHAT_CONTEXT_VIEW`); the full-chat view was removed. The "Đã xử lý" tab shows the School Manager's
     decision, who took it and when, the support note and every context view. The author of hidden content sees the
     placeholder with a "Xem" button (business rules §17; `docs/moderation-plan.md` "Luồng báo cáo").
-  - **Open (lead):** merge after the code freeze of 25/11 10:00 or not (patch and seed already run 27/11).
+  - **Lead review after the merge (27/11/2026, Quoc):** read the routes, `moderation.service.js`, `rules.service.js`,
+    the patch and the changes in FE-05 `posts.service.js` / FE-06 `conversations.service.js`. Every route is School
+    Manager only (report: chat members), checked again in the service by the active role; System Admin gets no
+    content; SQL uses placeholders only; rules are soft deleted; hidden comments are filtered (`hidden_at`) in the
+    comment lists and counts; no copy of the content in the new tables. Checked read-only on Supabase: 59 tables, the
+    3 new tables, `comments.hidden_at`, `comment_reports.support_note`, `posts_approval_status_check` with `BLOCKED`,
+    94 rules, both settings. No blocking bug found. Notes:
+    - It changes agreed rules (CLAUDE.md, permissions note 3, business rules: the School Manager may read chat content
+      through a report / violation) and ran a schema patch on the shared DB **without the lead's OK**; the patch
+      header still says "NOT run on the shared database yet (waiting for the team lead's OK)" (Anh to update).
+    - CLAUDE.md still says "53 tables" (59 now); `check-db.js` says 47.
+  - **Open (lead):** keep it in `develop` as a change after the R5 submission (patch and seed already run 27/11) or
+    revert it; until then it is not approved. If kept: Change Log rows and R3 / R4 / R5 parts for UC-134..UC-139 (Anh),
+    FE-09 links for the new notification types (Quoc), FE-05 / FE-06 follow-ups above (Khanh).
+  - PR #22 (`chore/deploy-config`, Anh, merge `5c9b5ab`, by Anh on GitHub 27/11): `DEPLOY.md` only (+74 lines, no
+    secret in it – `JWT_SECRET=<…>` placeholder).
 
 - **Report 5 test schedule (decided 24/11/2026, lead):** reports R1–R7 are due at the **end of 26/11/2026**, so the
   last test round is run just before that and everything else is planned backwards from it. "Round" means a run of
