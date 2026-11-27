@@ -2,9 +2,10 @@ import { fmtResult, fmtScore, isCommentBook, RESULT_LONG, slotLabel, validResult
 
 // The grade book grid (SCR-44, read only in SCR-68): one row per student, one column per score slot, then the
 // semester average. `edits` = { "enrollmentId:componentId:attempt": text } typed but not saved yet.
-// A book of a subject assessed by comments (assessmentType COMMENT, 27/11/2026) has a Đ / CĐ choice in each cell and
+// A book of a subject assessed by comments (assessmentType COMMENT, 27/11/2026) has an Đạt / Chưa đạt choice in each cell and
 // the semester result (Đạt / Chưa đạt) instead of the average.
 export const cellKey = (enrollmentId, componentId, attemptNo) => `${enrollmentId}:${componentId}:${attemptNo}`;
+
 
 export default function GradeBookTable({ book, edits = {}, onEdit, editable }) {
   const { components, students } = book;
@@ -81,8 +82,8 @@ export default function GradeBookTable({ book, edits = {}, onEdit, editable }) {
                       cell = (
                         <select className={className} value={shown} aria-label={label} onChange={(e) => onEdit(key, e.target.value, saved)}>
                           <option value="" />
-                          <option value="Đ">Đ</option>
-                          <option value="CĐ">CĐ</option>
+                          <option value="Đạt">Đạt</option>
+                          <option value="Chưa đạt">Chưa đạt</option>
                         </select>
                       );
                     } else if (editable && !left) {
