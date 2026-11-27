@@ -159,7 +159,7 @@ function AddRoleDialog({ account, choices, onClose, onAdded }) {
                 setTeacherCode(e.target.value.replace(/\s+/g, '').toUpperCase());
                 setErrors((x) => ({ ...x, teacherCode: undefined }));
               }}
-              maxLength={6}
+              maxLength={8}
               placeholder="GV000001"
             />
             {err('teacherCode') && <span className="field-error">{err('teacherCode')}</span>}
