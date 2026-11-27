@@ -13,7 +13,7 @@
 // shared DB 21/11/2026). On a database without the table the built-in defaults are used and saving answers 503
 // MSG_SCHOOL_SETTINGS_NOT_READY. A key that is not in school_settings yet falls back to system_settings (the attendance
 // deadline before patch_v0.3_school_settings_attendance.sql moves it), then to the built-in default.
-// ASSUMPTION: no UC / SCR id yet (to be given by the lead).
+// UC-133 "Cài đặt hệ thống" of the School Manager, screen SCR-86 (ids given by the lead 26/11/2026).
 // school_settings is separate from system_settings on purpose: system_settings is edited by the System Admin only
 // (UC-102, business rules §13) and its screen lists every row of that table.
 import { pool, withTransaction } from '../../config/db.js';

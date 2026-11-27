@@ -29,9 +29,31 @@ reactions, attachments) is merged into one place after both are on `develop`.
 
 ## Current status (read first; update after every merge, schema patch or new decision)
 
-- **FE-02 enrollment status labels after a promotion (27/11/2026, Anh, `fix/fe-02-enrollment-status-label`, NOT
-  merged; defect fix, no schema or data change):** UC-11 keeps the old year's enrollment `STUDYING` (business-rules §4,
-  unchanged), so SCR-08 showed "Đang học" in two years and "Từ <date>" for a year not started. Now the label follows
+- **All ASSUMPTIONs approved by the lead (27/11/2026, decision, no code change):** every `ASSUMPTION` up to
+  `develop` `9716357` is the agreed behaviour – about 178 in `server/src` + `client/src` (list:
+  `git grep -n "ASSUMPTION" 9716357 -- server/src client/src`), 22 in business-rules.md, 1 in the seed; noted at the
+  top of business-rules.md. They include, among others: earliest attendance deadline 12:00 on SCR-86 (the default
+  stays 23:59), chat message 2000 characters, 10 files per post / message, drafts kept 30 days, the FE-11 "to
+  confirm" grade rules, the FE-06 direct chat questions Q1/Q2/Q6/Q9/Q10, copying class types refused as a whole when
+  over the period limits. The `// ASSUMPTION:` marks stay in the code (owners may reword them). Owed by each owner:
+  describe the ones of their FE in R3–R5. Three leftovers fixed the same day by the lead (comments / docs only):
+  `schoolSettings.service.js` now names UC-133 / SCR-86; `students.service.js` notes that `WARN_STUDENT_HAS_NO_CLASS`
+  is translated by the three pages that receive it (no `messages.js` entry needed); `database/README-storage.md`
+  avatar path = `avatars/<uuid>.<ext>` as `utils/storage.js` does.
+
+- **Attendance deadline patch approved (27/11/2026, lead):** `patch_v0.3_school_settings_attendance.sql` (Dung, 24/11)
+  is approved: it moves `attendance.edit_deadline_time` from `system_settings` to `school_settings` (value kept,
+  default 23:59; the School Manager may set 12:00–23:59 on SCR-86). App behaviour is the same before and after it.
+  **To run on the shared DB by Dung** (Supabase SQL Editor, once); the lead then checks it read-only. Status: NOT
+  run yet. The moderation notice: the chat box already shows one line (`CHAT_MODERATION_NOTE`, `utils/moderation.js`,
+  Anh) – "Tin nhắn được kiểm tự động … Ban giám hiệu có thể xem nội dung hội thoại liên quan."; comments and group
+  posts show none before something is hidden or blocked. Whether to add one there is for the lead to decide.
+
+- **FE-02 enrollment status labels after a promotion (27/11/2026, Anh, `fix/fe-02-enrollment-status-label`;
+  merged into `develop` 27/11/2026 by Anh on GitHub, PR #26, merge `12f65a9` – reviewed by the lead before the merge:
+  server `npm test` 87/87 and client build pass on the merge result, not clicked through in a browser; defect fix,
+  no schema or data change):** UC-11 keeps the old year's enrollment `STUDYING` (business-rules §4, unchanged), so
+  SCR-08 showed "Đang học" in two years and "Từ <date>" for a year not started. Now the label follows
   the school year: "Đã xếp lớp" (not started; "Bắt đầu <first day>", "Xếp lớp ngày <date>"), "Đang học" (current),
   "Đã hoàn thành" (ended; until its last day). Server `students.service.js` only adds fields: `yearState`
   (`UPCOMING` | `CURRENT` | `ENDED`, from `CURRENT_DATE`), `schoolYearStart`, `schoolYearEnd` on `enrollmentHistory`
@@ -39,7 +61,6 @@ reactions, attachments) is merged into one place after both are on `develop`.
   used by SCR-08, SCR-07, the transfer page's history and the promotion roster. FE-14 (also Anh): `parents.service.js`
   UC-105 children get `yearState`, and `ParentDetailPage.jsx` (SCR-10, child card) uses the same rule for its chip
   ("Đã xếp lớp" / "Đã hoàn thành"; no chip while studying in the current year, as before).
-
 
 - **FE-09 `COMMENT_REPORT` link goes straight to the moderation tab (27/11/2026, Quoc, on `develop`, server only, no
   schema change):** after PR #25 the "Cần được hỗ trợ" notification on a school post comment opens

@@ -4,6 +4,11 @@ These rules override anything you might assume from "typical" school apps. When 
 older document (Report 1–3 v1.0, old ERD images), **this file wins**. If something is not covered, ask the team
 instead of inventing a rule.
 
+**Assumptions approved (27/11/2026, lead):** every `ASSUMPTION` written in this file, in the code (`// ASSUMPTION:`
+in `server/src`, `client/src`) and in `database/` up to `develop` `9716357` is approved by the lead as the agreed
+behaviour. Each owner documents the ones of their FE in Reports 3–5. A new `ASSUMPTION` after that commit still needs
+the lead's OK.
+
 The app serves **one high school** (grades 10–12). Users never self-register.
 
 ## 1. Actors and roles

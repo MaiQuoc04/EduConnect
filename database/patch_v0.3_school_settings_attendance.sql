@@ -1,4 +1,4 @@
--- PROPOSED by Dung 24/11/2026 – NOT approved by the team lead (Quoc) yet, NOT run on the shared DB.
+-- Written by Dung 24/11/2026. APPROVED by the team lead (Quoc) 27/11/2026 – to be run on the shared DB (not run yet).
 -- Moves the attendance deadline of the subject teacher (business rules §12: "can edit until 23:59 the same day") from
 -- the System Admin settings (system_settings, UC-102) to the School Manager settings (school_settings, "Cài đặt hệ
 -- thống" of the School Manager). The value in force is kept. Needs patch_v0.3_school_settings.sql (run 21/11/2026).

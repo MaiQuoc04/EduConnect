@@ -30,7 +30,8 @@ Storage > **New bucket**:
 | Restrict file size | on, **5 MB** |
 | Allowed MIME types | `image/jpeg, image/png, image/webp` |
 
-- Object path: `<userId>/<uuid>.<ext>`, e.g. `42/3f1c…9a.webp`.
+- Object path: `avatars/<uuid>.<ext>`, e.g. `avatars/3f1c…9a.webp` (`utils/storage.js` `saveFile(folder, …)` has no
+  user id; the random UUID keeps the link unguessable – changed 27/11/2026 to match the code).
 - Why public: `avatarUrl` is returned by about 12 server files (sign-in, profile, conversations, group members,
   students, parents…). Signing every avatar link would touch FE-01, FE-02, FE-04, FE-06 and FE-14. The file name is a
   random UUID, so a link cannot be guessed. `users.avatar_url` stores the public URL.

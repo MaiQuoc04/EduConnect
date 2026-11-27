@@ -46,9 +46,8 @@ export function mimeTypeOf(extension) {
 // Saves a PUBLIC file (today only avatars, UC-06) and returns the URL to store in the DB.
 // local:    UPLOAD_DIR/<folder>/<uuid><ext>, returns /uploads/<folder>/<uuid><ext> (unchanged behaviour).
 // supabase: object <folder>/<uuid><ext> in the public avatars bucket, returns its absolute public URL.
-// ASSUMPTION: the key is <folder>/<uuid><ext>, not <userId>/<uuid><ext> as README-storage.md says, because the
-// signature has no user id and must stay as it is (account.service.js calls it). The random UUID keeps the URL
-// unguessable all the same.
+// The key is <folder>/<uuid><ext> (no user id: the signature has none, account.service.js calls it); the random UUID
+// keeps the URL unguessable. Approved by the lead 27/11/2026, README-storage.md says the same.
 export async function saveFile(folder, buffer, extension) {
   const key = `${folder}/${crypto.randomUUID()}${extension}`;
   if (!isSupabase()) {

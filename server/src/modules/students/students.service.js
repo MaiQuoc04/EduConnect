@@ -383,7 +383,8 @@ async function activeClassesOfStudents(client, studentIds) {
 const activeClassesOfStudent = (client, studentId) => activeClassesOfStudents(client, [studentId]);
 
 // Same "no class" warning for link and unlink: the link itself is saved, only the groups are not touched.
-// ASSUMPTION: new warning code WARN_STUDENT_HAS_NO_CLASS (waiting for the team lead to add it to messages.js).
+// Warning code WARN_STUDENT_HAS_NO_CLASS (approved by the lead 27/11/2026): each page that receives it has its own
+// Vietnamese text (LinkChildDialog, ImportParentLinksPage, UpdateStudentRelationshipPage), so messages.js needs none.
 const NO_CLASS_WARNING = {
   code: 'WARN_STUDENT_HAS_NO_CLASS',
   message: 'The student is not studying in any class; no class group was changed.',
