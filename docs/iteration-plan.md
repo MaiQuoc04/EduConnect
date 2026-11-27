@@ -31,7 +31,7 @@ reactions, attachments) is merged into one place after both are on `develop`.
 
 - **FE-04 SCR-23 "Loại lớp áp dụng" as a summary + pop-up (27/11/2026, Khanh, client only, on
   `feature/fe-05-group-feed` `af73107`, with docs `75ae9df` – parent chat label per child, SCR-26 / SCR-35 wording;
-  merged into `develop` 27/11/2026 by the lead, merge hash: see the next docs commit; UC-22):** with one class type
+  merged into `develop` 27/11/2026 by the lead, merge `e6ddb70`; UC-22):** with one class type
   per grade (20/11) a subject could show 12 chips
   in its row. The cell now reads "12 loại lớp (Khối 10–12) · Xem chi tiết" (grades in number order; "Khối 10, 12" when
   they do not follow each other; still "Chưa thiết lập cho năm học này" when the subject has no type that year).
