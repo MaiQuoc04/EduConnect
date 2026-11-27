@@ -23,7 +23,7 @@ import {
 // `grade_histories` keeps only changes to an existing score (edit or clear); entering a score into an empty cell is
 // not logged (decided by Linh 12/11).
 // A COMMENT structure (subjects assessed by comments, 27/11/2026) works the same way with grades.result PASS / FAIL
-// (Đ / CĐ) instead of a score; its semester result replaces the average (grades.calc.js semesterResult).
+// (Đạt / Chưa đạt) instead of a score; its semester result replaces the average (grades.calc.js semesterResult).
 
 const MAX_CHANGES = 5000;
 
@@ -115,7 +115,7 @@ export async function getBook(params, user) {
 }
 
 // Reads and checks the changed cells sent by the grid or the import. Last value wins for a repeated cell.
-// SCORE book: { score } (0–10, '' / null = clear). COMMENT book: { result } (PASS / FAIL or Đ / CĐ, '' / null = clear).
+// SCORE book: { score } (0–10, '' / null = clear). COMMENT book: { result } (PASS / FAIL or Đạt / Chưa đạt, '' / null = clear).
 function readChanges(list, components, enrollments) {
   const comment = assessmentTypeOf(components) === 'COMMENT';
   if (!Array.isArray(list) || !list.length) throw badRequest('MSG_GRADES_NO_CHANGE', 'There is nothing to save.');
@@ -135,7 +135,7 @@ function readChanges(list, components, enrollments) {
       throw conflict('MSG_GRADES_STUDENT_LEFT', 'A student has left the class; their grades can only be viewed.');
     }
     if (!parsed.ok && comment) {
-      throw badRequest('MSG_RESULT_INVALID', 'A result must be Đ (Đạt) or CĐ (Chưa đạt).', {
+      throw badRequest('MSG_RESULT_INVALID', 'A result must be Đạt or Chưa đạt.', {
         enrollmentId: enrollment.enrollmentId,
         componentId: component.componentId,
         attemptNo,
