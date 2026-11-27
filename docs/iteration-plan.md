@@ -29,6 +29,19 @@ reactions, attachments) is merged into one place after both are on `develop`.
 
 ## Current status (read first; update after every merge, schema patch or new decision)
 
+- **FE-13 6-digit codes + FE-01 password checklist merged into `develop` (27/11/2026, Linh,
+  `feature/fe-13-system-administration`, merge `fc56271`; server `npm test` 46/46 pass):**
+  - `672b246` (UC-95, UC-96, UC-99): student / teacher code = `HS` / `GV` + **6 digits** (`HS000123`); the 4-digit
+    codes already in the data stay valid and are kept when the account is edited; templates, messages and business
+    rules §3 updated. Rule change after the R5 submission – **approved by the lead 27/11/2026** (Linh's proposal).
+    **Open bug (blocker for the forms):** the code inputs still have `maxLength={6}`, so `HS000001` (8 characters)
+    cannot be typed – SA cannot create a student / teacher on the form, add the teacher role or change a code
+    (import still works). Fix: `maxLength={8}` in `CreateAccountPage.jsx` (2 inputs), `AddRoleDialog.jsx`,
+    `EditAccountPage.jsx` (2 inputs).
+  - `a355573` (UC-01, UC-05, FE-01 SCR-34): on the forced change "Khác mật khẩu cũ gần nhất" is checked while typing
+    against the temporary password (kept in memory only, `utils/temporaryPassword.js`); a rule the client cannot
+    check shows "(kiểm tra khi lưu)" and is not counted.
+
 - **FE-12 automatic filling of the later periods (26/11/2026, lead decision, Quoc; committed to `develop` 27/11,
   `e707d10`, after the R5 submission):** saving a period saves the later periods of the same class, day and session at once (absent stays
   with its note, late → present, a student not on the source list → present), per student up to the first later period
