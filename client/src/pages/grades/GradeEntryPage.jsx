@@ -114,7 +114,7 @@ export default function GradeEntryPage() {
   }
 
   function choose(changes) {
-    if (changedKeys.length && !window.confirm('Có điểm chưa lưu. Bỏ các thay đổi này?')) return;
+    if (changedKeys.length && !window.confirm(`Có ${comment ? 'kết quả đánh giá' : 'điểm'} chưa lưu. Bỏ các thay đổi này?`)) return;
     update(changes);
   }
 
@@ -173,7 +173,10 @@ export default function GradeEntryPage() {
       <div className="page-header">
         <div>
           <h1 className="headline-lg">Nhập điểm</h1>
-          <p>Sổ điểm các lớp và môn bạn đang được phân công dạy. Điểm từ 0 đến 10, tối đa 2 chữ số thập phân.</p>
+          <p>
+            Sổ điểm các lớp và môn bạn đang được phân công dạy.{' '}
+            {comment ? 'Môn đánh giá bằng nhận xét: mỗi lần đánh giá chọn Đạt hoặc Chưa đạt.' : 'Điểm từ 0 đến 10, tối đa 2 chữ số thập phân.'}
+          </p>
         </div>
       </div>
 
@@ -292,7 +295,8 @@ export default function GradeEntryPage() {
         >
           <p>
             Chốt sổ điểm <strong>{data.subject.subjectName}</strong> lớp <strong>{data.class.className}</strong>, học kỳ{' '}
-            {data.semester.semesterNo}? Sau khi chốt, bạn không sửa được điểm nữa cho đến khi quản lý nhà trường mở khoá.
+            {data.semester.semesterNo}? Sau khi chốt, bạn không sửa được {comment ? 'kết quả đánh giá' : 'điểm'} nữa cho đến
+            khi quản lý nhà trường mở khoá.
           </p>
           {finalizeError && (
             <div className="form-error" role="alert">
