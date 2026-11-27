@@ -7,10 +7,10 @@ import { errorText } from '../../messages.js';
 import { formatDate } from '../../utils/format.js';
 import './StudentListPage.css';
 import SchoolAccountButtons from '../admin/SchoolAccountButtons.jsx';
+import { ENROLLMENT_LABELS, enrollmentLabel } from './enrollmentView.js'; // shared with SCR-08 (27/11/2026)
 
 const PAGE_SIZES = [20, 50, 100]; // the API allows at most 100
 const SEARCH_DELAY_MS = 350;
-const ENROLLMENT_LABELS = { STUDYING: 'Đang học', TRANSFERRED: 'Đã chuyển lớp', DROPPED: 'Đã nghỉ học' };
 const ACCOUNT_LABELS = { ACTIVE: 'Hoạt động', LOCKED: 'Đã khoá' };
 const MAX_PARENTS = 2; // business-rules §3
 const GENERIC_ERROR = 'Không tải được danh sách học sinh. Vui lòng thử lại.';
@@ -84,14 +84,16 @@ function ParentCount({ count }) {
   );
 }
 
+// 27/11/2026 (business-rules §4, display only): a STUDYING row of a year not started yet / already ended (yearState of
+// the year listed, from the API) is labelled "Đã xếp lớp" / "Đã hoàn thành"; "Đang học" in the current year shows
+// no chip, as before. The status filter keeps its meaning (status=STUDYING).
 function ClassCell({ student }) {
   if (!student.classId) return <span className="muted">Chưa xếp lớp</span>;
+  const { label, green } = enrollmentLabel(student.enrollmentStatus, student.yearState);
   return (
     <div className="student-list-class">
       <span>{student.className}</span>
-      {student.enrollmentStatus !== 'STUDYING' && (
-        <span className="chip">{ENROLLMENT_LABELS[student.enrollmentStatus] ?? student.enrollmentStatus}</span>
-      )}
+      {!green && <span className="chip">{label}</span>}
     </div>
   );
 }

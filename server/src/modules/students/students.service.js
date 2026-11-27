@@ -115,6 +115,14 @@ export function buildStudentFilter({ q, classId, accountStatus } = {}, params) {
 
 // --- UC-07 -----------------------------------------------------------------------------------------------------
 
+// Where a school year stands today, on the DB's Vietnam calendar (27/11/2026, display only – business-rules §4): a
+// STUDYING enrollment of a year not started yet is shown "Đã xếp lớp", of an ended year "Đã hoàn thành". The data is
+// not changed (UC-11 leaves the old year's row STUDYING). sy = school_years.
+const YEAR_STATE = `CASE WHEN sy.start_date > CURRENT_DATE THEN 'UPCOMING'
+                         WHEN sy.end_date < CURRENT_DATE THEN 'ENDED' ELSE 'CURRENT' END`;
+// The same for the year a list is read in ($1 = its id): one value for every row.
+const LIST_YEAR_STATE = `(SELECT ${YEAR_STATE} FROM school_years sy WHERE sy.school_year_id = $1) AS "yearState"`;
+
 const STUDENT_COLUMNS = `s.student_id AS "studentId", u.user_id AS "userId", s.student_code AS "studentCode",
             u.full_name AS "fullName", u.username AS "username", u.avatar_url AS "avatarUrl", s.dob, s.gender,
             u.email, u.phone`;
@@ -156,7 +164,8 @@ export async function listStudents({ q, classId, schoolYearId, status, accountSt
                        WHERE ce.student_id = s.student_id AND yc.school_year_id = $1 AND yc.deleted_at IS NULL)`;
     columns = `${STUDENT_COLUMNS},
             NULL::bigint AS "classId", NULL::text AS "className", NULL::text AS "gradeLevelName",
-            NULL::text AS "trackName", NULL::text AS "enrollmentStatus", u.status AS "accountStatus", ${PARENT_COUNT}`;
+            NULL::text AS "trackName", NULL::text AS "enrollmentStatus", u.status AS "accountStatus", ${PARENT_COUNT},
+            ${LIST_YEAR_STATE}`;
     orderBy = `${vietnameseNameOrder('u.full_name')}, s.student_id`;
   } else if (mode === 'ALL') {
     // Every student: the current enrollment of the year when there is one (one row per student, see
@@ -171,7 +180,8 @@ export async function listStudents({ q, classId, schoolYearId, status, accountSt
      WHERE TRUE`;
     columns = `${STUDENT_COLUMNS},
             c.class_id AS "classId", c.class_name AS "className", gl.grade_level_name AS "gradeLevelName",
-            t.track_name AS "trackName", e.status AS "enrollmentStatus", u.status AS "accountStatus", ${PARENT_COUNT}`;
+            t.track_name AS "trackName", e.status AS "enrollmentStatus", u.status AS "accountStatus", ${PARENT_COUNT},
+            ${LIST_YEAR_STATE}`;
     orderBy = `(c.class_id IS NOT NULL), c.class_name, ${vietnameseNameOrder('u.full_name')}, s.student_id`;
   } else {
     // class_tracks.deleted_at is not filtered: a class keeps showing the type it was created with.
@@ -184,7 +194,8 @@ export async function listStudents({ q, classId, schoolYearId, status, accountSt
      WHERE TRUE`;
     columns = `${STUDENT_COLUMNS},
             c.class_id AS "classId", c.class_name AS "className", gl.grade_level_name AS "gradeLevelName",
-            t.track_name AS "trackName", e.status AS "enrollmentStatus", u.status AS "accountStatus", ${PARENT_COUNT}`;
+            t.track_name AS "trackName", e.status AS "enrollmentStatus", u.status AS "accountStatus", ${PARENT_COUNT},
+            ${LIST_YEAR_STATE}`;
     orderBy = `c.class_name, ${vietnameseNameOrder('u.full_name')}, s.student_id, e.enrollment_id`;
   }
   const where = buildStudentFilter({ q, classId, accountStatus }, params);
@@ -248,6 +259,7 @@ export async function findCurrentEnrollments(studentIds, db = pool) {
             gl.grade_level_name AS "gradeLevelName", t.track_name AS "trackName", ce.nickname,
             ce.status, ce.enrolled_at AS "enrolledAt", ce.left_at AS "leftAt",
             sy.school_year_id AS "schoolYearId", sy.year_name AS "schoolYearName",
+            sy.start_date AS "schoolYearStart", sy.end_date AS "schoolYearEnd", ${YEAR_STATE} AS "yearState",
             hu.full_name AS "homeroomTeacherName"
      FROM ${enrollments}
      JOIN class_enrollments ce ON ce.enrollment_id = e.enrollment_id
@@ -276,7 +288,8 @@ export async function getStudentDetail(studentId) {
   const { rows: enrollmentHistory } = await pool.query(
     `SELECT ce.enrollment_id AS "enrollmentId", sy.year_name AS "schoolYearName", c.class_name AS "className",
             gl.grade_level_name AS "gradeLevelName", t.track_name AS "trackName", ce.status,
-            ce.enrolled_at AS "enrolledAt", ce.left_at AS "leftAt"
+            ce.enrolled_at AS "enrolledAt", ce.left_at AS "leftAt",
+            sy.start_date AS "schoolYearStart", sy.end_date AS "schoolYearEnd", ${YEAR_STATE} AS "yearState"
      FROM class_enrollments ce
      JOIN classes c ON c.class_id = ce.class_id
      JOIN grade_levels gl ON gl.grade_level_id = c.grade_level_id

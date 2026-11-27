@@ -19,8 +19,8 @@ business rules §17). Tables and filters only, no dashboard.
 | 4 | Notifications | FE-09 | Displays notifications and reminders relevant to User. (planned) |
 | 5 | School Post Detail | FE-08 | Displays details of a school announcement or news post. |
 | 6 | Update School Post | FE-08 | Allows School Manager to update an existing school announcement or news post. |
-| 7 | Student List | FE-02 | Displays students managed by the school. |
-| 8 | Student Detail | FE-02 | Displays detailed information about a student. |
+| 7 | Student List | FE-02 | Displays students managed by the school. A studying student of a year not started yet / ended is labelled “Đã xếp lớp” / “Đã hoàn thành” (27/11/2026). |
+| 8 | Student Detail | FE-02 | Displays detailed information about a student. “Quá trình học”: “Đang học” only in the current year (“… – nay” for the current class); a year not started yet: “Đã xếp lớp”, “Bắt đầu <first day>”, “Xếp lớp ngày <date>”; an ended year: “Đã hoàn thành”, until its last day (27/11/2026). |
 | 9 | Update Student | FE-02 | Allows School Manager to update student information. |
 | 10 | Parent Detail | FE-14 | Displays a parent and their linked children. Allows School Manager to link or unlink a child, reset the parent’s password and lock or unlock the account. |
 | 11 | Student Transfer & Promotion | FE-02 | Supports student transfers and grade promotion. |

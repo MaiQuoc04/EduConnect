@@ -7,11 +7,11 @@ import { useToast } from '../../context/ToastContext.jsx';
 import { errorText, GENDER_LABELS, RELATIONSHIP_LABELS } from '../../messages.js';
 import { formatDate } from '../../utils/format.js';
 import { clearHandedOverDetail, peekHandedOverDetail } from './detailHandoff.js';
+import { enrollmentView } from './enrollmentView.js';
 import './StudentDetailPage.css';
 import SchoolAccountCard from '../admin/SchoolAccountCard.jsx';
 
-// Same labels as the Student List (SCR-07).
-const ENROLLMENT_LABELS = { STUDYING: 'Đang học', TRANSFERRED: 'Đã chuyển lớp', DROPPED: 'Đã nghỉ học' };
+// "Quá trình học" labels and times (27/11/2026, business-rules §4): enrollmentView.js.
 const MAX_PARENTS = 2; // business-rules §3
 const GENERIC_ERROR = 'Không tải được thông tin học sinh. Vui lòng thử lại.';
 const EMPTY_VALUE = 'Chưa cập nhật';
@@ -164,13 +164,12 @@ function ClassTimeline({ current, history }) {
         <ol>
           {history.map((e) => {
             const isCurrent = current?.enrollmentId === e.enrollmentId;
+            const view = enrollmentView(e, isCurrent);
             return (
               <li key={e.enrollmentId} className={isCurrent ? 'current' : undefined}>
                 <div className="student-detail-timeline-head">
                   <span className="strong">{yearLabel(e.schoolYearName)}</span>
-                  <span className={`pill${e.status === 'STUDYING' ? ' green' : ''}`}>
-                    {ENROLLMENT_LABELS[e.status] ?? e.status}
-                  </span>
+                  <span className={`pill${view.green ? ' green' : ''}`}>{view.label}</span>
                 </div>
                 <dl className="caption">
                   <div>
@@ -199,13 +198,15 @@ function ClassTimeline({ current, history }) {
                   )}
                   <div>
                     <dt>Thời gian:</dt>
-                    {/* "– nay" only for the current enrollment: after a promotion the old row has no left_at
-                        (business-rules §4: promotion = new enrollment), so it is shown as a start date only. */}
-                    <dd className="mono">
-                      {e.leftAt && `${formatDate(e.enrolledAt)} – ${formatDate(e.leftAt)}`}
-                      {!e.leftAt && (isCurrent ? `${formatDate(e.enrolledAt)} – nay` : `Từ ${formatDate(e.enrolledAt)}`)}
-                    </dd>
+                    {/* enrollmentView: "– nay" only for the current enrollment of the current year; a promotion
+                        leaves the old row without left_at, so its end is the last day of its year once it ended. */}
+                    <dd className="mono">{view.time}</dd>
                   </div>
+                  {view.note && (
+                    <div>
+                      <dd className="muted">{view.note}</dd>
+                    </div>
+                  )}
                 </dl>
               </li>
             );

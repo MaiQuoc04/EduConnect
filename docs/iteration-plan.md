@@ -29,6 +29,18 @@ reactions, attachments) is merged into one place after both are on `develop`.
 
 ## Current status (read first; update after every merge, schema patch or new decision)
 
+- **FE-02 enrollment status labels after a promotion (27/11/2026, Anh, `fix/fe-02-enrollment-status-label`, NOT
+  merged; defect fix, no schema or data change):** UC-11 keeps the old year's enrollment `STUDYING` (business-rules §4,
+  unchanged), so SCR-08 showed "Đang học" in two years and "Từ <date>" for a year not started. Now the label follows
+  the school year: "Đã xếp lớp" (not started; "Bắt đầu <first day>", "Xếp lớp ngày <date>"), "Đang học" (current),
+  "Đã hoàn thành" (ended; until its last day). Server `students.service.js` only adds fields: `yearState`
+  (`UPCOMING` | `CURRENT` | `ENDED`, from `CURRENT_DATE`), `schoolYearStart`, `schoolYearEnd` on `enrollmentHistory`
+  and on `findCurrentEnrollments`, `yearState` on each UC-07 list row. Client: new `pages/students/enrollmentView.js`,
+  used by SCR-08, SCR-07, the transfer page's history and the promotion roster. FE-14 (also Anh): `parents.service.js`
+  UC-105 children get `yearState`, and `ParentDetailPage.jsx` (SCR-10, child card) uses the same rule for its chip
+  ("Đã xếp lớp" / "Đã hoàn thành"; no chip while studying in the current year, as before).
+
+
 - **FE-09 `COMMENT_REPORT` link goes straight to the moderation tab (27/11/2026, Quoc, on `develop`, server only, no
   schema change):** after PR #25 the "Cần được hỗ trợ" notification on a school post comment opens
   `/moderation?tab=comments&source=school` (`notifications.service.js` `LINK_SQL`) instead of the old

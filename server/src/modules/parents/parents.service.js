@@ -164,6 +164,7 @@ export async function getParentDetail(parentId) {
       trackName: e?.trackName ?? null,
       schoolYearName: e?.schoolYearName ?? null,
       enrollmentStatus: e?.status ?? null,
+      yearState: e?.yearState ?? null, // 27/11/2026: UPCOMING | CURRENT | ENDED of that class's year (display only)
       homeroomTeacherName: e?.homeroomTeacherName ?? null,
     };
   });

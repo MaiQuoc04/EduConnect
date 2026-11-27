@@ -157,6 +157,9 @@ Boundaries that are easy to get wrong:
 - Classes are created **per school year** (10A1 of 2026–2027 is a different row from 10A1 of 2027–2028).
   Promotion = new enrollment in the new class; transfer = old enrollment `TRANSFERRED` + new enrollment (back to a
   class already studied in that year: its old enrollment is reopened, see Transfer below).
+  Display (27/11/2026): a `STUDYING` enrollment of a year not started yet is shown "Đã xếp lớp" (from the first day of
+  the year), of an ended year "Đã hoàn thành" (until its last day); only the current year's reads "Đang học". Data
+  unchanged: the old year's row stays `STUDYING` after a promotion.
 - **Who puts a student in a class** (agreed 03/11/2026) – one path per case, so the rules live in one place:
   - Students who studied in a class **the previous school year** go to the new year only by **promotion (UC-11,
     FE-02)**: from the school year **right before** the destination year, into a destination year that has not

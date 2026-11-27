@@ -7,6 +7,7 @@ import { useAuth } from '../../context/AuthContext.jsx';
 import { useToast } from '../../context/ToastContext.jsx';
 import { errorText, ROLE_LABELS } from '../../messages.js';
 import { formatDate } from '../../utils/format.js';
+import { enrollmentView } from './enrollmentView.js';
 import PromoteStudentsPanel from './PromoteStudentsPanel.jsx';
 import TargetClassPicker from './TargetClassPicker.jsx';
 import './TransferStudentPage.css';
@@ -184,8 +185,9 @@ function CurrentClass({ current }) {
 
 // The student's class history (UC-08), newest first – stands in for the design's transfer log, which would need a
 // school-wide log API that does not exist.
+// 27/11/2026 (business-rules §4, display only): labels and times as SCR-08 (enrollmentView) – a STUDYING row of a
+// year not started yet / ended is "Đã xếp lớp" / "Đã hoàn thành".
 function HistoryLog({ history }) {
-  const LABELS = { STUDYING: 'Đang học', TRANSFERRED: 'Đã chuyển lớp', DROPPED: 'Đã nghỉ học' };
   return (
     <section className="card card-outline transfer-student-log" aria-labelledby="transfer-student-log-title">
       <div className="transfer-student-aside-head">
@@ -198,19 +200,20 @@ function HistoryLog({ history }) {
         <p className="caption muted">Chưa có bản ghi nào.</p>
       ) : (
         <ol>
-          {history.map((e) => (
+          {history.map((e) => {
+            const view = enrollmentView(e, false);
+            return (
             <li key={e.enrollmentId}>
               <div className="transfer-student-log-head">
                 <span className="strong">Lớp {e.className}</span>
                 <span className="caption muted mono">{yearLabel(e.schoolYearName)}</span>
               </div>
-              <p className="caption mono">
-                {formatDate(e.enrolledAt)}
-                {e.leftAt ? ` – ${formatDate(e.leftAt)}` : ''}
-              </p>
-              <span className={`pill${e.status === 'STUDYING' ? ' green' : ''}`}>{LABELS[e.status] ?? e.status}</span>
+              <p className="caption mono">{view.time}</p>
+              {view.note && <p className="caption muted">{view.note}</p>}
+              <span className={`pill${view.green ? ' green' : ''}`}>{view.label}</span>
             </li>
-          ))}
+            );
+          })}
         </ol>
       )}
     </section>
