@@ -13,7 +13,6 @@ import SchoolAccountCard from '../admin/SchoolAccountCard.jsx';
 // Same labels as the Student List (SCR-07).
 const ENROLLMENT_LABELS = { STUDYING: 'Đang học', TRANSFERRED: 'Đã chuyển lớp', DROPPED: 'Đã nghỉ học' };
 const MAX_PARENTS = 2; // business-rules §3
-const NOT_BUILT = 'Chức năng đang phát triển';
 const GENERIC_ERROR = 'Không tải được thông tin học sinh. Vui lòng thử lại.';
 const EMPTY_VALUE = 'Chưa cập nhật';
 
@@ -76,66 +75,6 @@ function CopyButton({ value, label }) {
     <button type="button" className="btn btn-icon" onClick={copy} aria-label={label} title="Sao chép">
       <Icon name="content_copy" size="sm" />
     </button>
-  );
-}
-
-// "…" menu of the design ("Bảo mật & quyền"). Every action belongs to FE-13 (business-rules §2) and has no API yet.
-function AccountMenu({ student }) {
-  const [open, setOpen] = useState(false);
-  const ref = useRef(null);
-  useEffect(() => {
-    if (!open) return undefined;
-    const onPointer = (e) => {
-      if (!ref.current?.contains(e.target)) setOpen(false);
-    };
-    const onKey = (e) => {
-      if (e.key === 'Escape') setOpen(false);
-    };
-    document.addEventListener('mousedown', onPointer);
-    document.addEventListener('keydown', onKey);
-    return () => {
-      document.removeEventListener('mousedown', onPointer);
-      document.removeEventListener('keydown', onKey);
-    };
-  }, [open]);
-
-  const locked = student.accountStatus === 'LOCKED';
-  return (
-    <div className="student-detail-menu-wrap" ref={ref}>
-      <button
-        type="button"
-        className="btn btn-secondary btn-icon-only"
-        aria-label="Bảo mật và quyền"
-        aria-haspopup="menu"
-        aria-expanded={open}
-        onClick={() => setOpen((v) => !v)}
-      >
-        <Icon name="more_horiz" size="sm" />
-      </button>
-      {open && (
-        <div className="student-detail-menu" role="menu">
-          <p className="label-upper">Bảo mật &amp; quyền</p>
-          {/* TODO UC-100 Reset Password (FE-13, Linh) */}
-          <button type="button" role="menuitem" disabled title={NOT_BUILT}>
-            <Icon name="key" size="sm" />
-            Đặt lại mật khẩu
-          </button>
-          {/* TODO UC-101 Lock / Unlock Account – clear the temporary sign-in lock (FE-13, Linh) */}
-          {student.lockedUntil && (
-            <button type="button" role="menuitem" disabled title={NOT_BUILT}>
-              <Icon name="lock_open" size="sm" />
-              Mở tạm khoá đăng nhập
-            </button>
-          )}
-          <hr />
-          {/* TODO UC-101 Lock / Unlock Account (FE-13, Linh) */}
-          <button type="button" role="menuitem" className={locked ? undefined : 'danger'} disabled title={NOT_BUILT}>
-            <Icon name={locked ? 'lock_open' : 'lock_person'} size="sm" />
-            {locked ? 'Mở khoá tài khoản' : 'Khoá tài khoản'}
-          </button>
-        </div>
-      )}
-    </div>
   );
 }
 
@@ -277,8 +216,10 @@ function ClassTimeline({ current, history }) {
   );
 }
 
-// Read only. Link / unlink is UC-13; the link details are on SCR-12 (UC-12, "Xem phụ huynh" in the header).
-function ParentsCard({ parents }) {
+// The link details are on SCR-12 (UC-12, "Xem phụ huynh" in the header). Link / unlink is UC-13 (SCR-13): while a
+// place is free (MAX_PARENTS, business-rules §3) the card leads there. linkState makes SCR-13 come back here.
+function ParentsCard({ parents, studentId, linkState }) {
+  const editPath = `/students/${studentId}/parents/edit`;
   return (
     <section className="card card-outline student-detail-parents">
       <h2 className="card-title title-sm">
@@ -291,11 +232,10 @@ function ParentsCard({ parents }) {
       {parents.length === 0 ? (
         <div className="student-detail-parents-empty">
           <p className="muted">Chưa liên kết phụ huynh.</p>
-          {/* TODO UC-13 Update Student Relationship (SCR-13) */}
-          <button type="button" className="btn btn-secondary" disabled title={NOT_BUILT}>
+          <Link to={editPath} state={linkState} className="btn btn-secondary">
             <Icon name="link" size="sm" />
             Liên kết phụ huynh
-          </button>
+          </Link>
         </div>
       ) : (
         <div className="student-detail-parent-list">
@@ -333,6 +273,14 @@ function ParentsCard({ parents }) {
               </ul>
             </article>
           ))}
+          {parents.length < MAX_PARENTS ? (
+            <Link to={editPath} state={linkState} className="btn btn-secondary student-detail-parents-more">
+              <Icon name="person_add" size="sm" />
+              Liên kết thêm phụ huynh
+            </Link>
+          ) : (
+            <p className="caption muted">Đã đủ {MAX_PARENTS} phụ huynh.</p>
+          )}
         </div>
       )}
     </section>
@@ -507,7 +455,6 @@ export default function StudentDetailPage() {
             <Icon name="family_restroom" size="sm" />
             Xem phụ huynh
           </Link>
-          <AccountMenu student={student} />
         </div>
       </div>
 
@@ -595,7 +542,13 @@ export default function StudentDetailPage() {
 
         <div className="student-detail-side">
           <ClassTimeline current={current} history={enrollmentHistory} />
-          <ParentsCard parents={parents} />
+          <ParentsCard
+            parents={parents}
+            studentId={studentId}
+            // ASSUMPTION: fromParents tells SCR-13 that the page behind it is the one to return to: its leave()
+            // goes back one step (navigate(-1)), here to this page, which then reloads the parents.
+            linkState={{ fromParents: true, listSearch: location.state?.listSearch }}
+          />
           {/* FE-13: email / phone, password reset, lock (School Manager, 23/11/2026) */}
           <SchoolAccountCard userId={student.userId} username={student.username} />
         </div>
