@@ -29,6 +29,15 @@ reactions, attachments) is merged into one place after both are on `develop`.
 
 ## Current status (read first; update after every merge, schema patch or new decision)
 
+- **FE-04 SCR-23 "Loại lớp áp dụng" as a summary + pop-up (27/11/2026, Khanh, client only, on
+  `feature/fe-05-group-feed`, not merged yet):** with one class type per grade (20/11) a subject could show 12 chips
+  in its row. The cell now reads "12 loại lớp (Khối 10–12) · Xem chi tiết" (grades in number order; "Khối 10, 12" when
+  they do not follow each other; still "Chưa thiết lập cho năm học này" when the subject has no type that year).
+  "Xem chi tiết" opens a pop-up (`subjects/SubjectScopePopover.jsx`) with the types grouped by grade and their
+  periods per week, the filtered type in bold, and a link to SCR-70 for the same year; it does not open SCR-24, and
+  closes on outside click, Esc, ✕, scroll, or when the year / filters change. Other columns, row click and filters
+  unchanged. **No API or schema change.** Client `npm run build` passes; not yet clicked through in a browser.
+
 - **FE-11 subjects assessed by comments – Đạt / Chưa đạt (27/11/2026, Linh, `feature/fe-11-grade-management`, merged
   into `develop` 27/11/2026 by the lead, merge hash: see the next docs commit):** SM chooses per structure "Điểm số"
   or "Nhận xét"; a comment book has Đạt / Chưa đạt cells (entry, import with
