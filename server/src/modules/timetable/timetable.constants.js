@@ -42,7 +42,9 @@ export const AUTO_LIMITS = Object.freeze({
   HOMEROOM_REDUCTION: 4, // Thông tư 05/2025: a homeroom teacher teaches 4 periods a week less (17 - 4 = 13)
   TEACHER_MAX_WEEK: 25, // norm 17 (Thông tư 05/2025) + at most 50 % over it = 25.5, rounded down
   CLASS_MAX_DAY: 7, // Công văn 4567/BGDĐT-GDPT (2025): a pupil has at most 7 periods of 45 minutes a day
-  CLASS_MAX_WEEK: 38, // ASSUMPTION (no cap in the dispatch, which allows at most 11 sessions a week): 5 days × 7 + 3
+  // Default 38 approved by the lead 27/11/2026 (the dispatch sets no weekly cap, at most 11 sessions a week): 5 days ×
+  // 7 + 3. Unlike the others it is not the highest value: the School Manager may set up to CLASS_MAX_DAY × DAYS_MAX = 42.
+  CLASS_MAX_WEEK: 38,
   MAX_PER_SUBJECT_DAY: 2, // hard: a subject at most 2 periods a day in a class
   BUSY_MAX: 3000,
   TIME_LIMIT_SEC: 5, // default search time; 1..30
