@@ -34,10 +34,10 @@ reactions, attachments) is merged into one place after both are on `develop`.
   - `672b246` (UC-95, UC-96, UC-99): student / teacher code = `HS` / `GV` + **6 digits** (`HS000123`); the 4-digit
     codes already in the data stay valid and are kept when the account is edited; templates, messages and business
     rules §3 updated. Rule change after the R5 submission – **approved by the lead 27/11/2026** (Linh's proposal).
-    **Open bug (blocker for the forms):** the code inputs still have `maxLength={6}`, so `HS000001` (8 characters)
-    cannot be typed – SA cannot create a student / teacher on the form, add the teacher role or change a code
-    (import still works). Fix: `maxLength={8}` in `CreateAccountPage.jsx` (2 inputs), `AddRoleDialog.jsx`,
-    `EditAccountPage.jsx` (2 inputs).
+    Bug found in review: the code inputs still had `maxLength={6}`, so `HS000001` (8 characters) could not be
+    typed – SA could not create a student / teacher on the form, add the teacher role or change a code (import was
+    fine). **Fixed** by Linh in `00ee924` (`maxLength={8}` in `CreateAccountPage.jsx` ×2, `AddRoleDialog.jsx`,
+    `EditAccountPage.jsx` ×2), merged into `develop` 27/11, merge `3cec642`; client `npm run build` passes.
   - `a355573` (UC-01, UC-05, FE-01 SCR-34): on the forced change "Khác mật khẩu cũ gần nhất" is checked while typing
     against the temporary password (kept in memory only, `utils/temporaryPassword.js`); a rule the client cannot
     check shows "(kiểm tra khi lưu)" and is not counted.
