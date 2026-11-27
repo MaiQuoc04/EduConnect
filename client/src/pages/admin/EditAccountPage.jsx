@@ -204,7 +204,7 @@ export default function EditAccountPage() {
             </h2>
             <div className="form-grid">
               <Field id="studentCode" label="Mã học sinh" required error={err('studentCode')}>
-                <input id="studentCode" className="input mono" value={form.studentCode} onChange={set('studentCode', normCode)} maxLength={6} autoComplete="off" />
+                <input id="studentCode" className="input mono" value={form.studentCode} onChange={set('studentCode', normCode)} maxLength={8} autoComplete="off" />
               </Field>
               <Field id="dob" label="Ngày sinh" error={err('dob')}>
                 <input id="dob" type="date" className="input" value={form.dob} onChange={set('dob')} max={today()} />
@@ -232,7 +232,7 @@ export default function EditAccountPage() {
             </h2>
             <div className="form-grid">
               <Field id="teacherCode" label="Mã giáo viên" required error={err('teacherCode')}>
-                <input id="teacherCode" className="input mono" value={form.teacherCode} onChange={set('teacherCode', normCode)} maxLength={6} autoComplete="off" />
+                <input id="teacherCode" className="input mono" value={form.teacherCode} onChange={set('teacherCode', normCode)} maxLength={8} autoComplete="off" />
               </Field>
               <Field id="department" label="Tổ chuyên môn" error={err('department')}>
                 <select id="department" className="input" value={form.departmentId} onChange={set('departmentId')}>

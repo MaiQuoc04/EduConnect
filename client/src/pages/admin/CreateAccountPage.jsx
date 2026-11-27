@@ -301,7 +301,7 @@ export default function CreateAccountPage({ kind }) {
                     className="input mono"
                     value={form.studentCode}
                     onChange={setCode('studentCode')}
-                    maxLength={6}
+                    maxLength={8}
                     placeholder="HS000001"
                     autoComplete="off"
                   />
@@ -337,7 +337,7 @@ export default function CreateAccountPage({ kind }) {
                     className="input mono"
                     value={form.teacherCode}
                     onChange={setCode('teacherCode')}
-                    maxLength={6}
+                    maxLength={8}
                     placeholder="GV000001"
                     autoComplete="off"
                   />
