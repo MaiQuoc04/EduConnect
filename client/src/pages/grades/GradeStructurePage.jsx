@@ -240,7 +240,7 @@ export default function GradeStructurePage() {
                 )}
                 {comment && (
                   <span className="caption muted">
-                    Theo Thông tư 22/2021: mỗi lần đánh giá ghi Đ (Đạt) hoặc CĐ (Chưa đạt). Học kỳ Đạt khi đủ số lần và tất cả các lần đều
+                    Theo Thông tư 22/2021: mỗi lần đánh giá chọn Đạt hoặc Chưa đạt. Học kỳ Đạt khi đủ số lần và tất cả các lần đều
                     Đạt; cả năm lấy theo học kỳ 2. Các học kỳ trong năm của một môn phải cùng một cách đánh giá.
                   </span>
                 )}
