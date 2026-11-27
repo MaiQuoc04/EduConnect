@@ -781,8 +781,9 @@ Boundaries that are easy to get wrong:
     is refused and nothing changes (14/11/2026).
 - Each individual score is its own `grades` row (`attempt_no`); averages are **not stored**, they are computed:
   subject semester average = weighted average of the scores present; subject year average = (S1 + 2 × S2) / 3.
-  Subjects counted = those with a grade structure for the class's grade that year (only the class type's subjects
-  when set); a subject without a structure is not counted.
+  Subjects counted = every subject of the class type for that year (`track_subjects`), with or without a grade
+  structure (27/11/2026); when the type has no subjects set, those with a grade structure for the class's grade that
+  year.
 - **Subjects assessed by comments (môn đánh giá bằng nhận xét, Circular 22/2021; 27/11/2026, Linh):** a structure is
   either **scored** (SCORE, 0–10, as above) or **assessed by comments** (COMMENT: Giáo dục thể chất, Nghệ thuật, Hoạt
   động trải nghiệm, Giáo dục địa phương…), chosen by SM when configuring it (`grade_components.assessment_type`).
@@ -802,8 +803,8 @@ Boundaries that are easy to get wrong:
   the year (Article 9), from the rounded subject averages of the period: **Tốt** = every subject ≥ 6.5 and at least 6
   subjects ≥ 8.0; **Khá** = every subject ≥ 5.0 and at least 6 subjects ≥ 6.5; **Đạt** = at least 6 subjects ≥ 5.0
   and none below 3.5; **Chưa đạt** = otherwise; no level while a subject has no average yet. Every period uses the
-  **same list of subjects: those with a grade structure in any semester of the year** (27/11/2026): a subject not yet
-  configured for a semester, not yet scored, or (students / parents) not yet finalized leaves that period without a
+  **same list of subjects: every subject the class studies that year** (the subjects counted above, 27/11/2026): a
+  subject not yet configured, not yet scored, or (students / parents) not yet finalized leaves that period without a
   level, so a level is never decided on part of the subjects. Subjects assessed by comments (below) add: **Tốt** and
   **Khá** need every comment subject Đạt; **Đạt** allows at most one comment subject Chưa đạt; "at least 6 subjects"
   counts the scored subjects. ASSUMPTION: with fewer than 6 scored subjects "at least 6" means all of them. Conduct (rèn luyện) and the titles Học sinh

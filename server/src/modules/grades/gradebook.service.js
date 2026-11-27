@@ -298,6 +298,7 @@ export async function finalizeBook(params, user) {
       throw conflict('MSG_GRADES_INCOMPLETE', 'Some studying students are missing scores.', {
         count: incomplete.length,
         students: incomplete.slice(0, 20),
+        assessmentType: assessmentTypeOf(components), // the screen says "lần đánh giá" for a COMMENT book
       });
     }
     await client.query(

@@ -29,6 +29,18 @@ reactions, attachments) is merged into one place after both are on `develop`.
 
 ## Current status (read first; update after every merge, schema patch or new decision)
 
+- **FE-11 academic level needs every subject the class studies (27/11/2026, Linh, `feature/fe-11-grade-management`
+  `681dcbc`, with `f0f1e63` / `e84d094` – comment subjects say "lần đánh giá" / "kết quả", not "điểm"; merged into
+  `develop` 27/11/2026 by the lead; UC-85, UC-88):** before, a subject of the class type with no grade structure was
+  skipped, so a class studying 11 subjects with only 2 configured already got a level. Now the subject list is every
+  subject of the class type for the year (`track_subjects`); one without a structure shows "–" and leaves the level
+  empty. A class type with no subjects set keeps the old rule. business-rules §11. No schema change, server only.
+  Rule change after the R5 submission – **approved by the lead 27/11/2026, with Linh's plan below**.
+  Tested on the local DB: `npm test` 87/87, level scenario 11/11, student result screen checked. Lead check of the
+  merge result: server `npm test` 87/87, client `npm run build` passes; on the shared DB every subject of a class type
+  already has a grade structure (14 subjects, read-only check), so no level disappears on the current data.
+  Owed (Linh): R3 academic level wording; R5.3 SYS-BF11-017/-018/-022/-023 preconditions, then run them again.
+
 - **FE-09 links for the moderation notifications (27/11/2026, Quoc; owed from PR #24; committed to `develop`
   `f3cb5c0`):** `notifications.service.js`
   `LINK_SQL` + `CHAT` → `/chat/<groupId>` (author's "message hidden / shown again"), `MESSAGE_REPORT` →
