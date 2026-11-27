@@ -10,8 +10,11 @@ export const listStructures = (semesterId, gradeLevelId) =>
   api.get('/grades/structures', { params: { semesterId, gradeLevelId } }).then((r) => r.data);
 export const getStructure = (semesterId, gradeLevelId, subjectId) =>
   api.get(`/grades/structures/${semesterId}/${gradeLevelId}/${subjectId}`).then((r) => r.data);
-export const saveStructure = (semesterId, gradeLevelId, subjectId, components) =>
-  api.put(`/grades/structures/${semesterId}/${gradeLevelId}/${subjectId}`, { components }).then((r) => r.data);
+// assessmentType: SCORE (scores 0–10) or COMMENT (Đạt / Chưa đạt), 27/11/2026.
+export const saveStructure = (semesterId, gradeLevelId, subjectId, components, assessmentType = 'SCORE') =>
+  api
+    .put(`/grades/structures/${semesterId}/${gradeLevelId}/${subjectId}`, { components, assessmentType })
+    .then((r) => r.data);
 // to = { semesterId, gradeLevelId, subjectIds: [...] }
 export const copyStructure = (from, to) => api.post('/grades/structures/copy', { from, to }).then((r) => r.data);
 

@@ -1,8 +1,9 @@
 import { pool, withTransaction } from '../../config/db.js';
 import { badRequest, forbidden } from '../../utils/AppError.js';
-import { missingSlots, parseScore, roundScore, semesterAverage } from './grades.calc.js';
+import { missingSlots, parseResult, parseScore, roundScore, semesterAverage, semesterResult } from './grades.calc.js';
 import {
   assertCanViewClass,
+  assessmentTypeOf,
   assertSameYear,
   bookStatus,
   classEnrollments,
@@ -21,6 +22,8 @@ import {
 // Every score is one `grades` row (attempt_no); rows are never deleted – clearing a score sets it to NULL.
 // `grade_histories` keeps only changes to an existing score (edit or clear); entering a score into an empty cell is
 // not logged (decided by Linh 12/11).
+// A COMMENT structure (subjects assessed by comments, 27/11/2026) works the same way with grades.result PASS / FAIL
+// (Đ / CĐ) instead of a score; its semester result replaces the average (grades.calc.js semesterResult).
 
 const MAX_CHANGES = 5000;
 
@@ -56,7 +59,7 @@ async function lockInfo(db, classId, subjectId, semesterId) {
 async function bookScores(db, enrollmentIds, componentIds) {
   if (!enrollmentIds.length || !componentIds.length) return [];
   const { rows } = await db.query(
-    `SELECT enrollment_id AS "enrollmentId", component_id AS "componentId", attempt_no AS "attemptNo", score
+    `SELECT enrollment_id AS "enrollmentId", component_id AS "componentId", attempt_no AS "attemptNo", score, result
      FROM grades WHERE enrollment_id = ANY($1::bigint[]) AND component_id = ANY($2::bigint[])`,
     [enrollmentIds, componentIds],
   );
@@ -77,13 +80,22 @@ export async function getBook(params, user) {
     components.map((c) => c.componentId),
   );
   const lock = await lockInfo(pool, cls.classId, subject.subjectId, semester.semesterId);
+  const assessmentType = assessmentTypeOf(components);
+  const comment = assessmentType === 'COMMENT';
 
   const students = enrollments.map((e) => {
     const own = scores.filter((s) => String(s.enrollmentId) === String(e.enrollmentId));
     return {
       ...e,
-      scores: own.map((s) => ({ componentId: s.componentId, attemptNo: s.attemptNo, score: s.score === null ? null : Number(s.score) })),
-      average: roundScore(semesterAverage(components, own)),
+      scores: own.map((s) => ({
+        componentId: s.componentId,
+        attemptNo: s.attemptNo,
+        score: s.score === null ? null : Number(s.score),
+        result: s.result ?? null,
+      })),
+      // SCORE: the semester average; COMMENT: the semester result PASS / FAIL (null while not decided).
+      average: comment ? null : roundScore(semesterAverage(components, own)),
+      result: comment ? semesterResult(components, own) : null,
       missing: e.status === 'STUDYING' ? missingSlots(components, own).length : 0,
     };
   });
@@ -92,6 +104,7 @@ export async function getBook(params, user) {
     class: cls,
     subject,
     semester,
+    assessmentType,
     components,
     students,
     lock,
@@ -102,7 +115,9 @@ export async function getBook(params, user) {
 }
 
 // Reads and checks the changed cells sent by the grid or the import. Last value wins for a repeated cell.
+// SCORE book: { score } (0–10, '' / null = clear). COMMENT book: { result } (PASS / FAIL or Đ / CĐ, '' / null = clear).
 function readChanges(list, components, enrollments) {
+  const comment = assessmentTypeOf(components) === 'COMMENT';
   if (!Array.isArray(list) || !list.length) throw badRequest('MSG_GRADES_NO_CHANGE', 'There is nothing to save.');
   if (list.length > MAX_CHANGES) throw badRequest('MSG_GRADES_TOO_MANY', 'Too many changes at once.');
   const byComponent = new Map(components.map((c) => [String(c.componentId), c]));
@@ -112,12 +127,19 @@ function readChanges(list, components, enrollments) {
     const component = byComponent.get(String(ch?.componentId));
     const enrollment = byEnrollment.get(String(ch?.enrollmentId));
     const attemptNo = Number(ch?.attemptNo);
-    const parsed = parseScore(ch?.score);
+    const parsed = comment ? parseResult(ch?.result) : parseScore(ch?.score);
     if (!component || !enrollment || !Number.isInteger(attemptNo) || attemptNo < 1 || attemptNo > component.scoreCount) {
       throw badRequest('MSG_GRADES_CELL_INVALID', 'A changed cell does not belong to this grade book.');
     }
     if (enrollment.status !== 'STUDYING') {
       throw conflict('MSG_GRADES_STUDENT_LEFT', 'A student has left the class; their grades can only be viewed.');
+    }
+    if (!parsed.ok && comment) {
+      throw badRequest('MSG_RESULT_INVALID', 'A result must be Đ (Đạt) or CĐ (Chưa đạt).', {
+        enrollmentId: enrollment.enrollmentId,
+        componentId: component.componentId,
+        attemptNo,
+      });
     }
     if (!parsed.ok) {
       throw badRequest('MSG_SCORE_INVALID', 'A score must be from 0 to 10 with at most 2 decimals.', {
@@ -130,7 +152,8 @@ function readChanges(list, components, enrollments) {
       enrollmentId: Number(enrollment.enrollmentId),
       componentId: Number(component.componentId),
       attemptNo,
-      score: parsed.value,
+      score: comment ? null : parsed.value,
+      result: comment ? parsed.value : null,
     });
   }
   return [...cells.values()];
@@ -172,7 +195,7 @@ export async function applyChanges(params, user, buildChanges) {
 
     // Existing rows of the changed cells, locked for this transaction.
     const { rows: existing } = await client.query(
-      `SELECT g.grade_id, g.enrollment_id, g.component_id, g.attempt_no, g.score
+      `SELECT g.grade_id, g.enrollment_id, g.component_id, g.attempt_no, g.score, g.result
        FROM grades g
        JOIN unnest($1::bigint[], $2::bigint[], $3::int[]) AS c(enrollment_id, component_id, attempt_no)
          ON c.enrollment_id = g.enrollment_id AND c.component_id = g.component_id AND c.attempt_no = g.attempt_no
@@ -185,43 +208,53 @@ export async function applyChanges(params, user, buildChanges) {
     for (const c of cells) {
       const row = rowOf.get(`${c.enrollmentId}:${c.componentId}:${c.attemptNo}`);
       const old = row?.score === null || row?.score === undefined ? null : Number(row.score);
+      const oldResult = row?.result ?? null;
       if (!row) {
-        if (c.score !== null) inserts.push(c); // clearing an empty cell changes nothing
-      } else if (old !== c.score) {
-        updates.push({ ...c, gradeId: row.grade_id, old });
+        if (c.score !== null || c.result !== null) inserts.push(c); // clearing an empty cell changes nothing
+      } else if (old !== c.score || oldResult !== c.result) {
+        updates.push({ ...c, gradeId: row.grade_id, old, oldResult });
       }
     }
 
     if (inserts.length) {
       await client.query(
-        `INSERT INTO grades (enrollment_id, component_id, attempt_no, score, entered_by)
-         SELECT c.enrollment_id, c.component_id, c.attempt_no, c.score, $5
-         FROM unnest($1::bigint[], $2::bigint[], $3::int[], $4::numeric[]) AS c(enrollment_id, component_id, attempt_no, score)
-`,
+        `INSERT INTO grades (enrollment_id, component_id, attempt_no, score, result, entered_by)
+         SELECT c.enrollment_id, c.component_id, c.attempt_no, c.score, c.result, $5
+         FROM unnest($1::bigint[], $2::bigint[], $3::int[], $4::numeric[], $6::text[])
+           AS c(enrollment_id, component_id, attempt_no, score, result)`,
         [
           inserts.map((c) => c.enrollmentId),
           inserts.map((c) => c.componentId),
           inserts.map((c) => c.attemptNo),
           inserts.map((c) => c.score),
           teacherId,
+          inserts.map((c) => c.result),
         ],
       );
     }
     if (updates.length) {
       await client.query(
-        `UPDATE grades g SET score = u.score
-         FROM unnest($1::bigint[], $2::numeric[]) AS u(grade_id, score)
+        `UPDATE grades g SET score = u.score, result = u.result
+         FROM unnest($1::bigint[], $2::numeric[], $3::text[]) AS u(grade_id, score, result)
          WHERE g.grade_id = u.grade_id`,
-        [updates.map((u) => u.gradeId), updates.map((u) => u.score)],
+        [updates.map((u) => u.gradeId), updates.map((u) => u.score), updates.map((u) => u.result)],
       );
-      // A score typed into an empty cell (old NULL) is an entry, not a change: only edits and clears are logged.
-      const edited = updates.filter((u) => u.old !== null);
+      // A score / result typed into an empty cell is an entry, not a change: only edits and clears are logged.
+      const edited = updates.filter((u) => u.old !== null || u.oldResult !== null);
       if (edited.length) {
         await client.query(
-          `INSERT INTO grade_histories (grade_id, old_score, new_score, changed_by)
-           SELECT h.grade_id, h.old_score, h.new_score, $4
-           FROM unnest($1::bigint[], $2::numeric[], $3::numeric[]) AS h(grade_id, old_score, new_score)`,
-          [edited.map((u) => u.gradeId), edited.map((u) => u.old), edited.map((u) => u.score), user.userId],
+          `INSERT INTO grade_histories (grade_id, old_score, new_score, old_result, new_result, changed_by)
+           SELECT h.grade_id, h.old_score, h.new_score, h.old_result, h.new_result, $6
+           FROM unnest($1::bigint[], $2::numeric[], $3::numeric[], $4::text[], $5::text[])
+             AS h(grade_id, old_score, new_score, old_result, new_result)`,
+          [
+            edited.map((u) => u.gradeId),
+            edited.map((u) => u.old),
+            edited.map((u) => u.score),
+            edited.map((u) => u.oldResult),
+            edited.map((u) => u.result),
+            user.userId,
+          ],
         );
       }
     }
@@ -229,7 +262,7 @@ export async function applyChanges(params, user, buildChanges) {
   });
 }
 
-// UC-83 Enter Grades: body { changes: [{ enrollmentId, componentId, attemptNo, score }] } (score '' / null = clear).
+// UC-83 Enter Grades: body { changes: [{ enrollmentId, componentId, attemptNo, score | result }] } ('' / null = clear).
 export async function saveGrades(params, body, user) {
   const result = await applyChanges(params, user, () => body?.changes);
   return { ...result, book: await getBook(params, user) };

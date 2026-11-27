@@ -29,6 +29,19 @@ reactions, attachments) is merged into one place after both are on `develop`.
 
 ## Current status (read first; update after every merge, schema patch or new decision)
 
+- **FE-11 subjects assessed by comments – Đạt / Chưa đạt (27/11/2026, Linh, `feature/fe-11-grade-management`, not
+  merged yet):** SM chooses per structure "Điểm số" or "Nhận xét"; a comment book has Đ / CĐ cells (entry, import with
+  a drop-down, export, finalize, unlock, history); semester result = every assessment Đạt, year = semester 2; the
+  academic level adds "every comment subject Đạt" (Tốt, Khá) and "at most one Chưa đạt" (Đạt). Same commit line:
+  every period's level uses every subject of the year (fix of 27/11). business-rules §11.
+  - **DB: `patch_v0.3_grade_comment_subjects.sql` (+ `educonnect_schema_v0.3.sql`) – NOT run on the shared DB, needs
+    the lead's approval.** Adds `grade_components.assessment_type` (default SCORE), `grades.result`,
+    `grade_histories.old_result / new_result` with CHECKs; existing rows stay scored. The new server code reads these
+    columns, so **run the patch before merging** (the old code ignores them).
+  - Tested on the local DB: `npm test` 53/53 (7 new calc tests), comment scenario 31/31 (structure type and mismatch,
+    copy, entry, history, DB check, finalize, import / template / export, class and student results, levels, finalized
+    view during a correction), FE-11 regression 45/45.
+
 - **FE-12 automatic filling of the later periods (26/11/2026, lead decision, Quoc; committed to `develop` 27/11,
   `e707d10`, after the R5 submission):** saving a period saves the later periods of the same class, day and session at once (absent stays
   with its note, late → present, a student not on the source list → present), per student up to the first later period

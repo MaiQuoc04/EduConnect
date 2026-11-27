@@ -165,16 +165,21 @@ export async function assertCanViewStudent(db, user, studentId, schoolYearId) {
   throw notFound('MSG_STUDENT_NOT_FOUND', 'Student not found.');
 }
 
-// The structure of one subject × grade level × semester (UC-81), in display order.
+// The structure of one subject × grade level × semester (UC-81), in display order. assessmentType SCORE / COMMENT
+// (subjects assessed by comments, 27/11/2026) is the same for every component of a structure.
 export async function loadComponents(db, subjectId, gradeLevelId, semesterId) {
   const { rows } = await db.query(
-    `SELECT component_id AS "componentId", component_name AS "name", weight, score_count AS "scoreCount"
+    `SELECT component_id AS "componentId", component_name AS "name", weight, score_count AS "scoreCount",
+            assessment_type AS "assessmentType"
      FROM grade_components WHERE subject_id = $1 AND grade_level_id = $2 AND semester_id = $3
      ORDER BY component_id`,
     [subjectId, gradeLevelId, semesterId],
   );
   return rows.map((r) => ({ ...r, weight: Number(r.weight) }));
 }
+
+// SCORE or COMMENT: the type of a structure (its components), SCORE when it has none.
+export const assessmentTypeOf = (components) => components[0]?.assessmentType ?? 'SCORE';
 
 // The structure locks once it has grades (any grades row, even a cleared score).
 // ASSUMPTION (FE-11 owner, 10/11/2026, to confirm): the lock is per subject × grade level × semester, not the whole

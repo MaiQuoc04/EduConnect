@@ -4,7 +4,7 @@ import { listGradeBooks, listGradeHistory } from '../../api/grades.js';
 import Icon from '../../components/Icon.jsx';
 import { errorText } from '../../messages.js';
 import '../admin/admin.css';
-import { fmtScore, formatDateTime } from './gradeFormat.js';
+import { fmtResult, fmtScore, formatDateTime } from './gradeFormat.js';
 import SemesterSelect from './SemesterSelect.jsx';
 import useGradeOptions from './useGradeOptions.js';
 import './grades.css';
@@ -150,8 +150,18 @@ export default function GradeHistoryPage() {
                   </td>
                   <td>{h.scoreCount > 1 ? `${h.componentName} ${h.attemptNo}` : h.componentName}</td>
                   <td className="mono">
-                    {h.oldScore === null ? <span className="muted">(trống)</span> : fmtScore(h.oldScore)} →{' '}
-                    {h.newScore === null ? <span className="muted">(xoá)</span> : <strong>{fmtScore(h.newScore)}</strong>}
+                    {h.assessmentType === 'COMMENT' ? (
+                      // Subject assessed by comments: Đ / CĐ (27/11/2026)
+                      <>
+                        {h.oldResult === null ? <span className="muted">(trống)</span> : fmtResult(h.oldResult)} →{' '}
+                        {h.newResult === null ? <span className="muted">(xoá)</span> : <strong>{fmtResult(h.newResult)}</strong>}
+                      </>
+                    ) : (
+                      <>
+                        {h.oldScore === null ? <span className="muted">(trống)</span> : fmtScore(h.oldScore)} →{' '}
+                        {h.newScore === null ? <span className="muted">(xoá)</span> : <strong>{fmtScore(h.newScore)}</strong>}
+                      </>
+                    )}
                   </td>
                   <td>
                     {h.changedBy}

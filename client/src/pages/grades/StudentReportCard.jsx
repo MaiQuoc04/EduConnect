@@ -2,7 +2,12 @@ import { useEffect, useState } from 'react';
 import { getStudentResults } from '../../api/grades.js';
 import Icon from '../../components/Icon.jsx';
 import { errorText } from '../../messages.js';
-import { fmtScore, LEVELS } from './gradeFormat.js';
+import { fmtResult, fmtScore, LEVELS, RESULT_LONG } from './gradeFormat.js';
+
+// A subject assessed by comments (27/11/2026) shows Đạt / Chưa đạt where a scored subject shows its average.
+const isComment = (sub) => sub.assessmentType === 'COMMENT';
+const semesterValue = (sub, sem) => (isComment(sub) ? RESULT_LONG[sem?.result] : fmtScore(sem?.average)) || '';
+const yearValue = (sub) => (isComment(sub) ? RESULT_LONG[sub.yearResult] : fmtScore(sub.year)) || '';
 
 // UC-88 for one student (SCR-47): every subject's scores and semester / year averages, and the academic level of each
 // semester and of the year (Circular 22, Article 9). No overall average and no rank since 23/11/2026. Used by
@@ -82,7 +87,8 @@ export default function StudentReportCard({ studentId, schoolYearId }) {
         </div>
       </div>
       <p className="caption muted" style={{ marginTop: -8, marginBottom: 16 }}>
-        Theo Thông tư 22/2021/TT-BGDĐT: Tốt, Khá, Đạt hoặc Chưa đạt, dựa trên điểm trung bình từng môn.
+        Theo Thông tư 22/2021/TT-BGDĐT: Tốt, Khá, Đạt hoặc Chưa đạt, dựa trên điểm trung bình từng môn và kết quả Đạt / Chưa
+        đạt của các môn đánh giá bằng nhận xét.
       </p>
       <ReportTables d={d} detail={detail} setDetail={setDetail} detailSemester={detailSemester} />
     </>
@@ -110,11 +116,11 @@ function ReportTables({ d, detail, setDetail, detailSemester }) {
                   <td>{sub.subjectName}</td>
                   {sub.semesters.map((s) => (
                     <td key={s.semesterId}>
-                      {s.published === false ? <span className="caption muted">Chưa công bố</span> : fmtScore(s.average) || <span className="muted">–</span>}
+                      {s.published === false ? <span className="caption muted">Chưa công bố</span> : semesterValue(sub, s) || <span className="muted">–</span>}
                     </td>
                   ))}
                   <td>
-                    <strong>{fmtScore(sub.year) || <span className="muted">–</span>}</strong>
+                    <strong>{yearValue(sub) || <span className="muted">–</span>}</strong>
                   </td>
                 </tr>
               ))}
@@ -167,7 +173,7 @@ function ReportTables({ d, detail, setDetail, detailSemester }) {
                                 {c.scores.map((x, i) => (
                                   // eslint-disable-next-line react/no-array-index-key -- one cell per attempt, fixed order
                                   <span key={i} className={`score-cell${x === null ? ' empty' : ''}`}>
-                                    {x === null ? '–' : fmtScore(x)}
+                                    {x === null ? '–' : isComment(sub) ? fmtResult(x) : fmtScore(x)}
                                   </span>
                                 ))}
                               </div>
@@ -176,7 +182,7 @@ function ReportTables({ d, detail, setDetail, detailSemester }) {
                         }
                       </td>
                       <td>
-                        <strong>{sem?.published === false ? <span className="muted">–</span> : fmtScore(sem?.average) || <span className="muted">–</span>}</strong>
+                        <strong>{sem?.published === false ? <span className="muted">–</span> : semesterValue(sub, sem) || <span className="muted">–</span>}</strong>
                       </td>
                     </tr>
                   );

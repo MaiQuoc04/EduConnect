@@ -5,7 +5,7 @@ import Icon from '../../components/Icon.jsx';
 import { useAuth } from '../../context/AuthContext.jsx';
 import { errorText } from '../../messages.js';
 import '../admin/admin.css';
-import { fmtScore } from './gradeFormat.js';
+import { fmtScore, RESULT_LONG } from './gradeFormat.js';
 import StudentReportCard, { LevelTag } from './StudentReportCard.jsx';
 import useGradeOptions from './useGradeOptions.js';
 import './grades.css';
@@ -221,7 +221,14 @@ function ClassView() {
                           {s.status !== 'STUDYING' && ' · đã rời lớp'}
                         </div>
                       </td>
-                      {d.subjects.map((sub) => <td key={sub.subjectId}>{fmtScore(s.averages[sub.subjectId]) || <span className="muted">–</span>}</td>)}
+                      {d.subjects.map((sub) => (
+                        <td key={sub.subjectId}>
+                          {/* Subject assessed by comments: Đạt / Chưa đạt instead of an average (27/11/2026). */}
+                          {(sub.assessmentType === 'COMMENT'
+                            ? RESULT_LONG[s.results?.[sub.subjectId]]
+                            : fmtScore(s.averages[sub.subjectId])) || <span className="muted">–</span>}
+                        </td>
+                      ))}
                       <td>
                         <LevelTag level={s.level} />
                       </td>
