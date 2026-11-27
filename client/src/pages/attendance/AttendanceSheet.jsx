@@ -26,9 +26,9 @@ const BLOCKED_TEXT = {
   MSG_ATTENDANCE_VIEW_ONLY: 'Bạn chỉ xem được điểm danh của tiết này.',
 };
 
-// A sheet never taken starts from the server's prefill (lead 23/11/2026, §12 point 3): the statuses and notes of the
-// nearest earlier taken period of the same day and session, copied as they are; without one (first period of the
-// session), everyone present. Only a draft – the period is taken when this teacher saves it.
+// Since 26/11/2026 (§12 point 3) saving a period fills the later periods of the session on the server, so a later
+// period usually opens already taken ("Tự điền theo tiết N"). A sheet never taken (e.g. a session saved before that
+// rule) still starts from the server's draft prefill; without one (first period of the session), everyone present.
 function draftOf(sheet) {
   const fill = !sheet.lesson.taken && (sheet.mode === 'TEACHER' || sheet.mode === 'MANAGER');
   const from = fill ? sheet.prefill?.records ?? {} : {};
@@ -146,11 +146,12 @@ export default function AttendanceSheet({ lessonId, onSaved, onDirty }) {
       setInitial(draftOf(result));
       setReason('');
       setHistory(null);
-      const { changed: n, notified } = result.saved;
+      const { changed: n, notified, autoFilled } = result.saved;
+      const later = autoFilled ? ' Các tiết sau trong buổi đã được tự điền theo tiết này.' : '';
       toast(
         n
-          ? `Đã lưu điểm danh. ${n} trạng thái được ghi nhận${notified ? `, đã gửi ${notified} thông báo tới học sinh và phụ huynh` : ''}.`
-          : 'Đã lưu điểm danh.',
+          ? `Đã lưu điểm danh. ${n} trạng thái được ghi nhận${notified ? `, đã gửi ${notified} thông báo tới học sinh và phụ huynh` : ''}.${later}`
+          : `Đã lưu điểm danh.${later}`,
       );
       onSaved?.(result);
     } catch (err) {
@@ -202,7 +203,19 @@ export default function AttendanceSheet({ lessonId, onSaved, onDirty }) {
             <p className="notice-title">
               Đã điền sẵn theo tiết {sheet.prefill.period} – {sheet.prefill.subjectName} ({sheet.prefill.teacherName})
             </p>
-            <p>Trạng thái và ghi chú được chép nguyên từ tiết đó. Kiểm tra lại từng em rồi bấm Lưu để xác nhận; tiết này chưa được tính là đã điểm danh cho đến khi lưu.</p>
+            <p>Học sinh vắng giữ nguyên kèm ghi chú, học sinh đi muộn được ghi Có mặt. Kiểm tra lại từng em rồi bấm Lưu; tiết này chưa được tính là đã điểm danh cho đến khi lưu.</p>
+          </div>
+        </div>
+      )}
+      {lesson.autoFromPeriods?.length > 0 && (
+        <div className="notice amber">
+          <Icon name="content_copy" />
+          <div>
+            <p className="notice-title">Tự điền theo tiết {lesson.autoFromPeriods.join(', ')}{editable ? ' – kiểm tra và lưu nếu có thay đổi' : ''}</p>
+            <p>
+              Hệ thống đã điền tiết này khi tiết trước được lưu: học sinh vắng giữ nguyên, học sinh đi muộn được ghi Có mặt.
+              {editable && ' Chỉ cần sửa những em có thay đổi rồi bấm Lưu; học sinh và phụ huynh chỉ nhận thông báo cho em được sửa.'}
+            </p>
           </div>
         </div>
       )}
@@ -253,6 +266,7 @@ export default function AttendanceSheet({ lessonId, onSaved, onDirty }) {
                   <span className="caption muted">
                     {s.studentCode}
                     {!s.onRoll && ' · Không còn trong lớp vào ngày này'}
+                    {s.autoFromPeriod && ` · Tự điền theo tiết ${s.autoFromPeriod}`}
                   </span>
                 </div>
                 {editable && (mode !== 'HOMEROOM' || ABSENCES.includes(s.status)) ? (

@@ -55,6 +55,9 @@
 --   NEEDS_SUPPORT, settings moderation.enabled / moderation.context_window (6 since 27/11/2026). Existing database: run
 --   patch_v0.3_moderation.sql, then seed_moderation_rules.sql (first rules) (written by Anh, PROPOSED – not run on the
 --   shared DB yet).
+-- 26/11/2026: + attendances.auto_from_slot_id (FE-12: later periods of a session filled automatically from the saved
+--   one, business rules §12 point 3). Existing database: run patch_v0.3_attendance_auto.sql (approved by the lead, run
+--   on the shared DB 26/11/2026).
 -- 27/11/2026: posts.approval_status + BLOCKED (posts_approval_status_check, now named): a group post stopped by the
 --   automatic check when posted or edited, seen by its author only, never a violation (business-rules §5, §17).
 --   Existing database: in patch_v0.3_moderation.sql (step 6, finds the old unnamed CHECK and replaces it).
@@ -362,10 +365,14 @@ CREATE TABLE attendances (
   taken_by          BIGINT NOT NULL,              -- users.user_id
   taken_at          TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
   updated_at        TIMESTAMPTZ NULL,
+  -- 26/11/2026: NULL = recorded by a person; else the period this row was filled from automatically (later periods
+  -- of the same session follow the saved one until their teacher changes the student). patch_v0.3_attendance_auto.sql
+  auto_from_slot_id BIGINT NULL,
   UNIQUE (enrollment_id, timetable_slot_id),
   FOREIGN KEY (enrollment_id)     REFERENCES class_enrollments(enrollment_id),
   FOREIGN KEY (timetable_slot_id) REFERENCES timetable_slots(timetable_slot_id),
   FOREIGN KEY (taken_by)          REFERENCES users(user_id),
+  CONSTRAINT fk_attendances_auto_from_slot FOREIGN KEY (auto_from_slot_id) REFERENCES timetable_slots(timetable_slot_id),
   CHECK (status IN ('PRESENT','ABSENT_EXCUSED','ABSENT_UNEXCUSED','LATE'))
 );
 

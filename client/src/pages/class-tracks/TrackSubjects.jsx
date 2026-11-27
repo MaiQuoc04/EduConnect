@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { api } from '../../api/client.js';
 import Icon from '../../components/Icon.jsx';
 import { useToast } from '../../context/ToastContext.jsx';
@@ -6,8 +6,29 @@ import { errorText } from '../../messages.js';
 import { yearLabel } from '../school-years/schoolYearLabels.js';
 import { trackLabel } from './trackLabel.js';
 
-// Same limit as the server (UC-26): periods per week 1–10. Every subject weight is 1 and is not shown (agreed 01/11).
-const periodsValid = (text) => /^\d+$/.test(text.trim()) && Number(text) >= 1 && Number(text) <= 10;
+// Same limits as the server (UC-26). Since 27/11/2026 they are School Manager settings ("Cài đặt hệ thống", SCR-86),
+// sent with the subjects (data.limits): periods of one subject 1..subjectMaxWeek, all subjects of the type at most
+// classMaxWeek a week (Chào cờ / Sinh hoạt lớp count). These defaults are only used if an older server sends none.
+// Every subject weight is 1 and is not shown (agreed 01/11).
+const DEFAULT_LIMITS = Object.freeze({ subjectMaxWeek: 10, classMaxWeek: 38 });
+
+// The reason a periods value is not accepted, in Vietnamese, or '' when it is valid. One message per case so the
+// user never has to guess (empty / not a whole number / zero / above the limit).
+function periodsError(text, max) {
+  const value = text.trim();
+  if (value === '') return 'Nhập số tiết mỗi tuần.';
+  if (!/^\d+$/.test(value)) return 'Số tiết phải là số nguyên, ví dụ 3.';
+  const n = Number(value);
+  if (n < 1) return 'Tối thiểu 1 tiết. Nếu lớp không học môn này, hãy bỏ chọn ở cột Áp dụng.';
+  if (n > max) return `Tối đa ${max} tiết mỗi tuần (đang nhập ${n}).`;
+  return '';
+}
+
+// "Toán học, Ngữ văn" or "Toán học, Ngữ văn, Vật lý và 2 môn khác".
+function subjectList(names) {
+  if (names.length <= 3) return names.join(', ');
+  return `${names.slice(0, 3).join(', ')} và ${names.length - 3} môn khác`;
+}
 
 function initialRows(subjects) {
   return Object.fromEntries(
@@ -18,11 +39,14 @@ function initialRows(subjects) {
 const sameRow = (a, b) => a.on === b.on && (!a.on || a.periods.trim() === b.periods.trim());
 
 // SCR-70 right column: the subjects one class type studies in the selected year, with periods per week (UC-26).
+// A wrong periods value shows its reason under the box; saving with wrong values names the subjects instead.
 // The subjects of another type (e.g. the same type of the grade below) can be copied in, then adjusted before
 // saving. Saving sends the whole list; the server removes unticked subjects.
 export default function TrackSubjects({ data, tracks, onSaved, onEdit, onDeleted, onDirtyChange }) {
   const toast = useToast();
   const { track, schoolYear, subjects } = data;
+  const limits = data.limits ?? DEFAULT_LIMITS;
+  const periodsValid = (text) => !periodsError(text, limits.subjectMaxWeek);
   const [initial, setInitial] = useState(() => initialRows(subjects));
   const [rows, setRows] = useState(initial);
   const [saving, setSaving] = useState(false);
@@ -30,6 +54,12 @@ export default function TrackSubjects({ data, tracks, onSaved, onEdit, onDeleted
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [copying, setCopying] = useState(false);
+  // Subjects whose periods box was left (or every subject after a save attempt): only then is an empty box an error,
+  // so clearing the box to type a new number does not flash a message.
+  const [touched, setTouched] = useState(() => new Set());
+  const inputRefs = useRef({});
+  // Set by a save attempt with invalid rows; the summary then follows the rows live and goes away once all are valid.
+  const [showInvalidSummary, setShowInvalidSummary] = useState(false);
 
   const canEditPeriods = Boolean(schoolYear) && !schoolYear.ended;
   const canEditSubjects = canEditPeriods && !schoolYear.weightsLocked; // the year has no grades yet
@@ -43,13 +73,25 @@ export default function TrackSubjects({ data, tracks, onSaved, onEdit, onDeleted
   useEffect(() => () => onDirtyChange(false), [onDirtyChange]);
 
   const chosen = subjects.filter((s) => rows[s.subjectId].on);
-  const invalid = chosen.some((s) => !periodsValid(rows[s.subjectId].periods));
+  const invalidSubjects = chosen.filter((s) => !periodsValid(rows[s.subjectId].periods));
+  const invalid = invalidSubjects.length > 0;
   const totalPeriods = chosen.reduce(
     (sum, s) => sum + (periodsValid(rows[s.subjectId].periods) ? Number(rows[s.subjectId].periods) : 0),
     0,
   );
+  const overTotal = totalPeriods > limits.classMaxWeek; // the valid rows alone are already above the week limit
+  const totalError = `Tổng số tiết là ${totalPeriods}, vượt giới hạn ${limits.classMaxWeek} tiết mỗi tuần của một lớp. Hãy giảm số tiết hoặc bỏ bớt môn.`;
 
   const setRow = (id, patch) => setRows((r) => ({ ...r, [id]: { ...r[id], ...patch } }));
+  const touch = (id) => setTouched((t) => (t.has(id) ? t : new Set(t).add(id)));
+
+  // The message under one periods box: an empty box only counts once it was left or a save was tried.
+  function rowError(s) {
+    const row = rows[s.subjectId];
+    if (!row.on || !canEditPeriods) return '';
+    if (row.periods.trim() === '' && !touched.has(s.subjectId)) return '';
+    return periodsError(row.periods, limits.subjectMaxWeek);
+  }
 
   // Fills the table from another class type of the same year; nothing is saved until "Lưu thay đổi".
   async function copyFrom(trackId) {
@@ -62,6 +104,8 @@ export default function TrackSubjects({ data, tracks, onSaved, onEdit, onDeleted
         params: { schoolYearId: schoolYear.schoolYearId },
       });
       setRows(initialRows(src.subjects));
+      setTouched(new Set());
+      setShowInvalidSummary(false);
       toast(`Đã lấy môn học của ${trackLabel(source)}. Kiểm tra lại rồi bấm “Lưu thay đổi”.`);
     } catch (err) {
       setError(errorText(err));
@@ -72,9 +116,20 @@ export default function TrackSubjects({ data, tracks, onSaved, onEdit, onDeleted
 
   async function handleSave() {
     if (invalid) {
-      setError('Vui lòng kiểm tra lại số tiết được đánh dấu đỏ.');
+      // Show every reason (empty boxes included), name the subjects and take the user to the first one.
+      setTouched(new Set(chosen.map((s) => s.subjectId)));
+      setShowInvalidSummary(true);
+      setError('');
+      const first = inputRefs.current[invalidSubjects[0].subjectId];
+      if (first) {
+        first.scrollIntoView({ block: 'center', behavior: 'smooth' });
+        first.focus({ preventScroll: true });
+      }
       return;
     }
+    setShowInvalidSummary(false);
+    if (overTotal) return; // the reason is already shown under the table
+
     setSaving(true);
     setError('');
     try {
@@ -85,6 +140,7 @@ export default function TrackSubjects({ data, tracks, onSaved, onEdit, onDeleted
       const next = initialRows(saved.subjects);
       setInitial(next);
       setRows(next);
+      setTouched(new Set());
       toast(`Đã lưu môn học của ${trackLabel(track)} cho năm học ${yearLabel(schoolYear.yearName)}.`);
       onSaved();
     } catch (err) {
@@ -185,13 +241,15 @@ export default function TrackSubjects({ data, tracks, onSaved, onEdit, onDeleted
                   <th className="check">Áp dụng</th>
                   <th>Mã môn</th>
                   <th>Tên môn học</th>
-                  <th className="num">Số tiết/tuần</th>
+                  <th className="num">Số tiết/tuần (1–{limits.subjectMaxWeek})</th>
                 </tr>
               </thead>
               <tbody>
                 {subjects.map((s) => {
                   const row = rows[s.subjectId];
-                  const badPeriods = row.on && !periodsValid(row.periods);
+                  const message = rowError(s);
+                  const badPeriods = Boolean(message);
+                  const errorId = `track-periods-error-${s.subjectId}`;
                   return (
                     <tr key={s.subjectId} className={row.on ? '' : 'is-off'}>
                       <td className="check">
@@ -205,17 +263,30 @@ export default function TrackSubjects({ data, tracks, onSaved, onEdit, onDeleted
                       </td>
                       <td className="mono subject-code">{s.subjectCode}</td>
                       <td className="subject-name">{s.subjectName}</td>
-                      <td className="num">
+                      <td className="num track-periods-cell">
                         {row.on ? (
-                          <input
-                            className={`input track-input${badPeriods ? ' bad' : ''}`}
-                            inputMode="numeric"
-                            value={row.periods}
-                            disabled={!canEditPeriods}
-                            onChange={(e) => setRow(s.subjectId, { periods: e.target.value })}
-                            aria-label={`Số tiết mỗi tuần môn ${s.subjectName}`}
-                            aria-invalid={badPeriods || undefined}
-                          />
+                          <>
+                            <input
+                              ref={(el) => {
+                                if (el) inputRefs.current[s.subjectId] = el;
+                                else delete inputRefs.current[s.subjectId];
+                              }}
+                              className={`input track-input${badPeriods ? ' bad' : ''}`}
+                              inputMode="numeric"
+                              value={row.periods}
+                              disabled={!canEditPeriods}
+                              onChange={(e) => setRow(s.subjectId, { periods: e.target.value })}
+                              onBlur={() => touch(s.subjectId)}
+                              aria-label={`Số tiết mỗi tuần môn ${s.subjectName}`}
+                              aria-invalid={badPeriods || undefined}
+                              aria-describedby={badPeriods ? errorId : undefined}
+                            />
+                            {badPeriods && (
+                              <p id={errorId} className="field-error track-cell-error">
+                                {message}
+                              </p>
+                            )}
+                          </>
                         ) : (
                           <span className="muted">—</span>
                         )}
@@ -227,10 +298,19 @@ export default function TrackSubjects({ data, tracks, onSaved, onEdit, onDeleted
             </table>
           </div>
           {subjects.length === 0 && <p className="subject-empty muted">Trường chưa có môn học nào.</p>}
-          <p className="field-help track-help">
-            Số tiết mỗi tuần từ 1 đến 10. Mọi môn có hệ số như nhau khi tính điểm trung bình.
-          </p>
+          <p className="field-help track-help">Mọi môn có hệ số như nhau khi tính điểm trung bình.</p>
 
+          {overTotal && canEditPeriods && (
+            <p className="form-error" role="alert">
+              {totalError}
+            </p>
+          )}
+          {showInvalidSummary && invalid && (
+            <p className="form-error" role="alert">
+              Còn {invalidSubjects.length} môn có số tiết chưa hợp lệ:{' '}
+              {subjectList(invalidSubjects.map((s) => s.subjectName))}.
+            </p>
+          )}
           {error && (
             <p className="form-error" role="alert">
               {error}
@@ -240,13 +320,19 @@ export default function TrackSubjects({ data, tracks, onSaved, onEdit, onDeleted
           {canEditPeriods && (
             <div className="card-footer track-footer">
               <span className="left">
-                {chosen.length} môn · {totalPeriods} tiết mỗi tuần
+                {chosen.length} môn ·{' '}
+                <span className={overTotal ? 'track-total-over' : undefined}>
+                  {totalPeriods}/{limits.classMaxWeek} tiết mỗi tuần
+                </span>
+                {invalid && ` · chưa tính ${invalidSubjects.length} môn chưa hợp lệ`}
               </span>
               <button
                 type="button"
                 className="btn btn-secondary"
                 onClick={() => {
                   setRows(initial);
+                  setTouched(new Set());
+                  setShowInvalidSummary(false);
                   setError('');
                 }}
                 disabled={!dirty || saving}

@@ -2,20 +2,21 @@
 // calls assignTeachers() (step A) and/or solveTimetable() (step B), and saves the draft only when the School Manager
 // applies it. Spec: docs/business-rules.md §10 "Automatic scheduling".
 //
-// Step A – teaching assignment: greedy with balancing (fewest qualified teachers first, then the teacher with the most
-//   room under their norm), then pairwise improvement. Hard: H1 qualified, H2 one teacher per (class, subject),
-//   H3 weekly cap; the subject of the fixed slots (Chào cờ, Sinh hoạt lớp) gets a different teacher in every class
-//   (the fixed slots are at the same time in every class).
+// Step A – teaching assignment: greedy with balancing (fewest qualified teachers first, then the teacher with the
+//   lightest load), then pairwise improvement. Hard: H1 qualified, H2 one teacher per (class, subject),
+//   H3 weekly cap (school setting "Số tiết giáo viên dạy tối đa / tuần", 26/11/2026 – no norm any more); the subject of the fixed slots (Chào cờ, Sinh hoạt lớp) gets a different teacher in every class
+//   (the fixed slots are at the same time in every class) and never a teacher busy at a fixed slot.
 // Step B – timetable: a constraint satisfaction problem. Hardest lessons first, each into the free cell that adds the
 //   least penalty, a one-step repair (move the lesson in the way) when no cell is free, then local search (swap two
 //   cells of a class) until the time limit. Hard (never broken): H4 teacher clash (+ busy cells and the other classes'
 //   lessons), H5 one subject per class per cell, H6 exact periods (else reported as unplaced), H7 only the week grid
 //   + fixed slots kept, H8 rooms per subject, H9 teacher busy cells, H10 at most N periods of a subject per day.
-//   Soft (weighted penalty): S2 teacher gaps, S3 two periods of a subject in a day not adjacent, S4 teacher periods per
-//   day, S5 a subject packed into one day, S6 heavy subjects late, S7 afternoon subjects in the morning, GAP empty cell
+//   Soft (weighted penalty): S2 teacher gaps, S3 two periods of a subject in a day not adjacent, S5 a subject packed
+//   into one day, S6 heavy subjects late, S7 afternoon subjects in the morning, GAP empty cell
 //   before a lesson in the same session (empty cells go to the end of a session).
 
-export const DEFAULT_WEIGHTS = Object.freeze({ S1: 10, S2: 8, S3: 6, S4: 5, S5: 4, S6: 3, S7: 3, S8: 2, S9: 2, GAP: 20 });
+// S1 (over the norm) and S4 (teacher periods a day) were removed with the norms (26/11/2026, Dung).
+export const DEFAULT_WEIGHTS = Object.freeze({ S2: 8, S3: 6, S5: 4, S6: 3, S7: 3, S8: 2, S9: 2, GAP: 20 });
 export const MORNING_LAST = 5; // periods 1..5 = morning, 6.. = afternoon (time_slots of the school)
 
 const cellKey = (w, p) => `${w}-${p}`;
@@ -34,8 +35,7 @@ export function rng(seed) {
 }
 
 const pairKey = (classId, subjectId) => `${classId}:${subjectId}`;
-const normOf = (t, o) => (t.homeroom ? o.homeroomNorm : o.norm);
-// Periods of a (class, subject) that count towards the teacher's norm: the fixed slots (Chào cờ, Sinh hoạt lớp) do not.
+// Periods of a (class, subject) that count towards the teacher's weekly load: the fixed slots (Chào cờ, Sinh hoạt lớp) do not.
 export function countedPeriods(subjectId, periods, o) {
   if (!o.fixed || String(o.fixed.subjectId) !== String(subjectId)) return periods;
   return Math.max(0, periods - Math.min(periods, o.fixed.slots.length));
@@ -44,16 +44,21 @@ export function countedPeriods(subjectId, periods, o) {
 // ── Step A: teaching assignment ─────────────────────────────────────────────
 // input: classes [{ classId, homeroomTeacherId, subjects: [{ subjectId, periods }] }],
 //        teachers [{ teacherId, subjectIds, homeroom, baseLoad }], fixedAssignments { 'class:subject': teacherId },
-//        options { norm, homeroomNorm, maxOver, fixed, weights, seed }
+//        options { teacherMaxWeek, fixed, weights, seed }
 // output: { assignments { 'class:subject': teacherId }, unassigned [{ classId, subjectId, reason }], loads { teacherId: n } }
 export function assignTeachers({ classes, teachers, fixedAssignments = {}, options }) {
   const o = { ...options, weights: { ...DEFAULT_WEIGHTS, ...(options.weights ?? {}) } };
   const W = o.weights;
   const random = rng((o.seed ?? 1) * 7919 + 13);
-  const byId = new Map(teachers.map((t) => [String(t.teacherId), t]));
   const load = new Map(teachers.map((t) => [String(t.teacherId), t.baseLoad ?? 0]));
   const fixedSubject = o.fixed?.slots?.length ? String(o.fixed.subjectId) : null;
   const fixedTaken = new Set(); // teachers that already teach the fixed-slot subject somewhere
+  // Teachers busy at a fixed slot (a lesson of a class outside this run, or a cell marked busy) cannot take the
+  // fixed-slot subject: its lessons are pinned to those cells in every class (25/11/2026, 12D1 / 10A1 case).
+  const fixedCells = fixedSubject ? o.fixed.slots.map((f) => cellKey(f.weekday, f.period)) : [];
+  const busyAtFixed = new Set(teachers
+    .filter((t) => (t.busy ?? []).some((k) => fixedCells.includes(k)))
+    .map((t) => String(t.teacherId)));
   const assignments = {};
   const unassigned = [];
 
@@ -75,11 +80,11 @@ export function assignTeachers({ classes, teachers, fixedAssignments = {}, optio
   }
   pairs.sort((a, b) => a.qualified.length - b.qualified.length || b.counted - a.counted || a.tie - b.tie);
 
-  const capOf = (t) => normOf(t, o) + o.maxOver;
+  const capOf = () => o.teacherMaxWeek;
   const pickCost = (t, p) => {
     const id = String(t.teacherId);
     const after = load.get(id) + p.counted;
-    let cost = Math.max(0, after - normOf(t, o)) * W.S1 + (after / normOf(t, o)) * W.S8;
+    let cost = (after / o.teacherMaxWeek) * W.S8;
     if (String(p.c.homeroomTeacherId) === id) cost -= W.S9 * 2; // homeroom teacher teaches their own class
     return cost;
   };
@@ -90,7 +95,8 @@ export function assignTeachers({ classes, teachers, fixedAssignments = {}, optio
     }
     const isFixed = fixedSubject && String(p.s.subjectId) === fixedSubject;
     const fits = p.qualified.filter(
-      (t) => load.get(String(t.teacherId)) + p.counted <= capOf(t) && !(isFixed && fixedTaken.has(String(t.teacherId))),
+      (t) => load.get(String(t.teacherId)) + p.counted <= capOf(t)
+        && !(isFixed && (fixedTaken.has(String(t.teacherId)) || busyAtFixed.has(String(t.teacherId)))),
     );
     if (!fits.length) {
       const reason = p.qualified.every((t) => load.get(String(t.teacherId)) + p.counted > capOf(t)) ? 'OVER_CAP' : 'FIXED_CLASH';
@@ -113,11 +119,8 @@ export function assignTeachers({ classes, teachers, fixedAssignments = {}, optio
     if (isFixed) fixedTaken.add(id);
   }
 
-  // Improvement: move a (class, subject) to another qualified teacher when it lowers overload + imbalance.
-  const teacherCost = (id, l) => {
-    const t = byId.get(id);
-    return Math.max(0, l - normOf(t, o)) * W.S1 + ((l / normOf(t, o) - 1) ** 2) * W.S8 * 10;
-  };
+  // Improvement: move a (class, subject) to another qualified teacher when it evens out the loads.
+  const teacherCost = (id, l) => ((l / o.teacherMaxWeek - 1) ** 2) * W.S8 * 10;
   const movable = pairs.filter((p) => assignments[p.k] && !(fixedSubject && String(p.s.subjectId) === fixedSubject));
   for (let round = 0; round < 3; round += 1) {
     let improved = false;
@@ -147,13 +150,12 @@ export function assignTeachers({ classes, teachers, fixedAssignments = {}, optio
 // ── Step B: timetable ───────────────────────────────────────────────────────
 // input: days [{ weekday, periods: [1..] }] (the week grid), classes [{ classId, subjects: [{ subjectId, periods }] }],
 //        assignments { 'class:subject': teacherId }, teachers [{ teacherId, busy: ['w-p'] }] (busy = other classes'
-//        lessons + cells marked busy), options { maxPerDay, maxPerSubjectDay, rooms { subjectId: n }, heavy [ids],
+//        lessons + cells marked busy), options { maxPerSubjectDay, rooms { subjectId: n }, heavy [ids],
 //        afternoon [ids], fixed { subjectId, slots [{ weekday, period }] }, weights, seed, timeLimitMs }
 // output: { entries { classId: [{ weekday, period, subjectId, teacherId }] }, unplaced [{ classId, subjectId, count,
 //          reason }], violations [{ code, weight, classId?, teacherId?, subjectId?, weekday, period? }], score }
 export function solveTimetable({ days, classes, assignments, teachers, options }) {
   const o = {
-    maxPerDay: 4,
     maxPerSubjectDay: 2,
     rooms: {},
     heavy: [],
@@ -287,17 +289,14 @@ export function solveTimetable({ days, classes, assignments, teachers, options }
   function teacherDayCost(teacherId, w) {
     const ps = dayPeriods.get(w) ?? [];
     let cost = 0;
-    let count = 0;
     for (const s of [0, 1]) {
       const teach = ps.filter((p) => session(p) === s && teacherAt.get(`${teacherId}|${cellKey(w, p)}`) != null
         && teacherAt.get(`${teacherId}|${cellKey(w, p)}`) !== -1);
-      count += teach.length;
       if (teach.length >= 2) {
         const span = ps.filter((p) => session(p) === s && p >= teach[0] && p <= teach[teach.length - 1]).length;
         cost += (span - teach.length) * W.S2;
       }
     }
-    if (count > o.maxPerDay) cost += (count - o.maxPerDay) * W.S4;
     return cost;
   }
   const spreadCost = (classId, subjectId) => {
@@ -533,16 +532,13 @@ export function solveTimetable({ days, classes, assignments, teachers, options }
         const v = teacherDayCost(tid, d.weekday);
         if (!v) continue;
         const ps = dayPeriods.get(d.weekday);
-        let count = 0;
         for (const s of [0, 1]) {
           const teach = ps.filter((p) => session(p) === s && teacherAt.get(`${tid}|${cellKey(d.weekday, p)}`) >= 0);
-          count += teach.length;
           if (teach.length >= 2) {
             const gaps = ps.filter((p) => session(p) === s && p > teach[0] && p < teach[teach.length - 1] && !teach.includes(p)).length;
             if (gaps) out.push({ code: 'S2', weight: W.S2 * gaps, teacherId: tid, weekday: d.weekday, count: gaps });
           }
         }
-        if (count > o.maxPerDay) out.push({ code: 'S4', weight: (count - o.maxPerDay) * W.S4, teacherId: tid, weekday: d.weekday, count });
       }
     }
     return out.sort((a, b) => b.weight - a.weight);

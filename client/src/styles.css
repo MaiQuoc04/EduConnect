@@ -639,7 +639,14 @@ a.link-row .icon:last-child { color: var(--graphite-400); }
 .track-table tr.is-off .subject-code, .track-table tr.is-off .subject-name { color: var(--graphite-500); font-weight: 400; }
 .track-input { width: 76px; height: 32px; padding: 0 10px; text-align: right; }
 .track-input.bad { border-color: var(--red-pen); box-shadow: 0 0 0 0.5px var(--red-pen); }
+/* A periods error makes its row taller: keep code, name and checkbox level with the 32px box, not centred. */
+.track-table td { vertical-align: top; }
+.track-table td.check, .track-table td.subject-code, .track-table td.subject-name { line-height: 32px; }
+.track-table td.track-periods-cell { width: 220px; }
+.track-periods-cell > .muted { line-height: 32px; }
+.track-cell-error { margin: 4px 0 0 auto; max-width: 220px; white-space: normal; text-align: right; }
 .track-help { margin-top: -8px; }
+.track-total-over { color: var(--red-pen); font-weight: 600; } /* above the class week limit (27/11/2026) */
 .track-footer { padding-top: 16px; border-top: 1px solid var(--graphite-200); }
 
 /* ---------- classes & class groups (SCR-20, FE-04 UC-27/UC-28) ---------- */
@@ -765,6 +772,7 @@ a.link-row .icon:last-child { color: var(--graphite-400); }
 .pick-basket .link-button { justify-self: start; }
 .review { display: grid; gap: 16px; }
 .review-max { font-size: 14px; font-weight: 400; }
+.review-over { color: var(--amber); } /* above the recommended class size (27/11/2026) */
 .review-table td { vertical-align: top; padding-top: 8px; padding-bottom: 8px; }
 .review-table th.num, .review-table td.num { width: 48px; text-align: right; }
 @media (max-width: 900px) {

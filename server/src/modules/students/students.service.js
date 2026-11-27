@@ -3,7 +3,8 @@ import { badRequest, notFound } from '../../utils/AppError.js';
 import { vietnameseNameOrder } from '../../utils/nameSort.js';
 import { containsPattern, VI_TRANSLATE } from '../../utils/search.js';
 // FE-04 (merged): one place for the class-size limit, the ended-year check and "the school year just before".
-import { conflict, lockOpenYear, MAX_CLASS_SIZE, previousYearSql } from '../classes/classes.service.js';
+import { lockOpenYear, previousYearSql } from '../classes/classes.service.js';
+import { checkClassSize } from '../classes/classSize.js';
 import { afterRemovedFromTeams } from '../groups/teamEvents.js';
 
 // FE-02 Student Management (owner: Anh). SQL lives here; the controller validates the query first.
@@ -103,7 +104,9 @@ export function buildStudentFilter({ q, classId, accountStatus } = {}, params) {
     const from = add(VI_TRANSLATE.from);
     const to = add(VI_TRANSLATE.to);
     const fold = (column) => `lower(translate(${column}, ${from}, ${to}))`;
-    conditions.push(`(${fold('u.full_name')} LIKE ${p} OR lower(s.student_code) LIKE ${p})`);
+    // Name, student code or username (FE-13 owner, 26/11/2026: SM looks a new account up by the username SA
+    // handed over, e.g. "lannths8989").
+    conditions.push(`(${fold('u.full_name')} LIKE ${p} OR lower(s.student_code) LIKE ${p} OR lower(u.username) LIKE ${p})`);
   }
   if (classId) conditions.push(`c.class_id = ${add(classId)}`);
   if (accountStatus) conditions.push(`u.status = ${add(accountStatus)}`);
@@ -117,11 +120,17 @@ const STUDENT_COLUMNS = `s.student_id AS "studentId", u.user_id AS "userId", s.s
             u.email, u.phone`;
 const PARENT_COUNT = `(SELECT COUNT(*) FROM student_parents sp WHERE sp.student_id = s.student_id) AS "parentCount"`;
 
-// UC-07 View Student List (School Manager): search by name / student code, filter by class, enrollment status
-// and account status, within one school year. An empty list is a normal result (the UI shows MSG01).
+// UC-07 View Student List (School Manager): search by name / student code / username, filter by class, enrollment
+// status, account status and placement, within one school year. An empty list is a normal result (the UI shows MSG01).
 // email / phone are returned because only School Manager calls this (business-rules §6, permissions note 2);
 // hide them if another role is ever allowed here.
-export async function listStudents({ q, classId, schoolYearId, status, accountStatus, unassigned, page, pageSize }) {
+// placement (FE-13 owner, 26/11/2026): by default EVERY student is listed – those with a class this year and those
+// without one yet (accounts SA just created) – so a new account is never hidden. 'ASSIGNED' = only students with a
+// class this year, 'UNASSIGNED' = only those without (the old `unassigned=true`). A class or an enrollment status
+// filter needs an enrollment, so it lists assigned students only.
+export async function listStudents({ q, classId, schoolYearId, status, accountStatus, unassigned, placement, page, pageSize }) {
+  const mode = unassigned || placement === 'UNASSIGNED' ? 'UNASSIGNED'
+    : placement === 'ASSIGNED' || classId || status ? 'ASSIGNED' : 'ALL';
   const yearId = await resolveSchoolYearId({ schoolYearId, classId });
   if (!yearId) return { items: [], page, pageSize, total: 0 };
 
@@ -137,7 +146,7 @@ export async function listStudents({ q, classId, schoolYearId, status, accountSt
   let from;
   let columns;
   let orderBy;
-  if (unassigned) {
+  if (mode === 'UNASSIGNED') {
     // Students with an account but no enrollment in the year. business-rules §3: SA creates accounts first and
     // SM imports classes afterwards (UC-27 needs the accounts to exist), so there is always a period when
     // students have an account but no class; SM uses this list to see who has not been imported yet.
@@ -149,6 +158,21 @@ export async function listStudents({ q, classId, schoolYearId, status, accountSt
             NULL::bigint AS "classId", NULL::text AS "className", NULL::text AS "gradeLevelName",
             NULL::text AS "trackName", NULL::text AS "enrollmentStatus", u.status AS "accountStatus", ${PARENT_COUNT}`;
     orderBy = `${vietnameseNameOrder('u.full_name')}, s.student_id`;
+  } else if (mode === 'ALL') {
+    // Every student: the current enrollment of the year when there is one (one row per student, see
+    // enrollmentsOfYear), else no class. Students without a class come first: they are the School Manager's
+    // to-do (put them into a class), then the classes in order.
+    from = `students s
+     JOIN users u ON u.user_id = s.user_id
+     LEFT JOIN ${enrollmentsOfYear(params)} ON e.student_id = s.student_id
+     LEFT JOIN classes c ON c.class_id = e.class_id
+     LEFT JOIN grade_levels gl ON gl.grade_level_id = c.grade_level_id
+     LEFT JOIN class_tracks t ON t.track_id = c.track_id
+     WHERE TRUE`;
+    columns = `${STUDENT_COLUMNS},
+            c.class_id AS "classId", c.class_name AS "className", gl.grade_level_name AS "gradeLevelName",
+            t.track_name AS "trackName", e.status AS "enrollmentStatus", u.status AS "accountStatus", ${PARENT_COUNT}`;
+    orderBy = `(c.class_id IS NOT NULL), c.class_name, ${vietnameseNameOrder('u.full_name')}, s.student_id`;
   } else {
     // class_tracks.deleted_at is not filtered: a class keeps showing the type it was created with.
     from = `${enrollmentsOfYear(params, { status })}
@@ -563,8 +587,9 @@ const JOIN_GROUP_TYPES = { STUDENT: ['GENERAL', 'STUDENT'], PARENT: ['GENERAL', 
 //
 // Back to a class already left this year (11D1 -> 11A1 -> 11D1): class_enrollments keeps UNIQUE (student_id,
 // class_id), so the old enrollment is reopened (STUDYING, left_at NULL) instead of a new one (lead, 03/11/2026).
-// Also refused: a school year that has ended (MSG_SCHOOL_YEAR_ENDED) and a full class (MSG_CLASS_FULL, 45).
-export async function transferStudent(studentId, toClassId) {
+// Also refused: a school year that has ended (MSG_SCHOOL_YEAR_ENDED) and a full class (MSG_CLASS_FULL). Class size
+// (27/11/2026, FE-04 classSize.js): above the recommended size only with confirmOverWarning (MSG_CLASS_OVER_WARNING).
+export async function transferStudent(studentId, toClassId, { confirmOverWarning = false } = {}) {
   return withTransaction(async (client) => {
     // Lock the student first: two School Managers transferring the same student run one after the other, and the
     // second one then finds the new enrollment instead of creating another one.
@@ -622,14 +647,12 @@ export async function transferStudent(studentId, toClassId) {
     }
     // Business-rules §4: a school year that has ended is read only (lockOpenYear, FE-04: 409 MSG_SCHOOL_YEAR_ENDED).
     await lockOpenYear(client, from.school_year_id);
-    // Business-rules §4: at most 45 studying students per class (MAX_CLASS_SIZE, FE-04).
+    // Business-rules §4: class size settings (warning / hard cap, FE-04 checkClassSize).
     const { rows: [{ size }] } = await client.query(
       `SELECT COUNT(*) AS size FROM class_enrollments WHERE class_id = $1 AND status = 'STUDYING'`,
       [to.class_id],
     );
-    if (size >= MAX_CLASS_SIZE) {
-      throw conflict('MSG_CLASS_FULL', `A class has at most ${MAX_CLASS_SIZE} students.`, { max: MAX_CLASS_SIZE, current: size });
-    }
+    await checkClassSize([{ classId: to.class_id, className: to.class_name, current: size, adding: 1 }], { confirmOverWarning });
 
     // 1. Close the old enrollment (kept, with its grades and attendances). 2. Open the new one – or, back to a class
     // the student already studied in this year, reopen that enrollment (business-rules §4, lead 03/11/2026:
@@ -885,8 +908,9 @@ export const MAX_PROMOTE_STUDENTS = 200;
 // - the destination year is the one right after the source year (MSG_NOT_NEXT_SCHOOL_YEAR) and has not ended
 //   (MSG_SCHOOL_YEAR_ENDED, FE-04 lockOpenYear);
 // - a student goes to the next grade or stays in the same grade (repeating), else SKIP_GRADE_NOT_ALLOWED;
-// - a target class never goes over 45 studying students (MSG_CLASS_FULL, FE-04 MAX_CLASS_SIZE): the whole request
-//   is refused, School Manager picks another class or fewer students.
+// - a target class never goes over the class size hard cap (MSG_CLASS_FULL, FE-04 checkClassSize): the whole request
+//   is refused, School Manager picks another class or fewer students; above the recommended size the request needs
+//   confirmOverWarning (MSG_CLASS_OVER_WARNING lists every class concerned).
 //
 // groups: [{ toClassId, studentIds }] (already validated by the controller: no student twice, at most
 // MAX_PROMOTE_STUDENTS). A whole-request problem (school year / class) is a 400; a student who does not qualify
@@ -898,7 +922,7 @@ export const MAX_PROMOTE_STUDENTS = 200;
 // can still read them. ASSUMPTION: "read only" is derived from the school year having ended – the schema has no
 // column for it and none is added here (to confirm with the team lead).
 // Not logged: promotion is not in the activity_logs list (business-rules §13).
-export async function promoteStudents({ fromSchoolYearId, toSchoolYearId, groups }) {
+export async function promoteStudents({ fromSchoolYearId, toSchoolYearId, groups, confirmOverWarning = false }) {
   return withTransaction(async (client) => {
     await resolveSchoolYearId({ schoolYearId: fromSchoolYearId }, client);
     await resolveSchoolYearId({ schoolYearId: toSchoolYearId }, client);
@@ -1018,21 +1042,19 @@ export async function promoteStudents({ fromSchoolYearId, toSchoolYearId, groups
     });
     const toPromote = decisions.filter((decision) => decision.status === 'PROMOTED');
 
-    // At most MAX_CLASS_SIZE studying students per class, counting the students promoted into it now.
+    // Class size settings (FE-04 checkClassSize), counting the students promoted into each class now.
     const { rows: sizeRows } = await client.query(
       `SELECT class_id, COUNT(*) AS size FROM class_enrollments
        WHERE class_id = ANY($1::bigint[]) AND status = 'STUDYING' GROUP BY class_id`,
       [classIds],
     );
     const sizeByClass = new Map(sizeRows.map((row) => [row.class_id, row.size]));
-    for (const classId of classIds) {
-      const current = sizeByClass.get(classId) ?? 0;
-      const adding = toPromote.filter((decision) => decision.toClassId === classId).length;
-      if (adding && current + adding > MAX_CLASS_SIZE) {
-        throw conflict('MSG_CLASS_FULL', `A class has at most ${MAX_CLASS_SIZE} students.`,
-          { max: MAX_CLASS_SIZE, current, adding, classId, className: classNameById.get(classId) });
-      }
-    }
+    await checkClassSize(classIds.map((classId) => ({
+      classId,
+      className: classNameById.get(classId),
+      current: sizeByClass.get(classId) ?? 0,
+      adding: toPromote.filter((decision) => decision.toClassId === classId).length,
+    })), { confirmOverWarning });
 
     const warnings = [];
     const enrollmentIdByStudent = new Map();

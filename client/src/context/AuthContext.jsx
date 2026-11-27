@@ -1,5 +1,6 @@
 import { createContext, useCallback, useContext, useEffect, useState } from 'react';
 import { api, tokenStore } from '../api/client.js';
+import { temporaryPassword } from '../utils/temporaryPassword.js';
 
 const AuthContext = createContext(null);
 const SIGNED_OUT = { loading: false, user: null, roles: [], activeRole: null };
@@ -26,6 +27,9 @@ export function AuthProvider({ children }) {
   async function signIn(identifier, password) {
     const { data } = await api.post('/auth/sign-in', { identifier, password });
     tokenStore.set(data.token);
+    // Signed in with a temporary password: keep it in memory for the forced change (utils/temporaryPassword.js).
+    if (data.user?.mustChangePassword) temporaryPassword.remember(password);
+    else temporaryPassword.forget();
     setState({ loading: false, user: data.user, roles: data.roles, activeRole: data.activeRole });
     return data;
   }
@@ -38,6 +42,7 @@ export function AuthProvider({ children }) {
 
   // UC-05: after a password change the server issues a token without the "temporary password" flag.
   function passwordChanged(token) {
+    temporaryPassword.forget();
     tokenStore.set(token);
     setState((s) => ({ ...s, user: { ...s.user, mustChangePassword: false } }));
   }
@@ -48,6 +53,7 @@ export function AuthProvider({ children }) {
 
   // UC-03 Sign Out: the JWT is stateless, dropping it ends the session.
   function signOut() {
+    temporaryPassword.forget();
     tokenStore.clear();
     setState(SIGNED_OUT);
   }

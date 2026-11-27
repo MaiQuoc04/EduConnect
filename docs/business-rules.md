@@ -71,13 +71,15 @@ Boundaries that are easy to get wrong:
   Importing accounts (SA) is separate from importing classes (SM); a class import needs the accounts to exist.
 - **System Admin accounts are never created from the screens or the import** (01/11/2026): SA is a sensitive role;
   the few IT admins are created with `npm run seed:admin` (username typed by hand, use `sa.<name>`).
-- **Codes** (01/11/2026): student code = `HS` + 4 digits (`HS0123`), teacher code = `GV` + 4 digits (`GV0042`);
-  typed lower case is accepted and stored upper case. Parents, School Managers and System Admins have no code.
+- **Codes** (27/11/2026, was 4 digits since 01/11/2026): student code = `HS` + 6 digits (`HS000123`), teacher code
+  = `GV` + 6 digits (`GV000042`); typed lower case is accepted and stored upper case. A new or changed code needs
+  6 digits (create, import, edit, add role); the 4-digit codes already in the data (`HS2601`, `GV0001`…) stay valid
+  and are kept when the account is edited. Parents, School Managers and System Admins have no code.
 - Sign in with **email, phone number or username** + password.
 - `username` is required and **generated when the account is created** (formats agreed 01/11/2026). Name part =
   first name + initials of family name and middle name, no accents (Nguyen The Anh → `anhnt`). By role:
-  - Student: name + student code in lower case → `anhnths0123`; Teacher: name + teacher code → `anhntgv0042`
-    (unique because the codes are).
+  - Student: name + student code in lower case → `anhnths000123`; Teacher: name + teacher code → `anhntgv000042`
+    (unique because the codes are; accounts made with a 4-digit code keep names like `anhnths0123`).
   - School Manager: `sm.` + name → `sm.anhnt`; Parent: `ph.` + name → `ph.anhnt`; if taken add a number
     (`ph.anhnt1`, `ph.anhnt2`). System Admin: `sa.` + name (created by hand, see above).
   - Several roles: Student > Teacher > School Manager > Parent. Adding or removing a role later does not rename.
@@ -160,9 +162,10 @@ Boundaries that are easy to get wrong:
     FE-02)**: from the school year **right before** the destination year, into a destination year that has not
     ended; to the **next grade or the same grade** (repeating a year; grade 12 can only repeat); only students still
     `STUDYING` in the source year count (a student transferred inside that year moves from the class they study in
-    now); at most 200 students per call; a target class never goes over 45 studying students (the call is refused).
+    now); at most 200 students per call; class size as below (hard cap refuses the call, above the recommended size the
+    call needs a confirmation listing every class concerned).
   - **Transfer (UC-10, FE-02)**: to another class of the **same school year and the same grade**, not once the year
-    has ended, not into a full class (45). Back to a class the student already studied in that year (11D1 → 11A1 →
+    has ended, not into a full class (class size as below; above the recommended size after a confirmation). Back to a class the student already studied in that year (11D1 → 11A1 →
     11D1): the old enrollment is **reopened** (`STUDYING`, `left_at` cleared) with its grades and attendance –
     `UNIQUE (student_id, class_id)` stays (lead, 03/11/2026).
   - **Create class / import class list (UC-28, UC-27, FE-04)** only take students who were **not studying in a
@@ -184,7 +187,12 @@ Boundaries that are easy to get wrong:
   than 2 parents (existing links + rows of the file), the same student–parent pair twice in the file. A new link
   adds the parent to GENERAL + PARENT of the child's current class, as UC-13 does. Not logged (like UC-13).
 - Every class has a **class type** (`class_tracks`, NOT NULL), e.g. type A = Maths/Physics/Chemistry focus.
-  `track_subjects` holds, per school year, the subjects and **periods per week** (whole number 1–10) of that type;
+  `track_subjects` holds, per school year, the subjects and **periods per week** of that type – a whole number from 1
+  to the School Manager setting "most periods of one subject a week" (default 10, at most 12 = 2 a day × 6 days), and
+  all subjects of the type together at most the setting "most periods of a class a week" (default 38, see "Period
+  limits" §10; Chào cờ / Sinh hoạt lớp count). Both checked when saving a type (SCR-70) and when copying a year (a copy
+  above the limits is refused as a whole – ASSUMPTION 27/11/2026). A type already above a lowered limit keeps its rows
+  and is saved again only once it is back within the limits (27/11/2026, lead agreed);
   copied from the previous year by default; editable, but subjects can no longer be added or removed **once the year
   has grades** (periods per week stay editable). Removing a subject from a type hard-deletes its `track_subjects`
   row (allowed only while the year has no grades and has not ended, §14).
@@ -199,8 +207,14 @@ Boundaries that are easy to get wrong:
 - **Every subject weight is 1** (agreed 01/11/2026, in line with Circular 22/2021): `track_subjects.weight` is
   always 1.00 and is not shown.
 - **Classes** (FE-04, agreed 03/11/2026): a class name is the grade followed by 1–8 letters or digits, no spaces or
-  accents (`10A1`, `12CT`; typed names are upper-cased). A class has at most **45 studying students**, checked when
-  creating a class, adding students, importing a class list, transferring (UC-10) and promoting (UC-11). UC-28 creates a class and also adds students to
+  accents (`10A1`, `12CT`; typed names are upper-cased). **Class size** (27/11/2026, lead agreed – replaces the fixed 45): two
+  School Manager settings (SCR-86, UC-133): a **recommended size** (default 45, Điều lệ trường) and a **hard cap**
+  (default 55; both 10–60, recommended ≤ hard cap). Counted as `STUDYING` students plus the students being added.
+  Above the recommended size the action is done only after the School Manager confirms (the request carries
+  `confirmOverWarning`; without it 409 `MSG_CLASS_OVER_WARNING`); the hard cap is never passed (`MSG_CLASS_FULL`).
+  Checked when creating a class, adding students, importing a class list (rows past the hard cap are errors, rows
+  past the recommended size warnings), transferring (UC-10) and promoting (UC-11). Lowering the hard cap keeps the
+  students of a class already above it (the screens show "Vượt sĩ số tối đa"); only adding more is refused. UC-28 creates a class and also adds students to
   an existing class, only the students it may take (see "Who puts a student in a class"). A class list import has at most 2000 rows; a locked
   account is still imported, with a warning.
 - Homeroom teacher may be empty → show a warning so SM assigns one.
@@ -627,8 +641,12 @@ Boundaries that are easy to get wrong:
   - Two School Managers on the same class: a save made from an editor opened before someone else's save is refused
     (`MSG_TIMETABLE_STALE`, reload first). An empty pattern is allowed and removes the periods without attendance of
     the range (the screen asks first). A school year that has ended is read only (no create / update / import).
-  - Subjects must be subjects of the class type for that year (`track_subjects`); one subject per period. The number
-    of periods per subject is shown against `track_subjects.periods_per_week` but not enforced (ASSUMPTION).
+  - Subjects must be subjects of the class type for that year (`track_subjects`); one subject per period. More
+    periods of a subject in the weekly pattern than `track_subjects.periods_per_week` is a **warning only** (Dung,
+    26/11/2026 refused it, 27/11/2026 changed to a warning): the editor adds the period and shows a warning, and
+    saving asks "Quay lại sửa / Vẫn lưu"; the server saves and returns the subjects over it in `overQuota` (the Excel
+    import shows them on the class row). `MSG_TIMETABLE_OVER_QUOTA` is no longer thrown. Fewer periods are allowed
+    (shown as "Thiếu n"). Automatic scheduling still places exactly the periods of each subject.
   - ASSUMPTION: lessons are Monday–Saturday (no Sunday); periods come from `time_slots`; no holiday calendar yet –
     SM shortens the range or changes the pattern for a holiday week.
   - Import (UC-72): one .xlsx, one row per lesson (class, weekday 2–7, period, subject code or name, room) for one or
@@ -700,22 +718,43 @@ Boundaries that are easy to get wrong:
   only, timetable only (uses the running assignments). The server makes a **draft**; nothing is saved until "Áp dụng".
   - Range: from today (or the semester's first day) to the semester's last day. New assignments run from that day to
     the end of the school year (one teacher per class and subject); history before it is kept (same code as SCR-19).
-  - Week grid (default 5 mornings × 5 + Tuesday and Thursday afternoons × 2 = 29 cells; morning ≤ 5, afternoon ≤ 3,
-    ≤ 6 days – Công văn 7291). Periods per week from `track_subjects`, changeable for the semester being scheduled
+  - Week grid (default 5 mornings × 5 + Tuesday and Thursday afternoons × 2 = 29 cells; a session ≤ 5 periods,
+    ≤ 6 days; a day and the whole grid within the class limits below). Periods per week from `track_subjects`, changeable for the semester being scheduled
     (History: 1 in semester I, 2 in semester II). Fixed cells: Chào cờ (Monday period 1) and Sinh hoạt lớp (Friday
-    period 5) taken from HĐTN, a different teacher in every class (the homeroom teacher first); they do not count
-    towards the norm.
-  - Norm 17 periods/week, homeroom teacher 13 (Thông tư 05/2025), at most 4 over (ASSUMPTION: school's choice).
+    period 5) taken from HĐTN, a different teacher in every class (the homeroom teacher first), never a teacher who
+    teaches a class outside the run at a fixed cell (25/11/2026); they do not count towards the teacher's load.
+  - **Period limits (26/11/2026, Dung – replace the norms; no separate norm for homeroom teachers, no periods over a
+    norm, no teacher limit a day):** School Manager settings "Cài đặt hệ thống" (SCR-86, UC-133), one value for the
+    whole school: most periods a teacher teaches a week (default 25 = norm 17 of Thông tư 05/2025 + at most 50 % over
+    it, 25.5 rounded down), most periods a class has a day (default 7 – Công văn 4567/BGDĐT-GDPT 2025: at most 7
+    periods of 45 minutes a day, at least 5 days and at most 11 sessions a week) and a week (default 38, ASSUMPTION:
+    the dispatch sets no weekly cap – 5 days × 7 + 3; at most the day limit × 6). The School Manager may lower these
+    values but not raise them above the legal caps (teacher 25, class 7 a day, 42 a week).
+    27/11/2026 (Khanh, FE-04): the same page also holds the most periods of one subject a week (default 10, 1–12, not
+    above the class week) and the class size settings (§4); the class types of SCR-70 are checked against the class
+    week limit too. Lowering the hard cap or a period limit first lists what is already above it (`GET
+    /school-settings/impact`) and asks for a confirmation; nothing existing is changed.
+    **"Nên dạy" (27/11/2026, Dung):** the norm of Thông tư 05/2025 is built in, not a setting: 17 periods a week, a
+    homeroom teacher 4 less (13). Warning only, never blocks: automatic scheduling shows it per
+    teacher (warning `OVER_NORM_NEEDED` before running, `OVER_NORM` with no penalty on a draft) and SCR-19 saves the
+    change and lists the teachers over it (`normWarnings`). The solver does not aim at it (it balances the loads). Checked by automatic scheduling (grid and weekly cap), by every save of a class
+    timetable – editor and Excel import – (`MSG_TIMETABLE_CLASS_LIMIT`, details: days over the limit and the week
+    total) and by the teaching assignment SCR-19 (`MSG_TEACHER_OVER_WEEK_LIMIT`: the load is the sum of
+    `periods_per_week` of the teacher's assignments on any day of the range; ASSUMPTION: Chào cờ / Sinh hoạt lớp count
+    there, so only a change that raises a teacher above the limit is refused). The timetable editor refuses a period
+    that breaks a limit when it is picked.
   - Hard rules (never broken, re-checked on apply): qualified teacher, one teacher per (class, subject), weekly cap,
     no teacher / class clash (lessons of classes not in the run included), exact periods per subject, only grid cells,
     rooms per subject (e.g. Tin học 1 room), teacher busy cells, at most 2 periods of a subject per day.
-  - Soft rules (weighted penalty, weights editable): teacher gaps, two periods of a subject not adjacent, more than 4
-    periods a day, a subject packed into one day, heavy subjects (Toán, Văn, Anh) at periods 4–5 or afternoon,
-    afternoon subjects in the morning, empty cells before a lesson (empty cells go to the end of a session),
-    overload, imbalance, homeroom teacher not teaching their class.
-  - Checked before running (blocking): grid periods missing in `time_slots`, a class needing more periods than cells,
-    not enough teachers for a subject (need vs norm + overload of the qualified teachers), not enough teachers for
-    the fixed cells, too few rooms, timetable-only mode without running assignments.
+  - Soft rules (weighted penalty, weights editable): teacher gaps, two periods of a subject not adjacent, a subject
+    packed into one day, heavy subjects (Toán, Văn, Anh) at periods 4–5 or afternoon, afternoon subjects in the
+    morning, empty cells before a lesson (empty cells go to the end of a session), imbalance between teachers of a
+    subject, homeroom teacher not teaching their class (S1 overload and S4 teacher periods a day removed 26/11/2026).
+  - Checked before running (blocking): grid periods missing in `time_slots`, a grid day or week over the class limits
+    (`GRID_DAY_LIMIT`, `GRID_WEEK_LIMIT`), a class needing more periods than cells, not enough teachers for a subject
+    (need vs the weekly maximum of the qualified teachers), not enough teachers for
+    the fixed cells (teachers busy at a fixed cell not counted), a kept HĐTN teacher busy at a fixed cell
+    (`FIXED_TEACHER_BUSY`), too few rooms, timetable-only mode without running assignments.
   - Apply: refused when assignments or timetables changed since the draft (`MSG_AUTO_STALE`), when a class already has
     a timetable / assignments and the overwrite is not confirmed (`MSG_AUTO_CONFIRM`), or when the draft breaks a hard
     rule or misses lessons. Lessons with attendance are kept; class groups follow the new assignments (FE-04 sync).
@@ -793,7 +832,8 @@ Boundaries that are easy to get wrong:
   early; whether an absence is excused depends on the family's explanation, which reaches the homeroom teacher days
   later (there is no leave request in the system), and the excused / unexcused counts are final when the semester
   closes. The homeroom teacher never changes absent ↔ present / late.
-- **Every action is logged** in `attendance_histories`, including the first take (`old_status` NULL).
+- **Every action is logged** in `attendance_histories`, including the first take (`old_status` NULL) and the automatic
+  filling of later periods (point 3).
 - **Notifications (18/11/2026, lead):** personal (`type` / `target_type` ATTENDANCE, `is_personal` TRUE,
   `student_id` = the student) to the **student and their linked parents** (active accounts), **one per period**
   (no grouping by day). Sent when attendance is saved: first take with a status other than PRESENT, and every
@@ -809,13 +849,28 @@ Boundaries that are easy to get wrong:
   3. The sheet of the **first period taken in a session** opens with everyone PRESENT; the teacher changes the
      exceptions and saves the **whole class at once** (no partial save). Each student has an optional note
      (`attendances.note`).
-     **Prefill (lead, 23/11/2026):** a period not taken yet opens with the statuses **and notes** of the nearest
-     earlier period of the same class, same day and **same session** (morning = periods 1–5, afternoon = 6–10; the
-     afternoon never copies the morning) that is already taken – copied as they are (a late student stays late). It is
-     only a draft: the period stays "not taken" (and in the SM's list of periods not taken) until its own teacher
-     checks it and saves it (one save confirms it). A student not on the source period's list starts PRESENT.
-     Notifications are unchanged: each saved period with a status other than PRESENT notifies, also when the status
-     was prefilled (a student absent all morning → one notification per period).
+     **Automatic filling of the later periods (lead, 26/11/2026; replaces the draft prefill of 23/11/2026):** when a
+     period is saved (by its teacher, the homeroom teacher or SM), the **later periods of the same class, same day and
+     same session** (morning = periods 1–5, afternoon = 6–10; the afternoon never copies the morning) are **saved
+     automatically** from it, with no extra action:
+     - absent (excused / unexcused) stays absent **with its note**; **late becomes PRESENT** and present stays PRESENT,
+       both without the note; a student not on the source period's list is PRESENT;
+     - per student, the copy stops at the first later period where a person recorded that student (that row is never
+       overwritten); rows filled automatically are marked `attendances.auto_from_slot_id` (patch_v0.3_attendance_auto.sql);
+     - a row stays "automatic" until a person **changes** that student's status or note on its period: saving the sheet
+       unchanged keeps it automatic, so a later correction of the earlier period (e.g. the homeroom teacher's switch to
+       excused) still flows on;
+     - each automatic row is in `attendance_histories` with reason "Tự điền theo tiết N" (changed_by = who saved);
+     - the period then counts as taken (it leaves the SM's list of periods not taken); its sheet shows "Tự điền theo
+       tiết N – kiểm tra và lưu nếu có thay đổi" and its teacher changes only the exceptions (from the period start to
+       the deadline, as before).
+     **Notifications (lead, 26/11/2026):** automatic rows **send nothing**. A notification is sent only when a person
+     saves a period, for each student whose status changes there (rules above: not PRESENT on a first take; any change
+     where the old or new status is not PRESENT). A change on an automatic row is worded from that period on ("Có mặt
+     từ tiết 3", detail: what was filled from period N). So a student absent all morning → one notification (period 1);
+     back in period 3 → one more, at period 3.
+     A period not taken yet without any automatic row (e.g. its session started before this rule) still opens prefilled
+     as a draft with the same copy rule.
   4. A period not taken by the deadline: the subject teacher and the homeroom teacher can no longer enter it; only SM
      enters it, with a reason.
   5. Reason (`attendance_histories.reason`): optional for the subject teacher on the day; **required** for the

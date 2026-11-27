@@ -67,7 +67,7 @@ Source: Report 3 section 4.4 (draft v1.3). Full = all records; Restricted (n) = 
 | Class timetable | View | No | Full | Restricted (4) | Restricted (4) | Restricted (7) | Restricted (7) |
 | Period times | Configure (UC-122) | No | Full | No | No | No | No |
 | Automatic scheduling | Run / apply (UC-123) | No | Full | No | No | No | No |
-| School settings (teaching load, attendance edit deadline) | View / change (UC-133) | No | Full | No | No | No | No |
+| School settings (period limits, class size, attendance edit deadline) | View / change (UC-133) | No | Full | No | No | No | No |
 | Timetable history | View / export (UC-124) | No | Full | No | No | No | No |
 | School calendar | Create / update / delete (UC-126) | No | Full | No | No | No | No |
 | School calendar | View (UC-127) | No | Full | Full | Full | Restricted (21) | Restricted (21) |

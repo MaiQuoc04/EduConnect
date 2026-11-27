@@ -5,6 +5,8 @@ import { ERROR_CODES, TEACHING_RULES, USER_STATUS } from './teacher.constants.js
 import { cellLabel, currentYearId, toSchoolYear, toSchoolYearList, toTeachingBoard } from './teacher.format.js';
 import * as queries from './teacher.queries.js';
 import { syncClassTeachers } from '../classes/classGroups.js';
+import { schoolLimits } from '../school-settings/schoolSettings.service.js';
+import { normOf } from '../timetable/timetable.constants.js';
 
 /**
  * Picks the school year and the view range [from, to]. Assignments are date ranges (business-rules §4), so the
@@ -67,6 +69,7 @@ export async function getTeachingBoard({ schoolYearId, from, to } = {}) {
  */
 export async function saveTeachingAssignments({ schoolYearId, startDate, endDate, changes }) {
   let savedRange;
+  let normWarnings = [];
   await withTransaction(async (conn) => {
     const year = await queries.findSchoolYearById(schoolYearId, conn);
     if (!year) throw notFound(ERROR_CODES.SCHOOL_YEAR_NOT_FOUND, 'School year not found.');
@@ -121,6 +124,9 @@ export async function saveTeachingAssignments({ schoolYearId, startDate, endDate
       }
     }
 
+    // Weekly load of the new teachers before the change (school setting "Số tiết giáo viên dạy tối đa / tuần").
+    const loadsBefore = await queries.findMaxWeeklyLoads(teacherIds, start, end, conn);
+
     const clashes = [];
     const blocked = [];
     for (const ch of changes) {
@@ -148,6 +154,32 @@ export async function saveTeachingAssignments({ schoolYearId, startDate, endDate
     if (clashes.length) {
       throw new AppError(409, ERROR_CODES.TIMETABLE_CLASH, 'The new teacher already teaches at those periods.', { items: clashes });
     }
+    // 26/11/2026: a teacher may not get more periods a week than the school allows. Only a change that raises a
+    // teacher's load above the limit is refused (a teacher already over it can still lose periods).
+    if (teacherIds.length) {
+      const limits = await schoolLimits(conn);
+      const { teacherMaxWeek } = limits;
+      const loadsAfter = await queries.findMaxWeeklyLoads(teacherIds, start, end, conn);
+      const names = new Map((await queries.findTeachersWithSubjectIds(teacherIds, conn)).map((t) => [String(t.teacherId), t.fullName]));
+      const over = teacherIds
+        .filter((id) => (loadsAfter.get(String(id)) ?? 0) > teacherMaxWeek && (loadsAfter.get(String(id)) ?? 0) > (loadsBefore.get(String(id)) ?? 0))
+        .map((id) => ({ teacher: names.get(String(id)) ?? String(id), load: loadsAfter.get(String(id)), max: teacherMaxWeek }));
+      if (over.length) {
+        throw new AppError(409, ERROR_CODES.TEACHER_OVER_WEEK_LIMIT, 'A teacher would teach more periods a week than allowed.', { items: over });
+      }
+      // 27/11/2026: over "nên dạy" (17, homeroom teacher 13) is only a warning – the change is saved and the page says
+      // which teachers it concerns.
+      const { rows: homeroomRows } = await conn.query(
+        `SELECT DISTINCT homeroom_teacher_id::text AS "teacherId" FROM classes
+         WHERE school_year_id = $1 AND deleted_at IS NULL AND homeroom_teacher_id = ANY($2::bigint[])`,
+        [schoolYearId, teacherIds],
+      );
+      const homeroom = new Set(homeroomRows.map((r) => r.teacherId));
+      normWarnings = teacherIds
+        .map((id) => ({ id: String(id), load: loadsAfter.get(String(id)) ?? 0, norm: normOf(limits, homeroom.has(String(id))) }))
+        .filter((t) => t.load > t.norm)
+        .map((t) => ({ teacher: names.get(t.id) ?? t.id, load: t.load, norm: t.norm, homeroom: homeroom.has(t.id) }));
+    }
 
     // Business-rules §4 "Class group membership follows the class": the class groups follow the new assignments,
     // in this transaction (FE-04 syncClassTeachers; nothing happens for an ended school year).
@@ -157,5 +189,5 @@ export async function saveTeachingAssignments({ schoolYearId, startDate, endDate
     for (const classId of new Set(changes.map((ch) => ch.classId))) await syncClassTeachers(conn, Number(classId));
   });
 
-  return getTeachingBoard({ schoolYearId, ...savedRange });
+  return { ...(await getTeachingBoard({ schoolYearId, ...savedRange })), normWarnings };
 }

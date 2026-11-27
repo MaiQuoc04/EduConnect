@@ -9,6 +9,7 @@ import ClassCard from './ClassCard.jsx';
 import ClassCreateForm from './ClassCreateForm.jsx';
 import ClassImportPanel from './ClassImportPanel.jsx';
 import ClassTable from './ClassTable.jsx';
+import { DEFAULT_SIZE_LIMITS } from './studentPick.js';
 
 const GRADES = ['10', '11', '12'];
 
@@ -58,6 +59,7 @@ export default function ClassListPage() {
 
   const schoolYear = state.data?.schoolYear ?? null;
   const classes = useMemo(() => state.data?.classes ?? [], [state.data]);
+  const sizeLimits = state.data?.sizeLimits ?? DEFAULT_SIZE_LIMITS; // School Manager settings (27/11/2026)
   // Filters and search run here: a school has only a few dozen classes per year.
   const gradeCounts = useMemo(
     () => Object.fromEntries(GRADES.map((g) => [g, classes.filter((c) => c.gradeLevel === g).length])),
@@ -159,6 +161,7 @@ export default function ClassListPage() {
       {mode === 'create' && schoolYear && (
         <ClassCreateForm
           schoolYear={schoolYear}
+          sizeLimits={sizeLimits}
           takenNames={classes.map((c) => c.className)}
           onCancel={() => setMode(null)}
           onDone={handleDone}
@@ -169,6 +172,7 @@ export default function ClassListPage() {
           key={adding.classId}
           schoolYear={schoolYear}
           cls={adding}
+          sizeLimits={sizeLimits}
           onCancel={() => {
             setMode(null);
             setAdding(null);
@@ -268,7 +272,7 @@ export default function ClassListPage() {
       ) : (
         <>
           {view === 'table' ? (
-            <ClassTable classes={shown} loading={state.loading} />
+            <ClassTable classes={shown} loading={state.loading} sizeLimits={sizeLimits} />
           ) : (
             <div className={state.loading ? 'is-loading' : undefined}>
               {sections.map((s) => (
@@ -283,7 +287,7 @@ export default function ClassListPage() {
                   </header>
                   <div className="class-grid">
                     {s.items.map((c) => (
-                      <ClassCard key={c.classId} cls={c} onAddStudents={canChange && !mode ? openAdd : undefined} />
+                      <ClassCard key={c.classId} cls={c} sizeLimits={sizeLimits} onAddStudents={canChange && !mode ? openAdd : undefined} />
                     ))}
                   </div>
                 </section>

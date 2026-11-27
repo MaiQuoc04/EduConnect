@@ -16,18 +16,23 @@ const EXCLUSIVE_ROLES = ['SYSTEM_ADMIN', 'STUDENT']; // business-rules §1: no o
 const GENDERS = ['MALE', 'FEMALE', 'OTHER'];
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
-// Business rules §3 (agreed 01/11/2026): student code =
-// "HS" + 4 digits (HS0001), teacher code = "GV" + 4 digits (GV0001). Typed lower case is accepted and upper-cased.
-// Checked when an account is created or imported; older short codes were padded by patch_v0.3_reset_cooldown_codes.sql.
-const STUDENT_CODE_RE = /^HS\d{4}$/;
-const TEACHER_CODE_RE = /^GV\d{4}$/;
+// Business rules §3: student code = "HS" + 6 digits (HS000123), teacher code = "GV" + 6 digits (GV000042)
+// (FE-13 owner, 27/11/2026; 4 digits from 01/11/2026). Typed lower case is accepted and upper-cased.
+// Checked when an account is created, imported, edited or given a role. The 4-digit codes already in the data stay
+// valid: an account keeps its code when it is edited (readAccountInput `keep`); only a new or changed code needs
+// 6 digits.
+const STUDENT_CODE_RE = /^HS\d{6}$/;
+const TEACHER_CODE_RE = /^GV\d{6}$/;
 const code = (value) => text(value).replace(/\s+/g, '').toUpperCase();
 
 const text = (value) => (typeof value === 'string' ? value.trim() : '');
 const optional = (value) => text(value) || null;
 
 // Normalises the request body and collects field errors as { field: 'REQUIRED' | 'INVALID' | 'TOO_LONG' | … }.
-export function readAccountInput(body = {}) {
+// `keep` = { studentCode, teacherCode } the account already has (UC-99 edit): sent back unchanged it is accepted even
+// in the older 4-digit format.
+export function readAccountInput(body = {}, { keep = {} } = {}) {
+  const validCode = (value, re, kept) => re.test(value) || (Boolean(kept) && value === code(kept));
   const errors = {};
   const maxLength = (field, value, max) => {
     if (value && value.length > max) errors[field] = 'TOO_LONG';
@@ -64,7 +69,7 @@ export function readAccountInput(body = {}) {
       gender: optional(s.gender),
     };
     if (!student.studentCode) errors.studentCode = 'REQUIRED';
-    else if (!STUDENT_CODE_RE.test(student.studentCode)) errors.studentCode = 'INVALID';
+    else if (!validCode(student.studentCode, STUDENT_CODE_RE, keep.studentCode)) errors.studentCode = 'INVALID';
     if (student.dob && (!DATE_RE.test(student.dob) || Number.isNaN(Date.parse(student.dob)))) errors.dob = 'INVALID';
     if (student.gender && !GENDERS.includes(student.gender)) errors.gender = 'INVALID';
     input.student = student;
@@ -76,7 +81,7 @@ export function readAccountInput(body = {}) {
     const departmentId = t.departmentId == null || t.departmentId === '' ? null : String(t.departmentId);
     const teacher = { teacherCode: code(t.teacherCode), department: optional(t.department), departmentId };
     if (!teacher.teacherCode) errors.teacherCode = 'REQUIRED';
-    else if (!TEACHER_CODE_RE.test(teacher.teacherCode)) errors.teacherCode = 'INVALID';
+    else if (!validCode(teacher.teacherCode, TEACHER_CODE_RE, keep.teacherCode)) errors.teacherCode = 'INVALID';
     if (departmentId != null && !/^\d{1,15}$/.test(departmentId)) errors.department = 'NOT_IN_LIST';
     maxLength('department', teacher.department, 100);
     input.teacher = teacher;

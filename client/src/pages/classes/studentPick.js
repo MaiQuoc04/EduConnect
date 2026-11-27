@@ -1,7 +1,8 @@
 // Shared helpers of the UC-28 student pickers (create a class, add students to a class).
 
-// Agreed 29/10: at most 45 studying students per class (the server checks it too).
-export const MAX_CLASS_SIZE = 45;
+// Class size (27/11/2026): School Manager settings, sent with the class list (GET /classes -> sizeLimits). These
+// defaults are only used before the list has loaded. The server checks both limits too.
+export const DEFAULT_SIZE_LIMITS = Object.freeze({ warnStudents: 45, maxStudents: 55 });
 
 export const GENDER_LABELS = { MALE: 'Nam', FEMALE: 'Nữ', OTHER: 'Khác' };
 

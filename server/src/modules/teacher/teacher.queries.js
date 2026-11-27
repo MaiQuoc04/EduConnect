@@ -801,3 +801,33 @@ export async function moveFreeSlotsToTeacher(teacherId, classId, subjectId, star
     end,
   ]);
 }
+
+// Highest weekly load of each teacher inside [from, to] (26/11/2026, school setting "Số tiết giáo viên dạy tối đa /
+// tuần"): the sum of track_subjects.periods_per_week of the assignments running on a day, taken on `from` and on every
+// day one of the teacher's assignments starts inside the range (the load only changes on those days).
+// ASSUMPTION: every period counts here, Chào cờ / Sinh hoạt lớp included (automatic scheduling leaves those two out),
+// so the check only refuses a change that raises a teacher's load above the limit.
+// Returns Map(teacherId -> load).
+export async function findMaxWeeklyLoads(teacherIds, from, to, db = pool) {
+  if (!teacherIds.length) return new Map();
+  const { rows } = await db.query(
+    `WITH days AS (
+       SELECT $2::date AS day
+       UNION SELECT ta.start_date FROM teaching_assignments ta
+       WHERE ta.teacher_id = ANY($1::bigint[]) AND ta.deleted_at IS NULL AND ta.start_date > $2::date AND ta.start_date <= $3::date
+     )
+     SELECT x.teacher_id::text AS "teacherId", MAX(x.load)::int AS "load"
+     FROM (
+       SELECT ta.teacher_id, d.day, SUM(ts.periods_per_week) AS load
+       FROM days d
+       JOIN teaching_assignments ta ON ta.teacher_id = ANY($1::bigint[]) AND ta.deleted_at IS NULL
+                                   AND ta.start_date <= d.day AND ta.end_date >= d.day
+       JOIN classes c ON c.class_id = ta.class_id AND c.deleted_at IS NULL
+       JOIN track_subjects ts ON ts.track_id = c.track_id AND ts.subject_id = ta.subject_id AND ts.school_year_id = c.school_year_id
+       GROUP BY ta.teacher_id, d.day
+     ) x
+     GROUP BY x.teacher_id`,
+    [teacherIds, from, to],
+  );
+  return new Map(rows.map((r) => [r.teacherId, r.load]));
+}

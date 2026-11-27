@@ -1,7 +1,12 @@
 // School Manager settings ("Cài đặt hệ thống" of the School Manager, Dung, 21/11/2026). Two groups:
-//   teaching   – the teaching load used by automatic scheduling (moved here from part "4. Giáo viên" of SCR-80): the
-//                weekly norm of a teacher and of a homeroom teacher, how many periods a teacher may go over the norm,
-//                and the most periods a teacher should teach in one day;
+//   teaching   – school-wide limits (26/11/2026, replace the teacher norms – no separate norm for homeroom teachers,
+//                no periods over the norm, no teacher limit a day): the most periods a teacher teaches in a week, and
+//                the most periods a class has in a day and in a week. Checked by automatic scheduling, by every save
+//                of a class timetable (editor, Excel import) and by the teaching assignment (FE-03, SCR-19).
+//                27/11/2026 (Khanh, FE-04): also the most periods of one subject a week (SCR-70, UC-26), and the class
+//                types of SCR-70 are checked against classMaxWeek;
+//   classes    – class size (27/11/2026, Khanh, FE-04): above warnStudents a student is still added once the School
+//                Manager confirms; maxStudents is never passed (UC-28, class import UC-27, UC-10, UC-11);
 //   attendance – the time of day until which a subject teacher can still edit the attendance of that day (business
 //                rules §12; moved here from the System Admin settings 24/11/2026, key attendance.edit_deadline_time).
 // The values live in school_settings (database/patch_v0.3_school_settings.sql, approved by the lead and run on the
@@ -18,21 +23,42 @@ import { AUTO_LIMITS } from '../timetable/timetable.constants.js';
 
 export const ERROR_CODES = Object.freeze({
   NOT_READY: 'MSG_SCHOOL_SETTINGS_NOT_READY', // 503 – patch_v0.3_school_settings.sql not run on this database
-  INVALID: 'MSG_SCHOOL_SETTINGS_INVALID', // 400 details: { field, reason: REQUIRED | RANGE | TIME | ABOVE_NORM, min?, max? }
+  // 400 details: { field, reason: REQUIRED | RANGE | TIME | ABOVE_DAYS | ABOVE_CLASS_WEEK | ABOVE_MAX_STUDENTS, min?, max? }
+  INVALID: 'MSG_SCHOOL_SETTINGS_INVALID',
   CHANGED: 'MSG_SCHOOL_SETTINGS_CHANGED', // 409 – saved by someone else after the page was opened
   NOTHING: 'MSG_NOTHING_CHANGED', // 400 – same code as the System Admin settings
 });
 
 const TIME_RE = /^([01]\d|2[0-3]):[0-5]\d$/;
 
+// FE-04 defaults (27/11/2026). Periods of one subject: the old fixed range 1–10; at most 2 periods a day
+// (AUTO_LIMITS.MAX_PER_SUBJECT_DAY) × 6 days, more could never be placed in a timetable.
+// Class size: a warning above 45 (Điều lệ trường), a hard cap of 55 – the school's choice, agreed by the lead 27/11/2026.
+export const CLASS_LIMITS = Object.freeze({
+  SUBJECT_MAX_WEEK: 10,
+  SUBJECT_MAX_WEEK_CAP: AUTO_LIMITS.MAX_PER_SUBJECT_DAY * AUTO_LIMITS.DAYS_MAX,
+  WARN_STUDENTS: 45,
+  MAX_STUDENTS: 55,
+  STUDENTS_MIN: 10,
+  STUDENTS_CAP: 60, // ASSUMPTION: highest class size the School Manager may set
+});
+
 // group -> field (API, camelCase) -> row key, type, built-in default, allowed range.
-// Defaults = the values used before the move.
+// New keys (26/11/2026) are new rows of school_settings (no schema change); the old rows teaching.norm,
+// teaching.homeroom_norm, teaching.max_over and teaching.max_periods_per_day are no longer read.
 export const GROUPS = Object.freeze({
   teaching: {
-    norm: { key: 'teaching.norm', type: 'int', fallback: AUTO_LIMITS.NORM, min: 1, max: 40 },
-    homeroomNorm: { key: 'teaching.homeroom_norm', type: 'int', fallback: AUTO_LIMITS.HOMEROOM_NORM, min: 0, max: 40 },
-    maxOver: { key: 'teaching.max_over', type: 'int', fallback: AUTO_LIMITS.MAX_OVER, min: 0, max: 20 },
-    maxPerDay: { key: 'teaching.max_periods_per_day', type: 'int', fallback: AUTO_LIMITS.MAX_PER_DAY, min: 1, max: 10 },
+    // Never above the legal caps: 25 periods a week for a teacher, 7 periods a day for a class (and 7 × 6 a week).
+    teacherMaxWeek: { key: 'teaching.teacher_max_week', type: 'int', fallback: AUTO_LIMITS.TEACHER_MAX_WEEK, min: 1, max: AUTO_LIMITS.TEACHER_MAX_WEEK },
+    classMaxDay: { key: 'teaching.class_max_day', type: 'int', fallback: AUTO_LIMITS.CLASS_MAX_DAY, min: 1, max: AUTO_LIMITS.CLASS_MAX_DAY },
+    classMaxWeek: { key: 'teaching.class_max_week', type: 'int', fallback: AUTO_LIMITS.CLASS_MAX_WEEK, min: 1, max: AUTO_LIMITS.CLASS_MAX_DAY * AUTO_LIMITS.DAYS_MAX },
+    // FE-04 (27/11/2026): most periods of one subject a week in a class type (SCR-70); never above classMaxWeek.
+    subjectMaxWeek: { key: 'teaching.subject_max_week', type: 'int', fallback: CLASS_LIMITS.SUBJECT_MAX_WEEK, min: 1, max: CLASS_LIMITS.SUBJECT_MAX_WEEK_CAP },
+  },
+  // FE-04 (27/11/2026): class size, warnStudents <= maxStudents.
+  classes: {
+    warnStudents: { key: 'class.warn_students', type: 'int', fallback: CLASS_LIMITS.WARN_STUDENTS, min: CLASS_LIMITS.STUDENTS_MIN, max: CLASS_LIMITS.STUDENTS_CAP },
+    maxStudents: { key: 'class.max_students', type: 'int', fallback: CLASS_LIMITS.MAX_STUDENTS, min: CLASS_LIMITS.STUDENTS_MIN, max: CLASS_LIMITS.STUDENTS_CAP },
   },
   attendance: {
     // ASSUMPTION: earliest 12:00 (not in the business rules) – an earlier deadline would close the morning periods
@@ -102,9 +128,16 @@ async function read(db, opts) {
   }
 }
 
-// The teaching load in force (automatic scheduling reads it on every run and apply).
-export async function teachingLoad(db = pool) {
-  return (await read(db)).teaching;
+// The teacher and class limits in force { teacherNormWeek, teacherMaxWeek, classMaxDay, classMaxWeek } (automatic scheduling on every
+// run and apply, class timetable saves, teaching assignment saves).
+// teacherNormWeek ("nên dạy", warning only) is not a setting: the norm of Thông tư 05/2025 (17), built in (27/11/2026).
+export async function schoolLimits(db = pool) {
+  return { ...(await read(db)).teaching, teacherNormWeek: AUTO_LIMITS.TEACHER_NORM_WEEK };
+}
+
+// Class size in force { warnStudents, maxStudents } (FE-04: UC-28, class import, UC-10 transfer, UC-11 promotion).
+export async function classSizeLimits(db = pool) {
+  return (await read(db)).classes;
 }
 
 // The subject teacher's attendance deadline of the day (HH:MM), read by FE-12 (attendance.scope.js).
@@ -119,7 +152,7 @@ export function getSettings() {
 
 const invalid = (field, reason, more = {}) => badRequest(ERROR_CODES.INVALID, `Invalid ${field}.`, { field, reason, ...more });
 
-// Body { teaching?, attendance?, stamp }: each group sent is checked in full; a group left out keeps its values.
+// Body { teaching?, classes?, attendance?, stamp }: each group sent is checked in full; a group left out keeps its values.
 export function checkBody(body) {
   const out = {};
   for (const [group, fields] of Object.entries(GROUPS)) {
@@ -136,7 +169,17 @@ export function checkBody(body) {
     }
   }
   if (!Object.keys(out).length) throw invalid('teaching', 'REQUIRED');
-  if (out.teaching && out.teaching.homeroomNorm > out.teaching.norm) throw invalid('homeroomNorm', 'ABOVE_NORM');
+  // A week of more periods than classMaxDay × 6 school days can never be filled.
+  if (out.teaching && out.teaching.classMaxWeek > out.teaching.classMaxDay * AUTO_LIMITS.DAYS_MAX) {
+    throw invalid('classMaxWeek', 'ABOVE_DAYS', { max: out.teaching.classMaxDay * AUTO_LIMITS.DAYS_MAX });
+  }
+  // One subject cannot have more periods than the whole week of a class (FE-04).
+  if (out.teaching && out.teaching.subjectMaxWeek > out.teaching.classMaxWeek) {
+    throw invalid('subjectMaxWeek', 'ABOVE_CLASS_WEEK', { max: out.teaching.classMaxWeek });
+  }
+  if (out.classes && out.classes.warnStudents > out.classes.maxStudents) {
+    throw invalid('warnStudents', 'ABOVE_MAX_STUDENTS', { max: out.classes.maxStudents });
+  }
   return out;
 }
 

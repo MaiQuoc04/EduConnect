@@ -7,6 +7,8 @@
 import { pool, withTransaction } from '../../config/db.js';
 import { AppError, badRequest, notFound } from '../../utils/AppError.js';
 import { ERROR_CODES, ROLES, TIMETABLE_LIMITS } from './timetable.constants.js';
+import { classLimitErrors, overQuota } from './timetable.quota.js';
+import { schoolLimits } from '../school-settings/schoolSettings.service.js';
 
 const conflict = (code, message, details) => new AppError(409, code, message, details);
 
@@ -189,7 +191,7 @@ export function listClasses({ schoolYearId }) {
 export function getEditor({ classId, date }) {
   return guard(async () => {
     const [cls, day, slots] = await Promise.all([classInfo(classId), today(), timeSlots()]);
-    const [subjects, versions, homeroomTeacher] = await Promise.all([classSubjects(cls), versionsOf(classId), homeroomOf(classId)]);
+    const [subjects, versions, homeroomTeacher, limits] = await Promise.all([classSubjects(cls), versionsOf(classId), homeroomOf(classId), schoolLimits()]);
     const at = date ?? day;
     const shown =
       versions.find((v) => v.startDate <= at && v.endDate >= at) ?? versions.find((v) => v.startDate > at) ?? versions.at(-1) ?? null;
@@ -204,6 +206,7 @@ export function getEditor({ classId, date }) {
       timeSlots: slots,
       subjects: subjects.map((s) => ({ ...s, teacher: teachers[String(s.subjectId)] ?? null })),
       teacherDate,
+      limits: { classMaxDay: limits.classMaxDay, classMaxWeek: limits.classMaxWeek }, // Cài đặt hệ thống
       versions,
       stamp: stampOf(versions),
       shown: shown ? { ...shown, entries } : null,
@@ -260,7 +263,13 @@ const PLANNED = `
 
 // Saves the pattern for [start, end] inside an open transaction and generates the periods. Throws 409 with the
 // problems (no teacher assigned / teacher busy in another class) – the caller's transaction is then rolled back.
+// Every save goes through saveVersion (editor, Excel import, automatic scheduling), so the rules are checked here.
+// A subject over its periods per week is only a warning (27/11/2026, Dung): the pattern is saved and the subjects
+// over it come back in `overQuota` (the editor asks before saving, the import shows them).
 async function saveVersion(db, { cls, start, end, entries, userId }) {
+  const over = overQuota(await classSubjects(cls, db), entries);
+  const limit = classLimitErrors(entries, await schoolLimits(db));
+  if (limit) throw badRequest(ERROR_CODES.TIMETABLE_CLASS_LIMIT, 'The class has more periods than the school allows.', limit);
   await freeRange(cls.classId, start, end, db);
   const { rows: created } = await db.query(
     `INSERT INTO timetables (class_id, start_date, end_date, created_by) VALUES ($1, $2::date, $3::date, $4)
@@ -345,7 +354,7 @@ async function saveVersion(db, { cls, start, end, entries, userId }) {
        AND EXISTS (SELECT 1 FROM attendances a WHERE a.timetable_slot_id = ts.timetable_slot_id)`,
     [cls.classId, start, end],
   );
-  return { timetableId, generated: inserted[0].n, removed: removed[0].n, kept: kept[0].n };
+  return { timetableId, generated: inserted[0].n, removed: removed[0].n, kept: kept[0].n, overQuota: over };
 }
 
 // Checks the range against today and the class's school year. Returns { start, end }.

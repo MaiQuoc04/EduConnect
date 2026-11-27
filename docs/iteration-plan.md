@@ -29,6 +29,52 @@ reactions, attachments) is merged into one place after both are on `develop`.
 
 ## Current status (read first; update after every merge, schema patch or new decision)
 
+- **Parent linking fixes (27/11/2026, Anh, FE-02 / FE-14; defect fixes from testing; branch `fix/fe-02-parent-link`,
+  commit 9060e4b, merged into `develop` 27/11/2026 by Quoc (PR #23, merge 259669a) – the same change is 16e5c7f on
+  `feature/report-auto`):** SCR-08 parent card links to SCR-13 (0 parents "Liên kết phụ huynh", 1 parent "Liên kết
+  thêm phụ huynh", 2 parents the caption "Đã đủ 2 phụ huynh."); UC-13 from the parent's side on SCR-10 ("Liên kết con"
+  dialog, `LinkChildDialog.jsx`: search students with `GET /students?q=`, same `POST /students/:id/parents`, server
+  unchanged); the disabled "⋯ Bảo mật & quyền" menus removed from SCR-08 / SCR-10 (FE-13's "Tài khoản đăng nhập" card
+  already does it); SCR-13 back button label "Quay lại". Client only, no schema change, client build passes.
+
+- **Parent List search widened (27/11/2026, Anh, FE-14, branch `feature/report-auto`, NOT merged):** UC-104 /
+  SCR-69 `GET /parents?q=` – a phone-like q still matches the phone only (SCR-13 lookup unchanged); any other q
+  matches the parent's name, username, email, or a linked child's name / student code (business-rules §16). Only
+  `parents.service.js` `buildParentFilter` (its one caller is `listParents`) and the SCR-69 placeholder / help line.
+  No schema change, no new index. Tested on the local throw-away DB.
+
+- **FE-13 6-digit codes + FE-01 password checklist merged into `develop` (27/11/2026, Linh,
+  `feature/fe-13-system-administration`, merge `fc56271`; server `npm test` 46/46 pass):**
+  - `672b246` (UC-95, UC-96, UC-99): student / teacher code = `HS` / `GV` + **6 digits** (`HS000123`); the 4-digit
+    codes already in the data stay valid and are kept when the account is edited; templates, messages and business
+    rules §3 updated. Rule change after the R5 submission – **approved by the lead 27/11/2026** (Linh's proposal).
+    **Open bug (blocker for the forms):** the code inputs still have `maxLength={6}`, so `HS000001` (8 characters)
+    cannot be typed – SA cannot create a student / teacher on the form, add the teacher role or change a code
+    (import still works). Fix: `maxLength={8}` in `CreateAccountPage.jsx` (2 inputs), `AddRoleDialog.jsx`,
+    `EditAccountPage.jsx` (2 inputs).
+  - `a355573` (UC-01, UC-05, FE-01 SCR-34): on the forced change "Khác mật khẩu cũ gần nhất" is checked while typing
+    against the temporary password (kept in memory only, `utils/temporaryPassword.js`); a rule the client cannot
+    check shows "(kiểm tra khi lưu)" and is not counted.
+
+- **FE-12 automatic filling of the later periods (26/11/2026, lead decision, Quoc; committed to `develop` 27/11,
+  `e707d10`, after the R5 submission):** saving a period saves the later periods of the same class, day and session at once (absent stays
+  with its note, late → present, a student not on the source list → present), per student up to the first later period
+  where a person recorded that student; rows marked `attendances.auto_from_slot_id`; an unchanged save keeps them
+  automatic, a change of status or note by a person clears it; history reason "Tự điền theo tiết N"; automatic rows
+  notify nothing, a person's change on one says "… từ tiết N". Replaces the draft prefill of 23/11 (kept only for
+  sessions without automatic rows, same copy rule). business-rules §12 point 3 rewritten.
+  - **DB:** `patch_v0.3_attendance_auto.sql` (+ `educonnect_schema_v0.3.sql`) approved and **run on the shared DB
+    26/11/2026** (column `auto_from_slot_id` BIGINT NULL + FK checked after the run; existing 11 rows untouched, all
+    NULL = recorded by a person). Old server code ignores the column, so the code can be merged whenever ready.
+  - Tested on the local DB (`auto.mjs`, 30 checks: the four lead cases, unchanged save, correction flowing on, stop at
+    a person's row, note-only change, afternoon separate); server `npm test` 24/24, client build OK.
+  - **FE-09 fix (26/11/2026, same working tree):** the child chips of SCR-04 showed the class of a school year that has
+    not started (a student promoted early, UC-11: HS2602 "11A1" instead of 10A1; 8 students on the shared DB); the
+    class is now that of the latest started school year, a future one only when there is no other.
+  - **Reports owed (Quoc):** R3 BF-12 main steps, UC-90 normal flow / postconditions, SCR-56 notice, BR-40 / GBR on
+    notifications; R4 II.1.2 explanation + sequence UC-90 (fillLaterPeriods step), I.3 attendances (new column);
+    R5.1 UTC-ATT cases for the automatic filling.
+
 - **Content moderation – "Quy chuẩn cộng đồng" (25/11/2026, Anh, FE-08; branch `feature/report-auto`, NOT merged;
   server `npm test` (55/55) and client `npm run build` pass; every phase tested on the local throw-away DB):** comments
   and chat messages are checked when sent and hidden at once when they match a rule; message reports with the new
@@ -79,20 +125,6 @@ reactions, attachments) is merged into one place after both are on `develop`.
     placeholder with a "Xem" button (business rules §17; `docs/moderation-plan.md` "Luồng báo cáo").
   - **Open (lead):** approve and run the patch and the seed; merge after the code freeze of 25/11 10:00 or not.
 
-- **Parent List search widened (27/11/2026, Anh, FE-14, branch `feature/report-auto`, NOT merged):** UC-104 /
-  SCR-69 `GET /parents?q=` – a phone-like q still matches the phone only (SCR-13 lookup unchanged); any other q
-  matches the parent's name, username, email, or a linked child's name / student code (business-rules §16). Only
-  `parents.service.js` `buildParentFilter` (its one caller is `listParents`) and the SCR-69 placeholder / help line.
-  No schema change, no new index. Tested on the local throw-away DB.
-
-- **Parent linking fixes (27/11/2026, Anh, FE-02 / FE-14; defect fixes from testing; branch `fix/fe-02-parent-link`,
-  commit 9060e4b, PR into `develop`, NOT merged – the same change is 16e5c7f on `feature/report-auto`):** SCR-08
-  parent card links to SCR-13 (0 parents "Liên kết phụ huynh", 1 parent "Liên kết thêm phụ huynh", 2 parents the
-  caption "Đã đủ 2 phụ huynh."); UC-13 from the parent's side on SCR-10 ("Liên kết con" dialog, `LinkChildDialog.jsx`:
-  search students with `GET /students?q=`, same `POST /students/:id/parents`, server unchanged); the disabled
-  "⋯ Bảo mật & quyền" menus removed from SCR-08 / SCR-10 (FE-13's "Tài khoản đăng nhập" card already does it); SCR-13
-  back button label "Quay lại". Client only, no schema change, client build passes.
-
 - **Report 5 test schedule (decided 24/11/2026, lead):** reports R1–R7 are due at the **end of 26/11/2026**, so the
   last test round is run just before that and everything else is planned backwards from it. "Round" means a run of
   the whole set of Report 5 test cases (Round 2 and 3 re-run the failed cases plus the main flows after the fixes),
@@ -110,6 +142,74 @@ reactions, attachments) is merged into one place after both are on `develop`.
   | 26/11 13:00 – 17:00 | Round 3 (last round) + acceptance scripts SC-01..SC-12 |
   | 26/11 17:00 – end of day | Quoc fills 5.0 II.3 from the Test Statistics sheets; reports submitted |
   | Weeks 13–14 | Only revising and finishing Reports 6 and 7; no code or test changes |
+
+- **FE-10 / FE-03 period limits replace the teacher norms (26/11/2026, Dung, `feature/fe-10-system-limits` on top of
+  `feature/fe-10-timetable-quota`, merged into `develop` 27/11, merge `72ebd65`; changes business rules §10 – approved by
+  the lead 27/11/2026 after the R5 submission because the business rules needed it; client build and server `npm test`
+  (35/35) pass. Owed (Dung): one value for the legal cap of a class week – `timetable.constants.js` says the default 38
+  is also the highest, the settings allow 7 × 6 = 42, business rules say 42; R3/R4/R5 parts on the norms and UC-133):** "Cài đặt hệ thống"
+  (SCR-86) now has three school-wide values instead of the norms: most periods a teacher teaches a week (25), most
+  periods a class has a day (7, Công văn 4567) and a week (38). New `school_settings` keys `teaching.teacher_max_week`,
+  `teaching.class_max_day`, `teaching.class_max_week` (rows written on the first save, no schema change); the old
+  rows `teaching.norm`, `teaching.homeroom_norm`, `teaching.max_over`, `teaching.max_periods_per_day` are no longer
+  read (lead may soft-clean them later). Checked by automatic scheduling (weekly cap, grid day / week, `GRID_DAY_LIMIT`,
+  `GRID_WEEK_LIMIT`; soft rules S1 and S4 removed; afternoon may now have up to 5 periods), every class timetable save
+  (`MSG_TIMETABLE_CLASS_LIMIT`; editor and Excel import) and the teaching assignment SCR-19
+  (`MSG_TEACHER_OVER_WEEK_LIMIT`). The timetable editor gets the class limits and refuses a period that breaks one
+  when it is picked. FE-03 / FE-10 test cases about the norms (5.1–5.3) need updating (Dung).
+  27/11/2026: built-in "nên dạy" 17 periods a week, homeroom teacher 13 (Thông tư 05/2025, not a setting) – warning
+  only (auto scheduling loads / `OVER_NORM`, SCR-19 notice after saving).
+  27/11/2026: a subject over its periods per week (`feature/fe-10-timetable-quota`) is now a warning only – editor
+  warning + "Quay lại sửa / Vẫn lưu" on save, server returns `overQuota`, import shows it; class and teacher limits
+  still block.
+
+- **FE-10 periods per week enforced (26/11/2026, Dung, `feature/fe-10-timetable-quota`, merged with `feature/fe-10-system-limits`
+  27/11, merge `72ebd65`; changes business rule §10 "shown but not enforced"):** a subject can no longer get more periods in a class
+  timetable than its class type allows (`track_subjects.periods_per_week`). Server: `saveVersion` refuses the pattern
+  with `MSG_TIMETABLE_OVER_QUOTA` (400, `details.items`), so the editor (UC-71 / UC-73), the Excel import (UC-72, the
+  class is reported with the message) and the automatic scheduling apply are all covered; pure check in
+  `timetable.quota.js` with unit tests (`timetable.quota.test.js`). Client (SCR-28 / SCR-30): picking a subject that
+  already has its periods, or saving a pattern over the quota, opens a blocking dialog with one OK button; the server
+  error opens the same dialog. Fewer periods are still allowed. Merged after Round 3, so FE-10 / BF-04 test cases
+  need one more case each (Dung).
+
+- **FE-13 / FE-02 fixes merged into `develop` (26/11/2026, Linh, `feature/fe-13-system-administration`, merge
+  `822d3bc`; client `npm run build` and server `npm test` (24/24) pass):**
+  - `ff65dda` (UC-103): the maintenance form with an end before the start returns `BEFORE_START` instead of a 500
+    (the overlap check uses `GREATEST(start, end)` as the upper bound of `tstzrange`).
+  - `21500d6` (UC-07, SCR student list, FE-02 page): every student is listed by default (students without a class
+    this year first, then the classes); the "Chưa xếp lớp" checkbox became one more choice of the enrollment status
+    select; the API takes `placement=ASSIGNED | UNASSIGNED` (the old `unassigned=true` still works); the search also
+    matches the username. Merged after Round 3 (26/11 17:00), so the UC-07 test cases written for the checkbox need
+    checking against the new select. Tell Anh (FE-02 owner). Left over: `.student-list-toggle` in `StudentListPage.css` is unused.
+
+- **FE-08 `baaa3a5` merged into `develop` (25/11/2026, Quoc, merge `e6f8833`):** Anh's commit of 19/11 removes
+  "Qua anh, chị, em" from linking a parent to a student (FE-02 page `UpdateStudentRelationshipPage`); only the phone
+  lookup remains. Client only.
+
+- **FE-04 class size and period limits as School Manager settings (27/11/2026, Khanh, `feature/fe-05-group-feed`,
+  merged into `develop` 27/11, merge `0726f80`, server `npm test` 46/46 pass; tell Anh (FE-02 UC-10 / UC-11) and Dung
+  (SCR-86) their code changed; lead agreed: change after the code freeze, warning 45 / hard cap 55, Khanh also edits FE-10 SCR-86 and
+  FE-02 UC-10 / UC-11, HĐTN counts in the week):**
+  - SCR-86 (`school-settings`): `teaching.subjectMaxWeek` (default 10, 1–12, ≤ classMaxWeek) and a new group
+    `classes` (`warnStudents` 45, `maxStudents` 55, 10–60, warn ≤ max); `GET /school-settings/impact` lists
+    what is above a lowered limit (the page asks before saving). New keys are new `school_settings` rows written on
+    the first save (no schema change, no patch; defaults until then). Not added to the default rows of
+    `educonnect_schema_v0.3.sql` (the 26/11 keys are not there either) – for the lead.
+  - Class size (`classes/classSize.js` `checkClassSize`): UC-28 create / add, UC-27 import (warning rows
+    `WARN_CLASS_OVER_RECOMMENDED`), UC-10, UC-11; body flag `confirmOverWarning`; 409 `MSG_CLASS_OVER_WARNING`.
+    `MAX_CLASS_SIZE` removed. GET /classes returns `sizeLimits` (cards / table labels).
+  - SCR-70 (UC-26): periods per subject ≤ `subjectMaxWeek`, total ≤ `classMaxWeek` (`MSG_TRACK_PERIODS_TOTAL`),
+    copy year refused above the limits (`MSG_TRACK_COPY_OVER_LIMIT`, ASSUMPTION – question 6 not answered).
+  - Tests: `npm test` 46/46 (11 new in `classSize.test.js`); API checked on the throw-away local DB (settings,
+    impact, add students, transfer, promotion, track save, copy). Client `npm run build` passes.
+
+- **FE-04 SCR-70 periods message (26/11/2026, Khanh, on `feature/fe-05-group-feed`, merged into `develop` 26/11, merge
+  `cef24c8`; merged after Round 3, so the UC-26 test cases may need the new messages):** a wrong
+  "Số tiết/tuần" now shows its reason under the box (empty / not a whole number / 0 / above 10; an empty box only
+  after leaving it or a save attempt), the column header shows "(1–10)", saving with wrong values names the subjects
+  ("Còn n môn …") and focuses the first one, the footer total notes the rows it skips. Client only; the server rule
+  (`MSG_TRACK_PERIODS_RANGE`, 1–10) is unchanged.
 
 - **FE-10 School Manager settings + FE-07 fix merged into `develop` (24/11/2026, Quoc; client `npm run build` and
   server `npm test` (21/21) pass):**
@@ -129,7 +229,7 @@ reactions, attachments) is merged into one place after both are on `develop`.
     screens.md, permissions.md; SCR-85 Update Contact Information of FE-13 added to screens.md, it was only in R3).
     Owed (Dung): replace "id pending" in R3 10.1.11 and in the UC / screen lists, add the screenshot; add the
     `school_settings` table to R4 I.3 (56 tables). Owed (Linh): R4 I.2 lists 22 packages, now 23 (`school-settings`).
-  - Still not merged: `feature/fe-08-school-feed` (`baaa3a5`, Anh, 19/11).
+  - Still not merged: `feature/fe-08-school-feed` (`baaa3a5`, Anh, 19/11) – merged 25/11, `e6f8833`.
 
 - **FE-13 merged into `develop` (24/11/2026, Quoc, `feature/fe-13-system-administration`, merge `a9c656e`;
   client `npm run build` and server `npm test` (21/21) pass; Linh's work of 22–24/11 below):** School Manager manages student / teacher / parent accounts, "Thêm vai trò", menu "Quản lý tài khoản",
@@ -216,6 +316,12 @@ reactions, attachments) is merged into one place after both are on `develop`.
   `GET /timetables/teachers/:teacherId/week` removed) and the version list inside the timetable editor (the history page
   UC-124 stays, linked from the editor). No schema change. **Open (lead):** remove UC-125 from use-cases.md /
   permissions.md and the R3 SRS, or keep it pointing to Teacher Detail.
+- **FE-10 automatic scheduling fix (25/11/2026, Dung, `fix/fe-10-auto-fixed-busy`, merged into `develop` 25/11, merge
+  `e464504`; also removes the "Thông báo tự động" note from the class event form, SCR-40/42):** the HĐTN of the fixed cells
+  (Chào cờ, Sinh hoạt lớp) no longer goes to a teacher who teaches a class outside the run at a fixed cell (found when
+  re-taking the R3 screenshots: 12D1 got the teacher who has Chào cờ in 10A1, so its two fixed lessons could not be
+  placed). Pre-check: teachers busy at a fixed cell are not counted for `FIXED_TEACHERS`; new blocking error
+  `FIXED_TEACHER_BUSY` for a kept assignment. Solver unit tests added (`timetable.auto.solver.test.js`).
 - **FE-10 School Manager settings (21/11/2026, Dung, `feature/fe-10-school-settings`, merged into `develop` 24/11):** new page
   "Cài đặt hệ thống" for the School Manager (`/school-settings`, menu "Quản trị hệ thống"; `GET` / `PUT
   /api/v1/school-settings`, module `server/src/modules/school-settings`). First group, moved from part "4. Giáo viên"

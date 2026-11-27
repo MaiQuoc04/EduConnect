@@ -18,12 +18,20 @@ const EMPTY_RESULT = 'Không có kết quả.'; // MSG01
 
 const number = (n) => n.toLocaleString('vi-VN');
 
-// Filters live in the URL (?q=&classId=&status=&accountStatus=&unassigned=&schoolYearId=&page=&pageSize=), so a
-// refresh or a shared link shows the same list. Values the API would reject are dropped here.
+// FE-13 owner, 26/11/2026: by default every student is listed, with or without a class this year, so an account SA
+// just created is not hidden. "Chưa xếp lớp" is one more choice of the enrollment status select (placement=UNASSIGNED
+// for the API); every real enrollment status means the student has a class.
+const PLACEMENT_LABELS = { ASSIGNED: 'Đã xếp lớp', UNASSIGNED: 'Chưa xếp lớp' };
+const UNASSIGNED = 'UNASSIGNED';
+
+// Filters live in the URL (?q=&classId=&status=&accountStatus=&placement=&schoolYearId=&page=&pageSize=), so a
+// refresh or a shared link shows the same list. Values the API would reject are dropped here. An old link with
+// unassigned=true still opens the students without a class.
 function readFilters(sp) {
   const id = (key) => (/^\d+$/.test(sp.get(key) ?? '') ? sp.get(key) : '');
   const oneOf = (key, allowed) => (allowed.includes(sp.get(key)) ? sp.get(key) : '');
-  const unassigned = sp.get('unassigned') === 'true';
+  const placement = sp.get('unassigned') === 'true' ? 'UNASSIGNED' : oneOf('placement', Object.keys(PLACEMENT_LABELS));
+  const unassigned = placement === 'UNASSIGNED';
   const page = Number(sp.get('page'));
   const pageSize = Number(sp.get('pageSize'));
   return {
@@ -31,7 +39,7 @@ function readFilters(sp) {
     classId: unassigned ? '' : id('classId'),
     status: unassigned ? '' : oneOf('status', Object.keys(ENROLLMENT_LABELS)),
     accountStatus: oneOf('accountStatus', Object.keys(ACCOUNT_LABELS)),
-    unassigned,
+    placement,
     schoolYearId: id('schoolYearId'), // no selector in the design; kept so links to another year still work
     page: Number.isInteger(page) && page >= 1 ? page : 1,
     // ASSUMPTION: only the offered page sizes are accepted from the URL; anything else falls back to 20.
@@ -222,15 +230,15 @@ export default function StudentListPage() {
               value={qInput}
               maxLength={100}
               onChange={(e) => setQInput(e.target.value)}
-              placeholder="Tìm theo tên hoặc mã học sinh…"
-              aria-label="Tìm theo tên hoặc mã học sinh"
+              placeholder="Tìm theo tên, mã học sinh hoặc tên đăng nhập…"
+              aria-label="Tìm theo tên, mã học sinh hoặc tên đăng nhập"
             />
           </div>
           <select
             className="input"
             value={filters.classId}
             onChange={(e) => updateFilters({ classId: e.target.value })}
-            disabled={filters.unassigned}
+            disabled={filters.placement === 'UNASSIGNED'}
             aria-label="Lớp"
           >
             <option value="">Tất cả các lớp</option>
@@ -247,12 +255,19 @@ export default function StudentListPage() {
               </optgroup>
             ))}
           </select>
-          {/* ASSUMPTION: not in the design; the API filters by enrollment status, so it gets its own select. */}
+          {/* ASSUMPTION: not in the design; the API filters by enrollment status, so it gets its own select.
+              "Chưa xếp lớp" (students with an account but no class this year – business-rules §3: SA creates
+              accounts, SM puts them into classes later) clears the class filter: the API rejects them together. */}
           <select
             className="input"
-            value={filters.status}
-            onChange={(e) => updateFilters({ status: e.target.value })}
-            disabled={filters.unassigned}
+            value={filters.placement === UNASSIGNED ? UNASSIGNED : filters.status}
+            onChange={(e) =>
+              updateFilters(
+                e.target.value === UNASSIGNED
+                  ? { placement: UNASSIGNED, unassigned: '', status: '', classId: '' }
+                  : { status: e.target.value, placement: '', unassigned: '' },
+              )
+            }
             aria-label="Trạng thái học tập"
           >
             <option value="">Mọi trạng thái học tập</option>
@@ -261,6 +276,7 @@ export default function StudentListPage() {
                 {label}
               </option>
             ))}
+            <option value={UNASSIGNED}>{PLACEMENT_LABELS.UNASSIGNED}</option>
           </select>
           <select
             className="input"
@@ -275,18 +291,6 @@ export default function StudentListPage() {
               </option>
             ))}
           </select>
-          {/* Students with an account but no class this year (business-rules §3: SA creates accounts, SM imports
-              classes later). The API rejects it together with a class or an enrollment status. */}
-          <label className="student-list-toggle">
-            <input
-              type="checkbox"
-              checked={filters.unassigned}
-              onChange={(e) =>
-                updateFilters(e.target.checked ? { unassigned: true, classId: '', status: '' } : { unassigned: false })
-              }
-            />
-            Chưa xếp lớp
-          </label>
         </div>
         <div className="student-list-total">
           <span className="caption muted">Tổng cộng:</span>

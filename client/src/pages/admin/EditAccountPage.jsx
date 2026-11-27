@@ -17,7 +17,8 @@ const USERNAME_TEXT = {
   INVALID: 'Tên đăng nhập dài 3–50 ký tự, chỉ gồm chữ thường không dấu, số, dấu chấm và gạch dưới, không toàn chữ số.',
   DUPLICATE: 'Tên đăng nhập này đã được dùng.',
 };
-const CODE_RE = { studentCode: /^HS\d{4}$/, teacherCode: /^GV\d{4}$/ };
+// HS / GV + 6 digits (business rules §3, 27/11/2026); the account's own older 4-digit code may be kept as it is.
+const CODE_RE = { studentCode: /^HS\d{6}$/, teacherCode: /^GV\d{6}$/ };
 const normCode = (v) => v.replace(/\s+/g, '').toUpperCase();
 const today = () => new Date().toLocaleDateString('sv-SE');
 // A department name that is no longer in FE-03's list: kept as it is unless another one is picked.
@@ -116,7 +117,7 @@ export default function EditAccountPage() {
     for (const [part, key] of [['student', 'studentCode'], ['teacher', 'teacherCode']]) {
       if (!account[part]) continue;
       if (!form[key].trim()) e[key] = 'REQUIRED';
-      else if (!CODE_RE[key].test(form[key])) e[key] = 'INVALID';
+      else if (!CODE_RE[key].test(normCode(form[key])) && normCode(form[key]) !== account[part].code) e[key] = 'INVALID';
     }
     return e;
   }
@@ -203,7 +204,7 @@ export default function EditAccountPage() {
             </h2>
             <div className="form-grid">
               <Field id="studentCode" label="Mã học sinh" required error={err('studentCode')}>
-                <input id="studentCode" className="input mono" value={form.studentCode} onChange={set('studentCode', normCode)} maxLength={6} autoComplete="off" />
+                <input id="studentCode" className="input mono" value={form.studentCode} onChange={set('studentCode', normCode)} maxLength={8} autoComplete="off" />
               </Field>
               <Field id="dob" label="Ngày sinh" error={err('dob')}>
                 <input id="dob" type="date" className="input" value={form.dob} onChange={set('dob')} max={today()} />
@@ -231,7 +232,7 @@ export default function EditAccountPage() {
             </h2>
             <div className="form-grid">
               <Field id="teacherCode" label="Mã giáo viên" required error={err('teacherCode')}>
-                <input id="teacherCode" className="input mono" value={form.teacherCode} onChange={set('teacherCode', normCode)} maxLength={6} autoComplete="off" />
+                <input id="teacherCode" className="input mono" value={form.teacherCode} onChange={set('teacherCode', normCode)} maxLength={8} autoComplete="off" />
               </Field>
               <Field id="department" label="Tổ chuyên môn" error={err('department')}>
                 <select id="department" className="input" value={form.departmentId} onChange={set('departmentId')}>
