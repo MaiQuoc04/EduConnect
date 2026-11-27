@@ -731,8 +731,8 @@ Boundaries that are easy to get wrong:
     norm, no teacher limit a day):** School Manager settings "Cài đặt hệ thống" (SCR-86, UC-133), one value for the
     whole school: most periods a teacher teaches a week (default 25 = norm 17 of Thông tư 05/2025 + at most 50 % over
     it, 25.5 rounded down), most periods a class has a day (default 7 – Công văn 4567/BGDĐT-GDPT 2025: at most 7
-    periods of 45 minutes a day, at least 5 days and at most 11 sessions a week) and a week (default 38, ASSUMPTION:
-    the dispatch sets no weekly cap – 5 days × 7 + 3; at most the day limit × 6). The School Manager may lower these
+    periods of 45 minutes a day, at least 5 days and at most 11 sessions a week) and a week (default 38, approved by the lead
+    27/11/2026: the dispatch sets no weekly cap – 5 days × 7 + 3; at most the day limit × 6). The School Manager may lower these
     values but not raise them above the legal caps (teacher 25, class 7 a day, 42 a week).
     27/11/2026 (Khanh, FE-04): the same page also holds the most periods of one subject a week (default 10, 1–12, not
     above the class week) and the class size settings (§4); the class types of SCR-70 are checked against the class
