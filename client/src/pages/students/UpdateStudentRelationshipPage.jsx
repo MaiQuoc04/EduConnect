@@ -614,7 +614,7 @@ export default function UpdateStudentRelationshipPage() {
             Thử lại
           </button>
           <button type="button" className="btn btn-tertiary" onClick={leave}>
-            Quay lại thông tin phụ huynh
+            Quay lại
           </button>
         </div>
       </div>
@@ -758,7 +758,7 @@ export default function UpdateStudentRelationshipPage() {
         </div>
         <button type="button" className="btn btn-secondary" onClick={leave}>
           <Icon name="arrow_back" size="sm" />
-          Quay lại thông tin phụ huynh
+          Quay lại
         </button>
       </div>
 

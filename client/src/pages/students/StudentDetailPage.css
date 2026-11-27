@@ -16,40 +16,6 @@
   border-bottom: 1px solid var(--graphite-200);
 }
 .student-detail .page-header .actions-row { gap: 10px; flex-wrap: nowrap; }
-.student-detail-menu-wrap { position: relative; }
-.student-detail-menu {
-  position: absolute;
-  right: 0;
-  top: calc(100% + 6px);
-  z-index: 20;
-  width: 240px;
-  padding: 6px 0;
-  border-radius: var(--radius-card);
-  background: var(--white);
-  outline: 1px solid var(--graphite-200);
-  box-shadow: var(--shadow-menu);
-}
-.student-detail-menu .label-upper { padding: 4px 12px; color: var(--graphite-400); }
-.student-detail-menu hr { margin: 4px 0; border: 0; border-top: 1px solid var(--graphite-200); }
-.student-detail-menu button {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  width: 100%;
-  min-height: 36px;
-  padding: 0 12px;
-  border: 0;
-  background: none;
-  color: var(--graphite-900);
-  font: 500 14px/20px var(--font-ui);
-  text-align: left;
-  cursor: pointer;
-}
-.student-detail-menu button .icon { color: var(--graphite-600); }
-.student-detail-menu button.danger,
-.student-detail-menu button.danger .icon { color: var(--red-pen); }
-.student-detail-menu button:not(:disabled):hover { background: var(--graphite-50); }
-.student-detail-menu button:disabled { opacity: 0.55; cursor: default; }
 
 /* ---------- identity strip ---------- */
 .student-detail .student-detail-identity {
@@ -183,6 +149,9 @@
 .student-detail-parent li .icon { margin-top: 0; color: var(--graphite-400); }
 .student-detail-parent .empty { color: var(--graphite-400); }
 .student-detail-parents-empty { display: grid; gap: 12px; justify-items: start; }
+/* "Liên kết thêm phụ huynh" / "Đã đủ 2 phụ huynh." under the list: a whole row, also when the parents sit side by side. */
+.student-detail-parent-list > .student-detail-parents-more,
+.student-detail-parent-list > .caption { grid-column: 1 / -1; justify-self: start; }
 
 /* ---------- loading, not found, error ---------- */
 .student-detail-skeleton { display: grid; gap: 12px; }
@@ -216,17 +185,17 @@
 }
 @media (max-width: 640px) {
   .student-detail .breadcrumb a { display: inline-flex; align-items: center; min-height: 44px; margin: -12px 0; }
-  /* Two labelled buttons and the "…" menu do not always fit in 358px: let them wrap instead of overflowing. */
+  /* The labelled buttons do not always fit in 358px: let them wrap instead of overflowing. */
   .student-detail .page-header .actions-row { flex-wrap: wrap; }
   .student-detail .page-header .actions-row .btn { flex: 1 1 auto; height: 44px; }
   .student-detail .page-header .actions-row .btn-icon-only { flex: none; width: 44px; }
-  .student-detail-menu button { min-height: 44px; }
   .student-detail .student-detail-identity { align-items: flex-start; padding: 16px; }
   .student-detail .student-detail-fields dd { min-height: 44px; }
   .student-detail-code .btn-icon { width: 44px; height: 44px; margin: -10px -12px -10px 0; }
   .student-detail-parent-list { grid-template-columns: minmax(0, 1fr); }
   .student-detail-parent + .student-detail-parent { padding-top: 16px; border-top: 1px solid var(--graphite-200); }
   .student-detail-retry .btn { flex: 1 1 100%; height: 44px; }
-  .student-detail-parents-empty .btn { width: 100%; height: 44px; }
+  .student-detail-parents-empty .btn,
+  .student-detail-parent-list > .student-detail-parents-more { width: 100%; height: 44px; justify-self: stretch; }
   .student-detail-missing .btn { width: 100%; height: 44px; }
 }

@@ -8,10 +8,10 @@ import { formatDate } from '../../utils/format.js';
 import { clearHandedOverParentDetail, peekHandedOverParentDetail } from './parentHandoff.js';
 import './ParentDetailPage.css';
 import SchoolAccountCard from '../admin/SchoolAccountCard.jsx';
+import LinkChildDialog from './LinkChildDialog.jsx';
 
 // Same labels and texts as Student Detail (SCR-08), so both detail screens read alike.
 const ENROLLMENT_LABELS = { STUDYING: 'Đang học', TRANSFERRED: 'Đã chuyển lớp', DROPPED: 'Đã nghỉ học' };
-const NOT_BUILT = 'Chức năng đang phát triển';
 const GENERIC_ERROR = 'Không tải được thông tin phụ huynh. Vui lòng thử lại.';
 const EMPTY_VALUE = 'Chưa cập nhật';
 const SA_ONLY = 'Chỉ Quản trị hệ thống thay đổi được.';
@@ -51,67 +51,6 @@ function Field({ label, readOnly, wide, children }) {
       <dd className={`${readOnly ? 'is-readonly' : ''}${empty ? ' empty' : ''}`.trim() || undefined}>
         {empty ? EMPTY_VALUE : children}
       </dd>
-    </div>
-  );
-}
-
-// "…" menu ("Bảo mật & quyền"), as on Student Detail. Every action belongs to FE-13 (business-rules §2, Linh), so the
-// items stay disabled here.
-function AccountMenu({ parent }) {
-  const [open, setOpen] = useState(false);
-  const ref = useRef(null);
-  useEffect(() => {
-    if (!open) return undefined;
-    const onPointer = (e) => {
-      if (!ref.current?.contains(e.target)) setOpen(false);
-    };
-    const onKey = (e) => {
-      if (e.key === 'Escape') setOpen(false);
-    };
-    document.addEventListener('mousedown', onPointer);
-    document.addEventListener('keydown', onKey);
-    return () => {
-      document.removeEventListener('mousedown', onPointer);
-      document.removeEventListener('keydown', onKey);
-    };
-  }, [open]);
-
-  const locked = parent.accountStatus === 'LOCKED';
-  return (
-    <div className="parent-detail-menu-wrap" ref={ref}>
-      <button
-        type="button"
-        className="btn btn-secondary btn-icon-only"
-        aria-label="Bảo mật và quyền"
-        aria-haspopup="menu"
-        aria-expanded={open}
-        onClick={() => setOpen((v) => !v)}
-      >
-        <Icon name="more_horiz" size="sm" />
-      </button>
-      {open && (
-        <div className="parent-detail-menu" role="menu">
-          <p className="label-upper">Bảo mật &amp; quyền</p>
-          {/* TODO UC-100 Reset Password (FE-13, Linh) */}
-          <button type="button" role="menuitem" disabled title={NOT_BUILT}>
-            <Icon name="key" size="sm" />
-            Đặt lại mật khẩu
-          </button>
-          {/* TODO UC-101 Lock / Unlock Account – clear the temporary sign-in lock (FE-13, Linh) */}
-          {parent.lockedUntil && (
-            <button type="button" role="menuitem" disabled title={NOT_BUILT}>
-              <Icon name="lock_open" size="sm" />
-              Mở tạm khoá đăng nhập
-            </button>
-          )}
-          <hr />
-          {/* TODO UC-101 Lock / Unlock Account (FE-13, Linh) */}
-          <button type="button" role="menuitem" className={locked ? undefined : 'danger'} disabled title={NOT_BUILT}>
-            <Icon name={locked ? 'lock_open' : 'lock_person'} size="sm" />
-            {locked ? 'Mở khoá tài khoản' : 'Khoá tài khoản'}
-          </button>
-        </div>
-      )}
     </div>
   );
 }
@@ -259,8 +198,9 @@ function ChildCard({ child }) {
   );
 }
 
-// Read only. Link / unlink is UC-13 (FE-02), from the student's side.
-function ChildrenCard({ items }) {
+// Link / unlink is UC-13 (FE-02): unlink from the student's side (SCR-13), link here with LinkChildDialog
+// (UC-13 from the parent's side, 27/11/2026).
+function ChildrenCard({ items, onLinkChild }) {
   return (
     <section className="card card-outline parent-detail-children">
       <h2 className="card-title title-sm">
@@ -275,7 +215,7 @@ function ChildrenCard({ items }) {
           <div>
             <p className="notice-title">Phụ huynh chưa được liên kết với học sinh nào.</p>
             <p className="caption">
-              Tài khoản phụ huynh được tạo trước, sau đó nhà trường liên kết với học sinh từ hồ sơ của từng học sinh.
+              Tài khoản phụ huynh được tạo trước, sau đó nhà trường liên kết với học sinh bằng nút Liên kết con.
             </p>
           </div>
         </div>
@@ -287,14 +227,10 @@ function ChildrenCard({ items }) {
         </div>
       )}
       <div className="parent-detail-link-more">
-        {/* TODO UC-13 from the parent's side: Update Student Relationship (SCR-13) starts from a student
-            (/students/:studentId/parents/edit) and has no "pick a student" step, so a new child is linked from that
-            student's record ("Xem phụ huynh" → "Cập nhật liên kết"). Enable this once SCR-13 can take a parent. */}
-        <button type="button" className="btn btn-secondary" disabled title={NOT_BUILT}>
+        <button type="button" className="btn btn-secondary" onClick={onLinkChild}>
           <Icon name="person_add" size="sm" />
           Liên kết con
         </button>
-        <p className="caption muted">Để liên kết thêm con, mở hồ sơ học sinh và chọn Xem phụ huynh.</p>
       </div>
     </section>
   );
@@ -377,6 +313,7 @@ export default function ParentDetailPage() {
   const [loading, setLoading] = useState(validId && !handedOver);
   const [error, setError] = useState(null);
   const [attempt, setAttempt] = useState(0);
+  const [linkOpen, setLinkOpen] = useState(false);
 
   useEffect(() => clearHandedOverParentDetail(), []);
 
@@ -446,7 +383,6 @@ export default function ParentDetailPage() {
             <Icon name="edit" size="sm" />
             Sửa thông tin
           </Link>
-          <AccountMenu parent={parent} />
         </div>
       </div>
 
@@ -517,11 +453,22 @@ export default function ParentDetailPage() {
         </section>
 
         <div className="parent-detail-side">
-          <ChildrenCard items={children} />
+          <ChildrenCard items={children} onLinkChild={() => setLinkOpen(true)} />
           {/* FE-13: email / phone, password reset, lock (School Manager, 23/11/2026) */}
           <SchoolAccountCard userId={parent.userId} username={parent.username} />
         </div>
       </div>
+
+      <LinkChildDialog
+        open={linkOpen}
+        parent={parent}
+        linkedStudentIds={children.map((c) => c.studentId)}
+        onClose={() => setLinkOpen(false)}
+        onLinked={() => {
+          setLinkOpen(false);
+          setAttempt((n) => n + 1);
+        }}
+      />
     </div>
   );
 }
