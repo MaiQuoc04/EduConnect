@@ -659,7 +659,9 @@ It2: Anh FE-08 + FE-14, Khanh FE-05 + FE-06).
     (same look; their CSS keeps only search, pin colour, news padding and the audience line) – checked by Anh 18/11:
     true until 17/11, then the long-post rules copied `.gf-more`; cleaned up 18/11 (see the 18/11 entry above).
     FE-05 rebuilt on it: cards with a kind line (Bài viết / Đã ghim / Chờ duyệt / Đã bị từ chối / Đã ẩn + left bar),
-    pager (10 per page), "Có nội dung mới — Tải lại" pill, right column "Bài đã ghim" + "Duyệt bài"; SCR-37 as the
+    pager (10 per page), "Có nội dung mới — Tải lại" pill, right column "Bài đã ghim" + "Duyệt bài" (15/11: the
+    "Bài đã ghim" panel was dropped – pinned posts already lead the feed with the "Đã ghim" kind line – so the right
+    column keeps only "Duyệt bài"); SCR-37 as the
     school reading canvas with the actions at the top; SCR-36/38 in the school form shell (`SchoolPostForm.css`
     `.spf-*`) with a live preview; confirm dialogs in the `.sf-dialog` style.
   - **14/11 (Khanh, not committed yet): FE-05 pop-up and long posts.** A click on a card opens the post in a pop-up

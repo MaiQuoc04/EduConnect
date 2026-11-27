@@ -406,6 +406,9 @@ Boundaries that are easy to get wrong:
   - When the two are no longer in reach (transfer, promotion, assignment ended), the old 1-1 chat stays readable and
     sending is closed. Locked accounts are not offered and cannot be written to; their old chats stay readable.
   - 1-1 chats show full names, never the class nickname.
+  - Who someone is to me (contact list and chat header, UC-49): a parent is labelled per child with that child's
+    class, children in name order – "Mẹ của Lê Minh Tuấn (10A1) · Mẹ của Phạm Gia Khánh (11D1)" – followed only by
+    the shared classes not already named after a child (Khanh, 17/11/2026).
   - A message has at most 2000 characters. Messages cannot be edited (deleting: UC-113, below). No `CHAT`
     notifications (lead, 18/11/2026: the chat list already shows unread messages).
   - A student who transfers back to a class does not rejoin its teams (only GENERAL + STUDENT); the old team's chat
