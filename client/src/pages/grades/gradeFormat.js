@@ -54,8 +54,8 @@ export function formatDateTime(value) {
 // Subjects assessed by comments (môn đánh giá bằng nhận xét, Circular 22/2021; 27/11/2026): each assessment and the
 // semester / year result is Đạt (PASS) or Chưa đạt (FAIL), written in full everywhere (no Đ / CĐ short forms).
 export const RESULT_LONG = { PASS: 'Đạt', FAIL: 'Chưa đạt' };
-export const fmtResult = (value) => RESULT_SHORT[value] ?? '';
-// "Đ" / "CĐ" typed in the grid -> PASS / FAIL for the API; '' stays '' (= clear).
-export const toApiResult = (text) => ({ Đ: 'PASS', CĐ: 'FAIL' })[String(text ?? '').trim()] ?? '';
-export const validResult = (text) => ['', 'Đ', 'CĐ'].includes(String(text ?? '').trim());
+export const fmtResult = (value) => RESULT_LONG[value] ?? '';
+// "Đạt" / "Chưa đạt" chosen in the grid -> PASS / FAIL for the API; '' stays '' (= clear).
+export const toApiResult = (text) => ({ 'Đạt': 'PASS', 'Chưa đạt': 'FAIL' })[String(text ?? '').trim()] ?? '';
+export const validResult = (text) => ['', 'Đạt', 'Chưa đạt'].includes(String(text ?? '').trim());
 export const isCommentBook = (book) => book?.assessmentType === 'COMMENT';
